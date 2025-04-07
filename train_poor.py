@@ -351,7 +351,7 @@ class Hyperparameters:
     train_files : str = "data/fineweb10B/fineweb_train_*.bin" # input .bin to train on
     val_files : str = "data/fineweb10B/fineweb_val_*.bin" # input .bin to eval validation loss on
     val_tokens : int = 10485760 # how many tokens of validation data? it's important to keep this fixed for consistent comparisons
-    train_seq_len : int = 48*1024 # FlexAttention sequence length (per GPU)
+    train_seq_len : int = 32*1024 # FlexAttention sequence length (per GPU)
     val_seq_len : int = 4*64*1024 # FlexAttention sequence length for validation (per GPU)
     batch_size : int = 8 # Batch size, across all devices
     # optimization
@@ -364,7 +364,7 @@ class Hyperparameters:
     save_checkpoint : bool = False
 
 if len(sys.argv) > 1 and sys.argv[1] == "poor": 
-    args = Hyperparameters(batch_size=16, train_seq_len=16*1024, val_seq_len=16*1024)
+    args = Hyperparameters(batch_size=16, train_seq_len=32*1024, val_seq_len=16*1024)
     model_config = GPTConfig(
         flex_kernel_options={
             "BLOCK_M": 64, "BLOCK_N": 64, # forward
@@ -376,6 +376,7 @@ else:
     model_config = GPTConfig() 
     assert world_size == 8 # this code is designed for 8xH100
 
+
 # torchrun sets these env variables
 rank = int(os.environ["RANK"])
 world_size = int(os.environ["WORLD_SIZE"])
@@ -385,6 +386,9 @@ torch.cuda.set_device(device)
 dist.init_process_group(backend="nccl", device_id=device)
 dist.barrier()
 master_process = (rank == 0) # this process will do logging, checkpointing etc.
+assert args.batch_size % (world_size) == 0
+train_accumulation_steps = args.batch_size // world_size
+
 
 # begin logging
 logfile = None
@@ -452,9 +456,6 @@ def get_lr(step: int):
 
 model: nn.Module = torch.compile(model, dynamic=False)
 
-# # To keep: gradient accumulation steps, and potential of bigger batch size than 1
-# assert args.batch_size % (ddp_world_size) == 0
-# train_accumulation_steps = args.batch_size // ddp_world_size
 
 ########################################
 #            Warmup kernels            #
@@ -528,9 +529,11 @@ for step in range(train_steps + 1):
         break
 
     # --------------- TRAINING SECTION -----------------
-    inputs, targets = next(train_loader)
-    model(inputs, targets, attn_blocksize).backward()
+    for _ in range(train_accumulation_steps): 
+        inputs, targets = next(train_loader)
+        model(inputs, targets, attn_blocksize).backward()    
     for param in model.parameters():
+        param.grad /= train_accumulation_steps
         dist.all_reduce(param.grad, op=dist.ReduceOp.AVG)
     # set optimization hyperparameters
     for opt in optimizers:
@@ -544,6 +547,7 @@ for step in range(train_steps + 1):
         opt.step()
     # null the gradients
     model.zero_grad(set_to_none=True)
+    # ----------------------------------------------------
     # logging
     approx_training_time_ms = training_time_ms + 1000 * (time.perf_counter() - t0)
     print0(f"step:{step+1}/{train_steps} train_time:{approx_training_time_ms:.0f}ms step_avg:{approx_training_time_ms/(step + 1):.2f}ms", console=True)
