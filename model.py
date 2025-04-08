@@ -24,7 +24,8 @@ class CastedLinear(nn.Linear):
         super().__init__(in_features, out_features, bias=False)
     def forward(self, x):
         return F.linear(x, self.weight.to(x.dtype))
-    
+
+        
 # Rotary embedding could be applied to randomized SO(2) group
 class RandomizedRotary(torch.nn.Module):
     def __init__(self, dim, base=10000, device='cuda'):
@@ -127,8 +128,34 @@ class RandomizedCausalSelfAttention(nn.Module):
         return y, v1
 
 
+class MLP(nn.Module):
+
+    def __init__(self, dim):
+        super().__init__()
+        self.c_fc   = CastedLinear(dim, 4 * dim)
+        self.c_proj = CastedLinear(4 * dim, dim)
+        self.c_proj.weight.data.zero_() # zero init suggested by @Grad62304977
+
+    def forward(self, x):
+        x = self.c_fc(x)
+        x = F.relu(x).square()
+        x = self.c_proj(x)
+        return x
+
+class Block(nn.Module):
+
+    def __init__(self, config):
+        super().__init__()
+        self.attn = CausalSelfAttention(config.n_embd, config.n_head, config.flex_kernel_options)
+        self.mlp = MLP(config.n_embd)
+        self.lambdas = nn.Parameter(torch.tensor([1., 0.]))
+
+    def forward(self, x, v1, x0, block_mask):
+        x = self.lambdas[0] * x + self.lambdas[1] * x0
+        x1, v1 = self.attn(norm(x), v1, block_mask)
+        x = x + x1
+        x = x + self.mlp(norm(x))
+        return x, v1
 
 
-        
-
-
+# TBD: extend 'GPT' model class that has batch forward functional
