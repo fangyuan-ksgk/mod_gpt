@@ -8,6 +8,17 @@ from torch.nn.attention.flex_attention import flex_attention
 def norm(x):
     return F.rms_norm(x, (x.size(-1),))
 
+class DynamicTanh(nn.Module):
+    def __init__(self, dim, alpha_init=0.5):
+        super().__init__()
+        self.alpha = nn.Parameter(torch.ones(1) * alpha_init)
+        self.weight = nn.Parameter(torch.ones(dim))
+        self.bias = nn.Parameter(torch.zeros(dim))
+        
+    def forward(self, x):
+        x = torch.tanh(self.alpha * x)
+        return x * self.weight + self.bias
+
 class CastedLinear(nn.Linear):
     def __init__(self, in_features, out_features):
         super().__init__(in_features, out_features, bias=False)
@@ -114,6 +125,8 @@ class RandomizedCausalSelfAttention(nn.Module):
             y = self._reverse_permutation(y, permutation, x.device)        
         y = self.c_proj(y)
         return y, v1
+
+
 
 
         
