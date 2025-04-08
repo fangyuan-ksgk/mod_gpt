@@ -3,6 +3,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.nn.attention.flex_attention import flex_attention
 
 def norm(x):
     return F.rms_norm(x, (x.size(-1),))
@@ -19,7 +20,6 @@ class RandomizedRotary(torch.nn.Module):
         super().__init__()
         self.dim = dim
         self.base = base
-        self.fixed_grouping = fixed_grouping
         self.inv_freq = None
         self.seq_len_cached = None
         self.cos_cached = None
@@ -35,7 +35,7 @@ class RandomizedRotary(torch.nn.Module):
 
     def forward(self, x, fixed_grouping=True):
         seq_len = x.shape[1]        
-        if not self.fixed_grouping:
+        if not fixed_grouping:
             self._randomize_grouping(x.device) 
             
         if seq_len != self.seq_len_cached:
