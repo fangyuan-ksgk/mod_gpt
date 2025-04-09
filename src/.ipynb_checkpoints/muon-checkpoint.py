@@ -1,5 +1,7 @@
 # -----------------------------------------------------------------------------
 # Muon optimizer @KellerJordan
+import torch
+from torch import Tensor
 
 @torch.compile
 def zeropower_via_newtonschulz5(G: Tensor, steps: int) -> Tensor:

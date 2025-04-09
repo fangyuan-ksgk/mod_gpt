@@ -8,8 +8,7 @@ from pathlib import Path
 from typing import Optional
 import torch.nn.functional as F
 from dataclasses import dataclass
-from torch.nn.attention.flex_attention import flex_attention
-
+from torch.nn.attention.flex_attention import flex_attention, create_block_mask
 
 def norm(x):
     return F.rms_norm(x, (x.size(-1),))
@@ -53,7 +52,6 @@ class RandomizedRotary(torch.nn.Module):
     def _randomize_grouping(self, device): 
         if not self._require_random_group:
             return 
-        generator = torch.Generator(device=device)
         self.permutation = torch.randperm(self.dim, device=device)
         self.indices1 = self.permutation[:self.dim//2]
         self.indices2 = self.permutation[self.dim//2:]
@@ -86,15 +84,15 @@ class RandomizedCausalSelfAttention(nn.Module):
         assert dim % n_head == 0, "Embedding dimension must be divisible by number of heads"
         self.dim = dim
         self.n_head = n_head        
-        self.c_q = nn.Linear(dim, dim)
-        self.c_k = nn.Linear(dim, dim)
-        self.c_v = nn.Linear(dim, dim)
+        self.c_q = CastedLinear(dim, dim)
+        self.c_k = CastedLinear(dim, dim)
+        self.c_v = CastedLinear(dim, dim)
         # value residual lambda 
         self.lamb = nn.Parameter(torch.tensor(0.5))  # @Grad62304977
         # rotary embeddings
         self.rotary = RandomizedRotary(dim // n_head, eval_randomize=eval_randomize)
         # output projection
-        self.c_proj = nn.Linear(dim, dim)
+        self.c_proj = CastedLinear(dim, dim)
         self.c_proj.weight.data.zero_()  # zero init suggested by @Grad62304977
         # flex attention kernel options
         self.flex_kernel_options = flex_kernel_options
