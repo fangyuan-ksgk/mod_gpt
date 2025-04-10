@@ -122,8 +122,8 @@ class Muon(torch.optim.Optimizer):
 # -----------------------------------------------------------------------------
 # PyTorch nn.Module definitions for the GPT-2 model
 
-# from src import GPT, GPTConfig # random grouping model
-from src.orig_model import GPT, GPTConfig # original model
+from src.rg_model import GPT, GPTConfig # random grouping model
+# from src.model import GPT, GPTConfig # original model
 
 # -----------------------------------------------------------------------------
 # Our own simple Distributed Data Loader
