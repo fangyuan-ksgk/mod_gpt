@@ -122,8 +122,9 @@ class Muon(torch.optim.Optimizer):
 # -----------------------------------------------------------------------------
 # PyTorch nn.Module definitions for the GPT-2 model
 
-from src.rg_model import GPT, GPTConfig # random grouping model
+# from src.rg_model import GPT, GPTConfig # random grouping model
 # from src.model import GPT, GPTConfig # original model
+from src.reprank import GPT, GPTConfig # rank regularized model
 
 # -----------------------------------------------------------------------------
 # Our own simple Distributed Data Loader
@@ -242,8 +243,8 @@ def get_lr(step: int):
         w = (1 - x) / args.cooldown_frac
         return w * 1.0 + (1 - w) * 0.1
 
-model: nn.Module = torch.compile(model, dynamic=False)
-
+if _compile not model_config: 
+    model: nn.Module = torch.compile(model, dynamic=False)
 
 ########################################
 #            Warmup kernels            #
