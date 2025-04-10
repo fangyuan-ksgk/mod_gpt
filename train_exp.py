@@ -122,9 +122,9 @@ class Muon(torch.optim.Optimizer):
 # -----------------------------------------------------------------------------
 # PyTorch nn.Module definitions for the GPT-2 model
 
-# from src.rg_model import GPT, GPTConfig # random grouping model
+from src.rg_model import GPT, GPTConfig # random grouping model
 # from src.model import GPT, GPTConfig # original model
-from src.reprank import GPT, GPTConfig # rank regularized model
+# from src.reprank import GPT, GPTConfig # rank regularized model
 
 # -----------------------------------------------------------------------------
 # Our own simple Distributed Data Loader
@@ -144,7 +144,7 @@ class Hyperparameters:
     val_seq_len : int = 4*64*1024 # FlexAttention sequence length for validation (per GPU)
     batch_size : int = 8 # Batch size, across all devices
     # optimization
-    num_iterations : int = 1750 # number of iterations to run
+    num_iterations : int = 1750 * 2 # number of iterations to run
     cooldown_frac : float = 0.4 # fraction of training spent cooling down the learning rate
     # architecture
     vocab_size : int = 50257
@@ -154,6 +154,7 @@ class Hyperparameters:
 
 if len(sys.argv) > 1 and sys.argv[1] == "poor": 
     args = Hyperparameters(batch_size=16, train_seq_len=32*1024, val_seq_len=16*1024)
+
     model_config = GPTConfig(
         flex_kernel_options={
             "BLOCK_M": 64, "BLOCK_N": 64, # forward
@@ -243,7 +244,8 @@ def get_lr(step: int):
         w = (1 - x) / args.cooldown_frac
         return w * 1.0 + (1 - w) * 0.1
 
-if _compile not model_config: 
+should_compile = getattr(model_config, '_compile', True)
+if should_compile:
     model: nn.Module = torch.compile(model, dynamic=False)
 
 ########################################
