@@ -21,9 +21,8 @@ class GPTConfig:
     n_head : int = 6
     n_embd : int = 768
     flex_kernel_options: Optional[dict] = None
-    alpha: float = 0.01 # weight of rep rank regularizaiton
+    alpha: float = 0.1 # weight of rep rank regularizaiton
     window_size: int = 64
-    _compile: bool = False
 
 class GPT(nn.Module):
 
@@ -71,11 +70,11 @@ class GPT(nn.Module):
         for i in range(self.num_decoder_layers):
             x = x + self.skip_weights[i] * skip_connections.pop()
             x, v1 = self.transformer.h[self.num_encoder_layers + i](x, v1, x0, block_mask)
-            reg_loss += reg_norm(x)
+            reg_loss += rep_norm(x)
         x = norm(x)
         logits = self.lm_head(x)
         logits = 30 * torch.tanh(logits / 30) # @Grad62304977
         logits = logits.float()
         loss = F.cross_entropy(logits.view(-1, logits.size(-1)), target.view(-1))
-        print(f"Entropy loss: {loss} | Regularization loss: {reg_loss}")
-        return loss + self.alpha * reg_loss
+        print(f"Entropy loss: {loss} | Regularization loss: {reg_loss.mean()}")
+        return loss + self.alpha * reg_loss.mean()
