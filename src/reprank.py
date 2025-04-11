@@ -2,22 +2,9 @@
 # -------------------------------------------------------------------
 import torch 
 
-
-def sliding_window_cumsum(x_square, window_size):
-    cumsum = torch.cumsum(x_square, dim=-1)
-    return torch.cat([cumsum[..., :window_size], cumsum[..., window_size:] - cumsum[..., :-window_size]], dim=-1)
-
-
-def sliding_forbenius_norm(x, window_size, reduce=True): 
-    """Squared Forbenius norm with sliding window"""
-    x_square = (x**2).sum(-1) / x.shape[-1] 
-    if reduce: 
-        return sliding_window_cumsum(x_square, window_size).mean()
-    else:
-        return sliding_window_cumsum(x_square, window_size)
-
-
-# Idea #1. Scaling regularization loss with entropy loss value (we require insightful when things are well understood)
+def rep_norm(x): 
+    """token-level representation rank norm"""
+    return (x**2).mean(-1)
 
 # Customized GPT model with low-rank regularization loss 
 # -------------------------------------------------------------------
@@ -70,7 +57,7 @@ class GPT(nn.Module):
         block_mask = create_block_mask(document_causal_mask, None, None, S, S, device="cuda", _compile=True)
 
         x = self.transformer.wte(idx)
-        reg_loss = sliding_forbenius_norm(x, self.window_size)
+        reg_loss = rep_norm(x)
         x = norm(x)
         
         x0 = x
@@ -79,90 +66,16 @@ class GPT(nn.Module):
         skip_connections = []
         for i in range(self.num_encoder_layers):
             x, v1 = self.transformer.h[i](x, v1, x0, block_mask)
-            reg_loss += sliding_forbenius_norm(x, self.window_size)
+            reg_loss += rep_norm(x)
             skip_connections.append(x)
         for i in range(self.num_decoder_layers):
             x = x + self.skip_weights[i] * skip_connections.pop()
             x, v1 = self.transformer.h[self.num_encoder_layers + i](x, v1, x0, block_mask)
-            reg_loss += sliding_forbenius_norm(x, self.window_size)
+            reg_loss += reg_norm(x)
         x = norm(x)
         logits = self.lm_head(x)
         logits = 30 * torch.tanh(logits / 30) # @Grad62304977
         logits = logits.float()
         loss = F.cross_entropy(logits.view(-1, logits.size(-1)), target.view(-1))
-        print(f"Entropy loss: {loss} | Regularization loss: {reg_loss}")
-        return loss + self.alpha * reg_loss
-
-
-# Customized GPT model with low-rank regularization loss | Memorize --> Understand
-# - Recommend to use 'accumulated max loss' to adapt regularization loss scale 
-# ----------------------------------------------------------------------------------
-
-def adaptive_reg(logits, targets, reg_loss, window_size, temperature=1.0):
-    token_loss = F.cross_entropy(
-        logits.view(-1, logits.size(-1)), 
-        targets.view(-1), 
-        reduction='none'
-    ).view(logits.shape[0], -1)  # [B, S]
-    # inverse weighting
-    inverse_weights = F.softmax(-token_loss/temperature, dim=-1)
-    print(" - Inverse weights:", inverse_weights.mean(dim=0))
-    return token_loss.mean(), (reg_loss * inverse_weights).mean()
-
-
-class GPTalpha(nn.Module):
-
-    def __init__(self, config):
-        super().__init__()
-
-        self.num_encoder_layers = config.n_layer // 2
-        self.num_decoder_layers = config.n_layer - self.num_encoder_layers 
-        self.skip_weights = nn.Parameter(torch.ones(self.num_decoder_layers))
-
-        self.transformer = nn.ModuleDict(dict(
-            wte = nn.Embedding(config.vocab_size, config.n_embd),
-            h = nn.ModuleList([Block(config) for _ in range(config.n_layer)]),
-        ))
-        self.lm_head = CastedLinear(config.n_embd, config.vocab_size)
-        self.lm_head.weight.data.zero_()
-
-        self.alpha = config.alpha 
-        self.window_size = config.window_size
-
-    def forward(self, idx, target, attn_blocksize):
-
-        docs = (idx == 50256).cumsum(1)
-        def document_causal_mask(b, h, q_idx, kv_idx):
-          causal_mask = q_idx >= kv_idx
-          document_mask = docs[b, q_idx] == docs[b, kv_idx]
-          window_mask = q_idx - kv_idx < attn_blocksize
-          return causal_mask & document_mask & window_mask
-
-        S = idx.shape[1]
-        block_mask = create_block_mask(document_causal_mask, None, None, S, S, device="cuda", _compile=True)
-
-        x = self.transformer.wte(idx)
-        reg_loss = sliding_forbenius_norm(x, self.window_size, False)
-        x = norm(x)
-        
-        x0 = x
-        v1 = None
-
-        # Store outputs for U-Net skip connections
-        skip_connections = []
-        for i in range(self.num_encoder_layers):
-            x, v1 = self.transformer.h[i](x, v1, x0, block_mask)
-            reg_loss += sliding_forbenius_norm(x, self.window_size, False)
-            skip_connections.append(x)
-        for i in range(self.num_decoder_layers):
-            x = x + self.skip_weights[i] * skip_connections.pop()
-            x, v1 = self.transformer.h[self.num_encoder_layers + i](x, v1, x0, block_mask)
-            reg_loss += sliding_forbenius_norm(x, self.window_size, False)
-        x = norm(x)
-        logits = self.lm_head(x)
-        logits = 30 * torch.tanh(logits / 30)
-        logits = logits.float()
-
-        loss, reg_loss = adaptive_reg(logits, target, reg_loss, self.window_size)
         print(f"Entropy loss: {loss} | Regularization loss: {reg_loss}")
         return loss + self.alpha * reg_loss
