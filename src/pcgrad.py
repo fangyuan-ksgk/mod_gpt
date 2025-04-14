@@ -37,6 +37,11 @@ class SimPGrad:
                         p.grad = self._project_non_confict(p.grad, prev_grad) + self._project_non_conflict(prev_grad, p.grad)
                     else: # loss order in descending importance, previous batch more important than current one
                         p.grad = prev_grad + self._project_non_conflict(prev_grad, p.grad)  
+
+    def naive_backward(self, loss_dict): # for experiment purpose
+        params = [p for p in self.model.parameters() if p.requires_grad]
+        loss = sum(loss_dict.values())
+        loss.backward() 
                         
 
 

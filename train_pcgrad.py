@@ -8,6 +8,7 @@ import uuid
 import time
 import copy
 from dataclasses import dataclass
+from collections import defaultdict
 
 import numpy as np
 import torch
@@ -15,8 +16,7 @@ from torch import nn, Tensor
 import torch.distributed as dist
 
 from src.pcgrad import SimPGrad
-from collections import defaultdict 
-
+from src.util import plot_training_losses
 
 # -----------------------------------------------------------------------------
 # Muon optimizer
@@ -130,6 +130,22 @@ class Muon(torch.optim.Optimizer):
 # from src.model import GPT, GPTConfig # original model
 from src.reprank import GPT, GPTConfig # rank regularized model
 
+
+# -----------------------------------------------------------------------------
+# Experiment hyper-parameter
+ignore_loss = ["rank_reg"] # which target to ignore for optimization
+no_priority = True # view all target to be equally important (across loss, and across batch)
+additive_grad = True # accumulate gradient via naive addition
+if (sys.argv) > 4: 
+    ignore_loss = ["rank_reg"] if sys.argv[2] == "no_reg"
+    no_priority = sys.argv[3] == "no_priority"
+    additive_grad = sys.argv[4] == "additive_grad"
+    
+print("------------ Hyperparameter ------------")
+print(f" :: Ignore Rank Regularization: {ignore_loss}") 
+print(f" :: Priority on entropy loss: {~no_priority}")
+print(f" :: Additive Gradient Accumulation: {additive_grad}")
+
 # -----------------------------------------------------------------------------
 # Our own simple Distributed Data Loader
 
@@ -148,7 +164,7 @@ class Hyperparameters:
     val_seq_len : int = 4*64*1024 # FlexAttention sequence length for validation (per GPU)
     batch_size : int = 8 # Batch size, across all devices
     # optimization
-    num_iterations : int = 1750 * 2 # number of iterations to run
+    num_iterations : int = 750 # number of iterations to run
     cooldown_frac : float = 0.4 # fraction of training spent cooling down the learning rate
     # architecture
     vocab_size : int = 50257
@@ -263,7 +279,10 @@ attn_blocksize = torch.tensor(64, dtype=torch.int, device="cuda")
 for _ in range(warmup_steps):
     inputs = targets = torch.randint(0, args.vocab_size, size=(1, args.train_seq_len,), device="cuda")
     loss_dict = model(inputs.to(torch.int32), targets, attn_blocksize)
-    grad_composer.backward(loss_dict) # projective composition of gradients
+    if additive_grad: 
+        grad_composer.naive_backward(loss_dict)
+    else: 
+        grad_composer.backward(loss_dict, no_priority) # projective composition of gradients
     for param in model.parameters():
         dist.all_reduce(param.grad, op=dist.ReduceOp.AVG)
     for opt in optimizers:
@@ -286,6 +305,7 @@ torch.cuda.synchronize()
 t0 = time.perf_counter()
 # begin training
 train_steps = args.num_iterations
+loss_record = defaultdict(list)
 for step in range(train_steps + 1):
     last_step = (step == train_steps)
     attn_blocksize = torch.tensor(64*((step/train_steps * (1792 - 64) + 64)//64), dtype=torch.int, device='cuda')
@@ -309,6 +329,7 @@ for step in range(train_steps + 1):
                     val_loss[name] += loss
         for name in val_loss: 
             val_loss[name] /= val_steps
+            loss_record[name] = val_loss[name].item()
         del val_loader
         for key in val_loss: 
             dist.all_reduce(val_loss[key], op=dist.ReduceOp.AVG)            
@@ -323,7 +344,9 @@ for step in range(train_steps + 1):
         if master_process and args.save_checkpoint:
             log = dict(step=step, code=code, model=model.state_dict(), optimizers=[opt.state_dict() for opt in optimizers])
             os.makedirs(f"logs/{run_id}", exist_ok=True)
-            torch.save(log, f"logs/{run_id}/state_step{step:06d}.pt")
+            torch.save(log, f"logs/{run_id}/state_step{step:06d}.pt") 
+            plot_training_losses(loss_record, save_path=f"logs/{run_id}_loss_curve.png")
+            
         # the last step only has the validation loop, so break to avoid training
         break
 
@@ -331,7 +354,11 @@ for step in range(train_steps + 1):
     for _ in range(train_accumulation_steps): 
         inputs, targets = next(train_loader)
         loss_dict = model(inputs, targets, attn_blocksize)
-        grad_composer.backward(loss_dict)
+        loss_dict = [key: loss_dict[key] for key in loss_dict if key not in ignore_loss] # for experiment
+        if additive_grad: 
+            grad_composer.naive_backward(loss_dict)
+        else: 
+            grad_composer.backward(loss_dict, no_priority)
     for param in model.parameters():
         param.grad /= train_accumulation_steps
         dist.all_reduce(param.grad, op=dist.ReduceOp.AVG)
