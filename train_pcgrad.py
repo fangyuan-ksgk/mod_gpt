@@ -14,7 +14,9 @@ import torch
 from torch import nn, Tensor
 import torch.distributed as dist
 
-from src.pcgrad import PCGrad
+from src.pcgrad import SimPGrad
+from collections import defaultdict 
+
 
 # -----------------------------------------------------------------------------
 # Muon optimizer
@@ -246,7 +248,7 @@ def get_lr(step: int):
         w = (1 - x) / args.cooldown_frac
         return w * 1.0 + (1 - w) * 0.1
 
-grad_mixer = PCGrad(model)
+grad_composer = SimPGrad(model)
 model: nn.Module = torch.compile(model, dynamic=False)
 
 ########################################
@@ -261,7 +263,7 @@ attn_blocksize = torch.tensor(64, dtype=torch.int, device="cuda")
 for _ in range(warmup_steps):
     inputs = targets = torch.randint(0, args.vocab_size, size=(1, args.train_seq_len,), device="cuda")
     loss_dict = model(inputs.to(torch.int32), targets, attn_blocksize)
-    gard_mixer.pc_backward(loss_dict)
+    grad_composer.backward(loss_dict) # projective composition of gradients
     for param in model.parameters():
         dist.all_reduce(param.grad, op=dist.ReduceOp.AVG)
     for opt in optimizers:
@@ -298,15 +300,20 @@ for step in range(train_steps + 1):
         assert args.val_tokens % val_seq_len == 0
         val_steps = args.val_tokens // val_seq_len
         val_loader = distributed_data_generator(args.val_files, val_seq_len, rank, world_size)
-        val_loss = 0
+        val_loss = defaultdict(float)
         with torch.no_grad():
             for _ in range(val_steps):
                 inputs, targets = next(val_loader)
-                val_loss += model(inputs, targets, attn_blocksize)
-        val_loss /= val_steps
+                loss_dict = model(inputs, targets, attn_blocksize)
+                for name, loss in loss_dict.items(): 
+                    val_loss[name] += loss
+        for name in val_loss: 
+            val_loss[name] /= val_steps
         del val_loader
-        dist.all_reduce(val_loss, op=dist.ReduceOp.AVG)
-        print0(f"step:{step}/{train_steps} val_loss:{val_loss:.4f} train_time:{training_time_ms:.0f}ms step_avg:{training_time_ms/max(step, 1):.2f}ms", console=True)
+        for key in val_loss: 
+            dist.all_reduce(val_loss[key], op=dist.ReduceOp.AVG)            
+        val_info = " ".join([f"{item} loss: {value:.4f}" for (item, value) in val_loss.items()])
+        print0(f"step:{step}/{train_steps} {val_info} train_time:{training_time_ms:.0f}ms step_avg:{training_time_ms/max(step, 1):.2f}ms", console=True)
         model.train()
         # start the clock again
         torch.cuda.synchronize()
@@ -324,7 +331,7 @@ for step in range(train_steps + 1):
     for _ in range(train_accumulation_steps): 
         inputs, targets = next(train_loader)
         loss_dict = model(inputs, targets, attn_blocksize)
-        gard_mixer.pc_backward(loss_dict)
+        grad_composer.backward(loss_dict)
     for param in model.parameters():
         param.grad /= train_accumulation_steps
         dist.all_reduce(param.grad, op=dist.ReduceOp.AVG)

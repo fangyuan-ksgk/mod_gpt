@@ -17,7 +17,7 @@ class SimPGrad:
                 g2 = g2 - projection
         return g2 
     
-    def update_with_batch(self, loss_dict, priority_loss=None):
+    def backward(self, loss_dict, no_priority=False):
         # Basically replacing additive grad accumulation with non-conflicting accumulation
         params = [p for p in self.model.parameters() if p.requires_grad]
         
@@ -33,7 +33,11 @@ class SimPGrad:
             loss_dict[loss_name].backward(retain_graph=True)            
             for p, prev_grad in zip(params, prev_grads):
                 if p.grad is not None:
-                    p.grad = prev_grad + _project_non_conflict(prev_grad, p.grad)  
+                    if no_priority: # all batch & loss are viewed as equaly important
+                        p.grad = self._project_non_confict(p.grad, prev_grad) + self._project_non_conflict(prev_grad, p.grad)
+                    else: # loss order in descending importance, previous batch more important than current one
+                        p.grad = prev_grad + self._project_non_conflict(prev_grad, p.grad)  
+                        
 
 
 # Original PCGrad implementation, for reference

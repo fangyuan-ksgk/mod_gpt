@@ -76,5 +76,4 @@ class GPT(nn.Module):
         logits = 30 * torch.tanh(logits / 30) # @Grad62304977
         logits = logits.float()
         loss = F.cross_entropy(logits.view(-1, logits.size(-1)), target.view(-1))
-        print(f"Entropy loss: {loss} | Regularization loss: {reg_loss.mean()}")
         return {"entropy": loss, "rank_reg": reg_loss.mean()}
