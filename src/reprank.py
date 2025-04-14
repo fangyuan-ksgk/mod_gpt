@@ -77,4 +77,4 @@ class GPT(nn.Module):
         logits = logits.float()
         loss = F.cross_entropy(logits.view(-1, logits.size(-1)), target.view(-1))
         print(f"Entropy loss: {loss} | Regularization loss: {reg_loss.mean()}")
-        return {"entropy": loss, "rank_reg": self.alpha * reg_loss.mean()}
+        return {"entropy": loss, "rank_reg": reg_loss.mean()}
