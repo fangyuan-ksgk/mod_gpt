@@ -16,7 +16,7 @@ from torch import nn, Tensor
 import torch.distributed as dist
 
 from src.pcgrad import SimPGrad
-from src.util import plot_training_losses
+from src.utils import plot_training_losses
 
 # -----------------------------------------------------------------------------
 # Muon optimizer
@@ -136,14 +136,14 @@ from src.reprank import GPT, GPTConfig # rank regularized model
 ignore_loss = ["rank_reg"] # which target to ignore for optimization
 no_priority = True # view all target to be equally important (across loss, and across batch)
 additive_grad = True # accumulate gradient via naive addition
-if (sys.argv) > 4: 
-    ignore_loss = ["rank_reg"] if sys.argv[2] == "no_reg"
+if len(sys.argv) > 4: 
+    ignore_loss = ["rank_reg"] if sys.argv[2] == "no_reg" else []
     no_priority = sys.argv[3] == "no_priority"
     additive_grad = sys.argv[4] == "additive_grad"
     
 print("------------ Hyperparameter ------------")
 print(f" :: Ignore Rank Regularization: {ignore_loss}") 
-print(f" :: Priority on entropy loss: {~no_priority}")
+print(f" :: No priority on entropy loss: {no_priority}")
 print(f" :: Additive Gradient Accumulation: {additive_grad}")
 
 # -----------------------------------------------------------------------------
@@ -354,7 +354,7 @@ for step in range(train_steps + 1):
     for _ in range(train_accumulation_steps): 
         inputs, targets = next(train_loader)
         loss_dict = model(inputs, targets, attn_blocksize)
-        loss_dict = [key: loss_dict[key] for key in loss_dict if key not in ignore_loss] # for experiment
+        loss_dict = {key: loss_dict[key] for key in loss_dict if key not in ignore_loss} # for experiment
         if additive_grad: 
             grad_composer.naive_backward(loss_dict)
         else: 
