@@ -23,7 +23,7 @@ def hutchinson_power_estimator(Z, alpha, num_samples=10):
     trace_est = 0
     for _ in range(num_samples):
         # Random ±1 vector
-        v = (torch.randint(0, 2, (m,), device=Z.device) * 2 - 1).float()
+        v = (torch.randint(0, 2, (m,), device=Z.device) * 2 - 1).to(Z.dtype)
         
         # Compute v^T P^α v
         u = v.clone()
@@ -41,7 +41,7 @@ def batch_mbe_estimator(Z, alpha, num_samples=10):
     trace_est = torch.zeros(B, device=Z.device)
     for _ in range(num_samples):
         # Random ±1 vector
-        v = (torch.randint(0, 2, (B, S), device=Z.device) * 2 - 1).float()
+        v = (torch.randint(0, 2, (B, S), device=Z.device) * 2 - 1).to(Z.dtype)
         
         # Compute v^T P^α v
         u = v.clone()

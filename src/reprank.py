@@ -56,7 +56,7 @@ class GPT(nn.Module):
         x = self.transformer.wte(idx)
         x = norm(x)
         reg_loss = {}
-        # reg_loss["rank_wte"] = patch_mbe(x)
+        reg_loss["rank_wte"] = patch_mbe(x)
         
         x0 = x
         v1 = None
@@ -107,6 +107,7 @@ class GPT(nn.Module):
             x = x + self.skip_weights[i] * skip_connections.pop()
             x, v1 = self.transformer.h[self.num_encoder_layers + i](x, v1, x0, block_mask)
             layer_reg_loss[f"rank_layer{self.num_encoder_layers + i+1}"] = patch_mbe(x)
+
         x = norm(x)
         logits = self.lm_head(x)
         logits = 30 * torch.tanh(logits / 30) # @Grad62304977

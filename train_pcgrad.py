@@ -133,18 +133,13 @@ from src.reprank import GPT, GPTConfig # rank regularized model
 
 # -----------------------------------------------------------------------------
 # Experiment hyper-parameter
-ignore_loss = [f"rank_layer{i}" for i in range(1,13)] # which target to ignore for optimization
+ignore_loss = ["rank_wte"] + [f"rank_layer{i}" for i in range(1,13)] # which target to ignore for optimization
 no_priority = True # view all target to be equally important (across loss, and across batch)
 additive_grad = True # accumulate gradient via naive addition
 if len(sys.argv) > 4: 
     ignore_loss = ignore_loss + ["rank_reg"] if sys.argv[2] == "no_reg" else ignore_loss
     no_priority = sys.argv[3] == "no_priority"
     additive_grad = sys.argv[4] == "additive_grad"
-    
-print("------------ Hyperparameter ------------")
-print(f" :: Ignore Rank Regularization: {ignore_loss}") 
-print(f" :: No priority on entropy loss: {no_priority}")
-print(f" :: Additive Gradient Accumulation: {additive_grad}")
 
 # -----------------------------------------------------------------------------
 # Our own simple Distributed Data Loader
@@ -207,6 +202,10 @@ if master_process:
     os.makedirs("logs", exist_ok=True)
     logfile = f"logs/{run_id}.txt"
     print(logfile)
+    print("------------ Hyperparameter ------------")
+    print(f" :: Ignore Rank Regularization: {ignore_loss}") 
+    print(f" :: No priority on entropy loss: {no_priority}")
+    print(f" :: Additive Gradient Accumulation: {additive_grad}")
 def print0(s, console=False):
     if master_process:
         with open(logfile, "a") as f:
@@ -265,7 +264,7 @@ def get_lr(step: int):
         return w * 1.0 + (1 - w) * 0.1
 
 grad_composer = SimPGrad(model)
-model: nn.Module = torch.compile(model, dynamic=False)
+model: nn.Module = torch.compile(model)
 
 ########################################
 #            Warmup kernels            #
@@ -276,9 +275,12 @@ warmup_steps = 10
 initial_state = dict(model=copy.deepcopy(model.state_dict()),
                      optimizers=[copy.deepcopy(opt.state_dict()) for opt in optimizers]) # save the initial state
 attn_blocksize = torch.tensor(64, dtype=torch.int, device="cuda")
+print("---------- WarmUp ------------")
 for _ in range(warmup_steps):
     inputs = targets = torch.randint(0, args.vocab_size, size=(1, args.train_seq_len,), device="cuda")
-    loss_dict = model(inputs.to(torch.int32), targets, attn_blocksize)
+    print(f" :: inputs & targets with length {inputs.shape[1]} prepared :: start model forward propagation ::")
+    loss_dict = model.forward_info(inputs.to(torch.int32), targets, attn_blocksize)
+    print(" :: model forward complete :: start composer backward") 
     if additive_grad: 
         grad_composer.naive_backward(loss_dict)
     else: 
@@ -325,7 +327,7 @@ for step in range(train_steps + 1):
             for _ in range(val_steps):
                 inputs, targets = next(val_loader)
                 # loss_dict = model(inputs, targets, attn_blocksize)
-                loss_dict, layer_reg_loss = model.forward_info(inputs, targets, attn_blocksize)
+                loss_dict = model.forward_info(inputs, targets, attn_blocksize)
                 for name, loss in loss_dict.items(): 
                     val_loss[name] += loss
         for name in val_loss: 
