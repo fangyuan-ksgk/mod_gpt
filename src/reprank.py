@@ -1,10 +1,13 @@
 # Representation Rank Regularization
 # -------------------------------------------------------------------
-import torch 
+import torch
+from .rank_regularizer import hutchinson_power_estimator
 
 def rep_norm(x): 
-    """token-level representation rank norm"""
-    return (x**2).mean(-1)
+    """sequence-level representation rank norm"""
+    # patch-wise mbe calculation 
+    # 1. slice sequence into patches 
+    # 2. calculate mbe for each patch 
 
 # Customized GPT model with low-rank regularization loss 
 # -------------------------------------------------------------------

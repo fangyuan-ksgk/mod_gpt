@@ -34,7 +34,40 @@ def hutchinson_power_estimator(Z, alpha, num_samples=10):
     
     return torch.log(trace_est) / (1-alpha)
 
+def batch_mbe_estimator(Z, alpha, num_samples=10):
+    B, S, D = Z.shape
+    frob_norm_sq = torch.sum(Z * Z, dim=(1, 2))
+    
+    trace_est = torch.zeros(B, device=Z.device)
+    for _ in range(num_samples):
+        # Random ±1 vector
+        v = (torch.randint(0, 2, (B, S), device=Z.device) * 2 - 1).float()
+        
+        # Compute v^T P^α v
+        u = v.clone()
+        for _ in range(alpha):  # For integer alpha
+            u = torch.einsum('bsd,bd->bs', Z, torch.einsum('bsd,bs->bd', Z, u)) / frob_norm_sq.unsqueeze(1)
+        
+        batch_dots = (v * u).sum(dim=1)
+        trace_est += batch_dots / num_samples
+    
+    return torch.log(trace_est) / (1-alpha)
 
+
+def patch_wise_mbe(x, alpha=2, window_size=64, num_samples=10): 
+    B, S, D = x.shape 
+    assert S % window_size == 0, "Sequence length must be divisible by window size"
+    batch_reg = torch.zeros(B, device=x.device)
+    num_patches = S // window_size
+    
+    mbe_per_patch = torch.zeros(B, num_patches, device=x.device)
+    for i in range(num_patches): 
+        patch_start = i * window_size
+        patch_end = patch_start + window_size
+        patch = x[:, patch_start:patch_end, :]  # Use the correct batch index
+        mbe_per_patch[:i] = batch_mbe_estimator(patch, alpha, num_samples)
+    
+    return mbe_per_patch.mean()
 
 # Stable Rank 
 # -----------------------------------------------------------------------------
