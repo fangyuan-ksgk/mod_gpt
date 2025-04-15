@@ -2,10 +2,12 @@
 # Viewing loss in each batch as a different task, conduct non-conflicting projection on their gradient
 # -----------------------------------------------------------------------------------------------------
 import torch 
+from collections import defaultdict
 
 class SimPGrad:
     def __init__(self, model):
         self.model = model
+        self._init_info() # for info logging
     
     def _project_non_conflict(self, g1, g2):
         """Remove conflicting component from secondary gradient"""
@@ -15,7 +17,7 @@ class SimPGrad:
             if g1_norm > 1e-8: 
                 projection = (g_dot / g1_norm) * g1
                 g2 = g2 - projection
-        return g2 
+        return g2
     
     def backward(self, loss_dict, no_priority=False):
         # Basically replacing additive grad accumulation with non-conflicting accumulation
@@ -34,15 +36,66 @@ class SimPGrad:
             for p, prev_grad in zip(params, prev_grads):
                 if p.grad is not None:
                     if no_priority: # all batch & loss are viewed as equaly important
-                        p.grad = self._project_non_confict(p.grad, prev_grad) + self._project_non_conflict(prev_grad, p.grad)
+                        p.grad = self._project_non_conflict(p.grad, prev_grad) + self._project_non_conflict(prev_grad, p.grad)
                     else: # loss order in descending importance, previous batch more important than current one
                         p.grad = prev_grad + self._project_non_conflict(prev_grad, p.grad)  
 
+    # Extra gadget for experiment logging
+    # ------------------------------------------------------------------------------------------
+     
+    
     def naive_backward(self, loss_dict): # for experiment purpose
         params = [p for p in self.model.parameters() if p.requires_grad]
         loss = sum(loss_dict.values())
         loss.backward() 
-                        
+
+    def _init_info(self): 
+        self.grad_info = {name: defaultdict(list) for name, p in self.model.named_parameters() if p.requires_grad}
+
+    def _update_info(self, param_name, prev_g_norm, curr_g_norm, cosim): 
+        print(f" :: Updating param: {param_name} with current gradient norm: {curr_g_norm}")
+        self.grad_info[param_name]["prev_grad_norm"].append(prev_g_norm)
+        self.grad_info[param_name]["curr_grad_norm"].append(curr_g_norm)
+        self.grad_info[param_name]["cosine_similarity"].append(cosim)
+        
+    def _project_non_conflict_info(self, g1, g2):
+        """
+        For non-priority projection of non-conflicting gradients
+        Provide extra information on prev grad norm, current grad norm, cosine similarity between the two
+        """
+        g1_norm = torch.norm(g1)
+        g2_norm = torch.norm(g2)
+        if g1_norm > 0 and g2_norm > 0: 
+            cosim = torch.sum((g1/g1_norm) * (g2/g2_norm))
+        else: 
+            cosim = torch.tensor(0.)
+        if cosim < 0: 
+            if g1_norm > 1e-4:
+                projection = g2_norm * cosim
+                g2 -= projection
+            if g2_norm > 1e-4: 
+                projection = g1_norm * cosim
+                g1 -= projection
+        return g1 + g2, g1_norm.item(), g2_norm.item(), cosim.item()
+
+    def backward_info(self, loss_dict, no_priority=False): 
+        names = [name for name, p in self.model.named_parameters() if p.requires_grad]
+        params = [p for p in self.model.parameters() if p.requires_grad]
+        
+        loss_names = list(loss_dict.keys())        
+        for loss_name in loss_names:
+            prev_grads = []
+            for p in params:
+                if p.grad is not None:
+                    prev_grads.append(p.grad.clone())
+                    p.grad.zero_() # zero-out to avoid additive accumulation
+                else: 
+                    prev_grads.append(torch.zeros_like(p))
+            loss_dict[loss_name].backward(retain_graph=True)            
+            for name, p, prev_grad in zip(names, params, prev_grads):
+                if p.grad is not None:                        
+                    p.grad, curr_g_norm, prev_g_norm, cosim = self._project_non_conflict_info(p.grad, prev_grad)
+                    self._update_info(name, prev_g_norm, curr_g_norm, cosim)
 
 
 # Original PCGrad implementation, for reference

@@ -133,11 +133,11 @@ from src.reprank import GPT, GPTConfig # rank regularized model
 
 # -----------------------------------------------------------------------------
 # Experiment hyper-parameter
-ignore_loss = ["rank_reg"] # which target to ignore for optimization
+ignore_loss = [f"rank_layer{i}" for i in range(1,13)] # which target to ignore for optimization
 no_priority = True # view all target to be equally important (across loss, and across batch)
 additive_grad = True # accumulate gradient via naive addition
 if len(sys.argv) > 4: 
-    ignore_loss = ["rank_reg"] if sys.argv[2] == "no_reg" else []
+    ignore_loss = ignore_loss + ["rank_reg"] if sys.argv[2] == "no_reg" else ignore_loss
     no_priority = sys.argv[3] == "no_priority"
     additive_grad = sys.argv[4] == "additive_grad"
     
@@ -324,12 +324,13 @@ for step in range(train_steps + 1):
         with torch.no_grad():
             for _ in range(val_steps):
                 inputs, targets = next(val_loader)
-                loss_dict = model(inputs, targets, attn_blocksize)
+                # loss_dict = model(inputs, targets, attn_blocksize)
+                loss_dict, layer_reg_loss = model.forward_info(inputs, targets, attn_blocksize)
                 for name, loss in loss_dict.items(): 
                     val_loss[name] += loss
         for name in val_loss: 
             val_loss[name] /= val_steps
-            loss_record[name] = val_loss[name].item()
+            loss_record[name].append(val_loss[name].item())
         del val_loader
         for key in val_loss: 
             dist.all_reduce(val_loss[key], op=dist.ReduceOp.AVG)            
@@ -358,7 +359,7 @@ for step in range(train_steps + 1):
         if additive_grad: 
             grad_composer.naive_backward(loss_dict)
         else: 
-            grad_composer.backward(loss_dict, no_priority)
+            grad_composer.backward_info(loss_dict, no_priority) # with gradient info accumulated
     for param in model.parameters():
         param.grad /= train_accumulation_steps
         dist.all_reduce(param.grad, op=dist.ReduceOp.AVG)

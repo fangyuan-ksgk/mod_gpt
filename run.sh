@@ -5,7 +5,7 @@
 
 # Experiment Set-Ups (use small step size ~750 to quickly benchmark algorithm performance)
 # - experiment (I) baseline 
-torchrun --standalone --nproc_per_node=2 train_pcgrad.py poor no_reg no_priority additive_grad 
+# torchrun --standalone --nproc_per_node=2 train_pcgrad.py poor no_reg no_priority additive_grad 
 # - experiment (II) compose non conflicting gradient 
 torchrun --standalone --nproc_per_node=2 train_pcgrad.py poor no_reg no_priority compose_grad 
 # - experiment (III) with rank regularization, naive additive grad
