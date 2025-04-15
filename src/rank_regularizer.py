@@ -65,7 +65,7 @@ def patch_mbe(x, alpha=2, patch_size=16, num_samples=10):
         patch_start = i * patch_size
         patch_end = patch_start + patch_size
         patch = x[:, patch_start:patch_end, :]  # Use the correct batch index
-        mbe_per_patch[:i] = batch_mbe_estimator(patch, alpha, num_samples)
+        mbe_per_patch[:, i] = batch_mbe_estimator(patch, alpha, num_samples)
     
     return mbe_per_patch.mean()
 
