@@ -168,7 +168,8 @@ class Hyperparameters:
     save_checkpoint : bool = False
 
 if len(sys.argv) > 1 and sys.argv[1] == "poor": 
-    args = Hyperparameters(batch_size=16, train_seq_len=32*1024, val_seq_len=16*1024)
+    # args = Hyperparameters(batch_size=16, train_seq_len=32*1024, val_seq_len=16*1024)
+    args = Hyperparameters(batch_size=16, train_seq_len=8*1024, val_seq_len=16*1024)
 
     model_config = GPTConfig(
         flex_kernel_options={
@@ -275,12 +276,12 @@ warmup_steps = 10
 initial_state = dict(model=copy.deepcopy(model.state_dict()),
                      optimizers=[copy.deepcopy(opt.state_dict()) for opt in optimizers]) # save the initial state
 attn_blocksize = torch.tensor(64, dtype=torch.int, device="cuda")
-print("---------- WarmUp ------------")
+
 for _ in range(warmup_steps):
     inputs = targets = torch.randint(0, args.vocab_size, size=(1, args.train_seq_len,), device="cuda")
-    print(f" :: inputs & targets with length {inputs.shape[1]} prepared :: start model forward propagation ::")
+    print(f" :: Forward propagation starts with inputs & targets of length {inputs.shape[1]}")
     loss_dict = model.forward_info(inputs.to(torch.int32), targets, attn_blocksize)
-    print(" :: model forward complete :: start composer backward") 
+    print(" :: Backward gradient computation starts ::") 
     if additive_grad: 
         grad_composer.naive_backward(loss_dict)
     else: 
