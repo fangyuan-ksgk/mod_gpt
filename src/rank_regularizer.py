@@ -54,16 +54,16 @@ def batch_mbe_estimator(Z, alpha, num_samples=10):
     return torch.log(trace_est) / (1-alpha)
 
 
-def patch_wise_mbe(x, alpha=2, window_size=64, num_samples=10): 
+def patch_mbe(x, alpha=2, patch_size=16, num_samples=10): 
     B, S, D = x.shape 
-    assert S % window_size == 0, "Sequence length must be divisible by window size"
+    assert S % patch_size == 0, "Sequence length must be divisible by patch size"
     batch_reg = torch.zeros(B, device=x.device)
-    num_patches = S // window_size
+    num_patches = S // patch_size
     
     mbe_per_patch = torch.zeros(B, num_patches, device=x.device)
     for i in range(num_patches): 
-        patch_start = i * window_size
-        patch_end = patch_start + window_size
+        patch_start = i * patch_size
+        patch_end = patch_start + patch_size
         patch = x[:, patch_start:patch_end, :]  # Use the correct batch index
         mbe_per_patch[:i] = batch_mbe_estimator(patch, alpha, num_samples)
     

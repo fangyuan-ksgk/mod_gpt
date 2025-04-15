@@ -1,13 +1,8 @@
 # Representation Rank Regularization
 # -------------------------------------------------------------------
 import torch
-from .rank_regularizer import hutchinson_power_estimator
-
-def rep_norm(x): 
-    """sequence-level representation rank norm"""
-    # patch-wise mbe calculation 
-    # 1. slice sequence into patches 
-    # 2. calculate mbe for each patch 
+from .rank_regularizer import patch_mbe
+    
 
 # Customized GPT model with low-rank regularization loss 
 # -------------------------------------------------------------------
@@ -59,7 +54,7 @@ class GPT(nn.Module):
         block_mask = create_block_mask(document_causal_mask, None, None, S, S, device="cuda", _compile=True)
 
         x = self.transformer.wte(idx)
-        reg_loss = rep_norm(x)
+        reg_loss = patch_mbe(x)
         x = norm(x)
         
         x0 = x
@@ -68,12 +63,12 @@ class GPT(nn.Module):
         skip_connections = []
         for i in range(self.num_encoder_layers):
             x, v1 = self.transformer.h[i](x, v1, x0, block_mask)
-            reg_loss += rep_norm(x)
+            reg_loss += patch_mbe(x)
             skip_connections.append(x)
         for i in range(self.num_decoder_layers):
             x = x + self.skip_weights[i] * skip_connections.pop()
             x, v1 = self.transformer.h[self.num_encoder_layers + i](x, v1, x0, block_mask)
-            reg_loss += rep_norm(x)
+            reg_loss += patch_mbe(x)
         x = norm(x)
         logits = self.lm_head(x)
         logits = 30 * torch.tanh(logits / 30) # @Grad62304977
@@ -96,7 +91,7 @@ class GPT(nn.Module):
         block_mask = create_block_mask(document_causal_mask, None, None, S, S, device="cuda", _compile=True)
 
         x = self.transformer.wte(idx)
-        reg_loss = rep_norm(x)
+        reg_loss = patch_mbe(x)
         x = norm(x)
         layer_reg_loss = {}
         
@@ -106,14 +101,14 @@ class GPT(nn.Module):
         skip_connections = []
         for i in range(self.num_encoder_layers):
             x, v1 = self.transformer.h[i](x, v1, x0, block_mask)
-            layer_reg_loss[f"rank_layer{i+1}"] = rep_norm(x)
-            reg_loss += rep_norm(x)
+            layer_reg_loss[f"rank_layer{i+1}"] = patch_mbe(x)
+            reg_loss += patch_mbe(x)
             skip_connections.append(x)
         for i in range(self.num_decoder_layers):
             x = x + self.skip_weights[i] * skip_connections.pop()
             x, v1 = self.transformer.h[self.num_encoder_layers + i](x, v1, x0, block_mask)
-            layer_reg_loss[f"rank_layer{self.num_encoder_layers + i+1}"] = rep_norm(x)
-            reg_loss += rep_norm(x)
+            layer_reg_loss[f"rank_layer{self.num_encoder_layers + i+1}"] = patch_mbe(x)
+            reg_loss += patch_mbe(x)
         x = norm(x)
         logits = self.lm_head(x)
         logits = 30 * torch.tanh(logits / 30) # @Grad62304977
