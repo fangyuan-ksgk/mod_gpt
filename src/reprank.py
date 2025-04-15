@@ -54,8 +54,9 @@ class GPT(nn.Module):
         block_mask = create_block_mask(document_causal_mask, None, None, S, S, device="cuda", _compile=True)
 
         x = self.transformer.wte(idx)
-        reg_loss = patch_mbe(x)
         x = norm(x)
+        reg_loss = {}
+        # reg_loss["rank_wte"] = patch_mbe(x)
         
         x0 = x
         v1 = None
@@ -63,18 +64,18 @@ class GPT(nn.Module):
         skip_connections = []
         for i in range(self.num_encoder_layers):
             x, v1 = self.transformer.h[i](x, v1, x0, block_mask)
-            reg_loss += patch_mbe(x)
+            reg_loss[f"rank_layer{i+1}"] = patch_mbe(x)
             skip_connections.append(x)
         for i in range(self.num_decoder_layers):
             x = x + self.skip_weights[i] * skip_connections.pop()
             x, v1 = self.transformer.h[self.num_encoder_layers + i](x, v1, x0, block_mask)
-            reg_loss += patch_mbe(x)
+            reg_loss[f"rank_layer{self.num_encoder_layers + i+1}"] = patch_mbe(x)
         x = norm(x)
         logits = self.lm_head(x)
         logits = 30 * torch.tanh(logits / 30) # @Grad62304977
         logits = logits.float()
         loss = F.cross_entropy(logits.view(-1, logits.size(-1)), target.view(-1))
-        return {"entropy": loss, "rank_reg": reg_loss.mean()}
+        return {"entropy": loss, "rank_reg": sum(reg_loss.values()) / len(reg_loss)}
 
     # Extra info collector
     # ------------------------------------------------------------------------
@@ -91,7 +92,6 @@ class GPT(nn.Module):
         block_mask = create_block_mask(document_causal_mask, None, None, S, S, device="cuda", _compile=True)
 
         x = self.transformer.wte(idx)
-        reg_loss = patch_mbe(x)
         x = norm(x)
         layer_reg_loss = {}
         
@@ -102,16 +102,16 @@ class GPT(nn.Module):
         for i in range(self.num_encoder_layers):
             x, v1 = self.transformer.h[i](x, v1, x0, block_mask)
             layer_reg_loss[f"rank_layer{i+1}"] = patch_mbe(x)
-            reg_loss += patch_mbe(x)
             skip_connections.append(x)
         for i in range(self.num_decoder_layers):
             x = x + self.skip_weights[i] * skip_connections.pop()
             x, v1 = self.transformer.h[self.num_encoder_layers + i](x, v1, x0, block_mask)
             layer_reg_loss[f"rank_layer{self.num_encoder_layers + i+1}"] = patch_mbe(x)
-            reg_loss += patch_mbe(x)
         x = norm(x)
         logits = self.lm_head(x)
         logits = 30 * torch.tanh(logits / 30) # @Grad62304977
         logits = logits.float()
         loss = F.cross_entropy(logits.view(-1, logits.size(-1)), target.view(-1))
-        return {"entropy": loss, "rank_reg": reg_loss.mean()}.update(layer_reg_loss)
+        loss_dict = {"entropy": loss, "rank_reg": sum(layer_reg_loss.values()) / len(layer_reg_loss)}
+        loss_dict.update(layer_reg_loss)
+        return loss_dict
