@@ -2,6 +2,8 @@
 # -------------------------------------------------------------------
 import torch
 from .rank_regularizer import patch_mbe
+
+patch_mbe = lambda x: patch_mbe(x, alpha=2, patch_size=16, num_samples=3)
     
 
 # Customized GPT model with low-rank regularization loss 
