@@ -270,6 +270,7 @@ model: nn.Module = torch.compile(model)
 ########################################
 #            Warmup kernels            #
 ########################################
+import time 
 
 # Warmup the training kernels, then re-initialize the state so we aren't cheating
 warmup_steps = 10
@@ -280,12 +281,17 @@ attn_blocksize = torch.tensor(64, dtype=torch.int, device="cuda")
 for _ in range(warmup_steps):
     inputs = targets = torch.randint(0, args.vocab_size, size=(1, args.train_seq_len,), device="cuda")
     print(f" :: Forward propagation starts with inputs & targets of length {inputs.shape[1]}")
+    forward_start = time.time() 
     loss_dict = model.forward_info(inputs.to(torch.int32), targets, attn_blocksize)
+    backward_start = time.time()
+    print(f" :: Forward time: {backward_start - forward_start}")
     print(" :: Backward gradient computation starts ::") 
     if additive_grad: 
         grad_composer.naive_backward(loss_dict)
     else: 
         grad_composer.backward(loss_dict, no_priority) # projective composition of gradients
+    backward_end = time.time() 
+    print(f" :: Backward time: {backward_end - backward_start}")
     for param in model.parameters():
         dist.all_reduce(param.grad, op=dist.ReduceOp.AVG)
     for opt in optimizers:
