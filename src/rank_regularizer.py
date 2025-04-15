@@ -53,7 +53,6 @@ def batch_mbe_estimator(Z, alpha, num_samples=10):
     
     return torch.log(trace_est) / (1-alpha)
 
-
 def patch_mbe(x, alpha=2, patch_size=16, num_samples=10): 
     B, S, D = x.shape 
     assert S % patch_size == 0, "Sequence length must be divisible by patch size"
