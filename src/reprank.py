@@ -152,3 +152,46 @@ class GPT(nn.Module):
         loss = F.cross_entropy(logits.view(-1, logits.size(-1)), target.view(-1))
         loss_dict = {"entropy": loss}
         return loss_dict
+
+    # Representation Rank regularization forwmard (Truncate forward & Detach prev)
+    def forward_rank(self, idx, layer_idx, attn_blocksize, do_detach=True): 
+        docs = (idx == 50256).cumsum(1)
+        def document_causal_mask(b, h, q_idx, kv_idx):
+          causal_mask = q_idx >= kv_idx
+          document_mask = docs[b, q_idx] == docs[b, kv_idx]
+          window_mask = q_idx - kv_idx < attn_blocksize
+          return causal_mask & document_mask & window_mask
+
+        S = idx.shape[1]
+        block_mask = create_block_mask(document_causal_mask, None, None, S, S, device="cuda", _compile=True)
+
+        x = self.transformer.wte(idx)
+        x = norm(x)
+        
+        x0 = x
+        v1 = None
+
+        skip_connections = []
+        for i in range(self.num_encoder_layers):
+            if layer_idx == i and do_detach: 
+                x = x.detach() 
+                v1 = v1.detach() if v1 is not None else None
+                x0 = x0.detach() 
+                skip_connections = [s.detach() for s in skip_connections] 
+            x, v1 = self.transformer.h[i](x, v1, x0, block_mask)
+            if layer_idx == i: 
+                return {f"rank_layer{layer_idx+1}": patch_mbe(x)}
+            skip_connections.append(x)
+        for i in range(self.num_decoder_layers):
+            layer_num = self.num_encoder_layers + i 
+            if layer_idx == layer_num and do_detach: 
+                x = x.detach() 
+                v1 = v1.detach() if v1 is not None else None
+                x0 = x0.detach()
+                skip_connections = [s.detach() for s in skip_connections] 
+            x = x + self.skip_weights[i] * skip_connections.pop()
+            x, v1 = self.transformer.h[self.num_encoder_layers + i](x, v1, x0, block_mask)
+            if layer_idx == self.num_encoder_layers + i: 
+                return {f"rank_layer{layer_idx+1}": patch_mbe(x)}
+            
+        return {f"rank_layer{layer_idx+1}": patch_mbe(x)}
