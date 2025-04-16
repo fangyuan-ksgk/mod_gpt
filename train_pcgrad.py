@@ -7,6 +7,7 @@ with open(sys.argv[0]) as f:
 import uuid
 import time
 import copy
+import random
 from dataclasses import dataclass
 from collections import defaultdict
 
@@ -282,7 +283,7 @@ model: nn.Module = torch.compile(model)
 import time 
 
 # Warmup the training kernels, then re-initialize the state so we aren't cheating
-warmup_steps = 10
+warmup_steps = 2
 initial_state = dict(model=copy.deepcopy(model.state_dict()),
                      optimizers=[copy.deepcopy(opt.state_dict()) for opt in optimizers]) # save the initial state
 attn_blocksize = torch.tensor(64, dtype=torch.int, device="cuda")
@@ -294,22 +295,37 @@ for i in range(warmup_steps):
     if i % 2 == 0: 
         loss_dict = model.forward_clear(inputs.to(torch.int32), targets, attn_blocksize) 
     else: 
-        layer_idx = random.randint(2, 12)
-        _do_detach = bool(random.randint(0,1))
+        # Random value created in master_process, broadcasted to all GPUs 
+        # ------------------------------------------------------------------------
+        if master_process == 0:  # master_process
+            layer_idx = torch.tensor(random.randint(2, 11), dtype=torch.int, device="cuda")
+            _do_detach = torch.tensor(bool(random.randint(0, 1)), dtype=torch.bool, device="cuda")
+        else: 
+            layer_idx = torch.tensor(0, dtype=torch.int, device="cuda")
+            _do_detach = torch.tensor(False, dtype=torch.bool, device="cuda")
+        dist.broadcast(layer_idx, src=0)
+        dist.broadcast(_do_detach, src=0)
+        layer_idx = layer_idx.item()
+        _do_detach = _do_detach.item()      
+
+        for p in model.parameters():
+            if p.requires_grad: 
+                p.grad = torch.zeros_like(p)
+        # ------------------------------------------------------------------------
         loss_dict = model.forward_rank(inputs.to(torch.int32), layer_idx, attn_blocksize, _do_detach)
         if _do_detach: 
-            print(f" :: Calculating Rank regularization loss with gradient detach for layer {layer_idx}")
+            print(f" :: Calculating Rank regularization loss with gradient detach for layer {layer_idx+1}")
         else: 
-            print(f" :: Calculating Rank regularization loss w/o gradient detach for layer {layer_idx}")
+            print(f" :: Calculating Rank regularization loss w/o gradient detach for layer {layer_idx+1}")
     backward_start = time.time()
     loss_name = ', '.join(loss_dict.keys())
-    print(f" :: Forward computation of loss: {loss_name} takes {backward_start - forward_start} second")
+    print(f" :: Forward computation of loss [{loss_name}] takes {backward_start - forward_start} second")
     if additive_grad: 
         grad_composer.naive_backward(loss_dict)
     else: 
         grad_composer.backward(loss_dict, no_priority) # projective composition of gradients
     backward_end = time.time() 
-    print(f" :: Backward gradient calculation for loss: {loss_name} takes {backward_end - backward_start} second")
+    print(f" :: Backward gradient calculation for loss [{loss_name}] takes {backward_end - backward_start} second")
     for param in model.parameters():
         dist.all_reduce(param.grad, op=dist.ReduceOp.AVG)
     for opt in optimizers:
@@ -325,6 +341,8 @@ del initial_state
 #        Training and validation       #
 ########################################
 
+print("----"*10)
+print("Training & Validation begins") 
 train_loader = distributed_data_generator(args.train_files, world_size * args.train_seq_len, rank, world_size)
 training_time_ms = 0
 # start the clock
@@ -386,6 +404,12 @@ for step in range(train_steps + 1):
     # --------------- TRAINING SECTION -----------------
     for _ in range(train_accumulation_steps):
         scheduler.step() 
+        # Dirty Trick: Zero init on all gradients 
+        # ---------------------------------
+        for p in model.parameters():
+            if p.requires_grad: 
+                p.grad = torch.zeros_like(p)
+        # ---------------------------------
         inputs, targets = next(train_loader)
         if scheduler.rr_layer_index: 
             loss_dict = model.forward_rank(inputs, scheduler.rr_layer_index, attn_blocksize, do_detach)
