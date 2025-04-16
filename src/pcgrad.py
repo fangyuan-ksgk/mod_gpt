@@ -5,6 +5,7 @@ import torch
 from collections import defaultdict
 import pickle
 import numpy as np
+from .utils import compute_gradient_cosine_similarities
 
 class SimPGrad:
     def __init__(self, model):
@@ -53,13 +54,19 @@ class SimPGrad:
     def _init_info(self): 
         self.grad_info = {name: defaultdict(list) for name, p in self.model.named_parameters() if p.requires_grad and p.numel() > 1}
 
-    def _update_info(self, param_name, prev_g_norm, curr_g_norm, cosim, loss_name, is_reset = False): 
+    def _update_info(self, param_name, prev_g_norm, curr_g_norm, cosim, loss_name, is_reset, grad_array): 
         if param_name in self.grad_info: 
+            if is_reset: 
+                self.grad_info[param_name]["grad_angles"] = compute_gradient_cosine_similarities(self.grad_info[param_name])
+                self.grad_info[param_name]["grad_array"] = [] # clear up grad caches
+                
             self.grad_info[param_name]["prev_grad_norm"].append(prev_g_norm)
             self.grad_info[param_name]["curr_grad_norm"].append(curr_g_norm)
             self.grad_info[param_name]["cosine_similarity"].append(cosim)
             self.grad_info[param_name]["loss_name"].append(loss_name)
             self.grad_info[param_name]["reset"].append(is_reset)
+            self.grad_info[param_name]["grad_array"].append(grad_array)
+            
 
     def _project_non_conflict_info(self, g1, g2):
         """
@@ -100,8 +107,9 @@ class SimPGrad:
             loss_dict[loss_name].backward(retain_graph=True)            
             for name, p, prev_grad, is_reset in zip(names, params, prev_grads, reset_flags):
                 if p.grad is not None:            
+                    grad_array = p.grad.detach().cpu().numpy()
                     p.grad, curr_g_norm, prev_g_norm, cosim = self._project_non_conflict_info(p.grad, prev_grad)
-                    self._update_info(name, prev_g_norm, curr_g_norm, cosim, loss_name, is_reset)
+                    self._update_info(name, prev_g_norm, curr_g_norm, cosim, loss_name, is_reset, grad_array)
                     
     def save_grad_info(self, path):         
         serializable_grad_info = {}

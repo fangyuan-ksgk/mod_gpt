@@ -74,3 +74,30 @@ def plot_training_losses(loss_record, save_path="loss_curves.png"):
     plt.close()
     
     print(f"- Loss curves saved to {save_path}")
+    
+    
+def compute_gradient_cosine_similarities(param_info):
+    grad_arrays = param_info["grad_array"]
+    loss_names = param_info["loss_name"]
+    pair_similarities = {}    
+    for i in range(len(grad_arrays)):
+        for j in range(i+1, len(grad_arrays)):
+            grad_i = grad_arrays[i]
+            grad_j = grad_arrays[j]            
+            dot_product = np.dot(grad_i, grad_j)
+            norm_i = np.linalg.norm(grad_i)
+            norm_j = np.linalg.norm(grad_j)
+            cosine_sim = dot_product / (norm_i * norm_j)
+            loss_pair = tuple(sorted([loss_names[i], loss_names[j]]))            
+            if loss_pair not in pair_similarities:
+                pair_similarities[loss_pair] = []
+            pair_similarities[loss_pair].append(cosine_sim)
+    results = []
+    for loss_pair, similarities in pair_similarities.items():
+        avg_similarity = sum(similarities) / len(similarities)
+        results.append({
+            "loss_pair": loss_pair,
+            "cosine_similarity": avg_similarity
+        })
+    
+    return results
