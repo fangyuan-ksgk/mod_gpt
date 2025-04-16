@@ -53,13 +53,12 @@ class SimPGrad:
     def _init_info(self): 
         self.grad_info = {name: defaultdict(list) for name, p in self.model.named_parameters() if p.requires_grad}
 
-    def _update_info(self, param_name, prev_g_norm, curr_g_norm, cosim, loss_name, curr_grad): 
-        print(f" :: Updating param: {param_name} with current gradient norm: {curr_g_norm}")
+    def _update_info(self, param_name, prev_g_norm, curr_g_norm, cosim, loss_name, is_reset = False): 
         self.grad_info[param_name]["prev_grad_norm"].append(prev_g_norm)
         self.grad_info[param_name]["curr_grad_norm"].append(curr_g_norm)
         self.grad_info[param_name]["cosine_similarity"].append(cosim)
         self.grad_info[param_name]["loss_name"].append(loss_name)
-        self.grad_info[param_name]["curr_grad"].append(curr_grad)
+        self.grad_info[param_name]["reset"] # whether composition is reset
 
     def _project_non_conflict_info(self, g1, g2):
         """
@@ -90,16 +89,17 @@ class SimPGrad:
             prev_grads = []
             for p in params:
                 if p.grad is not None:
+                    is_reset = False
                     prev_grads.append(p.grad.clone())
                     p.grad.zero_() # zero-out to avoid additive accumulation
                 else: 
+                    is_reset = True
                     prev_grads.append(torch.zeros_like(p))
             loss_dict[loss_name].backward(retain_graph=True)            
             for name, p, prev_grad in zip(names, params, prev_grads):
                 if p.grad is not None:            
                     p.grad, curr_g_norm, prev_g_norm, cosim = self._project_non_conflict_info(p.grad, prev_grad)
-                    curr_grad = p.grad.detach().to("cpu").numpy()
-                    self._update_info(name, prev_g_norm, curr_g_norm, cosim, loss_name, curr_grad)
+                    self._update_info(name, prev_g_norm, curr_g_norm, cosim, loss_name, is_reset)
                     
     def save_grad_info(self, path):         
         serializable_grad_info = {}
