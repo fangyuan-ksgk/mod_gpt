@@ -16,6 +16,7 @@ from torch import nn, Tensor
 import torch.distributed as dist
 
 from src.pcgrad import SimPGrad
+from src.utils import RRScheduler
 from src.utils import plot_training_losses
 
 # -----------------------------------------------------------------------------
@@ -133,13 +134,16 @@ from src.reprank import GPT, GPTConfig # rank regularized model
 
 # -----------------------------------------------------------------------------
 # Experiment hyper-parameter
-ignore_loss = ["rank_wte"] + [f"rank_layer{i}" for i in range(1,13)] # which target to ignore for optimization
+RANK_REG_LOSS = "regularized_rank"
+ignore_loss = ["rank_wte"] + [f"{RANK_REG_LOSS}_layer{i}" for i in range(1,13)] # which target to ignore for optimization
 no_priority = True # view all target to be equally important (across loss, and across batch)
 additive_grad = True # accumulate gradient via naive addition
-if len(sys.argv) > 4: 
-    ignore_loss = ignore_loss + ["rank_reg"] if sys.argv[2] == "no_reg" else ignore_loss
+do_detach = True # whether to detach early layer for rank regularization
+if len(sys.argv) > 5: 
+    ignore_loss = ignore_loss + [RANK_REG_LOSS] if sys.argv[2] == "no_reg" else ignore_loss
     no_priority = sys.argv[3] == "no_priority"
     additive_grad = sys.argv[4] == "additive_grad"
+    do_detach = sys.argv[5] == "detach"
 
 # -----------------------------------------------------------------------------
 # Our own simple Distributed Data Loader
@@ -264,7 +268,12 @@ def get_lr(step: int):
         w = (1 - x) / args.cooldown_frac
         return w * 1.0 + (1 - w) * 0.1
 
+# Projective Non-conflicting Gradient Composer 
+# ---------------------------------------------------------
 grad_composer = SimPGrad(model)
+# ---------------------------------------------------------
+
+
 model: nn.Module = torch.compile(model)
 
 ########################################
@@ -278,20 +287,29 @@ initial_state = dict(model=copy.deepcopy(model.state_dict()),
                      optimizers=[copy.deepcopy(opt.state_dict()) for opt in optimizers]) # save the initial state
 attn_blocksize = torch.tensor(64, dtype=torch.int, device="cuda")
 
-for _ in range(warmup_steps):
+for i in range(warmup_steps):
     inputs = targets = torch.randint(0, args.vocab_size, size=(1, args.train_seq_len,), device="cuda")
     print(f" :: Forward propagation starts with inputs & targets of length {inputs.shape[1]}")
     forward_start = time.time() 
-    loss_dict = model.forward_info(inputs.to(torch.int32), targets, attn_blocksize)
+    if i % 2 == 0: 
+        loss_dict = model.forward_clear(inputs.to(torch.int32), targets, attn_blocksize) 
+    else: 
+        layer_idx = random.randint(2, 12)
+        _do_detach = bool(random.randint(0,1))
+        loss_dict = model.forward_rank(inputs.to(torch.int32), layer_idx, attn_blocksize, _do_detach)
+        if _do_detach: 
+            print(f" :: Calculating Rank regularization loss with gradient detach for layer {layer_idx}")
+        else: 
+            print(f" :: Calculating Rank regularization loss w/o gradient detach for layer {layer_idx}")
     backward_start = time.time()
-    print(f" :: Forward time: {backward_start - forward_start}")
-    print(" :: Backward gradient computation starts ::") 
+    loss_name = ', '.join(loss_dict.keys())
+    print(f" :: Forward computation of loss: {loss_name} takes {backward_start - forward_start} second")
     if additive_grad: 
         grad_composer.naive_backward(loss_dict)
     else: 
         grad_composer.backward(loss_dict, no_priority) # projective composition of gradients
     backward_end = time.time() 
-    print(f" :: Backward time: {backward_end - backward_start}")
+    print(f" :: Backward gradient calculation for loss: {loss_name} takes {backward_end - backward_start} second")
     for param in model.parameters():
         dist.all_reduce(param.grad, op=dist.ReduceOp.AVG)
     for opt in optimizers:
@@ -315,6 +333,8 @@ t0 = time.perf_counter()
 # begin training
 train_steps = args.num_iterations
 loss_record = defaultdict(list)
+scheduler = RRScheduler(train_accumulation_steps, train_steps) # scheduler for rank regularization
+
 for step in range(train_steps + 1):
     last_step = (step == train_steps)
     attn_blocksize = torch.tensor(64*((step/train_steps * (1792 - 64) + 64)//64), dtype=torch.int, device='cuda')
@@ -355,16 +375,22 @@ for step in range(train_steps + 1):
             log = dict(step=step, code=code, model=model.state_dict(), optimizers=[opt.state_dict() for opt in optimizers])
             os.makedirs(f"logs/{run_id}", exist_ok=True)
             torch.save(log, f"logs/{run_id}/state_step{step:06d}.pt") 
+            print(" - plotting loss curve - ")
             plot_training_losses(loss_record, save_path=f"logs/{run_id}_loss_curve.png")
+            print(" - save gradient information - ")
+            grad_mixer.save_grad_info(f"logs/{run_id}/grad_step{step:06d}.pkl")
             
         # the last step only has the validation loop, so break to avoid training
         break
 
     # --------------- TRAINING SECTION -----------------
-    for _ in range(train_accumulation_steps): 
+    for _ in range(train_accumulation_steps):
+        scheduler.step() 
         inputs, targets = next(train_loader)
-        loss_dict = model(inputs, targets, attn_blocksize)
-        loss_dict = {key: loss_dict[key] for key in loss_dict if key not in ignore_loss} # for experiment
+        if scheduler.rr_layer_index: 
+            loss_dict = model.forward_rank(inputs, scheduler.rr_layer_index, attn_blocksize, do_detach)
+        else: 
+            loss_dict = model.forward_clear(inputs, targets, attn_blocksize)
         if additive_grad: 
             grad_composer.naive_backward(loss_dict)
         else: 
