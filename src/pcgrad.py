@@ -88,16 +88,17 @@ class SimPGrad:
         loss_names = list(loss_dict.keys())        
         for loss_name in loss_names:
             prev_grads = []
+            reset_flags = []
             for p in params:
                 if p.grad is not None:
-                    is_reset = False
+                    reset_flags.append(False)
                     prev_grads.append(p.grad.clone())
                     p.grad.zero_() # zero-out to avoid additive accumulation
                 else: 
-                    is_reset = True
+                    reset_flags.append(True)
                     prev_grads.append(torch.zeros_like(p))
             loss_dict[loss_name].backward(retain_graph=True)            
-            for name, p, prev_grad in zip(names, params, prev_grads):
+            for name, p, prev_grad, is_reset in zip(names, params, prev_grads, reset_flags):
                 if p.grad is not None:            
                     p.grad, curr_g_norm, prev_g_norm, cosim = self._project_non_conflict_info(p.grad, prev_grad)
                     self._update_info(name, prev_g_norm, curr_g_norm, cosim, loss_name, is_reset)
