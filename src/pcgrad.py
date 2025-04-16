@@ -51,14 +51,15 @@ class SimPGrad:
         loss.backward() 
 
     def _init_info(self): 
-        self.grad_info = {name: defaultdict(list) for name, p in self.model.named_parameters() if p.requires_grad}
+        self.grad_info = {name: defaultdict(list) for name, p in self.model.named_parameters() if p.requires_grad and p.numel() > 1}
 
     def _update_info(self, param_name, prev_g_norm, curr_g_norm, cosim, loss_name, is_reset = False): 
-        self.grad_info[param_name]["prev_grad_norm"].append(prev_g_norm)
-        self.grad_info[param_name]["curr_grad_norm"].append(curr_g_norm)
-        self.grad_info[param_name]["cosine_similarity"].append(cosim)
-        self.grad_info[param_name]["loss_name"].append(loss_name)
-        self.grad_info[param_name]["reset"] # whether composition is reset
+        if param_name in self.grad_info: 
+            self.grad_info[param_name]["prev_grad_norm"].append(prev_g_norm)
+            self.grad_info[param_name]["curr_grad_norm"].append(curr_g_norm)
+            self.grad_info[param_name]["cosine_similarity"].append(cosim)
+            self.grad_info[param_name]["loss_name"].append(loss_name)
+            self.grad_info[param_name]["reset"].append(is_reset)
 
     def _project_non_conflict_info(self, g1, g2):
         """
