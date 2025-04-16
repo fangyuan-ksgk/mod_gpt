@@ -154,6 +154,7 @@ class GPT(nn.Module):
         return loss_dict
 
     # Representation Rank regularization forwmard (Truncate forward & Detach prev)
+    # -----------------------------------------------------------------------------
     def forward_rank(self, idx, layer_idx, attn_blocksize, do_detach=True): 
         docs = (idx == 50256).cumsum(1)
         def document_causal_mask(b, h, q_idx, kv_idx):

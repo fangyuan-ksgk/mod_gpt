@@ -3,6 +3,8 @@
 # -----------------------------------------------------------------------------------------------------
 import torch 
 from collections import defaultdict
+import pickle
+import numpy as np
 
 class SimPGrad:
     def __init__(self, model):
@@ -43,7 +45,6 @@ class SimPGrad:
     # Extra gadget for experiment logging
     # ------------------------------------------------------------------------------------------
      
-    
     def naive_backward(self, loss_dict): # for experiment purpose
         params = [p for p in self.model.parameters() if p.requires_grad]
         loss = sum(loss_dict.values())
@@ -52,12 +53,14 @@ class SimPGrad:
     def _init_info(self): 
         self.grad_info = {name: defaultdict(list) for name, p in self.model.named_parameters() if p.requires_grad}
 
-    def _update_info(self, param_name, prev_g_norm, curr_g_norm, cosim): 
+    def _update_info(self, param_name, prev_g_norm, curr_g_norm, cosim, loss_name, curr_grad): 
         print(f" :: Updating param: {param_name} with current gradient norm: {curr_g_norm}")
         self.grad_info[param_name]["prev_grad_norm"].append(prev_g_norm)
         self.grad_info[param_name]["curr_grad_norm"].append(curr_g_norm)
         self.grad_info[param_name]["cosine_similarity"].append(cosim)
-        
+        self.grad_info[param_name]["loss_name"].append(loss_name)
+        self.grad_info[param_name]["curr_grad"].append(curr_grad)
+
     def _project_non_conflict_info(self, g1, g2):
         """
         For non-priority projection of non-conflicting gradients
@@ -93,10 +96,19 @@ class SimPGrad:
                     prev_grads.append(torch.zeros_like(p))
             loss_dict[loss_name].backward(retain_graph=True)            
             for name, p, prev_grad in zip(names, params, prev_grads):
-                if p.grad is not None:                        
+                if p.grad is not None:            
                     p.grad, curr_g_norm, prev_g_norm, cosim = self._project_non_conflict_info(p.grad, prev_grad)
-                    self._update_info(name, prev_g_norm, curr_g_norm, cosim)
-
+                    curr_grad = p.grad.detach().to("cpu").numpy()
+                    self._update_info(name, prev_g_norm, curr_g_norm, cosim, loss_name, curr_grad)
+                    
+    def save_grad_info(self, path):         
+        serializable_grad_info = {}
+        for param_name, info in self.grad_info.items():
+            serializable_grad_info[param_name] = {k: np.array(v) if k == "curr_grad" else v 
+                                                for k, v in dict(info).items()}
+        
+        with open(path, "wb") as f:  # Note: changed to binary mode
+            pickle.dump(serializable_grad_info, f)
 
 # Original PCGrad implementation, for reference
 class PCGrad:
