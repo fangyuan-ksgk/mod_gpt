@@ -57,7 +57,7 @@ class SimPGrad:
     def _update_info(self, param_name, prev_g_norm, curr_g_norm, cosim, loss_name, is_reset, grad_array): 
         if param_name in self.grad_info: 
             if is_reset: 
-                self.grad_info[param_name]["grad_angles"] = compute_gradient_cosine_similarities(self.grad_info[param_name])
+                self.grad_info[param_name]["grad_angles"] += compute_gradient_cosine_similarities(self.grad_info[param_name])
                 self.grad_info[param_name]["grad_array"] = [] # clear up grad caches
                 
             self.grad_info[param_name]["prev_grad_norm"].append(prev_g_norm)

@@ -2,6 +2,7 @@
 # -------------------------------------------------------------------
 import torch
 from .rank_regularizer import patch_mbe
+RANK_REG_LOSS = "regularized_rank"
 
 # Customized GPT model with low-rank regularization loss 
 # -------------------------------------------------------------------
@@ -63,12 +64,12 @@ class GPT(nn.Module):
         skip_connections = []
         for i in range(self.num_encoder_layers):
             x, v1 = self.transformer.h[i](x, v1, x0, block_mask)
-            reg_loss[f"rank_layer{i+1}"] = patch_mbe(x)
+            reg_loss[f"{RANK_REG_LOSS}_layer{i+1}"] = patch_mbe(x)
             skip_connections.append(x)
         for i in range(self.num_decoder_layers):
             x = x + self.skip_weights[i] * skip_connections.pop()
             x, v1 = self.transformer.h[self.num_encoder_layers + i](x, v1, x0, block_mask)
-            reg_loss[f"rank_layer{self.num_encoder_layers + i+1}"] = patch_mbe(x)
+            reg_loss[f"{RANK_REG_LOSS}_layer{self.num_encoder_layers + i+1}"] = patch_mbe(x)
         x = norm(x)
         logits = self.lm_head(x)
         logits = 30 * torch.tanh(logits / 30) # @Grad62304977
@@ -101,13 +102,13 @@ class GPT(nn.Module):
         for i in range(self.num_encoder_layers):
             x, v1 = self.transformer.h[i](x, v1, x0, block_mask)
             if i == self.num_encoder_layers - 1: 
-                layer_reg_loss[f"rank_layer{i+1}"] = patch_mbe(x)            
+                layer_reg_loss[f"{RANK_REG_LOSS}_layer{i+1}"] = patch_mbe(x)            
             skip_connections.append(x)
             
         for i in range(self.num_decoder_layers):
             x = x + self.skip_weights[i] * skip_connections.pop()
             x, v1 = self.transformer.h[self.num_encoder_layers + i](x, v1, x0, block_mask)
-            # layer_reg_loss[f"rank_layer{self.num_encoder_layers + i+1}"] = patch_mbe(x)
+            # layer_reg_loss[f"{RANK_REG_LOSS}_layer{self.num_encoder_layers + i+1}"] = patch_mbe(x)
 
         x = norm(x)
         logits = self.lm_head(x)
@@ -181,7 +182,7 @@ class GPT(nn.Module):
                 skip_connections = [s.detach() for s in skip_connections] 
             x, v1 = self.transformer.h[i](x, v1, x0, block_mask)
             if layer_idx == i: 
-                return {f"rank_layer{layer_idx+1}": patch_mbe(x)}
+                return {f"{RANK_REG_LOSS}_layer{layer_idx+1}": patch_mbe(x)}
             skip_connections.append(x)
         for i in range(self.num_decoder_layers):
             layer_num = self.num_encoder_layers + i 
@@ -193,6 +194,6 @@ class GPT(nn.Module):
             x = x + self.skip_weights[i] * skip_connections.pop()
             x, v1 = self.transformer.h[self.num_encoder_layers + i](x, v1, x0, block_mask)
             if layer_idx == self.num_encoder_layers + i: 
-                return {f"rank_layer{layer_idx+1}": patch_mbe(x)}
+                return {f"{RANK_REG_LOSS}_layer{layer_idx+1}": patch_mbe(x)}
             
-        return {f"rank_layer{layer_idx+1}": patch_mbe(x)}
+        return {f"{RANK_REG_LOSS}_layer{layer_idx+1}": patch_mbe(x)}
