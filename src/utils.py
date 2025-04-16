@@ -82,8 +82,8 @@ def compute_gradient_cosine_similarities(param_info):
     pair_similarities = {}    
     for i in range(len(grad_arrays)):
         for j in range(i+1, len(grad_arrays)):
-            grad_i = grad_arrays[i]
-            grad_j = grad_arrays[j]            
+            grad_i = grad_arrays[i].flatten()
+            grad_j = grad_arrays[j].flatten()            
             dot_product = np.dot(grad_i, grad_j)
             norm_i = np.linalg.norm(grad_i)
             norm_j = np.linalg.norm(grad_j)
