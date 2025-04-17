@@ -288,6 +288,10 @@ initial_state = dict(model=copy.deepcopy(model.state_dict()),
                      optimizers=[copy.deepcopy(opt.state_dict()) for opt in optimizers]) # save the initial state
 attn_blocksize = torch.tensor(64, dtype=torch.int, device="cuda")
 
+for p in model.parameters():
+    if p.requires_grad: 
+        p.grad = torch.zeros_like(p)
+        
 for i in range(warmup_steps):
     inputs = targets = torch.randint(0, args.vocab_size, size=(1, args.train_seq_len,), device="cuda")
     print(f" :: Forward propagation starts with inputs & targets of length {inputs.shape[1]}")
@@ -307,10 +311,6 @@ for i in range(warmup_steps):
         dist.broadcast(_do_detach, src=0)
         layer_idx = layer_idx.item()
         _do_detach = _do_detach.item()      
-
-        for p in model.parameters():
-            if p.requires_grad: 
-                p.grad = torch.zeros_like(p)
         # ------------------------------------------------------------------------
         loss_dict = model.forward_rank(inputs.to(torch.int32), layer_idx, attn_blocksize, _do_detach)
         if _do_detach: 
@@ -352,6 +352,7 @@ t0 = time.perf_counter()
 train_steps = args.num_iterations
 loss_record = defaultdict(list)
 scheduler = RRScheduler(train_accumulation_steps, train_steps) # scheduler for rank regularization
+print(" :: Scheduler initialized") 
 
 for step in range(train_steps + 1):
     last_step = (step == train_steps)
@@ -359,6 +360,7 @@ for step in range(train_steps + 1):
 
     # --------------- VALIDATION SECTION -----------------
     if last_step or (args.val_loss_every > 0 and step % args.val_loss_every == 0):
+        print(f" ::beginning validation step: {step}")
         # stop the clock
         torch.cuda.synchronize()
         training_time_ms += 1000 * (time.perf_counter() - t0)
@@ -369,12 +371,14 @@ for step in range(train_steps + 1):
         val_loader = distributed_data_generator(args.val_files, val_seq_len, rank, world_size)
         val_loss = defaultdict(float)
         with torch.no_grad():
-            for _ in range(val_steps):
+            print(f" :: staring {val_steps} validation")
+            for i in range(val_steps):
                 inputs, targets = next(val_loader)
-                # loss_dict = model(inputs, targets, attn_blocksize)
-                loss_dict = model.forward_info(inputs, targets, attn_blocksize)
+                loss_dict = model.forward_clear(inputs, targets, attn_blocksize)
                 for name, loss in loss_dict.items(): 
                     val_loss[name] += loss
+                print(f" :: progress {i}/{val_steps}")
+        print(f" :: validation step: {val_steps} completed")
         for name in val_loss: 
             val_loss[name] /= val_steps
             loss_record[name].append(val_loss[name].item())
@@ -403,6 +407,7 @@ for step in range(train_steps + 1):
 
     # --------------- TRAINING SECTION -----------------
     for _ in range(train_accumulation_steps):
+        print(f" ::beginning training step: {step}")
         scheduler.step() 
         # Dirty Trick: Zero init on all gradients 
         # ---------------------------------
