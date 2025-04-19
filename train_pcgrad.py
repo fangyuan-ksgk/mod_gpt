@@ -275,7 +275,7 @@ grad_composer = SimPGrad(model)
 # ---------------------------------------------------------
 
 
-model: nn.Module = torch.compile(model)
+model: nn.Module = torch.compile(model, dynamic=True)
 
 ########################################
 #            Warmup kernels            #
@@ -283,14 +283,14 @@ model: nn.Module = torch.compile(model)
 import time 
 
 # Warmup the training kernels, then re-initialize the state so we aren't cheating
-warmup_steps = 2
+warmup_steps = 30
 initial_state = dict(model=copy.deepcopy(model.state_dict()),
                      optimizers=[copy.deepcopy(opt.state_dict()) for opt in optimizers]) # save the initial state
 attn_blocksize = torch.tensor(64, dtype=torch.int, device="cuda")
 
-# for p in model.parameters():
-#     if p.requires_grad: 
-#         p.grad = torch.zeros_like(p)
+for p in model.parameters():
+    if p.requires_grad: 
+        p.grad = torch.zeros_like(p)
         
 for i in range(warmup_steps):
     inputs = targets = torch.randint(0, args.vocab_size, size=(1, args.train_seq_len,), device="cuda")
@@ -301,22 +301,10 @@ for i in range(warmup_steps):
     else: 
         # Random value created in master_process, broadcasted to all GPUs 
         # ------------------------------------------------------------------------
-        if master_process == 0:  # master_process
-            layer_idx = torch.tensor(random.randint(2, 11), dtype=torch.int, device="cuda")
-            _do_detach = torch.tensor(bool(random.randint(0, 1)), dtype=torch.bool, device="cuda")
-        else: 
-            layer_idx = torch.tensor(0, dtype=torch.int, device="cuda")
-            _do_detach = torch.tensor(False, dtype=torch.bool, device="cuda")
-        dist.broadcast(layer_idx, src=0)
-        dist.broadcast(_do_detach, src=0)
-        layer_idx = layer_idx.item()
-        _do_detach = _do_detach.item()      
+        layer_idx = i % 11   
         # ------------------------------------------------------------------------
-        loss_dict = model.forward_rank(inputs.to(torch.int32), layer_idx, attn_blocksize, _do_detach)
-        if _do_detach: 
-            print(f" :: Calculating Rank regularization loss with gradient detach for layer {layer_idx+1}")
-        else: 
-            print(f" :: Calculating Rank regularization loss w/o gradient detach for layer {layer_idx+1}")
+        loss_dict = model.forward(inputs.to(torch.int32), targets, attn_blocksize, [layer_idx])
+        print(f" :: Calculating Rank regularization loss for layer {layer_idx+1}")
     backward_start = time.time()
     loss_name = ', '.join(loss_dict.keys())
     print(f" :: Forward computation of loss [{loss_name}] takes {backward_start - forward_start} second")
@@ -418,7 +406,7 @@ for step in range(train_steps + 1):
         # ---------------------------------
         inputs, targets = next(train_loader)
         if scheduler.rr_layer_index: 
-            loss_dict = model.forward_rank(inputs, scheduler.rr_layer_index, attn_blocksize, do_detach)
+            loss_dict = model.forward(inputs, targets, attn_blocksize, [scheduler.rr_layer_index])
         else: 
             loss_dict = model.forward_clear(inputs, targets, attn_blocksize)
         if additive_grad: 
