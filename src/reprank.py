@@ -75,36 +75,6 @@ class GPT(nn.Module):
         loss = F.cross_entropy(logits.view(-1, logits.size(-1)), target.view(-1))
         return {"entropy": loss, "rank_reg": sum(reg_loss.values()) / len(reg_loss) if reg_loss else torch.tensor(0., device=x.device)}
         
-        
-    def forward_clear(self, idx, target, attn_blocksize):
-        """regularization free ver."""
-        docs = (idx == 50256).cumsum(1)
-        def document_causal_mask(b, h, q_idx, kv_idx):
-          causal_mask = q_idx >= kv_idx
-          document_mask = docs[b, q_idx] == docs[b, kv_idx]
-          window_mask = q_idx - kv_idx < attn_blocksize
-          return causal_mask & document_mask & window_mask
-
-        S = idx.shape[1]
-        block_mask = create_block_mask(document_causal_mask, None, None, S, S, device="cuda", _compile=True)
-
-        x = self.transformer.wte(idx)
-        x = norm(x)
-        
-        x0 = x
-        v1 = None
-
-        skip_connections = []
-        for i in range(self.num_layers):
-            x, v1 = self.transformer.h[i](x, v1, x0, block_mask)
-
-        x = norm(x)
-        logits = self.lm_head(x)
-        logits = 30 * torch.tanh(logits / 30) # @Grad62304977
-        logits = logits.float()
-        loss = F.cross_entropy(logits.view(-1, logits.size(-1)), target.view(-1))
-        loss_dict = {"entropy": loss}
-        return loss_dict  
 
 
 class GPTconn(nn.Module):
