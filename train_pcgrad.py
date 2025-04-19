@@ -288,9 +288,9 @@ initial_state = dict(model=copy.deepcopy(model.state_dict()),
                      optimizers=[copy.deepcopy(opt.state_dict()) for opt in optimizers]) # save the initial state
 attn_blocksize = torch.tensor(64, dtype=torch.int, device="cuda")
 
-for p in model.parameters():
-    if p.requires_grad: 
-        p.grad = torch.zeros_like(p)
+# for p in model.parameters():
+#     if p.requires_grad: 
+#         p.grad = torch.zeros_like(p)
         
 for i in range(warmup_steps):
     inputs = targets = torch.randint(0, args.vocab_size, size=(1, args.train_seq_len,), device="cuda")
@@ -327,7 +327,8 @@ for i in range(warmup_steps):
     backward_end = time.time() 
     print(f" :: Backward gradient calculation for loss [{loss_name}] takes {backward_end - backward_start} second")
     for param in model.parameters():
-        dist.all_reduce(param.grad, op=dist.ReduceOp.AVG)
+        if param.grad is not None: 
+            dist.all_reduce(param.grad, op=dist.ReduceOp.AVG)
     for opt in optimizers:
         opt.step()
     model.zero_grad(set_to_none=True)

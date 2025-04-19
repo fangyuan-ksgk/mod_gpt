@@ -1,7 +1,7 @@
 # Representation Rank Regularization
 # -------------------------------------------------------------------
 import torch
-from .rank_regularizer import patch_mbe
+from .rank_regularizer import patch_mbe2 as patch_mbe
 RANK_REG_LOSS = "regularized_rank"
 
 # Customized GPT model with low-rank regularization loss 
@@ -41,7 +41,8 @@ class GPT(nn.Module):
         self.alpha = config.alpha 
         self.window_size = config.window_size
 
-    def forward(self, idx, target, attn_blocksize):
+    def forward(self, idx, target, attn_blocksize, reg_layer_indices):
+        """Localized Rank Regularization for Each Block"""
 
         docs = (idx == 50256).cumsum(1)
         def document_causal_mask(b, h, q_idx, kv_idx):
@@ -56,30 +57,38 @@ class GPT(nn.Module):
         x = self.transformer.wte(idx)
         x = norm(x)
         reg_loss = {}
-        reg_loss["rank_wte"] = patch_mbe(x)
         
         x0 = x
         v1 = None
 
         skip_connections = []
         for i in range(self.num_encoder_layers):
+            if i in reg_layer_indices: 
+                print(f" :: detached rank regularization loss computation for layer {i+1}")
+                _x, _ = self.transformer.h[i](x.detach(), v1.detach() if v1 is not None else None, x0.detach(), block_mask)
+                reg_loss[f"{RANK_REG_LOSS}_layer{i+1}"] = patch_mbe(_x)
+                print(" :: completed ::")
             x, v1 = self.transformer.h[i](x, v1, x0, block_mask)
-            reg_loss[f"{RANK_REG_LOSS}_layer{i+1}"] = patch_mbe(x)
             skip_connections.append(x)
         for i in range(self.num_decoder_layers):
             x = x + self.skip_weights[i] * skip_connections.pop()
+            if (self.num_encoder_layers + i) in reg_layer_indices: 
+                print(f" :: detached rank regularization loss computation for layer {self.num_encoder_layers+i+1}")
+                _x, _ = self.transformer.h[self.num_encoder_layers + i](x.detach(), v1.detach(), x0.detach(), block_mask)
+                reg_loss[f"{RANK_REG_LOSS}_layer{self.num_encoder_layers + i+1}"] = patch_mbe(_x)
+                print(" :: completed ::")
             x, v1 = self.transformer.h[self.num_encoder_layers + i](x, v1, x0, block_mask)
-            reg_loss[f"{RANK_REG_LOSS}_layer{self.num_encoder_layers + i+1}"] = patch_mbe(x)
         x = norm(x)
         logits = self.lm_head(x)
         logits = 30 * torch.tanh(logits / 30) # @Grad62304977
         logits = logits.float()
         loss = F.cross_entropy(logits.view(-1, logits.size(-1)), target.view(-1))
-        return {"entropy": loss, "rank_reg": sum(reg_loss.values()) / len(reg_loss)}
+        return {"entropy": loss, "rank_reg": sum(reg_loss.values()) / len(reg_loss) if reg_loss else torch.tensor(0., device=x.device)}
 
     # Extra info collector
-    # ------------------------------------------------------------------------
-    def forward_info(self, idx, target, attn_blocksize):
+    # ------------------------------------------------------------------------    
+    def forward_full(self, idx, target, attn_blocksize, reg_layer_indices):
+        """Localized Rank Regularization for Each Block"""
 
         docs = (idx == 50256).cumsum(1)
         def document_causal_mask(b, h, q_idx, kv_idx):
@@ -93,7 +102,7 @@ class GPT(nn.Module):
 
         x = self.transformer.wte(idx)
         x = norm(x)
-        layer_reg_loss = {}
+        reg_loss = {}
         
         x0 = x
         v1 = None
@@ -101,25 +110,26 @@ class GPT(nn.Module):
         skip_connections = []
         for i in range(self.num_encoder_layers):
             x, v1 = self.transformer.h[i](x, v1, x0, block_mask)
-            if i == self.num_encoder_layers - 1: 
-                layer_reg_loss[f"{RANK_REG_LOSS}_layer{i+1}"] = patch_mbe(x)            
+            if i in reg_layer_indices: 
+                print(f" :: Rank regularization loss computation for layer {i+1}")
+                reg_loss[f"{RANK_REG_LOSS}_layer{i+1}"] = patch_mbe(x)
+                print(" :: completed ::")
             skip_connections.append(x)
-            
         for i in range(self.num_decoder_layers):
             x = x + self.skip_weights[i] * skip_connections.pop()
+            if (self.num_encoder_layers + i) in reg_layer_indices: 
+                print(f" :: Rank regularization loss computation for layer {self.num_encoder_layers+i+1}")
+                reg_loss[f"{RANK_REG_LOSS}_layer{self.num_encoder_layers + i+1}"] = patch_mbe(x)
+                print(" :: completed ::")
             x, v1 = self.transformer.h[self.num_encoder_layers + i](x, v1, x0, block_mask)
-            # layer_reg_loss[f"{RANK_REG_LOSS}_layer{self.num_encoder_layers + i+1}"] = patch_mbe(x)
-
         x = norm(x)
         logits = self.lm_head(x)
         logits = 30 * torch.tanh(logits / 30) # @Grad62304977
         logits = logits.float()
         loss = F.cross_entropy(logits.view(-1, logits.size(-1)), target.view(-1))
-        loss_dict = {"entropy": loss, "rank_reg": sum(layer_reg_loss.values()) / len(layer_reg_loss)}
-        loss_dict.update(layer_reg_loss)
-        return loss_dict
-
-    
+        return {"entropy": loss, "rank_reg": sum(reg_loss.values()) / len(reg_loss) if reg_loss else torch.tensor(0., device=x.device)}
+        
+        
     def forward_clear(self, idx, target, attn_blocksize):
         """regularization free ver."""
         docs = (idx == 50256).cumsum(1)
@@ -197,3 +207,6 @@ class GPT(nn.Module):
                 return {f"{RANK_REG_LOSS}_layer{layer_idx+1}": patch_mbe(x)}
             
         return {f"{RANK_REG_LOSS}_layer{layer_idx+1}": patch_mbe(x)}
+
+    # Per-Layer Rank Regularization without hard detach etc.
+    
