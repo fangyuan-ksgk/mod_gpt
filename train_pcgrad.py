@@ -133,16 +133,7 @@ class Muon(torch.optim.Optimizer):
 from src.reprank import GPT, GPTConfig # rank regularized model
 
 
-# -----------------------------------------------------------------------------
-# Experiment hyper-parameter
-RANK_REG_LOSS = "regularized_rank"
-ignore_loss = ["rank_wte"] + [f"{RANK_REG_LOSS}_layer{i}" for i in range(1,13)] # which target to ignore for optimization
-no_priority = True # view all target to be equally important (across loss, and across batch)
-additive_grad = True # accumulate gradient via naive addition
-if len(sys.argv) > 5: 
-    ignore_loss = ignore_loss + [RANK_REG_LOSS] if sys.argv[2] == "no_reg" else ignore_loss
-    no_priority = sys.argv[3] == "no_priority"
-    additive_grad = sys.argv[4] == "additive_grad"
+
 
 # -----------------------------------------------------------------------------
 # Our own simple Distributed Data Loader
@@ -197,7 +188,16 @@ master_process = (rank == 0) # this process will do logging, checkpointing etc.
 assert args.batch_size % (world_size) == 0
 train_accumulation_steps = args.batch_size // world_size
 
-
+# -----------------------------------------------------------------------------
+# Experiment hyper-parameter
+RANK_REG_LOSS = "mbe"
+ignore_loss = []
+no_priority = True # view all target to be equally important (across loss, and across batch)
+additive_grad = True # accumulate gradient via naive addition
+if len(sys.argv)>4 and master_process: 
+    no_priority = sys.argv[3] == "no_priority"
+    additive_grad = sys.argv[4] == "additive_grad"
+    
 # begin logging
 logfile = None
 if master_process:
@@ -273,11 +273,10 @@ def get_lr(step: int):
 ################################################
 
 import torch._functorch
-torch._functorch.config.donated_buffer = False
+# torch._functorch.config.donated_buffer = False
 grad_composer = SimPGrad(model)
 
 # ---------------------------------------------------------
-
 
 model: nn.Module = torch.compile(model, dynamic=True)
 

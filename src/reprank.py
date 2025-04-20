@@ -134,4 +134,8 @@ class GPT(nn.Module):
         logits = 30 * torch.tanh(logits / 30) # @Grad62304977
         logits = logits.float()
         loss = F.cross_entropy(logits.view(-1, logits.size(-1)), target.view(-1))
-        return {"entropy": loss, "mbe": sum(reg_loss.values()) / len(reg_loss) if reg_loss else torch.tensor(0., device=x.device)}
+        
+        loss_dict = {"entropy": loss}
+        if reg_loss: 
+            loss_dict["mbe"] = sum(reg_loss.values()) / len(reg_loss)
+        return loss_dict 
