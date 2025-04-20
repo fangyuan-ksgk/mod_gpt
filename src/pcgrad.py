@@ -42,15 +42,15 @@ class SimPGrad:
                         p.grad = self._project_non_conflict(p.grad, prev_grad) + self._project_non_conflict(prev_grad, p.grad)
                     else: # loss order in descending importance, previous batch more important than current one
                         p.grad = prev_grad + self._project_non_conflict(prev_grad, p.grad)  
-
-    # Extra gadget for experiment logging
-    # ------------------------------------------------------------------------------------------
-     
+                        
     def naive_backward(self, loss_dict): # for experiment purpose
         params = [p for p in self.model.parameters() if p.requires_grad]
         loss = sum(loss_dict.values())
         loss.backward() 
 
+    # Extra gadget for experiment logging
+    # ------------------------------------------------------------------------------------------
+     
     def _init_info(self): 
         self.grad_info = {name: defaultdict(list) for name, p in self.model.named_parameters() if p.requires_grad and p.numel() > 1}
 
@@ -66,7 +66,6 @@ class SimPGrad:
             self.grad_info[param_name]["loss_name"].append(loss_name)
             self.grad_info[param_name]["reset"].append(is_reset)
             self.grad_info[param_name]["grad_array"].append(grad_array)
-            
 
     def _project_non_conflict_info(self, g1, g2):
         """
@@ -86,6 +85,15 @@ class SimPGrad:
             if g2_norm > 1e-4: 
                 projection = g1_norm * cosim
                 g1 -= projection
+        return g1 + g2, g1_norm.item(), g2_norm.item(), cosim.item()
+    
+    def _add_grad_info(self, g1, g2): 
+        g1_norm = torch.norm(g1)
+        g2_norm = torch.norm(g2)
+        if g1_norm > 0 and g2_norm > 0: 
+            cosim = torch.sum((g1/g1_norm) * (g2/g2_norm))
+        else: 
+            cosim = torch.tensor(0.)
         return g1 + g2, g1_norm.item(), g2_norm.item(), cosim.item()
 
     def backward_info(self, loss_dict, no_priority=False): 
@@ -109,6 +117,29 @@ class SimPGrad:
                 if p.grad is not None:            
                     grad_array = p.grad.detach().cpu().numpy()
                     p.grad, curr_g_norm, prev_g_norm, cosim = self._project_non_conflict_info(p.grad, prev_grad)
+                    self._update_info(name, prev_g_norm, curr_g_norm, cosim, loss_name, is_reset, grad_array)
+                    
+    def naive_backward_info(self, loss_dict): 
+        names = [name for name, p in self.model.named_parameters() if p.requires_grad]
+        params = [p for p in self.model.parameters() if p.requires_grad]
+        
+        loss_names = list(loss_dict.keys())        
+        for loss_name in loss_names:
+            prev_grads = []
+            reset_flags = []
+            for p in params:
+                if p.grad is not None:
+                    reset_flags.append(False)
+                    prev_grads.append(p.grad.clone())
+                    p.grad.zero_() # zero-out to avoid additive accumulation
+                else: 
+                    reset_flags.append(True)
+                    prev_grads.append(torch.zeros_like(p))
+            loss_dict[loss_name].backward(retain_graph=True)            
+            for name, p, prev_grad, is_reset in zip(names, params, prev_grads, reset_flags):
+                if p.grad is not None:            
+                    grad_array = p.grad.detach().cpu().numpy()
+                    p.grad, curr_g_norm, prev_g_norm, cosim = self._add_grad_info(p.grad, prev_grad)
                     self._update_info(name, prev_g_norm, curr_g_norm, cosim, loss_name, is_reset, grad_array)
                     
     def save_grad_info(self, path):         
