@@ -308,9 +308,10 @@ for i in range(warmup_steps):
     loss_name = ', '.join(loss_dict.keys())
     print(f" :: Forward computation of loss [{loss_name}] takes {backward_start - forward_start} second")
     if additive_grad: 
-        grad_composer.naive_backward_info(loss_dict)
+        # grad_composer.naive_backward_info(loss_dict)
+        grad_composer.naive_backward(loss_dict)
     else: 
-        grad_composer.backward(loss_dict, no_priority) # projective composition of gradients
+        grad_composer.backward_info(loss_dict, no_priority) # projective composition of gradients
     backward_end = time.time() 
     print(f" :: Backward gradient calculation for loss [{loss_name}] takes {backward_end - backward_start} second")
     for param in model.parameters():
@@ -393,11 +394,19 @@ for step in range(train_steps + 1):
     for _ in range(train_accumulation_steps):
         scheduler.step() 
         inputs, targets = next(train_loader)
-        loss_dict = model.forward(inputs, targets, attn_blocksize, [scheduler.rr_layer_index])
+        loss_dict = model.forward(inputs, targets, attn_blocksize, scheduler.rr_layer_index)
+        if 'mbe' in loss_dict: 
+            loss_dict = {"mbe": loss_dict["mbe"]}
         if additive_grad: 
-            grad_composer.naive_backward_info(loss_dict)
+            if step % 50 == 0: 
+                grad_composer.naive_backward_info(loss_dict)
+            else: 
+                grad_composer.naive_backward(loss_dict)
         else: 
-            grad_composer.backward_info(loss_dict, no_priority) # with gradient info accumulated
+            if step % 50 == 0: 
+                grad_composer.backward_info(loss_dict, no_priority) # with gradient info accumulated
+            else: 
+                grad_composer.backward(loss_dict, no_priority)
     for param in model.parameters():
         param.grad /= train_accumulation_steps
         dist.all_reduce(param.grad, op=dist.ReduceOp.AVG)

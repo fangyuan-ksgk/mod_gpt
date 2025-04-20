@@ -133,11 +133,11 @@ class RRScheduler:
             self.current_layer_idx = (self.current_layer_idx + 1) % len(self.layer_indices)
 
     def _do_rr(self):
-        return self.current_accumulation_step == 0
+        return self.current_accumulation_step % 2 == 0
         
     @property
     def rr_layer_index(self): 
         if self._do_rr(): 
-            return self.layer_indices[self.current_layer_idx]
+            return self.layer_indices[self.current_layer_idx: self.current_layer_idx + 1]
         else: 
-            return -1
+            return []

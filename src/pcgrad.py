@@ -27,6 +27,7 @@ class SimPGrad:
         params = [p for p in self.model.parameters() if p.requires_grad]
         
         loss_names = list(loss_dict.keys())        
+        assert len(loss_names) == 1, "retain_graph conflict with donated_buffer in pytorch, require one backward per forward calls"
         for loss_name in loss_names:
             prev_grads = []
             for p in params:
@@ -35,7 +36,7 @@ class SimPGrad:
                     p.grad.zero_() # zero-out to avoid additive accumulation
                 else: 
                     prev_grads.append(torch.zeros_like(p))
-            loss_dict[loss_name].backward(retain_graph=True)            
+            loss_dict[loss_name].backward(retain_graph=False)            
             for p, prev_grad in zip(params, prev_grads):
                 if p.grad is not None:
                     p.grad = self._project_non_conflict(p.grad, prev_grad) + self._project_non_conflict(prev_grad, p.grad)
@@ -97,7 +98,9 @@ class SimPGrad:
         names = [name for name, p in self.model.named_parameters() if p.requires_grad]
         params = [p for p in self.model.parameters() if p.requires_grad]
         
-        loss_names = list(loss_dict.keys())        
+        loss_names = list(loss_dict.keys())
+        assert len(loss_names) == 1, "retain_graph conflict with donated_buffer in pytorch, require one backward per forward calls"
+        
         for loss_name in loss_names:
             prev_grads = []
             reset_flags = []
@@ -109,7 +112,7 @@ class SimPGrad:
                 else: 
                     reset_flags.append(True)
                     prev_grads.append(torch.zeros_like(p))
-            loss_dict[loss_name].backward(retain_graph=True)            
+            loss_dict[loss_name].backward(retain_graph=False)            
             for name, p, prev_grad, is_reset in zip(names, params, prev_grads, reset_flags):
                 if p.grad is not None:            
                     grad_array = p.grad.detach().cpu().to(torch.float16).numpy()
@@ -121,6 +124,8 @@ class SimPGrad:
         params = [p for p in self.model.parameters() if p.requires_grad]
         
         loss_names = list(loss_dict.keys())        
+        assert len(loss_names) == 1, "retain_graph conflict with donated_buffer in pytorch, require one backward per forward calls"
+        
         for loss_name in loss_names:
             prev_grads = []
             reset_flags = []
@@ -132,7 +137,7 @@ class SimPGrad:
                 else: 
                     reset_flags.append(True)
                     prev_grads.append(torch.zeros_like(p))
-            loss_dict[loss_name].backward(retain_graph=True)            
+            loss_dict[loss_name].backward(retain_graph=False)            
             for name, p, prev_grad, is_reset in zip(names, params, prev_grads, reset_flags):
                 if p.grad is not None:            
                     grad_array = p.grad.detach().cpu().to(torch.float16).numpy()
