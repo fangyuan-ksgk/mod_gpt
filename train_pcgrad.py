@@ -173,8 +173,7 @@ class Hyperparameters:
     save_checkpoint : bool = False
 
 if len(sys.argv) > 1 and sys.argv[1] == "poor": 
-    args = Hyperparameters(batch_size=16, train_seq_len=32*1024, val_seq_len=16*1024,
-                          val_loss_every=2, num_iterations=6)
+    args = Hyperparameters(batch_size=16, train_seq_len=32*1024, val_seq_len=16*1024)
 
     model_config = GPTConfig(
         flex_kernel_options={
@@ -262,7 +261,7 @@ for opt in optimizers:
 # learning rate schedule: stable then decay
 def get_lr(step: int):
     x = step / args.num_iterations # progress in training
-    assert 0 <= x < 1
+    assert 0 <= x <= 1
     if x < 1 - args.cooldown_frac:
         return 1.0
     else:
@@ -379,11 +378,8 @@ for step in range(train_steps + 1):
 
     if last_step and master_process:
         os.makedirs(f"logs/{run_id}", exist_ok=True)
-        print("Loss record: ") 
-        print(loss_record)
-        print("-----"*10)
         plot_training_losses(loss_record, save_path=f"logs/{run_id}/loss_curve.png")
-        grad_mixer.save_grad_info(f"logs/{run_id}/grad_step{step:06d}.pkl")
+        grad_composer.save_grad_info(f"logs/{run_id}/grad_step{step:06d}.pkl")
         
         if args.save_checkpoint:
             log = dict(step=step, code=code, model=model.state_dict(), optimizers=[opt.state_dict() for opt in optimizers])
