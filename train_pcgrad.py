@@ -392,12 +392,6 @@ for step in range(train_steps + 1):
     # --------------- TRAINING SECTION -----------------
     for _ in range(train_accumulation_steps):
         scheduler.step() 
-        # Dirty Trick: Zero init on all gradients 
-        # ---------------------------------
-        for p in model.parameters():
-            if p.requires_grad: 
-                p.grad = torch.zeros_like(p)
-        # ---------------------------------
         inputs, targets = next(train_loader)
         loss_dict = model.forward(inputs, targets, attn_blocksize, [scheduler.rr_layer_index])
         if additive_grad: 
@@ -426,4 +420,7 @@ for step in range(train_steps + 1):
 
 print0(f"peak memory allocated: {torch.cuda.max_memory_allocated() // 1024 // 1024} MiB "
        f"reserved: {torch.cuda.max_memory_reserved() // 1024 // 1024} MiB", console=True)
-dist.destroy_process_group()
+dist.barrier()
+if dist.is_initialized():
+    dist.destroy_process_group()
+# dist.destroy_process_group()
