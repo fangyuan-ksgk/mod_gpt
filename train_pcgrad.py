@@ -273,7 +273,7 @@ def get_lr(step: int):
 ################################################
 
 import torch._functorch
-torch._functorch.config.donated_buffer = True if additive_grad else False
+torch._functorch.config.donated_buffer = False
 grad_composer = SimPGrad(model)
 
 # ---------------------------------------------------------
