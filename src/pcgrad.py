@@ -11,8 +11,9 @@ class SimPGrad:
     def __init__(self, model):
         self.model = model
         self._init_info() # for info logging
+        self._project_non_conflict = torch.compile(self._project_non_conflict_noncompiled)
     
-    def _project_non_conflict(self, g1, g2):
+    def _project_non_conflict_noncompiled(self, g1, g2):
         """Remove conflicting component from secondary gradient"""
         g_dot = torch.sum(g1 * g2)
         if g_dot < 0: 
