@@ -164,7 +164,7 @@ class Hyperparameters:
     val_seq_len : int = 4*64*1024 # FlexAttention sequence length for validation (per GPU)
     batch_size : int = 8 # Batch size, across all devices
     # optimization
-    num_iterations : int = 750 # number of iterations to run
+    num_iterations : int = 1750 # number of iterations to run
     cooldown_frac : float = 0.4 # fraction of training spent cooling down the learning rate
     # architecture
     vocab_size : int = 50257
@@ -173,8 +173,8 @@ class Hyperparameters:
     save_checkpoint : bool = False
 
 if len(sys.argv) > 1 and sys.argv[1] == "poor": 
-    # args = Hyperparameters(batch_size=16, train_seq_len=32*1024, val_seq_len=16*1024)
-    args = Hyperparameters(batch_size=16, train_seq_len=8*1024, val_seq_len=16*1024)
+    args = Hyperparameters(batch_size=16, train_seq_len=32*1024, val_seq_len=16*1024,
+                          val_loss_every=2, num_iterations=6)
 
     model_config = GPTConfig(
         flex_kernel_options={
@@ -301,7 +301,7 @@ for i in range(warmup_steps):
     else: 
         # Random value created in master_process, broadcasted to all GPUs 
         # ------------------------------------------------------------------------
-        layer_idx = i % 11   
+        layer_idx = i % (model.num_encoder_layers)  
         # ------------------------------------------------------------------------
         loss_dict = model.forward(inputs.to(torch.int32), targets, attn_blocksize, [layer_idx])
         print(f" :: Calculating Rank regularization loss for layer {layer_idx+1}")
@@ -329,6 +329,8 @@ del initial_state
 ########################################
 #        Training and validation       #
 ########################################
+print("--------"*10)
+print("Train & Evaluation")
 
 train_loader = distributed_data_generator(args.train_files, world_size * args.train_seq_len, rank, world_size)
 training_time_ms = 0
@@ -338,7 +340,7 @@ t0 = time.perf_counter()
 # begin training
 train_steps = args.num_iterations
 loss_record = defaultdict(list)
-scheduler = RRScheduler(train_accumulation_steps, train_steps) # scheduler for rank regularization
+scheduler = RRScheduler(train_accumulation_steps, train_steps, model.num_encoder_layers) # scheduler for rank regularization
 
 for step in range(train_steps + 1):
     last_step = (step == train_steps)
@@ -346,7 +348,6 @@ for step in range(train_steps + 1):
 
     # --------------- VALIDATION SECTION -----------------
     if last_step or (args.val_loss_every > 0 and step % args.val_loss_every == 0):
-        print(f" ::beginning validation step: {step}")
         # stop the clock
         torch.cuda.synchronize()
         training_time_ms += 1000 * (time.perf_counter() - t0)
@@ -376,22 +377,24 @@ for step in range(train_steps + 1):
         torch.cuda.synchronize()
         t0 = time.perf_counter()
 
-    if last_step:
-        if master_process and args.save_checkpoint:
+    if last_step and master_process:
+        os.makedirs(f"logs/{run_id}", exist_ok=True)
+        print("Loss record: ") 
+        print(loss_record)
+        print("-----"*10)
+        plot_training_losses(loss_record, save_path=f"logs/{run_id}/loss_curve.png")
+        grad_mixer.save_grad_info(f"logs/{run_id}/grad_step{step:06d}.pkl")
+        
+        if args.save_checkpoint:
             log = dict(step=step, code=code, model=model.state_dict(), optimizers=[opt.state_dict() for opt in optimizers])
             os.makedirs(f"logs/{run_id}", exist_ok=True)
             torch.save(log, f"logs/{run_id}/state_step{step:06d}.pt") 
-            print(" - plotting loss curve - ")
-            plot_training_losses(loss_record, save_path=f"logs/{run_id}_loss_curve.png")
-            print(" - save gradient information - ")
-            grad_mixer.save_grad_info(f"logs/{run_id}/grad_step{step:06d}.pkl")
             
         # the last step only has the validation loop, so break to avoid training
         break
 
     # --------------- TRAINING SECTION -----------------
     for _ in range(train_accumulation_steps):
-        print(f" ::beginning training step: {step}")
         scheduler.step() 
         # Dirty Trick: Zero init on all gradients 
         # ---------------------------------
@@ -400,10 +403,7 @@ for step in range(train_steps + 1):
                 p.grad = torch.zeros_like(p)
         # ---------------------------------
         inputs, targets = next(train_loader)
-        if scheduler.rr_layer_index: 
-            loss_dict = model.forward(inputs, targets, attn_blocksize, [scheduler.rr_layer_index])
-        else: 
-            loss_dict = model.forward_clear(inputs, targets, attn_blocksize)
+        loss_dict = model.forward(inputs, targets, attn_blocksize, [scheduler.rr_layer_index])
         if additive_grad: 
             grad_composer.naive_backward(loss_dict)
         else: 

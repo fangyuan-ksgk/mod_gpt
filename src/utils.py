@@ -42,6 +42,10 @@ def plot_training_losses(loss_record, save_path="loss_curves.png"):
     """
     Plot entropy loss and rank loss curves on the same figure with different y-axes.
     """
+    print("Loss record: ") 
+    print(loss_record)
+    print("Plotting training loss curve ...")
+    
     fig, ax1 = plt.figure(figsize=(10, 6)), plt.gca()
     x = np.arange(len(loss_record["entropy"]))
     
@@ -55,8 +59,8 @@ def plot_training_losses(loss_record, save_path="loss_curves.png"):
     # Create secondary y-axis and plot rank loss
     ax2 = ax1.twinx()
     color2 = 'tab:red'
-    ax2.set_ylabel('Rank Loss', color=color2)
-    ax2.plot(x, loss_record["rank"], 's-', color=color2, label='Rank Loss')
+    ax2.set_ylabel('MBE Loss', color=color2)
+    ax2.plot(x, loss_record["mbe"], 's-', color=color2, label='MBE Loss')
     ax2.tick_params(axis='y', labelcolor=color2)
     
     # Add title and grid
