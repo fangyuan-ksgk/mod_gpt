@@ -135,8 +135,5 @@ class GPT(nn.Module):
         logits = logits.float()
         loss = F.cross_entropy(logits.view(-1, logits.size(-1)), target.view(-1))
         
-        loss_dict = {"entropy": loss}
-        if reg_loss: 
-            loss_dict = {"mbe": sum(reg_loss.values()) / len(reg_loss)}
-            # loss_dict["mbe"] = sum(reg_loss.values()) / len(reg_loss)
+        loss_dict = {"entropy": loss, "mbe": sum(reg_loss.values()) / len(reg_loss) if reg_loss else 0.0 * loss}
         return loss_dict 
