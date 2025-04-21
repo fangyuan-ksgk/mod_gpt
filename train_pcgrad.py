@@ -191,10 +191,10 @@ train_accumulation_steps = args.batch_size // world_size
 # -----------------------------------------------------------------------------
 # Experiment hyper-parameter
 RANK_REG_LOSS = "mbe"
-ignore_loss = []
 no_priority = True # view all target to be equally important (across loss, and across batch)
 additive_grad = True # accumulate gradient via naive addition
 if len(sys.argv)>4 and master_process: 
+    ignore_loss = [RANK_REG_LOSS] if sys.argv[2] == "no_reg" else []
     no_priority = sys.argv[3] == "no_priority"
     additive_grad = sys.argv[4] == "additive_grad"
     
@@ -357,7 +357,7 @@ for step in range(train_steps + 1):
         val_steps = args.val_tokens // val_seq_len
         val_loader = distributed_data_generator(args.val_files, val_seq_len, rank, world_size)
         val_loss = defaultdict(float)
-        val_reg_layers = [2, 4, 6, 8, 10]
+        val_reg_layers = [2, 3, 4, 5]
         with torch.no_grad():
             for i in range(val_steps):
                 inputs, targets = next(val_loader)
@@ -395,8 +395,10 @@ for step in range(train_steps + 1):
         scheduler.step() 
         inputs, targets = next(train_loader)
         loss_dict = model.forward(inputs, targets, attn_blocksize, scheduler.rr_layer_index)
-        if 'mbe' in loss_dict: 
+        if 'mbe' in loss_dict and 'mbe' not in ignore_loss: 
             loss_dict = {"mbe": loss_dict["mbe"]}
+        else:
+            loss_dict = {"entropy": loss_dict["entropy"]}
         if additive_grad: 
             if step % 50 == 0: 
                 grad_composer.naive_backward_info(loss_dict)
