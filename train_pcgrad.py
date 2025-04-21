@@ -162,7 +162,8 @@ class Hyperparameters:
     save_checkpoint : bool = False
 
 if len(sys.argv) > 1 and sys.argv[1] == "poor": 
-    args = Hyperparameters(batch_size=16, train_seq_len=32*1024, val_seq_len=16*1024)
+    # args = Hyperparameters(batch_size=16, train_seq_len=32*1024, val_seq_len=16*1024)
+    args = Hyperparameters(batch_size=8, train_seq_len=32*1024, val_seq_len=16*1024) # compute-matching
 
     model_config = GPTConfig(
         flex_kernel_options={
