@@ -3,7 +3,7 @@
 import torch
 torch.set_float32_matmul_precision('high')
 from .rank_regularizer import patch_mbe2 as patch_mbe
-RANK_REG_LOSS = "regularized_rank"
+RANK_REG_LOSS = "mbe"
 
 # Customized GPT model with low-rank regularization loss 
 # -------------------------------------------------------------------
@@ -97,7 +97,7 @@ class GPT(nn.Module):
         self.alpha = config.alpha 
         self.window_size = config.window_size
 
-    def forward(self, idx, target, attn_blocksize, reg_layer_indices):
+    def forward(self, idx, target, attn_blocksize):
         """Localized Rank Regularization for Each Block"""
 
         docs = (idx == 50256).cumsum(1)
@@ -112,7 +112,7 @@ class GPT(nn.Module):
 
         x = self.transformer.wte(idx)
         x = norm(x)
-        reg_loss = {}
+        loss_dict = {}
         
         x0 = x
         v1 = None
@@ -120,20 +120,17 @@ class GPT(nn.Module):
         skip_connections = []
         for i in range(self.num_encoder_layers):
             x, v1 = self.transformer.h[i](x, v1, x0, block_mask)
-            if i in reg_layer_indices: 
-                reg_loss[f"{RANK_REG_LOSS}_layer{i+1}"] = patch_mbe(x)
+            loss_dict[f"{RANK_REG_LOSS}_{i}"] = patch_mbe(x)
             skip_connections.append(x)
         for i in range(self.num_decoder_layers):
             x = x + self.skip_weights[i] * skip_connections.pop()
             x, v1 = self.transformer.h[self.num_encoder_layers + i](x, v1, x0, block_mask)
-            if (self.num_encoder_layers + i) in reg_layer_indices: 
-                reg_loss[f"{RANK_REG_LOSS}_layer{self.num_encoder_layers + i+1}"] = patch_mbe(x)
+            loss_dict[f"{RANK_REG_LOSS}_{self.num_encoder_layers + i}"] = patch_mbe(x)
             
         x = norm(x)
         logits = self.lm_head(x)
         logits = 30 * torch.tanh(logits / 30) # @Grad62304977
         logits = logits.float()
         loss = F.cross_entropy(logits.view(-1, logits.size(-1)), target.view(-1))
-        
-        loss_dict = {"entropy": loss, "mbe": sum(reg_loss.values()) / len(reg_loss) if reg_loss else 0.0 * loss}
-        return loss_dict 
+        loss_dict["entropy"] = loss
+        return loss_dict

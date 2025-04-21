@@ -133,8 +133,6 @@ class Muon(torch.optim.Optimizer):
 from src.reprank import GPT, GPTConfig # rank regularized model
 
 
-
-
 # -----------------------------------------------------------------------------
 # Our own simple Distributed Data Loader
 
@@ -192,6 +190,7 @@ train_accumulation_steps = args.batch_size // world_size
 # -----------------------------------------------------------------------------
 # Experiment hyper-parameter
 RANK_REG_LOSS = "mbe"
+ignore_loss = []
 no_priority = True # view all target to be equally important (across loss, and across batch)
 additive_grad = True # accumulate gradient via naive addition
 if len(sys.argv)>4 and master_process: 
@@ -273,7 +272,7 @@ def get_lr(step: int):
 # Projective Non-conflicting Gradient Composer #
 ################################################
 
-import torch._functorch
+# import torch._functorch
 # torch._functorch.config.donated_buffer = False
 grad_composer = SimPGrad(model)
 
@@ -297,14 +296,18 @@ for i in range(warmup_steps):
     print(f" :: Forward propagation starts with inputs & targets of length {inputs.shape[1]}")
     forward_start = time.time() 
     if i % 2 == 0: 
-        loss_dict = model.forward(inputs.to(torch.int32), targets, attn_blocksize, []) 
+        loss_dict = model.forward(inputs.to(torch.int32), targets, attn_blocksize)
+        loss_dict = {"entropy": loss_dict["entropy"]}
     else: 
         # Random value created in master_process, broadcasted to all GPUs 
         # ------------------------------------------------------------------------
         layer_idx = i % (model.num_encoder_layers)  
         # ------------------------------------------------------------------------
-        loss_dict = model.forward(inputs.to(torch.int32), targets, attn_blocksize, [layer_idx])
+        loss_dict = model.forward(inputs.to(torch.int32), targets, attn_blocksize)
+        mbe_loss = loss_dict[f"mbe_{layer_idx}"]
+        loss_dict = {"entropy": loss_dict["entropy"], "mbe": mbe_loss}
         print(f" :: Calculating Rank regularization loss for layer {layer_idx+1}")
+        
     backward_start = time.time()
     loss_name = ', '.join(loss_dict.keys())
     print(f" :: Forward computation of loss [{loss_name}] takes {backward_start - forward_start} second")
@@ -358,11 +361,10 @@ for step in range(train_steps + 1):
         val_steps = args.val_tokens // val_seq_len
         val_loader = distributed_data_generator(args.val_files, val_seq_len, rank, world_size)
         val_loss = defaultdict(float)
-        val_reg_layers = [2, 3, 4, 5]
         with torch.no_grad():
             for i in range(val_steps):
                 inputs, targets = next(val_loader)
-                loss_dict = model.forward(inputs, targets, attn_blocksize, val_reg_layers)
+                loss_dict = model.forward(inputs, targets, attn_blocksize)
                 for name, loss in loss_dict.items(): 
                     val_loss[name] += loss                
         for name in val_loss: 
@@ -395,10 +397,11 @@ for step in range(train_steps + 1):
     for _ in range(train_accumulation_steps):
         scheduler.step() 
         inputs, targets = next(train_loader)
-        loss_dict = model.forward(inputs, targets, attn_blocksize, scheduler.rr_layer_index)
-        if 'mbe' in loss_dict and 'mbe' not in ignore_loss: 
-            loss_dict = {"mbe": loss_dict["mbe"]}
-        else:
+        loss_dict = model.forward(inputs, targets, attn_blocksize)
+        if scheduler.rr_layer_index and "mbe" not in ignore_loss: 
+            mbe_loss = sum([loss_dict[f'mbe_{i}'] for i in scheduler.rr_layer_index]) / len(scheduler.rr_layer_index)
+            loss_dict = {"mbe": mbe_loss}
+        else: 
             loss_dict = {"entropy": loss_dict["entropy"]}
         if additive_grad: 
             if step % 50 == 0: 
@@ -432,7 +435,8 @@ for step in range(train_steps + 1):
 
 print0(f"peak memory allocated: {torch.cuda.max_memory_allocated() // 1024 // 1024} MiB "
        f"reserved: {torch.cuda.max_memory_reserved() // 1024 // 1024} MiB", console=True)
-dist.barrier()
-if dist.is_initialized():
-    dist.destroy_process_group()
-# dist.destroy_process_group()
+        
+# dist.barrier()
+# if dist.is_initialized():
+#     dist.destroy_process_group()
+dist.destroy_process_group()
