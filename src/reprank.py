@@ -137,6 +137,6 @@ class GPT(nn.Module):
         
         loss_dict = {"entropy": loss}
         if reg_loss: 
-            # loss_dict = {"mbe": sum(reg_loss.values()) / len(reg_loss)}
-            loss_dict["mbe"] = sum(reg_loss.values()) / len(reg_loss)
+            loss_dict = {"mbe": sum(reg_loss.values()) / len(reg_loss)}
+            # loss_dict["mbe"] = sum(reg_loss.values()) / len(reg_loss)
         return loss_dict 
