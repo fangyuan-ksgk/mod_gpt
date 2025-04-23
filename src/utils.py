@@ -453,7 +453,7 @@ class RRScheduler:
         # loss record
         self.loss_record = []
     
-    def step(self, loss_dict):
+    def step(self):
         self.current_accumulation_step = (self.current_accumulation_step + 1) % self.num_accumulation_steps
         if self.current_accumulation_step == 0:
             self.current_iteration += 1

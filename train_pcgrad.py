@@ -401,7 +401,7 @@ for step in range(train_steps + 1):
                 grad_composer.backward_info(loss_dict, no_priority) # with gradient info accumulated
             else: 
                 grad_composer.backward(loss_dict, no_priority)
-        scheduler.step({k: v.item() for (k, v) in loss_dict.items()})
+        scheduler.step()
     for param in model.parameters():
         param.grad /= train_accumulation_steps
         dist.all_reduce(param.grad, op=dist.ReduceOp.AVG)
