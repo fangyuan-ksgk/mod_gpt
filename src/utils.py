@@ -20,6 +20,7 @@ def _load_data_shard(file: Path):
         assert nbytes == 2 * num_tokens, "number of tokens read does not match header"
     return tokens
 
+
 def distributed_data_generator(filename_pattern: str, sequence_length: int, rank : int, world_size : int):
     files = [Path(file) for file in sorted(glob.glob(filename_pattern))]
     assert sequence_length % world_size == 0
@@ -38,44 +39,77 @@ def distributed_data_generator(filename_pattern: str, sequence_length: int, rank
 # -------------------------------------------------------------------------------
 
 
-def plot_training_losses(loss_record, save_path="loss_curves.png"):
+def plot_training_losses(loss_record, save_path="loss_curves.png", mbe_alpha=0.7, mbe_linestyle='--'):
     """
     Plot entropy loss and rank loss curves on the same figure with different y-axes.
+    Emphasizes entropy loss by making MBE lines dashed and semi-transparent.
+    Uses different colors for each layer's MBE loss.
     """
     print("Loss record: ") 
     print(loss_record)
     print("Plotting training loss curve ...")
     
-    fig, ax1 = plt.figure(figsize=(10, 6)), plt.gca()
-    x = np.arange(len(loss_record["entropy"]))
+    fig, ax1 = plt.subplots(figsize=(12, 7)) # Use plt.subplots
     
-    # Plot entropy loss on primary y-axis
+    # Determine the range of iterations based on entropy loss
+    if "entropy" not in loss_record or not loss_record["entropy"]:
+        print("Error: 'entropy' key missing or empty in loss_record.")
+        plt.close(fig) # Close the empty figure
+        return
+    num_iterations = len(loss_record["entropy"])
+    x = np.arange(num_iterations)
+
+    # --- Plot Entropy Loss (Emphasized) ---
     color1 = 'tab:blue'
     ax1.set_xlabel('Iterations')
-    ax1.set_ylabel('Entropy Loss', color=color1)
-    ax1.plot(x, loss_record["entropy"], 'o-', color=color1, label='Entropy Loss')
+    ax1.set_ylabel('Entropy Loss', color=color1, fontweight='bold') # Make label bold
+    ax1.plot(x, loss_record["entropy"], 'o-', color=color1, label='Entropy Loss', linewidth=2.5) # Thicker line
     ax1.tick_params(axis='y', labelcolor=color1)
     
-    # Create secondary y-axis and plot rank loss
+    # --- Plot MBE Losses (De-emphasized) ---
     ax2 = ax1.twinx()
-    color2 = 'tab:red'
-    ax2.set_ylabel('MBE Loss', color=color2)
-    ax2.plot(x, loss_record["mbe"], 's-', color=color2, label='MBE Loss')
-    ax2.tick_params(axis='y', labelcolor=color2)
-    
+    ax2.set_ylabel('MBE Loss')
+
+    mbe_keys = sorted([k for k in loss_record if 'mbe_' in k])
+    if not mbe_keys:
+         print("No 'mbe_' keys found to plot.")
+         # Decide if you want to proceed without MBE plots or stop
+    else:
+        mbe_colors = plt.cm.viridis(np.linspace(0, 1, len(mbe_keys)))
+
+        for i, loss_name in enumerate(mbe_keys):
+             # Ensure MBE data has the same length as entropy data
+             if len(loss_record[loss_name]) != num_iterations:
+                 print(f"Warning: Length mismatch for {loss_name}. Skipping plot.")
+                 continue # Skip this MBE plot
+
+             layer_idx = loss_name.split("mbe_")[-1]
+             current_color = mbe_colors[i]
+             # Use alpha and linestyle to de-emphasize
+             ax2.plot(x, loss_record[loss_name], 
+                      marker='s', # Keep marker or remove if too cluttered
+                      markersize=4, # Smaller marker
+                      linestyle=mbe_linestyle, 
+                      color=current_color, 
+                      label=f"MBE Layer {layer_idx}", 
+                      alpha=mbe_alpha) # Apply transparency
+
+    ax2.tick_params(axis='y')
+
     # Add title and grid
-    plt.title("Training Loss Curves")
-    ax1.grid(True, alpha=0.3)
-    
+    plt.title("Training Loss Curves (Entropy Emphasized)")
+    ax1.grid(True, which='major', linestyle='--', linewidth='0.5', color='grey', alpha=0.6)
+    ax2.grid(True, which='major', linestyle=':', linewidth='0.5', color='grey', alpha=0.3) # More subtle grid for ax2
+
     # Add legend
     lines1, labels1 = ax1.get_legend_handles_labels()
     lines2, labels2 = ax2.get_legend_handles_labels()
-    ax1.legend(lines1 + lines2, labels1 + labels2, loc='upper right')
-    
+    ax1.legend(lines1 + lines2, labels1 + labels2, loc='center left', bbox_to_anchor=(1.1, 0.5))
+
     # Adjust layout and save
-    fig.tight_layout()
-    plt.savefig(save_path, dpi=300)
-    plt.close()
+    fig.tight_layout(rect=[0, 0, 0.85, 1])
+    plt.savefig(save_path, dpi=300, bbox_inches='tight')
+    plt.close(fig)
     
     print(f"- Loss curves saved to {save_path}")
     
