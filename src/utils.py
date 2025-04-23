@@ -447,15 +447,19 @@ class RRScheduler:
         self.current_iteration = 0
         
         # Layer rotation setup
-        self.layer_indices = list(range(2, total_layer))  # Layers 2-11
+        self.layer_indices = list(range(2, total_layer))  # layer 2 onwards
         self.current_layer_idx = 0
+
+        # loss record
+        self.loss_record = []
     
-    def step(self):
+    def step(self, loss_dict):
         self.current_accumulation_step = (self.current_accumulation_step + 1) % self.num_accumulation_steps
         if self.current_accumulation_step == 0:
             self.current_iteration += 1
             self.current_layer_idx = (self.current_layer_idx + 1) % len(self.layer_indices)
-
+        self.loss_record.append(loss_dict)
+        
     def _do_rr(self):
         return self.current_accumulation_step % 2 == 0
         

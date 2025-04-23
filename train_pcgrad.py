@@ -158,8 +158,8 @@ class Hyperparameters:
     # evaluation and logging
     val_loss_every : int = 125 # every how many steps to evaluate val loss? 0 for only at the end
     save_checkpoint : bool = False
-    no_reg: bool = True
-    additive_grad: bool = False
+    no_reg: bool = False
+    additive_grad: bool = True
 
 if len(sys.argv) > 1 and sys.argv[1] == "poor": 
     args = Hyperparameters(batch_size=16, train_seq_len=32*1024, val_seq_len=16*1024)
@@ -381,11 +381,10 @@ for step in range(train_steps + 1):
         break
 
     # --------------- TRAINING SECTION -----------------
-    for _ in range(train_accumulation_steps):
-        scheduler.step() 
+    for _ in range(train_accumulation_steps): 
         inputs, targets = next(train_loader)
         loss_dict = model.forward(inputs, targets, attn_blocksize)
-        if args.no_reg or (not args.no_reg and scheduler.rr_layer_index): 
+        if args.no_reg or len(scheduler.rr_layer_index) == 0: 
             print(" - entropy loss only - ") 
             loss_dict = {"entropy": loss_dict["entropy"]}
         else:        
@@ -402,6 +401,7 @@ for step in range(train_steps + 1):
                 grad_composer.backward_info(loss_dict, no_priority) # with gradient info accumulated
             else: 
                 grad_composer.backward(loss_dict, no_priority)
+        scheduler.step({k: v.item() for (k, v) in loss_dict.items()})
     for param in model.parameters():
         param.grad /= train_accumulation_steps
         dist.all_reduce(param.grad, op=dist.ReduceOp.AVG)
