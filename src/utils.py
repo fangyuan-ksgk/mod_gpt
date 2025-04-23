@@ -440,28 +440,54 @@ def plot_avg_consistency_across_layers(avg_consistency_df, title="Average Gradie
 
 class RRScheduler: 
     # rotate on layer_idx, compute one layer rank regularization loss per train step
-    def __init__(self, num_accumulation_steps, total_iterations, total_layer=12):
+    def __init__(self, 
+                 num_accumulation_steps, 
+                 total_iterations, 
+                 total_layer=12, 
+                 es_patience=1000, 
+                 es_min_delta=0.001):
         self.num_accumulation_steps = num_accumulation_steps
         self.total_iterations = total_iterations
         self.current_accumulation_step = 0
         self.current_iteration = 0
-        
+
+        # Phase management & early stopping
+        self.phase = 1
+        self.es_patience = es_patience
+        self.es_min_delta = es_min_delta
+        self.best_val_loss = np.inf 
+        self.patience_counter = 0 
+        self.validation_checks_done = 0 
+
         # Layer rotation setup
         self.layer_indices = list(range(2, total_layer))  # layer 2 onwards
         self.current_layer_idx = 0
-
-        # loss record
-        self.loss_record = []
     
     def step(self):
         self.current_accumulation_step = (self.current_accumulation_step + 1) % self.num_accumulation_steps
         if self.current_accumulation_step == 0:
             self.current_iteration += 1
             self.current_layer_idx = (self.current_layer_idx + 1) % len(self.layer_indices)
-        self.loss_record.append(loss_dict)
+
+    def log_validation_loss(self, val_loss):
+        if self.phase == 2: 
+            return True 
+        self.validation_checks_done += 1
+        improvement = self.best_val_loss - val_loss
+        if improvement > self.es_min_delta:
+            self.best_val_loss = val_loss
+            self.patience_counter = 0 # Reset patience counter
+            return False
+        else:
+            self.patience_counter += 1
+            if self.patience_counter >= self.es_patience:
+                self.phase = 2
+                return True
+            else:
+                return False
         
     def _do_rr(self):
-        return self.current_accumulation_step % 2 == 0
+        return self.phase == 2 and self.current_accumulation_step % 2 == 0
         
     @property
     def rr_layer_index(self): 

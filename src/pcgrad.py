@@ -40,12 +40,24 @@ class SimPGrad:
             loss_dict[loss_name].backward(retain_graph=False)            
             for p, prev_grad in zip(params, prev_grads):
                 if p.grad is not None:
-                    p.grad = self._project_non_conflict(p.grad, prev_grad) + self._project_non_conflict(prev_grad, p.grad)
+                    if no_priority: 
+                        p.grad = self._project_non_conflict(p.grad, prev_grad) + self._project_non_conflict(prev_grad, p.grad)
+                    else: 
+                        p.grad = prev_grad + self._project_non_conflict(prev_grad, p.grad)
                 
     def naive_backward(self, loss_dict): # for experiment purpose
         params = [p for p in self.model.parameters() if p.requires_grad]
         loss = sum(loss_dict.values())
         loss.backward() 
+
+
+    def backward_2phase(self, loss_dict): # prioritize entropy loss while projecting MBE loss
+        assert len(loss_dict) == 1, "backward_2phase requires exactly one loss"
+        if 'entropy' in loss_dict: 
+            self.naive_backward(loss_dict)
+        else: 
+            self.backward(loss_dict, no_priority=False)
+
 
     # Extra gadget for experiment logging
     # ------------------------------------------------------------------------------------------
@@ -86,6 +98,19 @@ class SimPGrad:
                 g1 -= projection
         return g1 + g2, g1_norm.item(), g2_norm.item(), cosim.item()
     
+    def _project_non_conflict_info_priority(self, g1, g2): 
+        g1_norm = torch.norm(g1)
+        g2_norm = torch.norm(g2)
+        if g1_norm > 0 and g2_norm > 0: 
+            cosim = torch.sum((g1/g1_norm) * (g2/g2_norm))
+        else: 
+            cosim = torch.tensor(0.)
+        if cosim < 0: 
+            if g1_norm > 1e-4:
+                projection = g2_norm * cosim
+                g2 -= projection
+        return g1 + g2, g1_norm.item(), g2_norm.item(), cosim.item()
+    
     def _add_grad_info(self, g1, g2): 
         g1_norm = torch.norm(g1)
         g2_norm = torch.norm(g2)
@@ -117,7 +142,10 @@ class SimPGrad:
             for name, p, prev_grad, is_reset in zip(names, params, prev_grads, reset_flags):
                 if p.grad is not None:            
                     grad_array = p.grad.detach().cpu().to(torch.float16).numpy()
-                    p.grad, curr_g_norm, prev_g_norm, cosim = self._project_non_conflict_info(p.grad, prev_grad)
+                    if no_priority: 
+                        p.grad, curr_g_norm, prev_g_norm, cosim = self._project_non_conflict_info_priority(p.grad, prev_grad)
+                    else: 
+                        p.grad, curr_g_norm, prev_g_norm, cosim = self._project_non_conflict_info(p.grad, prev_grad)
                     self._update_info(name, prev_g_norm, curr_g_norm, cosim, loss_name, is_reset, grad_array)
                     
     def naive_backward_info(self, loss_dict): 
@@ -145,6 +173,14 @@ class SimPGrad:
                     p.grad, curr_g_norm, prev_g_norm, cosim = self._add_grad_info(p.grad, prev_grad)
                     self._update_info(name, prev_g_norm, curr_g_norm, cosim, loss_name, is_reset, grad_array)
                     
+    def backward_2phase_info(self, loss_dict): 
+        assert len(loss_dict) == 1, "backward_2phase_info requires exactly one loss"
+        if 'entropy' in loss_dict: 
+            self.naive_backward_info(loss_dict)
+        else: 
+            self.backward_info(loss_dict, no_priority=False)
+
+
     def save_grad_info(self, path):         
         serializable_grad_info = {}
         for param_name, info in self.grad_info.items():
@@ -153,6 +189,7 @@ class SimPGrad:
         
         with open(path, "wb") as f:  # Note: changed to binary mode
             pickle.dump(serializable_grad_info, f)
+
 
 # Original PCGrad implementation, for reference
 class PCGrad:
