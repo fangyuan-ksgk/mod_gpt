@@ -158,10 +158,14 @@ class Hyperparameters:
     # evaluation and logging
     val_loss_every : int = 125 # every how many steps to evaluate val loss? 0 for only at the end
     save_checkpoint : bool = False
+    no_reg: bool = True
+    additive_grad: bool = False
 
 if len(sys.argv) > 1 and sys.argv[1] == "poor": 
-    # args = Hyperparameters(batch_size=16, train_seq_len=32*1024, val_seq_len=16*1024)
-    args = Hyperparameters(batch_size=8, train_seq_len=32*1024, val_seq_len=16*1024) # compute-matching
+    args = Hyperparameters(batch_size=16, train_seq_len=32*1024, val_seq_len=16*1024)
+    # args = Hyperparameters(batch_size=8, train_seq_len=32*1024, val_seq_len=16*1024) # compute-matching
+    # args = Hyperparameters(batch_size=8, train_seq_len=32*1024, val_seq_len=16*1024, num_iterations=125, no_reg=True) # compute-matching
+
 
     model_config = GPTConfig(
         flex_kernel_options={
@@ -186,29 +190,15 @@ dist.barrier()
 master_process = (rank == 0) # this process will do logging, checkpointing etc.
 assert args.batch_size % (world_size) == 0
 train_accumulation_steps = args.batch_size // world_size
-
-# -----------------------------------------------------------------------------
-# Experiment hyper-parameter
-RANK_REG_LOSS = "mbe"
-ignore_loss = []
-no_priority = True # view all target to be equally important (across loss, and across batch)
-additive_grad = True # accumulate gradient via naive addition
-if len(sys.argv)>4 and master_process: 
-    ignore_loss = [RANK_REG_LOSS] if sys.argv[2] == "no_reg" else []
-    no_priority = sys.argv[3] == "no_priority"
-    additive_grad = sys.argv[4] == "additive_grad"
     
 # begin logging
 logfile = None
+no_priority = True
 if master_process:
     run_id = uuid.uuid4()
     os.makedirs("logs", exist_ok=True)
     logfile = f"logs/{run_id}.txt"
     print(logfile)
-    print("------------ Hyperparameter ------------")
-    print(f" :: Ignore Rank Regularization: {ignore_loss}") 
-    print(f" :: No priority on entropy loss: {no_priority}")
-    print(f" :: Additive Gradient Accumulation: {additive_grad}")
 def print0(s, console=False):
     if master_process:
         with open(logfile, "a") as f:
@@ -272,8 +262,6 @@ def get_lr(step: int):
 # Projective Non-conflicting Gradient Composer #
 ################################################
 
-# import torch._functorch
-# torch._functorch.config.donated_buffer = False
 grad_composer = SimPGrad(model)
 
 # ---------------------------------------------------------
@@ -286,7 +274,7 @@ model: nn.Module = torch.compile(model, dynamic=True)
 import time 
 
 # Warmup the training kernels, then re-initialize the state so we aren't cheating
-warmup_steps = 10
+warmup_steps = 20
 initial_state = dict(model=copy.deepcopy(model.state_dict()),
                      optimizers=[copy.deepcopy(opt.state_dict()) for opt in optimizers]) # save the initial state
 attn_blocksize = torch.tensor(64, dtype=torch.int, device="cuda")
@@ -305,17 +293,16 @@ for i in range(warmup_steps):
         # ------------------------------------------------------------------------
         loss_dict = model.forward(inputs.to(torch.int32), targets, attn_blocksize)
         mbe_loss = loss_dict[f"mbe_{layer_idx}"]
-        loss_dict = {"entropy": loss_dict["entropy"], "mbe": mbe_loss}
+        loss_dict = {"mbe": mbe_loss}
         print(f" :: Calculating Rank regularization loss for layer {layer_idx+1}")
         
     backward_start = time.time()
     loss_name = ', '.join(loss_dict.keys())
     print(f" :: Forward computation of loss [{loss_name}] takes {backward_start - forward_start} second")
-    if additive_grad: 
-        # grad_composer.naive_backward_info(loss_dict)
+    if args.additive_grad: 
         grad_composer.naive_backward(loss_dict)
     else: 
-        grad_composer.backward_info(loss_dict, no_priority) # projective composition of gradients
+        grad_composer.backward(loss_dict, no_priority) # project grad
     backward_end = time.time() 
     print(f" :: Backward gradient calculation for loss [{loss_name}] takes {backward_end - backward_start} second")
     for param in model.parameters():
@@ -380,16 +367,16 @@ for step in range(train_steps + 1):
         torch.cuda.synchronize()
         t0 = time.perf_counter()
 
-    if last_step and master_process:
-        os.makedirs(f"logs/{run_id}", exist_ok=True)
-        plot_training_losses(loss_record, save_path=f"logs/{run_id}/loss_curve.png")
-        grad_composer.save_grad_info(f"logs/{run_id}/grad_step{step:06d}.pkl")
-        
-        if args.save_checkpoint:
-            log = dict(step=step, code=code, model=model.state_dict(), optimizers=[opt.state_dict() for opt in optimizers])
+    if last_step:
+        if master_process: 
             os.makedirs(f"logs/{run_id}", exist_ok=True)
-            torch.save(log, f"logs/{run_id}/state_step{step:06d}.pt") 
+            grad_composer.save_grad_info(f"logs/{run_id}/grad_step{step:06d}.pkl")
+            plot_training_losses(loss_record, save_path=f"logs/{run_id}/loss_curve.png")
             
+            if args.save_checkpoint:
+                log = dict(step=step, code=code, model=model.state_dict(), optimizers=[opt.state_dict() for opt in optimizers])
+                os.makedirs(f"logs/{run_id}", exist_ok=True)
+                torch.save(log, f"logs/{run_id}/state_step{step:06d}.pt") 
         # the last step only has the validation loop, so break to avoid training
         break
 
@@ -398,12 +385,14 @@ for step in range(train_steps + 1):
         scheduler.step() 
         inputs, targets = next(train_loader)
         loss_dict = model.forward(inputs, targets, attn_blocksize)
-        if scheduler.rr_layer_index and "mbe" not in ignore_loss: 
+        if args.no_reg or (not args.no_reg and scheduler.rr_layer_index): 
+            print(" - entropy loss only - ") 
+            loss_dict = {"entropy": loss_dict["entropy"]}
+        else:        
+            print(f" - mbe loss on {scheduler.rr_layer_index} -")
             mbe_loss = sum([loss_dict[f'mbe_{i}'] for i in scheduler.rr_layer_index]) / len(scheduler.rr_layer_index)
             loss_dict = {"mbe": mbe_loss}
-        else: 
-            loss_dict = {"entropy": loss_dict["entropy"]}
-        if additive_grad: 
+        if args.additive_grad: 
             if step % 50 == 0: 
                 grad_composer.naive_backward_info(loss_dict)
             else: 
@@ -436,7 +425,5 @@ for step in range(train_steps + 1):
 print0(f"peak memory allocated: {torch.cuda.max_memory_allocated() // 1024 // 1024} MiB "
        f"reserved: {torch.cuda.max_memory_reserved() // 1024 // 1024} MiB", console=True)
         
-# dist.barrier()
-# if dist.is_initialized():
-#     dist.destroy_process_group()
+
 dist.destroy_process_group()
