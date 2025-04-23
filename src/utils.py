@@ -55,6 +55,11 @@ def plot_training_losses(loss_record, save_path="loss_curves.png"):
     ax1.set_ylabel('Entropy Loss', color=color1)
     ax1.plot(x, loss_record["entropy"], 'o-', color=color1, label='Entropy Loss')
     ax1.tick_params(axis='y', labelcolor=color1)
+
+    if 'mbe' not in loss_record: 
+        layer_mbe = [k for k in loss_record.keys() if 'mbe' in k]
+        loss_record["mbe"] = [sum(loss_record[k][i] for k in layer_mbe) / len(layer_mbe) 
+                            for i in range(len(loss_record[layer_mbe[0]]))]
     
     # Create secondary y-axis and plot rank loss
     ax2 = ax1.twinx()
@@ -62,7 +67,17 @@ def plot_training_losses(loss_record, save_path="loss_curves.png"):
     ax2.set_ylabel('MBE Loss', color=color2)
     ax2.plot(x, loss_record["mbe"], 's-', color=color2, label='MBE Loss')
     ax2.tick_params(axis='y', labelcolor=color2)
+
+    # plot layer mbe loss too
+    # Define a colormap for different layers
+    layer_mbe = [k for k in loss_record.keys() if ('mbe' in k and k != 'mbe')]
+    cmap = plt.cm.get_cmap('tab10', len(layer_mbe) + 1)  # +1 to avoid last color which might be too light
     
+    for i, k in enumerate(layer_mbe):
+        layer_idx = k.split('_')[-1]
+        layer_color = cmap(i)
+        ax2.plot(x, loss_record[k], 's-', color=layer_color, label=f'Layer {layer_idx} MBE Loss', alpha=0.1)
+
     # Add title and grid
     plt.title("Training Loss Curves")
     ax1.grid(True, alpha=0.3)
