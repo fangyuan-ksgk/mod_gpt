@@ -163,9 +163,6 @@ class Hyperparameters:
 
 if len(sys.argv) > 1 and sys.argv[1] == "poor": 
     args = Hyperparameters(batch_size=16, train_seq_len=32*1024, val_seq_len=16*1024)
-    # args = Hyperparameters(batch_size=8, train_seq_len=32*1024, val_seq_len=16*1024) # compute-matching
-    # args = Hyperparameters(batch_size=8, train_seq_len=32*1024, val_seq_len=16*1024, num_iterations=125, no_reg=True) # compute-matching
-
 
     model_config = GPTConfig(
         flex_kernel_options={
@@ -302,7 +299,8 @@ for i in range(warmup_steps):
     if args.additive_grad: 
         grad_composer.naive_backward(loss_dict)
     else: 
-        grad_composer.backward(loss_dict, no_priority) # project grad
+        grad_composer.backward_2phase(loss_dict) 
+        # grad_composer.backward(loss_dict, no_priority) # project grad
     backward_end = time.time() 
     print(f" :: Backward gradient calculation for loss [{loss_name}] takes {backward_end - backward_start} second")
     for param in model.parameters():
@@ -332,6 +330,7 @@ t0 = time.perf_counter()
 train_steps = args.num_iterations
 loss_record = defaultdict(list)
 scheduler = RRScheduler(train_accumulation_steps, train_steps, model.num_encoder_layers) # scheduler for rank regularization
+scheduler.phase = 2 # for observing behavior on mbe loss v.s. entropy loss
 
 for step in range(train_steps + 1):
     last_step = (step == train_steps)
@@ -388,9 +387,12 @@ for step in range(train_steps + 1):
             print(" - entropy loss only - ") 
             loss_dict = {"entropy": loss_dict["entropy"]}
         else:        
-            print(f" - mbe loss on {scheduler.rr_layer_index} -")
-            mbe_loss = sum([loss_dict[f'mbe_{i}'] for i in scheduler.rr_layer_index]) / len(scheduler.rr_layer_index)
-            loss_dict = {"mbe": mbe_loss}
+            print(f" - mbe loss on {scheduler.rr_layer_index[0]} -")
+            layer_idx = scheduler.rr_layer_index[0]
+            mbe_loss_name = f"mbe_{layer_idx}"
+            loss_dict = {mbe_loss_name: loss_dict[mbe_loss_name]}
+            # mbe_loss = sum([loss_dict[f'mbe_{i}'] for i in scheduler.rr_layer_index]) / len(scheduler.rr_layer_index)
+            # loss_dict = {"mbe": mbe_loss}
         if args.additive_grad: 
             if step % 50 == 0: 
                 grad_composer.naive_backward_info(loss_dict)
@@ -398,9 +400,11 @@ for step in range(train_steps + 1):
                 grad_composer.naive_backward(loss_dict)
         else: 
             if step % 50 == 0: 
-                grad_composer.backward_info(loss_dict, no_priority) # with gradient info accumulated
+                # grad_composer.backward_info(loss_dict, no_priority) # with gradient info accumulated
+                grad_composer.backward_2phase_info(loss_dict)
             else: 
-                grad_composer.backward(loss_dict, no_priority)
+                # grad_composer.backward(loss_dict, no_priority)
+                grad_composer.backward_2phase(loss_dict)
         scheduler.step()
     for param in model.parameters():
         param.grad /= train_accumulation_steps
