@@ -279,6 +279,11 @@ class YetAnotherMixer:
                 # accumulate gradient aligned to priority gradient
                 p.grad = prev_grad + self._project_non_conflict(cache, p.grad)
 
+    def naive_backward(self, loss_dict): 
+        params = [p for p in self.model.parameters() if p.requires_grad]
+        loss = sum(loss_dict.values())
+        loss.backward() 
+
     def _project_non_conflict_info(self, g1, g2):
         g2_array = g2.detach().cpu().to(torch.float16).numpy()
         g1_norm = torch.norm(g1)
@@ -321,6 +326,7 @@ class YetAnotherMixer:
     def backward_info(self, loss_dict):
         param_names = [p[0] for p in self.model.named_parameters() if p[1].requires_grad]
         params = [p for p in self.model.parameters() if p.requires_grad]
+        assert len(loss_dict) == 1, "torch compile requires exactly one loss for explicit backward pass"
         loss_name = list(loss_dict.keys())[0]
 
         reset_flags = []
@@ -349,6 +355,30 @@ class YetAnotherMixer:
                 p.grad, priority_g_norm, curr_g_norm, cosim, g1_array = self._project_non_conflict_info(priority_grad, p.grad)
                 p.grad += prev_grad
                 self._update_info(name, priority_g_norm, curr_g_norm, cosim, loss_name, is_reset, g1_array)
+
+
+    def naive_backward_info(self, loss_dict): 
+        param_names = [p[0] for p in self.model.named_parameters() if p[1].requires_grad]
+        params = [p for p in self.model.parameters() if p.requires_grad]
+        assert len(loss_dict) == 1, "torch compile requires exactly one loss for explicit backward pass"
+        loss_name = list(loss_dict.keys())[0]
+
+        reset_flags = []
+        prev_grads = [] 
+        for p in params:
+            if p.grad is not None:
+                reset_flags.append(False)
+                prev_grads.append(p.grad.clone())
+                p.grad.zero_() 
+            else: 
+                print(" None Gradient encountered")
+                reset_flags.append(True)
+                prev_grads.append(torch.zeros_like(p))
+
+        loss_dict[loss_name].backward(retain_graph=False)
+        for i, p in enumerate(params): 
+            p.grad, prev_g_norm, curr_g_norm, cosim, curr_g_array = self._add_grad_info(prev_grads[i], p.grad)
+            self._update_info(param_names[i], prev_g_norm, curr_g_norm, cosim, loss_name, reset_flags[i], curr_g_array)
 
 
     def save_grad_info(self, path):         

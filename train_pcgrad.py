@@ -16,7 +16,7 @@ import torch
 from torch import nn, Tensor
 import torch.distributed as dist
 
-from src.pcgrad import SimPGrad
+from src.pcgrad import SimPGrad, YetAnotherMixer
 from src.utils import RRScheduler
 from src.utils import plot_training_losses
 
@@ -259,7 +259,8 @@ def get_lr(step: int):
 # Projective Non-conflicting Gradient Composer #
 ################################################
 
-grad_composer = SimPGrad(model)
+# grad_composer = SimPGrad(model)
+grad_composed = YetAnotherMixer(model, "entropy")
 
 # ---------------------------------------------------------
 
@@ -400,11 +401,10 @@ for step in range(train_steps + 1):
                 grad_composer.naive_backward(loss_dict)
         else: 
             if step % 50 == 0: 
-                # grad_composer.backward_info(loss_dict, no_priority) # with gradient info accumulated
-                grad_composer.backward_2phase_info(loss_dict)
+                grad_composer.backward_info(loss_dict, no_priority) # with gradient info accumulated
             else: 
-                # grad_composer.backward(loss_dict, no_priority)
-                grad_composer.backward_2phase(loss_dict)
+                grad_composer.backward(loss_dict, no_priority)
+
         scheduler.step()
     for param in model.parameters():
         param.grad /= train_accumulation_steps
