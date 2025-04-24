@@ -3,6 +3,7 @@
 
 import torch 
 from torch import einsum
+import math 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # Matrix-Based Entropy 
@@ -15,7 +16,7 @@ def mbe_alpha2_exact(Z, detach=False, epsilon=1e-7):
     else:
         gram_trace = torch.diagonal(gram, dim1=1, dim2=2).sum(dim=1)
     gram_sq = gram.pow(2).sum(dim=(1,2))
-    return -torch.log(gram_sq / (gram_trace.pow(2) + epsilon))
+    return -torch.log((gram_sq + epsilon) / (gram_trace.pow(2) + epsilon))
 
 def rademacher(shape, dtype=torch.float32, device=DEVICE):
     rand = ((torch.rand(shape) < 0.5)) * 2 - 1

@@ -229,3 +229,133 @@ class PCGrad:
         for i, p in enumerate(params):
             if p.requires_grad:
                 p.grad = sum([grads[loss_name][i] for loss_name in loss_dict.keys()]) / len(loss_dict)
+
+
+# Another ver. 
+# Remark 1. accumulation step scaling should use priority loss steps instead of full gradient steps
+class YetAnotherMixer: 
+
+    def __init__(self, model, priority_loss_name):
+        self.model = model
+        self.priority_loss_name = priority_loss_name
+        self._init_info() # for info logging
+        self._project_non_conflict = torch.compile(self._project_non_conflict_noncompiled)
+        self.init_priority_grad_cache()
+    
+    def init_priority_grad_cache(self): 
+        self.priority_grad_cache = []
+        for p in self.model.parameters(): 
+            if p.requires_grad: 
+                self.priority_grad_cache.append(torch.zeros_like(p))
+                
+    def _project_non_conflict_noncompiled(self, g1, g2):
+        """Remove conflicting component from secondary gradient"""
+        g_dot = torch.sum(g1 * g2)
+        if g_dot < 0: 
+            g1_norm = torch.sum(g1 * g1)
+            if g1_norm > 1e-8: 
+                projection = (g_dot / g1_norm) * g1
+                g2 = g2 - projection
+        return g2
+    
+    def backward(self, loss_dict):
+        params = [p for p in self.model.parameters() if p.requires_grad]
+        loss_name = list(loss_dict.keys())[0]
+
+        if loss_name == self.priority_loss_name: 
+            loss_dict[loss_name].backward(retain_graph=False)
+            for i, p in enumerate(params):
+                self.priority_grad_cache[i] = self.priority_grad_cache[i] + p.grad.detach()
+        else: 
+            prev_grads = [] 
+            for p in params: 
+                if p.grad is not None: 
+                    prev_grads.append(p.grad.clone())
+                    p.grad.zero_()
+                else: 
+                    prev_grads.append(torch.zeros_like(p))
+            loss_dict[loss_name].backward(retain_graph=False)
+            for p, cache, prev_grad in zip(params, self.priority_grad_cache, prev_grads): 
+                # accumulate gradient aligned to priority gradient
+                p.grad = prev_grad + self._project_non_conflict(cache, p.grad)
+
+    def _project_non_conflict_info(self, g1, g2):
+        g2_array = g2.detach().cpu().to(torch.float16).numpy()
+        g1_norm = torch.norm(g1)
+        g2_norm = torch.norm(g2)
+        g_dot = torch.sum(g1 * g2)
+        cosim = g_dot / (g1_norm * g2_norm)
+        if g_dot < 0: 
+            if g1_norm > 1e-8: 
+                projection = (g_dot / g1_norm.pow(2)) * g1
+                g2 = g2 - projection
+        return g2, g1_norm.item(), g2_norm.item(), cosim.item(), g2_array
+    
+    def _add_grad_info(self, g1, g2): 
+        g2_array = g2.detach().cpu().to(torch.float16).numpy()
+        g1_norm = torch.norm(g1)
+        g2_norm = torch.norm(g2)
+        if g1_norm > 0 and g2_norm > 0: 
+            cosim = torch.sum((g1/g1_norm) * (g2/g2_norm))
+        else: 
+            cosim = torch.tensor(0.)
+        return g1 + g2, g1_norm.item(), g2_norm.item(), cosim.item(), g2_array
+    
+    def _init_info(self): 
+        self.grad_info = {name: defaultdict(list) for name, p in self.model.named_parameters() if p.requires_grad and p.numel() > 1}
+    
+    def _update_info(self, param_name, prev_g_norm, curr_g_norm, cosim, loss_name, is_reset, grad_array): 
+        if param_name in self.grad_info: 
+            if is_reset: 
+                self.grad_info[param_name]["grad_angles"] += compute_gradient_cosine_similarities(self.grad_info[param_name])
+                self.grad_info[param_name]["grad_array"] = [] # clear up grad caches
+                
+            self.grad_info[param_name]["prev_grad_norm"].append(prev_g_norm)
+            self.grad_info[param_name]["curr_grad_norm"].append(curr_g_norm)
+            self.grad_info[param_name]["cosine_similarity"].append(cosim)
+            self.grad_info[param_name]["loss_name"].append(loss_name)
+            self.grad_info[param_name]["reset"].append(is_reset)
+            self.grad_info[param_name]["grad_array"].append(grad_array)
+
+
+    def backward_info(self, loss_dict):
+        param_names = [p[0] for p in self.model.named_parameters() if p[1].requires_grad]
+        params = [p for p in self.model.parameters() if p.requires_grad]
+        loss_name = list(loss_dict.keys())[0]
+
+        reset_flags = []
+        prev_grads = [] 
+        for p in params:
+            if p.grad is not None:
+                reset_flags.append(False)
+                prev_grads.append(p.grad.clone())
+                p.grad.zero_() 
+            else: 
+                print(" None Gradient encountered")
+                reset_flags.append(True)
+                prev_grads.append(torch.zeros_like(p))
+
+        if loss_name == self.priority_loss_name: 
+            print(" - priority loss | additive accumulation & update priority gradient cache")
+            loss_dict[loss_name].backward(retain_graph=False)
+            for i, p in enumerate(params): 
+                self.priority_grad_cache[i] = self.priority_grad_cache[i] + p.grad.detach()
+                p.grad, prev_g_norm, curr_g_norm, cosim, g1_array = self._add_grad_info(prev_grads[i], p.grad)
+                self._update_info(param_names[i], prev_g_norm, curr_g_norm, cosim, loss_name, reset_flags[i], g1_array)
+        else: 
+            print(" - non-priority loss | project to non-conflicting direction to priority gradient")
+            loss_dict[loss_name].backward(retain_graph=False)
+            for p, name, priority_grad, prev_grad, is_reset in zip(params, param_names, self.priority_grad_cache, prev_grads, reset_flags): 
+                p.grad, priority_g_norm, curr_g_norm, cosim, g1_array = self._project_non_conflict_info(priority_grad, p.grad)
+                p.grad += prev_grad
+                self._update_info(name, priority_g_norm, curr_g_norm, cosim, loss_name, is_reset, g1_array)
+
+
+    def save_grad_info(self, path):         
+        serializable_grad_info = {}
+        for param_name, info in self.grad_info.items():
+            serializable_grad_info[param_name] = {k: np.array(v) if k == "curr_grad" else v 
+                                                for k, v in dict(info).items()}
+        
+        with open(path, "wb") as f:  # Note: changed to binary mode
+            pickle.dump(serializable_grad_info, f)
