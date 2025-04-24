@@ -8,14 +8,14 @@ DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # Matrix-Based Entropy 
 # -----------------------------------------------------------------------------
 # Exact MBE calculation
-def mbe_alpha2_exact(Z, detach=False):     
+def mbe_alpha2_exact(Z, detach=False, epsilon=1e-7):     
     gram = torch.bmm(Z, Z.transpose(1,2))
     if detach: 
         gram_trace = torch.diagonal(gram.detach(), dim1=1, dim2=2).sum(dim=1)
     else:
         gram_trace = torch.diagonal(gram, dim1=1, dim2=2).sum(dim=1)
     gram_sq = gram.pow(2).sum(dim=(1,2))
-    return -torch.log(gram_sq / gram_trace.pow(2))
+    return -torch.log(gram_sq / (gram_trace.pow(2) + epsilon))
 
 def rademacher(shape, dtype=torch.float32, device=DEVICE):
     rand = ((torch.rand(shape) < 0.5)) * 2 - 1
