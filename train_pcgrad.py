@@ -159,10 +159,12 @@ class Hyperparameters:
     val_loss_every : int = 125 # every how many steps to evaluate val loss? 0 for only at the end
     save_checkpoint : bool = False
     no_reg: bool = False
-    additive_grad: bool = True
+    additive_grad: bool = False
 
 if len(sys.argv) > 1 and sys.argv[1] == "poor": 
-    args = Hyperparameters(batch_size=16, train_seq_len=32*1024, val_seq_len=16*1024)
+    # args = Hyperparameters(batch_size=16, train_seq_len=32*1024, val_seq_len=16*1024)
+    args = Hyperparameters(batch_size=32, train_seq_len=32*1024, val_seq_len=16*1024)
+
 
     model_config = GPTConfig(
         flex_kernel_options={
@@ -260,7 +262,7 @@ def get_lr(step: int):
 ################################################
 
 # grad_composer = SimPGrad(model)
-grad_composed = YetAnotherMixer(model, "entropy")
+grad_composer = YetAnotherMixer(model, "entropy")
 
 # ---------------------------------------------------------
 
@@ -300,8 +302,7 @@ for i in range(warmup_steps):
     if args.additive_grad: 
         grad_composer.naive_backward(loss_dict)
     else: 
-        grad_composer.backward_2phase(loss_dict) 
-        # grad_composer.backward(loss_dict, no_priority) # project grad
+        grad_composer.backward(loss_dict) # project grad
     backward_end = time.time() 
     print(f" :: Backward gradient calculation for loss [{loss_name}] takes {backward_end - backward_start} second")
     for param in model.parameters():
@@ -401,9 +402,9 @@ for step in range(train_steps + 1):
                 grad_composer.naive_backward(loss_dict)
         else: 
             if step % 50 == 0: 
-                grad_composer.backward_info(loss_dict, no_priority) # with gradient info accumulated
+                grad_composer.backward_info(loss_dict) # with gradient info accumulated
             else: 
-                grad_composer.backward(loss_dict, no_priority)
+                grad_composer.backward(loss_dict)
 
         scheduler.step()
     for param in model.parameters():
