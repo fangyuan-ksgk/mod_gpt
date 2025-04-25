@@ -20,6 +20,20 @@ from src.pcgrad import SimPGrad, YetAnotherMixer
 from src.utils import RRScheduler
 from src.utils import plot_training_losses
 
+import argparse
+
+# -----------------------------------------------------------------------------
+# Parse arguments
+# -----------------------------------------------------------------------------
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--batch_size", type=int, default=16)
+    parser.add_argument("--train_seq_len", type=int, default=32*1024)
+    parser.add_argument("--val_seq_len", type=int, default=16*1024)
+    parser.add_argument("--no_reg", action="store_true")
+    parser.add_argument("--additive_grad", action="store_true")
+    return parser.parse_args()
+
 # -----------------------------------------------------------------------------
 # Muon optimizer
 # -----------------------------------------------------------------------------
@@ -141,6 +155,16 @@ from src import distributed_data_generator
 # -----------------------------------------------------------------------------
 # int main
 
+# torchrun sets these env variables
+rank = int(os.environ["RANK"])
+world_size = int(os.environ["WORLD_SIZE"])
+assert torch.cuda.is_available()
+device = torch.device("cuda", int(os.environ["LOCAL_RANK"]))
+torch.cuda.set_device(device)
+dist.init_process_group(backend="nccl", device_id=device)
+dist.barrier()
+master_process = (rank == 0) # this process will do logging, checkpointing etc.
+
 @dataclass
 class Hyperparameters:
     # data
@@ -161,10 +185,13 @@ class Hyperparameters:
     no_reg: bool = False
     additive_grad: bool = False
 
-if len(sys.argv) > 1 and sys.argv[1] == "poor": 
-    # args = Hyperparameters(batch_size=16, train_seq_len=32*1024, val_seq_len=16*1024)
-    args = Hyperparameters(batch_size=32, train_seq_len=32*1024, val_seq_len=16*1024)
 
+cli_args = parse_args()
+if len(sys.argv) > 1 and sys.argv[1] == "poor": 
+    args = Hyperparameters()
+    for k, v in vars(cli_args).items():
+        if v is not None:
+            setattr(args, k, v)
 
     model_config = GPTConfig(
         flex_kernel_options={
@@ -178,17 +205,9 @@ else:
     assert world_size == 8 # this code is designed for 8xH100
 
 
-# torchrun sets these env variables
-rank = int(os.environ["RANK"])
-world_size = int(os.environ["WORLD_SIZE"])
-assert torch.cuda.is_available()
-device = torch.device("cuda", int(os.environ["LOCAL_RANK"]))
-torch.cuda.set_device(device)
-dist.init_process_group(backend="nccl", device_id=device)
-dist.barrier()
-master_process = (rank == 0) # this process will do logging, checkpointing etc.
 assert args.batch_size % (world_size) == 0
-train_accumulation_steps = args.batch_size // world_size
+train_accumulation_steps = args.batch_size // world_size # long seq train is more efficient than big batch
+
     
 # begin logging
 logfile = None
@@ -386,22 +405,24 @@ for step in range(train_steps + 1):
         inputs, targets = next(train_loader)
         loss_dict = model.forward(inputs, targets, attn_blocksize)
         if args.no_reg or len(scheduler.rr_layer_index) == 0: 
-            print(" - entropy loss only - ") 
             loss_dict = {"entropy": loss_dict["entropy"]}
+            print(f"- backward on entropy loss -")
         else:        
-            print(f" - mbe loss on {scheduler.rr_layer_index[0]} -")
             layer_idx = scheduler.rr_layer_index[0]
             mbe_loss_name = f"mbe_{layer_idx}"
+            print(f"- backward on {mbe_loss_name} loss -")
             loss_dict = {mbe_loss_name: loss_dict[mbe_loss_name]}
             # mbe_loss = sum([loss_dict[f'mbe_{i}'] for i in scheduler.rr_layer_index]) / len(scheduler.rr_layer_index)
             # loss_dict = {"mbe": mbe_loss}
         if args.additive_grad: 
-            if step % 50 == 0: 
+            if step % (len(scheduler.layer_indices) + 1) == 0: 
+                print(" :: logging gradient info :: ")
                 grad_composer.naive_backward_info(loss_dict)
             else: 
                 grad_composer.naive_backward(loss_dict)
         else: 
-            if step % 50 == 0: 
+            if step % (len(scheduler.layer_indices) + 1) == 0: 
+                print(" :: logging gradient info :: ")
                 grad_composer.backward_info(loss_dict) # with gradient info accumulated
             else: 
                 grad_composer.backward(loss_dict)

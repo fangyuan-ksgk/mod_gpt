@@ -125,6 +125,7 @@ class GPT(nn.Module):
         for i in range(self.num_decoder_layers):
             x = x + self.skip_weights[i] * skip_connections.pop()
             x, v1 = self.transformer.h[self.num_encoder_layers + i](x, v1, x0, block_mask)
+            loss_dict[f"{RANK_REG_LOSS}_{self.num_encoder_layers + i}"] = patch_mbe(x)
             
         x = norm(x)
         logits = self.lm_head(x)
