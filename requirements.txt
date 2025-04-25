@@ -4,3 +4,6 @@ torch
 huggingface-hub
 tiktoken 
 datasets
+matplotlib
+seaborn
+pandas
