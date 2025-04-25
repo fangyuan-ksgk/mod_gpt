@@ -32,6 +32,7 @@ def parse_args():
     parser.add_argument("--val_seq_len", type=int, default=16*1024)
     parser.add_argument("--no_reg", action="store_true")
     parser.add_argument("--additive_grad", action="store_true")
+    parser.add_argument("--np_weight", type=float, default=1.0)
     return parser.parse_args()
 
 # -----------------------------------------------------------------------------
@@ -184,6 +185,7 @@ class Hyperparameters:
     save_checkpoint : bool = False
     no_reg: bool = False
     additive_grad: bool = False
+    np_weight: float = 1.0 # weight on non-conflicting gradient, for observing behavior of mbe without backprop on it
 
 
 cli_args = parse_args()
@@ -350,7 +352,10 @@ t0 = time.perf_counter()
 # begin training
 train_steps = args.num_iterations
 loss_record = defaultdict(list)
-scheduler = RRScheduler(train_accumulation_steps, train_steps, model.num_encoder_layers) # scheduler for rank regularization
+scheduler = RRScheduler(train_accumulation_steps, 
+                        train_steps,
+                        start_layer=2,
+                        end_layer=model.num_encoder_layers + model.num_decoder_layers - 2) # scheduler for rank regularization
 scheduler.phase = 2 # for observing behavior on mbe loss v.s. entropy loss
 
 for step in range(train_steps + 1):
@@ -412,8 +417,6 @@ for step in range(train_steps + 1):
             mbe_loss_name = f"mbe_{layer_idx}"
             print(f"- backward on {mbe_loss_name} loss -")
             loss_dict = {mbe_loss_name: loss_dict[mbe_loss_name]}
-            # mbe_loss = sum([loss_dict[f'mbe_{i}'] for i in scheduler.rr_layer_index]) / len(scheduler.rr_layer_index)
-            # loss_dict = {"mbe": mbe_loss}
         if args.additive_grad: 
             if step % (len(scheduler.layer_indices) + 1) == 0: 
                 print(" :: logging gradient info :: ")
@@ -423,9 +426,9 @@ for step in range(train_steps + 1):
         else: 
             if step % (len(scheduler.layer_indices) + 1) == 0: 
                 print(" :: logging gradient info :: ")
-                grad_composer.backward_info(loss_dict) # with gradient info accumulated
+                grad_composer.backward_info(loss_dict, args.np_weight) # with gradient info accumulated
             else: 
-                grad_composer.backward(loss_dict)
+                grad_composer.backward(loss_dict, args.np_weight)
 
         scheduler.step()
     for param in model.parameters():

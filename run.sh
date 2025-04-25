@@ -4,8 +4,15 @@
 
 
 # Experiment Set-Ups (use small step size ~750 to quickly benchmark algorithm performance)
-# - experiment (I) baseline 
-torchrun --standalone --nproc_per_node=2 train_pcgrad.py poor no_reg no_priority additive_grad
+# - experiment (2.g) baseline | no logging on mbe grad. 
+torchrun --standalone --nproc_per_node=2 train_pcgrad.py poor
+# - experiment (2.j) baseline | logging on mbe grad. 
+torchrun --standalone --nproc_per_node=2 train_pcgrad.py poor --no_reg False --np_weight 0.0 --additive_grad False
+# - experiment (2.k) full mbe (2 ~ 9 layer) | projective composition
+torchrun --standalone --nproc_per_node=2 train_pcgrad.py poor --no_reg False --np_weight 1.0 --additive_grad False
+
+
+
 # - experiment (II) compose non conflicting gradient 
 # torchrun --standalone --nproc_per_node=2 train_pcgrad.py poor no_reg no_priority compose_grad 
 # # - experiment (III) with rank regularization, naive additive grad

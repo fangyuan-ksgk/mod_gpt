@@ -258,7 +258,7 @@ class YetAnotherMixer:
                 g2 = g2 - projection
         return g2
     
-    def backward(self, loss_dict):
+    def backward(self, loss_dict, np_weight=1.0):
         params = [p for p in self.model.parameters() if p.requires_grad]
         loss_name = list(loss_dict.keys())[0]
 
@@ -277,7 +277,7 @@ class YetAnotherMixer:
             loss_dict[loss_name].backward(retain_graph=False)
             for p, cache, prev_grad in zip(params, self.priority_grad_cache, prev_grads): 
                 # accumulate gradient aligned to priority gradient
-                p.grad = prev_grad + self._project_non_conflict(cache, p.grad)
+                p.grad = prev_grad + self._project_non_conflict(cache, p.grad) * np_weight
 
     def naive_backward(self, loss_dict): 
         params = [p for p in self.model.parameters() if p.requires_grad]
@@ -323,7 +323,7 @@ class YetAnotherMixer:
             self.grad_info[param_name]["grad_array"].append(grad_array)
 
 
-    def backward_info(self, loss_dict):
+    def backward_info(self, loss_dict, np_weight=1.0):
         param_names = [p[0] for p in self.model.named_parameters() if p[1].requires_grad]
         params = [p for p in self.model.parameters() if p.requires_grad]
         assert len(loss_dict) == 1, "torch compile requires exactly one loss for explicit backward pass"
@@ -337,7 +337,6 @@ class YetAnotherMixer:
                 prev_grads.append(p.grad.clone())
                 p.grad.zero_() 
             else: 
-                print(" None Gradient encountered")
                 reset_flags.append(True)
                 prev_grads.append(torch.zeros_like(p))
 
@@ -353,7 +352,7 @@ class YetAnotherMixer:
             loss_dict[loss_name].backward(retain_graph=False)
             for p, name, priority_grad, prev_grad, is_reset in zip(params, param_names, self.priority_grad_cache, prev_grads, reset_flags): 
                 p.grad, priority_g_norm, curr_g_norm, cosim, g1_array = self._project_non_conflict_info(priority_grad, p.grad)
-                p.grad += prev_grad
+                p.grad = p.grad * np_weight + prev_grad
                 self._update_info(name, priority_g_norm, curr_g_norm, cosim, loss_name, is_reset, g1_array)
 
 

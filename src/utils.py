@@ -110,7 +110,7 @@ def compute_gradient_cosine_similarities(param_info):
             if norm_ij > 1e-9: 
                 cosine_sim = float(dot_product / (norm_i * norm_j))
             else:
-                cosine_sim = 1.0 
+                cosine_sim = 0.0 
                 
             loss_pair = tuple(sorted([loss_names[i], loss_names[j]]))            
             if loss_pair not in pair_similarities:
@@ -458,7 +458,8 @@ class RRScheduler:
     def __init__(self, 
                  num_accumulation_steps, 
                  total_iterations, 
-                 total_layer=12, 
+                 start_layer=2,
+                 end_layer=12, 
                  es_patience=1000, 
                  es_min_delta=0.001):
         self.num_accumulation_steps = num_accumulation_steps
@@ -475,7 +476,7 @@ class RRScheduler:
         self.validation_checks_done = 0 
 
         # Layer rotation setup
-        self.layer_indices = list(range(2, total_layer))  # layer 2 onwards
+        self.layer_indices = list(range(start_layer, end_layer))  # layer 2 onwards
         self.current_layer_idx = 0
     
     def step(self):
