@@ -186,10 +186,11 @@ class Hyperparameters:
     no_reg: bool = False
     additive_grad: bool = False
     np_weight: float = 1.0 # weight on non-conflicting gradient, for observing behavior of mbe without backprop on it
+    
 
 
 cli_args = parse_args()
-if len(sys.argv) > 1 and sys.argv[1] == "poor": 
+if True: # i don't have 8xH100  
     args = Hyperparameters()
     for k, v in vars(cli_args).items():
         if v is not None:
