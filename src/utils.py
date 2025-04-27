@@ -94,7 +94,59 @@ def plot_training_losses(loss_record, save_path="loss_curves.png"):
     
     print(f"- Loss curves saved to {save_path}")
     
+
+def plot_mbe(mbe_values):
+    """
+    Plot Model Binding Energy (MBE) loss per layer.
     
+    Args:
+        mbe_values: List of MBE loss values per layer
+    """
+    # Create figure and axis
+    fig, ax = plt.subplots(figsize=(10, 6))
+    
+    # Layer indices for x-axis
+    layers = np.arange(len(mbe_values))
+    
+    # Create bar plot
+    bars = ax.bar(layers, mbe_values, color='steelblue', alpha=0.8)
+    
+    # Highlight highest and lowest values
+    max_idx = np.argmax(mbe_values)
+    min_idx = np.argmin(mbe_values)
+    bars[max_idx].set_color('red')
+    bars[min_idx].set_color('green')
+    
+    # Add value labels on top of each bar
+    for i, v in enumerate(mbe_values):
+        ax.text(i, v + 0.02, f"{v:.4f}", ha='center', fontsize=9)
+    
+    # Add labels and title
+    ax.set_xlabel('Layer Index')
+    ax.set_ylabel('MBE Loss')
+    ax.set_title('Matrix-based Entropy per layer (Entropy target only)')
+    
+    # Set x-ticks to layer indices
+    ax.set_xticks(layers)
+    ax.set_xticklabels([f'Layer {i}' for i in layers])
+    plt.xticks(rotation=45)
+    
+    # Add grid for better readability
+    ax.grid(axis='y', linestyle='--', alpha=0.7)
+    
+    # Add legend for highlighted bars
+    from matplotlib.patches import Patch
+    legend_elements = [
+        Patch(facecolor='red', label='Highest Loss'),
+        Patch(facecolor='green', label='Lowest Loss'),
+        Patch(facecolor='steelblue', label='Other Layers')
+    ]
+    ax.legend(handles=legend_elements, loc='upper right')
+    
+    plt.tight_layout()
+    plt.show()
+
+
 def compute_gradient_cosine_similarities(param_info):
     grad_arrays = param_info["grad_array"]
     loss_names = param_info["loss_name"]
@@ -503,7 +555,7 @@ class RRScheduler:
                 return False
         
     def _do_rr(self):
-        return self.phase == 2 and self.current_accumulation_step % 2 == 0
+        return self.phase == 2 and self.current_accumulation_step % 2 == 1
         
     @property
     def rr_layer_index(self): 
