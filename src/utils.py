@@ -149,10 +149,11 @@ def plot_mbe(mbe_values):
 
 def compute_gradient_cosine_similarities(param_info):
     grad_arrays = param_info["grad_array"]
-    loss_names = param_info["loss_name"]
+    n_grad = len(grad_arrays)
+    loss_names = param_info["loss_name"][-n_grad:]
     pair_similarities = {}    
-    for i in range(len(grad_arrays)):
-        for j in range(i+1, len(grad_arrays)):
+    for i in range(n_grad):
+        for j in range(i+1, n_grad):
             grad_i = grad_arrays[i].flatten()
             grad_j = grad_arrays[j].flatten()            
             dot_product = np.dot(grad_i, grad_j)
@@ -175,7 +176,7 @@ def compute_gradient_cosine_similarities(param_info):
             "loss_pair": loss_pair,
             "cosine_similarity": avg_similarity
         })
-    
+        
     return results
 
 import pandas as pd 
@@ -184,20 +185,8 @@ import re
 import math
 
 
-def plot_layer_grad_cosine_similarity(data, layer_idx, steps_per_ckpt=None, ax=None):
-    """
-    Plots the cosine similarity for a layer onto a given matplotlib Axes object.
-    If ax is None, creates a new figure (legacy behavior).
+def plot_layer_grad_cosine_similarity(data, layer_idx, loss_pair, steps_per_ckpt=None, ax=None):
 
-    Args:
-        data (dict): Dictionary containing the training data.
-        layer_idx (int): The index of the transformer layer to plot.
-        steps_per_ckpt (int, optional): Number of training steps per checkpoint.
-        ax (matplotlib.axes.Axes, optional): The Axes object to plot onto. If None, creates a new figure.
-
-    Returns:
-        bool: True if plotting was successful, False otherwise.
-    """
     # If no Axes object is provided, create a new figure and axes for standalone plotting
     if ax is None:
         fig, ax = plt.subplots(figsize=(15, 8))
@@ -241,12 +230,13 @@ def plot_layer_grad_cosine_similarity(data, layer_idx, steps_per_ckpt=None, ax=N
         x_values = x_indices * steps_per_ckpt
         x_label = "Step"
     else:
-        x_values = x_indices
-        x_label = "Checkpoint Index"
+        steps_per_ckpt = 1750 // n_ckpts
+        x_values = x_indices * steps_per_ckpt
+        x_label = "Step"
 
     # --- Plotting ---
     plotted_something = False
-    for param_key in layer_param_keys:
+    for param_key in layer_param_keys: 
         # Additional checks within the loop for robustness
         if param_key not in data or 'grad_angles' not in data.get(param_key, {}):
              continue
@@ -256,18 +246,26 @@ def plot_layer_grad_cosine_similarity(data, layer_idx, steps_per_ckpt=None, ax=N
              continue
 
         cosine_similarities = []
+        valid_x_values = []
         all_valid = True
         for i, item in enumerate(grad_angles_data):
             if isinstance(item, dict) and 'cosine_similarity' in item and isinstance(item['cosine_similarity'], (int, float)) and np.isfinite(item['cosine_similarity']):
-                cosine_similarities.append(item['cosine_similarity'])
+                if loss_pair == item['loss_pair']:
+                    cosine_similarities.append(item['cosine_similarity'])
+                    valid_x_values.append(x_values[i])
             else:
                 print(f"Warning: Invalid/Non-finite data at index {i} for '{param_key}' layer {layer_idx}. Skipping parameter.")
                 all_valid = False
                 break
+        
+        while cosine_similarities[0] == 0: 
+            cosine_similarities = cosine_similarities[1:]
+            valid_x_values = valid_x_values[1:]
 
-        if all_valid and len(cosine_similarities) == n_ckpts:
-            short_label = param_key.replace(layer_prefix, '')
-            ax.plot(x_values, cosine_similarities, marker='o', linestyle='-', label=short_label, markersize=4) # Smaller markers
+        if all_valid:
+            similarity_variance = np.var(cosine_similarities)
+            short_label = param_key.replace(layer_prefix, '') + f" (var: {similarity_variance:.4f})"
+            ax.plot(valid_x_values, cosine_similarities, marker='o', linestyle='-', label=short_label, markersize=4) # Smaller markers
             plotted_something = True
 
     if not plotted_something:
@@ -279,7 +277,7 @@ def plot_layer_grad_cosine_similarity(data, layer_idx, steps_per_ckpt=None, ax=N
     # --- Configure the specific subplot (ax) ---
     ax.set_xlabel(x_label)
     ax.set_ylabel("Cosine Similarity")
-    ax.set_title(f"Layer {layer_idx}") # Use concise title for subplot
+    ax.set_title(f"Layer {layer_idx} | Gradient cosine similarity for {loss_pair}") # Use concise title for subplot
     ax.legend(title="Parameter", fontsize='small', title_fontsize='small') # Smaller legend font
     ax.grid(True)
 
