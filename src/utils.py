@@ -185,7 +185,7 @@ import re
 import math
 
 
-def plot_layer_grad_cosine_similarity(data, layer_idx, loss_pair, steps_per_ckpt=None, ax=None):
+def plot_layer_grad_cosine_similarity(data, layer_idx, loss_pair, steps_per_ckpt=None, ax=None, max_pts=None):
 
     # If no Axes object is provided, create a new figure and axes for standalone plotting
     if ax is None:
@@ -234,16 +234,16 @@ def plot_layer_grad_cosine_similarity(data, layer_idx, loss_pair, steps_per_ckpt
         x_values = x_indices * steps_per_ckpt
         x_label = "Step"
 
-    # --- Plotting ---
-    plotted_something = False
-    for param_key in layer_param_keys: 
-        # Additional checks within the loop for robustness
+    # --- Collect and prepare data for plotting with average similarities ---
+    param_data = []
+    for param_key in layer_param_keys:
+        # Additional checks for robustness
         if param_key not in data or 'grad_angles' not in data.get(param_key, {}):
-             continue
+            continue
         grad_angles_data = data[param_key]['grad_angles']
         if not isinstance(grad_angles_data, list) or len(grad_angles_data) != n_ckpts:
-             print(f"Warning: Skipping '{param_key}' for layer {layer_idx}. Inconsistent checkpoints or invalid format.")
-             continue
+            print(f"Warning: Skipping '{param_key}' for layer {layer_idx}. Inconsistent checkpoints or invalid format.")
+            continue
 
         cosine_similarities = []
         valid_x_values = []
@@ -251,22 +251,60 @@ def plot_layer_grad_cosine_similarity(data, layer_idx, loss_pair, steps_per_ckpt
         for i, item in enumerate(grad_angles_data):
             if isinstance(item, dict) and 'cosine_similarity' in item and isinstance(item['cosine_similarity'], (int, float)) and np.isfinite(item['cosine_similarity']):
                 if loss_pair == item['loss_pair']:
-                    cosine_similarities.append(item['cosine_similarity'])
+                    # Use absolute value of cosine similarity
+                    cosine_similarities.append(abs(item['cosine_similarity']))
                     valid_x_values.append(x_values[i])
             else:
                 print(f"Warning: Invalid/Non-finite data at index {i} for '{param_key}' layer {layer_idx}. Skipping parameter.")
                 all_valid = False
                 break
         
-        while cosine_similarities[0] == 0: 
+        if max_pts is not None and len(valid_x_values) > max_pts: 
+            n_interval = len(valid_x_values) // max_pts
+            cosine_similarities = cosine_similarities[::n_interval]
+            valid_x_values = valid_x_values[::n_interval]
+
+        # Skip leading zeros
+        while cosine_similarities and cosine_similarities[0] == 0: 
             cosine_similarities = cosine_similarities[1:]
             valid_x_values = valid_x_values[1:]
 
-        if all_valid:
+        if all_valid and cosine_similarities:
+            avg_similarity = np.mean(cosine_similarities)
             similarity_variance = np.var(cosine_similarities)
-            short_label = param_key.replace(layer_prefix, '') + f" (var: {similarity_variance:.4f})"
-            ax.plot(valid_x_values, cosine_similarities, marker='o', linestyle='-', label=short_label, markersize=4) # Smaller markers
-            plotted_something = True
+            short_label = param_key.replace(layer_prefix, '') + f" (avg: {avg_similarity:.4f}, var: {similarity_variance:.4f})"
+            
+            param_data.append({
+                'param_key': param_key,
+                'short_label': short_label,
+                'cosine_similarities': cosine_similarities,
+                'valid_x_values': valid_x_values,
+                'avg_similarity': avg_similarity
+            })
+
+    # --- Sort parameters by average similarity (descending) ---
+    param_data.sort(key=lambda x: x['avg_similarity'], reverse=True)
+
+    # --- Plotting with varying line thicknesses ---
+    plotted_something = False
+    for i, data_item in enumerate(param_data):
+        # Scale line thickness based on average similarity
+        # Base thickness is 1.0, increasing for higher similarities
+        line_thickness = 1.0 + data_item['avg_similarity'] * 8  # Adjust scaling factor as needed
+        line_thickness = min(line_thickness, 5.0)  # Cap maximum thickness
+        alpha = 0.5 + data_item['avg_similarity'] * 0.5  # Adjust scaling factor as needed
+        
+        ax.plot(
+            data_item['valid_x_values'], 
+            data_item['cosine_similarities'], 
+            marker='o', 
+            linestyle='-', 
+            label=data_item['short_label'], 
+            markersize=4,
+            linewidth=line_thickness,
+            alpha=alpha
+        )
+        plotted_something = True
 
     if not plotted_something:
         if creating_own_figure:
@@ -276,9 +314,9 @@ def plot_layer_grad_cosine_similarity(data, layer_idx, loss_pair, steps_per_ckpt
 
     # --- Configure the specific subplot (ax) ---
     ax.set_xlabel(x_label)
-    ax.set_ylabel("Cosine Similarity")
+    ax.set_ylabel("Absolute Cosine Similarity")
     ax.set_title(f"Layer {layer_idx} | Gradient cosine similarity for {loss_pair}") # Use concise title for subplot
-    ax.legend(title="Parameter", fontsize='small', title_fontsize='small') # Smaller legend font
+    ax.legend(title="Parameter (sorted by avg similarity)", fontsize='small', title_fontsize='small') # Smaller legend font
     ax.grid(True)
 
     # If we created our own figure, adjust layout and show it
@@ -289,67 +327,234 @@ def plot_layer_grad_cosine_similarity(data, layer_idx, loss_pair, steps_per_ckpt
     return True # Indicate successful plotting on the axes
 
 
-def plot_all_layers_composite_figure(data, steps_per_ckpt=None, n_cols=3):
-    """
-    Generates a single composite figure with subplots for each layer's
-    gradient consistency.
 
-    Args:
-        data (dict): Dictionary containing the training data.
-        steps_per_ckpt (int, optional): Number of training steps per checkpoint.
-        n_cols (int): Number of columns for the subplot grid. Defaults to 3.
+def plot_all_entropy_mbe_pair_figures(data, layer_idx=None, steps_per_ckpt=None, n_cols=3, save_dir=None):
+
+    # Find all available loss pairs in the format ('entropy', 'mbe_x')
+    loss_pairs = set()
+    for param_key in data.keys():
+        if param_key not in data or 'grad_angles' not in data[param_key]:
+            continue
+            
+        for angle_data in data[param_key]['grad_angles']:
+            if isinstance(angle_data, dict) and 'loss_pair' in angle_data:
+                pair = angle_data['loss_pair']
+                if isinstance(pair, tuple) and len(pair) == 2:
+                    if layer_idx is not None: 
+                        if  pair[0] == 'entropy' and pair[1].startswith(f'mbe_{layer_idx}'):
+                            loss_pairs.add(pair)
+                    else: 
+                        if pair[0] == 'entropy' and pair[1].startswith('mbe_'):
+                            loss_pairs.add(pair)
+    
+    if not loss_pairs:
+        print("No valid ('entropy', 'mbe_x') loss pairs found in the data.")
+        return {}
+    
+    # Sort the loss pairs by the mbe layer number for consistent ordering
+    sorted_loss_pairs = sorted(loss_pairs, key=lambda p: int(p[1].split('_')[1]) if p[1].split('_')[1].isdigit() else 0)
+    
+    # Create a figure for each loss pair
+    figures = {}
+    for loss_pair in sorted_loss_pairs:
+        # Pre-check which layers have valid data for this loss pair
+        valid_layers = []
+        layer_indices = set()
+        
+        # First identify all layer indices in the data
+        for param_key in data.keys():
+            match = re.match(r'transformer\.h\.(\d+)\.', param_key)
+            if match:
+                layer_indices.add(int(match.group(1)))
+        
+        # Then check which ones have valid data for this loss pair
+        for layer_idx in sorted(layer_indices):
+            # Create a temporary figure/axis to test plotting
+            temp_fig, temp_ax = plt.subplots()
+            is_valid = False 
+            try: 
+                plot_layer_grad_cosine_similarity(
+                    data, layer_idx, loss_pair, steps_per_ckpt, ax=temp_ax
+                )
+                is_valid = True 
+            except Exception as e:
+                is_valid = False 
+            plt.close(temp_fig)  # Close the temporary figure
+            
+            if is_valid:
+                valid_layers.append(layer_idx)
+        
+        if not valid_layers:
+            print(f"No valid layers found for loss pair {loss_pair}")
+            continue
+            
+        # Calculate grid dimensions for this loss pair
+        n_layers = len(valid_layers)
+        n_rows = math.ceil(n_layers / n_cols)
+        
+        # Create figure with appropriate dimensions
+        fig_width = n_cols * 7  # Adjust base width per subplot
+        fig_height = n_rows * 5  # Adjust base height per subplot
+        fig, axes = plt.subplots(n_rows, n_cols, figsize=(fig_width, fig_height))
+        
+        # Handle different axes shapes based on grid dimensions
+        if n_rows > 1 and n_cols > 1:
+            axes = axes.flatten()
+        elif n_rows == 1 and n_cols > 1:
+            axes = axes  # Already 1D array in this case
+        elif n_cols == 1 and n_rows > 1:
+            axes = axes.flatten()
+        else:
+            axes = [axes]  # Convert single Axes to list for consistent handling
+        
+        # Plot each valid layer in its own subplot
+        successful_plots = 0
+        for i, layer_idx in enumerate(valid_layers):
+            if i < len(axes):
+                is_plotted = plot_layer_grad_cosine_similarity(
+                    data, layer_idx, loss_pair, steps_per_ckpt, ax=axes[i]
+                )
+                if is_plotted:
+                    successful_plots += 1
+            else:
+                print(f"Warning: Not enough subplots for layer {layer_idx} with loss pair {loss_pair}")
+        
+        # Hide any unused subplots
+        for j in range(successful_plots, len(axes)):
+            axes[j].set_visible(False)
+        
+        # Add overall title and adjust layout
+        mbe_layer = loss_pair[1].split('_')[1]
+        fig.suptitle(f"Grad Cosine Similarity: entropy & mbe_{mbe_layer} loss pair", 
+                     fontsize=12, y=0.98)
+        
+        # Add common labels for the figure
+        fig.text(0.5, 0.01, 'Training Steps', ha='center', fontsize=14)
+        fig.text(0.01, 0.5, 'Cosine Similarity', va='center', rotation='vertical', fontsize=14)
+        
+        plt.tight_layout(rect=[0.02, 0.03, 1, 0.95], h_pad=1.5, w_pad=2.0)  # Adjust to make room for labels and increase horizontal spacing
+        
+        # Store the figure in our dictionary
+        figures[loss_pair] = fig
+        
+    if save_dir: 
+        # Ensure the save directory exists
+        import os
+        os.makedirs(save_dir, exist_ok=True)
+        
+        # Save each figure with a sanitized filename
+        for loss_pair, fig in figures.items():
+            # Create a safe filename from the loss pair
+            filename = f"{loss_pair[0]}_{loss_pair[1].replace('/', '_')}.png"
+            save_file = os.path.join(save_dir, filename)
+            
+            try:
+                fig.savefig(save_file)
+                print(f"Saved figure to {save_file}")
+            except Exception as e:
+                print(f"Error saving figure to {save_file}: {e}")
+    
+    return figures
+
+
+def plot_all_layer_entropy_grad_consistency(data, steps_per_ckpt=None, n_cols=3, save_dir=None): 
     """
-    # Find all unique layer indices
+    Plots the gradient cosine similarity for ('entropy', 'entropy') loss pair across all layers.
+    
+    Args:
+        data (dict): Dictionary containing the training data with gradient angles.
+        steps_per_ckpt (int, optional): Number of steps between checkpoints. Default is None.
+        n_cols (int, optional): Number of columns in the subplot grid. Default is 3.
+        save_dir (str, optional): Directory to save the figures. Default is None.
+        
+    Returns:
+        matplotlib.figure.Figure: The created figure, or None if no valid data found.
+    """
+    # Find all available layers in the data
     layer_indices = set()
-    for key in data.keys():
-        match = re.match(r'transformer\.h\.(\d+)\.', key)
+    
+    for param_key in data.keys():
+        match = re.match(r'transformer\.h\.(\d+)\.', param_key)
         if match:
             layer_indices.add(int(match.group(1)))
-
+    
     if not layer_indices:
-        print("Error: No layer data found ('transformer.h.{idx}.'). Cannot plot.")
-        return
-
-    sorted_indices = sorted(list(layer_indices))
-    n_layers = len(sorted_indices)
+        print("No valid layers found in the data.")
+        return None
+    
+    # Sort the layer indices
+    valid_layers = sorted(layer_indices)
+    
+    # Define the loss pair we're interested in
+    entropy_pair = ('entropy', 'entropy')
+    
+    # Calculate grid dimensions
+    n_layers = len(valid_layers)
     n_rows = math.ceil(n_layers / n_cols)
-
-    # Create the figure and the grid of axes
-    # Adjust figsize based on grid size - heuristic, might need tuning
-    figsize_width = n_cols * 6
-    figsize_height = n_rows * 4
-    fig, axes = plt.subplots(n_rows, n_cols, figsize=(figsize_width, figsize_height), squeeze=False)
-
-    print(f"Generating composite plot for layers: {sorted_indices}...")
-
-    plot_count = 0
-    axes_flat = axes.flatten() # Flatten the 2D array of axes for easy iteration
-    for i, layer_idx in enumerate(sorted_indices):
-        ax = axes_flat[i] # Get the current subplot axes
-        print(f"  Plotting Layer {layer_idx}...")
-        success = plot_layer_grad_cosine_similarity(data, layer_idx, steps_per_ckpt=steps_per_ckpt, ax=ax)
-        if success:
-            plot_count += 1
+    
+    # Create figure with appropriate dimensions
+    fig_width = n_cols * 7  # Adjust base width per subplot
+    fig_height = n_rows * 5  # Adjust base height per subplot
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=(fig_width, fig_height))
+    
+    # Handle different axes shapes based on grid dimensions
+    if n_rows > 1 and n_cols > 1:
+        axes = axes.flatten()
+    elif n_rows == 1 and n_cols > 1:
+        axes = axes  # Already 1D array in this case
+    elif n_cols == 1 and n_rows > 1:
+        axes = axes.flatten()
+    else:
+        axes = [axes]  # Convert single Axes to list for consistent handling
+    
+    # Plot each valid layer in its own subplot
+    successful_plots = 0
+    for i, layer_idx in enumerate(valid_layers):
+        if i < len(axes):
+            is_plotted = plot_layer_grad_cosine_similarity(
+                data, layer_idx, entropy_pair, steps_per_ckpt, ax=axes[i]
+            )
+            if is_plotted:
+                successful_plots += 1
         else:
-            # Optional: Hide unused axes if plotting fails or layer is empty
-            ax.set_visible(False)
-
-    # Hide any remaining unused axes in the grid
-    for j in range(i + 1, len(axes_flat)):
-        axes_flat[j].set_visible(False)
-
-    if plot_count == 0:
-        print("Error: No layers could be successfully plotted.")
-        plt.close(fig) # Close the empty figure
-        return
-
-    # Add an overall title
-    fig.suptitle("Gradient Cosine Similarity Across Layers", fontsize=16, y=1.02) # Adjust y to prevent overlap
-
-    # Adjust layout to prevent overlapping titles/labels
-    fig.tight_layout(rect=[0, 0.03, 1, 0.98]) # Adjust rect to make space for suptitle
-
-    plt.show()
+            print(f"Warning: Not enough subplots for layer {layer_idx}")
+    
+    # Hide any unused subplots
+    for j in range(successful_plots, len(axes)):
+        axes[j].set_visible(False)
+    
+    # Add overall title and adjust layout
+    fig.suptitle(f"Entropy Loss Gradient Self-Consistency Across Layers", 
+                 fontsize=14, y=0.98)
+    
+    # Add common labels for the figure
+    fig.text(0.5, 0.01, 'Training Steps', ha='center', fontsize=14)
+    fig.text(0.01, 0.5, 'Cosine Similarity', va='center', rotation='vertical', fontsize=14)
+    
+    plt.tight_layout(rect=[0.02, 0.03, 1, 0.95], h_pad=1.5, w_pad=2.0)
+    
+    # Save the figure if save_dir is provided
+    if save_dir and successful_plots > 0:
+        # Ensure the save directory exists
+        import os
+        os.makedirs(save_dir, exist_ok=True)
+        
+        # Create a filename for the figure
+        save_file = os.path.join(save_dir, "entropy_self_consistency.png")
+        
+        try:
+            fig.savefig(save_file)
+            print(f"Saved figure to {save_file}")
+        except Exception as e:
+            print(f"Error saving figure to {save_file}: {e}")
+    
+    # If no successful plots, close the figure and return None
+    if successful_plots == 0:
+        plt.close(fig)
+        print("No data could be plotted for entropy self-consistency.")
+        return None
+    
+    return fig
 
 
 def calculate_average_consistency(data):
