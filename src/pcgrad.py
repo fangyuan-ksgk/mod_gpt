@@ -5,7 +5,7 @@ import torch
 from collections import defaultdict
 import pickle
 import numpy as np
-from .utils import compute_gradient_cosine_similarities
+from .utils import compute_gradient_cosine_similarities, plot_grad_info
 
 class SimPGrad:
     def __init__(self, model):
@@ -385,6 +385,9 @@ class YetAnotherMixer:
         for param_name, info in self.grad_info.items():
             serializable_grad_info[param_name] = {k: np.array(v) if k == "curr_grad" else v 
                                                 for k, v in dict(info).items()}
+            
+        # plot grad info
+        plot_grad_info(serializable_grad_info, save_dir=path)
         
         with open(path, "wb") as f:  # Note: changed to binary mode
             pickle.dump(serializable_grad_info, f)

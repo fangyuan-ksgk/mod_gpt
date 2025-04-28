@@ -246,13 +246,15 @@ def plot_layer_grad_cosine_similarity(data, layer_idx, loss_pair, steps_per_ckpt
             continue
 
         cosine_similarities = []
+        abs_cosine_similarities = []  # New list for absolute values
         valid_x_values = []
         all_valid = True
         for i, item in enumerate(grad_angles_data):
             if isinstance(item, dict) and 'cosine_similarity' in item and isinstance(item['cosine_similarity'], (int, float)) and np.isfinite(item['cosine_similarity']):
                 if loss_pair == item['loss_pair']:
-                    # Use absolute value of cosine similarity
-                    cosine_similarities.append(abs(item['cosine_similarity']))
+                    # Store both original and absolute values
+                    cosine_similarities.append(item['cosine_similarity'])
+                    abs_cosine_similarities.append(abs(item['cosine_similarity']))
                     valid_x_values.append(x_values[i])
             else:
                 print(f"Warning: Invalid/Non-finite data at index {i} for '{param_key}' layer {layer_idx}. Skipping parameter.")
@@ -262,37 +264,40 @@ def plot_layer_grad_cosine_similarity(data, layer_idx, loss_pair, steps_per_ckpt
         if max_pts is not None and len(valid_x_values) > max_pts: 
             n_interval = len(valid_x_values) // max_pts
             cosine_similarities = cosine_similarities[::n_interval]
+            abs_cosine_similarities = abs_cosine_similarities[::n_interval]
             valid_x_values = valid_x_values[::n_interval]
 
         # Skip leading zeros
         while cosine_similarities and cosine_similarities[0] == 0: 
             cosine_similarities = cosine_similarities[1:]
+            abs_cosine_similarities = abs_cosine_similarities[1:]
             valid_x_values = valid_x_values[1:]
 
         if all_valid and cosine_similarities:
-            avg_similarity = np.mean(cosine_similarities)
+            avg_abs_similarity = np.mean(abs_cosine_similarities)  # Average of absolute values
             similarity_variance = np.var(cosine_similarities)
-            short_label = param_key.replace(layer_prefix, '') + f" (avg: {avg_similarity:.4f}, var: {similarity_variance:.4f})"
+            short_label = param_key.replace(layer_prefix, '') + f" (avg abs: {avg_abs_similarity:.4f}, var: {similarity_variance:.4f})"
             
             param_data.append({
                 'param_key': param_key,
                 'short_label': short_label,
-                'cosine_similarities': cosine_similarities,
+                'cosine_similarities': cosine_similarities,  # Original values for plotting
                 'valid_x_values': valid_x_values,
-                'avg_similarity': avg_similarity
+                'avg_abs_similarity': avg_abs_similarity  # For sorting
             })
 
-    # --- Sort parameters by average similarity (descending) ---
-    param_data.sort(key=lambda x: x['avg_similarity'], reverse=True)
+    # --- Sort parameters by average absolute similarity (descending) ---
+    param_data.sort(key=lambda x: x['avg_abs_similarity'], reverse=True)
+    max_abs_similarity = param_data[0]['avg_abs_similarity']
+    min_abs_similarity = max(param_data[-1]['avg_abs_similarity'] - 0.1, 0.0)
 
     # --- Plotting with varying line thicknesses ---
     plotted_something = False
     for i, data_item in enumerate(param_data):
-        # Scale line thickness based on average similarity
-        # Base thickness is 1.0, increasing for higher similarities
-        line_thickness = 1.0 + data_item['avg_similarity'] * 8  # Adjust scaling factor as needed
+        # Scale line thickness based on average absolute similarity
+        line_thickness = 1.0 + (data_item['avg_abs_similarity'] - min_abs_similarity) / (max_abs_similarity - min_abs_similarity) * 4  # Adjust scaling factor as needed
         line_thickness = min(line_thickness, 5.0)  # Cap maximum thickness
-        alpha = 0.5 + data_item['avg_similarity'] * 0.5  # Adjust scaling factor as needed
+        alpha = 0.5 + (data_item['avg_abs_similarity'] - min_abs_similarity) / (max_abs_similarity - min_abs_similarity) * 0.5  # Adjust scaling factor as needed
         
         ax.plot(
             data_item['valid_x_values'], 
@@ -314,9 +319,9 @@ def plot_layer_grad_cosine_similarity(data, layer_idx, loss_pair, steps_per_ckpt
 
     # --- Configure the specific subplot (ax) ---
     ax.set_xlabel(x_label)
-    ax.set_ylabel("Absolute Cosine Similarity")
-    ax.set_title(f"Layer {layer_idx} | Gradient cosine similarity for {loss_pair}") # Use concise title for subplot
-    ax.legend(title="Parameter (sorted by avg similarity)", fontsize='small', title_fontsize='small') # Smaller legend font
+    ax.set_ylabel("Cosine Similarity")  # Changed from "Absolute Cosine Similarity"
+    ax.set_title(f"Layer {layer_idx} | Gradient cosine similarity for {loss_pair}")
+    ax.legend(title="Parameter (sorted by avg abs similarity)", fontsize='small', title_fontsize='small')
     ax.grid(True)
 
     # If we created our own figure, adjust layout and show it
@@ -327,8 +332,7 @@ def plot_layer_grad_cosine_similarity(data, layer_idx, loss_pair, steps_per_ckpt
     return True # Indicate successful plotting on the axes
 
 
-
-def plot_all_entropy_mbe_pair_figures(data, layer_idx=None, steps_per_ckpt=None, n_cols=3, save_dir=None):
+def plot_all_entropy_mbe_pair_figures(data, layer_idx=None, steps_per_ckpt=None, n_cols=3, save_dir=None, max_pts=None):
 
     # Find all available loss pairs in the format ('entropy', 'mbe_x')
     loss_pairs = set()
@@ -374,7 +378,7 @@ def plot_all_entropy_mbe_pair_figures(data, layer_idx=None, steps_per_ckpt=None,
             is_valid = False 
             try: 
                 plot_layer_grad_cosine_similarity(
-                    data, layer_idx, loss_pair, steps_per_ckpt, ax=temp_ax
+                    data, layer_idx, loss_pair, steps_per_ckpt, ax=temp_ax, max_pts=max_pts
                 )
                 is_valid = True 
             except Exception as e:
@@ -412,7 +416,7 @@ def plot_all_entropy_mbe_pair_figures(data, layer_idx=None, steps_per_ckpt=None,
         for i, layer_idx in enumerate(valid_layers):
             if i < len(axes):
                 is_plotted = plot_layer_grad_cosine_similarity(
-                    data, layer_idx, loss_pair, steps_per_ckpt, ax=axes[i]
+                    data, layer_idx, loss_pair, steps_per_ckpt, ax=axes[i], max_pts=max_pts
                 )
                 if is_plotted:
                     successful_plots += 1
@@ -457,7 +461,7 @@ def plot_all_entropy_mbe_pair_figures(data, layer_idx=None, steps_per_ckpt=None,
     return figures
 
 
-def plot_all_layer_entropy_grad_consistency(data, steps_per_ckpt=None, n_cols=3, save_dir=None): 
+def plot_all_layer_entropy_grad_consistency(data, steps_per_ckpt=None, n_cols=3, save_dir=None, max_pts=100): 
     """
     Plots the gradient cosine similarity for ('entropy', 'entropy') loss pair across all layers.
     
@@ -512,7 +516,7 @@ def plot_all_layer_entropy_grad_consistency(data, steps_per_ckpt=None, n_cols=3,
     for i, layer_idx in enumerate(valid_layers):
         if i < len(axes):
             is_plotted = plot_layer_grad_cosine_similarity(
-                data, layer_idx, entropy_pair, steps_per_ckpt, ax=axes[i]
+                data, layer_idx, entropy_pair, steps_per_ckpt, ax=axes[i], max_pts=max_pts
             )
             if is_plotted:
                 successful_plots += 1
@@ -555,6 +559,16 @@ def plot_all_layer_entropy_grad_consistency(data, steps_per_ckpt=None, n_cols=3,
         return None
     
     return fig
+
+
+def plot_grad_info(data, save_dir): 
+    # Plot entropy-entropy gradient consistency for all layers
+    figs = plot_all_layer_entropy_grad_consistency(data, max_pts=30, save_dir=save_dir)
+
+    # PLot entroy-mbe gradient similarity for all layers
+    for i in range(2, 10): 
+        figs = plot_all_entropy_mbe_pair_figures(data, layer_idx=i, n_cols=2, save_dir=save_dir)
+    return True 
 
 
 def calculate_average_consistency(data):
