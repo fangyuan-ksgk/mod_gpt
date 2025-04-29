@@ -3,7 +3,7 @@
 import torch
 torch.set_float32_matmul_precision('high')
 from .rank_regularizer import patch_mbe2 as patch_mbe
-from .rank_regularizer import patch_mbe_diff as patch_mbe_diff
+from .rank_regularizer import patch_mbe2_diff as patch_mbe_diff
 RANK_REG_LOSS = "mbe"
 DIFF_RANK_REG_LOSS = "diff_mbe"
 
