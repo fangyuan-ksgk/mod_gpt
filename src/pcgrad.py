@@ -391,3 +391,139 @@ class YetAnotherMixer:
         
         with open(path, "wb") as f:  # Note: changed to binary mode
             pickle.dump(serializable_grad_info, f)
+            
+            
+            
+            
+# Another Mixer Class: 
+# - projective loss name | this is the loss whose gradient we'll project to different components and compose together
+
+class YetAnotherMixer2: 
+
+    def __init__(self, model, projective_loss_name):
+        self.model = model
+        self.projective_loss_name = projective_loss_name
+        self._init_info() # for info logging
+        self._scale_projective_component = torch.compile(self._scale_projective_component_noncompiled)
+        self.init_priority_grad_cache()
+    
+    def init_priority_grad_cache(self): 
+        self.priority_grad_cache = []
+        for p in self.model.parameters(): 
+            if p.requires_grad: 
+                self.priority_grad_cache.append(torch.zeros_like(p))
+                
+    def _scale_projective_component_noncompiled(self, g, g_calib, scale_factor=1.0):
+        """Scale the projection component of g to g_calib by scale_factor"""
+        g_dot = torch.sum(g * g_calib)
+        g_calib_norm = torch.sum(g_calib * g_calib)
+        if g_calib_norm > 1e-8: 
+            g_proj = (g_dot / g_calib_norm) * g_calib
+            g = g + g_proj * (scale_factor - 1)
+        return g
+    
+    def backward(self, loss_dict, scale_factor=1.0):
+        params = [p for p in self.model.parameters() if p.requires_grad]
+        loss_name = list(loss_dict.keys())[0]
+
+        if loss_name == self.projective_loss_name: 
+            loss_dict[loss_name].backward(retain_graph=False)
+        else: 
+            prev_grads = [] 
+            for p in params: 
+                if p.grad is not None: 
+                    prev_grads.append(p.grad.clone())
+                    p.grad.zero_()
+                else: 
+                    prev_grads.append(torch.zeros_like(p))
+            loss_dict[loss_name].backward(retain_graph=False)
+            for p, prev_grad in zip(params, prev_grads):
+                p.grad = self._scale_projective_component(prev_grad, p.grad, scale_factor=scale_factor)
+
+    def naive_backward(self, loss_dict): 
+        params = [p for p in self.model.parameters() if p.requires_grad]
+        loss = sum(loss_dict.values())
+        loss.backward() 
+        
+    def _scale_projective_component_info(self, g, g_calib, scale_factor=1.0):
+        # Issue (I). g_calib does not have significant magnitude to scale g. 
+        
+        g_dot = torch.sum(g * g_calib)
+        g_norm = torch.norm(g)
+        g_calib_norm = torch.norm(g_calib)
+        cosim = torch.tensor(0.)
+        
+        if g_calib_norm * g_norm > 1e-8:
+            cosim = g_dot / (g_norm * g_calib_norm)
+            g_proj = cosim * g_calib
+            g = g + g_proj * (scale_factor - 1)
+            
+        return g, g_norm.item(), g_calib_norm.item(), cosim.item(), g
+    
+    def _add_grad_info(self, g1, g2): 
+        g2_array = g2.detach().cpu().to(torch.float16).numpy()
+        g1_norm = torch.norm(g1)
+        g2_norm = torch.norm(g2)
+        if g1_norm > 1e-8 and g2_norm > 1e-8: 
+            cosim = torch.sum((g1/g1_norm) * (g2/g2_norm))
+        else: 
+            cosim = torch.tensor(0.)
+        return g1 + g2, g1_norm.item(), g2_norm.item(), cosim.item(), g2_array
+    
+    def _init_info(self): 
+        self.grad_info = {name: defaultdict(list) for name, p in self.model.named_parameters() if p.requires_grad and p.numel() > 1}
+    
+    def _update_info(self, param_name, prev_g_norm, curr_g_norm, cosim, loss_name, is_reset, grad_array): 
+        if param_name in self.grad_info: 
+            if is_reset: 
+                self.grad_info[param_name]["grad_angles"] += compute_gradient_cosine_similarities(self.grad_info[param_name])
+                self.grad_info[param_name]["grad_array"] = [] # clear up grad caches
+                
+            self.grad_info[param_name]["prev_grad_norm"].append(prev_g_norm)
+            self.grad_info[param_name]["curr_grad_norm"].append(curr_g_norm)
+            self.grad_info[param_name]["cosine_similarity"].append(cosim)
+            self.grad_info[param_name]["loss_name"].append(loss_name)
+            self.grad_info[param_name]["reset"].append(is_reset)
+            self.grad_info[param_name]["grad_array"].append(grad_array)
+
+    def backward_info(self, loss_dict, scale_factor=1.0):
+        param_names = [p[0] for p in self.model.named_parameters() if p[1].requires_grad]
+        params = [p for p in self.model.parameters() if p.requires_grad]
+        assert len(loss_dict) == 1, "torch compile requires exactly one loss for explicit backward pass"
+        loss_name = list(loss_dict.keys())[0]
+
+        reset_flags = []
+        prev_grads = [] 
+        for p in params:
+            if p.grad is not None:
+                reset_flags.append(False)
+                prev_grads.append(p.grad.clone())
+                p.grad.zero_() 
+            else: 
+                reset_flags.append(True)
+                prev_grads.append(torch.zeros_like(p))
+
+        if loss_name == self.projective_loss_name: 
+            loss_dict[loss_name].backward(retain_graph=False)
+            for i, p in enumerate(params): 
+                
+                p.grad, prev_g_norm, curr_g_norm, cosim, g1_array = self._add_grad_info(prev_grads[i], p.grad)
+                self._update_info(param_names[i], prev_g_norm, curr_g_norm, cosim, loss_name, reset_flags[i], g1_array)
+        else: 
+            loss_dict[loss_name].backward(retain_graph=False)
+            for i, p in enumerate(params): 
+                p.grad, prev_g_norm, curr_g_norm, cosim, g1_array = self._scale_projective_component_info(prev_grads[i], p.grad, scale_factor=scale_factor)
+                self._update_info(param_names[i], prev_g_norm, curr_g_norm, cosim, loss_name, reset_flags[i], g1_array)
+                
+
+    def save_grad_info(self, path):         
+        serializable_grad_info = {}
+        for param_name, info in self.grad_info.items():
+            serializable_grad_info[param_name] = {k: np.array(v) if k == "curr_grad" else v 
+                                                for k, v in dict(info).items()}
+            
+        # plot grad info
+        plot_grad_info(serializable_grad_info, save_dir=path)
+        
+        with open(path, "wb") as f:  # Note: changed to binary mode
+            pickle.dump(serializable_grad_info, f)
