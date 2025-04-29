@@ -737,6 +737,8 @@ class RRScheduler:
         self.total_iterations = total_iterations
         self.current_accumulation_step = 0
         self.current_iteration = 0
+        self.main_loss_name = main_loss_name
+
 
         # Phase management & early stopping
         # - Phase 1. Memorization / Entropy Drop Fast || Phase 2. Compression - Entropy loss plateauing
