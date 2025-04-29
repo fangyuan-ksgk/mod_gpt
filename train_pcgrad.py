@@ -35,6 +35,7 @@ def parse_args():
     parser.add_argument("--np_weight", type=float, default=1.0)
     parser.add_argument("--scale_factor", type=float, default=1.1)
     parser.add_argument("--switch_phase", action="store_true")
+    parser.add_argument("--log_grad_info", action="store_false")
     return parser.parse_args()
 
 # -----------------------------------------------------------------------------
@@ -190,7 +191,8 @@ class Hyperparameters:
     np_weight: float = 1.0 # weight on non-conflicting gradient, for observing behavior of mbe without backprop on it
     switch_phase: bool = False
     scale_factor: float = 1.1
-
+    log_grad_info: bool = True
+    
 
 cli_args = parse_args()
 if True: # i don't have 8xH100  
@@ -358,10 +360,10 @@ train_steps = args.num_iterations
 loss_record = defaultdict(list)
 scheduler = RRScheduler(train_accumulation_steps, 
                         train_steps,
-                        start_layer= 1 if args.switch_phase else 2,
+                        start_layer=2,
                         end_layer=model.num_encoder_layers + model.num_decoder_layers - 2,
                         switch_phase=args.switch_phase) # scheduler for rank regularization
-scheduler.phase = 2 # for observing behavior on mbe loss v.s. entropy loss
+scheduler.phase = 1 if args.switch_phase else 2
 
 for step in range(train_steps + 1):
     last_step = (step == train_steps)
@@ -400,7 +402,8 @@ for step in range(train_steps + 1):
     if last_step:
         if master_process: 
             os.makedirs(f"logs/{run_id}", exist_ok=True)
-            grad_composer.save_grad_info(f"logs/{run_id}/grad_step{step:06d}.pkl")
+            if args.log_grad_info: 
+                grad_composer.save_grad_info(f"logs/{run_id}/grad_step{step:06d}.pkl")
             plot_training_losses(loss_record, save_path=f"logs/{run_id}/loss_curve.png")
             
             if args.save_checkpoint:
@@ -423,13 +426,13 @@ for step in range(train_steps + 1):
             print(f"- backward on {mbe_loss_name} loss -")
             loss_dict = {mbe_loss_name: loss_dict[mbe_loss_name]}
         if args.additive_grad: 
-            if step % (len(scheduler.layer_indices) + 1) == 0: 
+            if (step % (20 * scheduler.num_reg_layers) < scheduler.num_reg_layers) and args.log_grad_info: 
                 print(" :: logging gradient info :: ")
                 grad_composer.naive_backward_info(loss_dict)
             else: 
                 grad_composer.naive_backward(loss_dict)
         else: 
-            if step % (len(scheduler.layer_indices) + 1) == 0: 
+            if (step % (20 * scheduler.num_reg_layers) < scheduler.num_reg_layers) and args.log_grad_info: 
                 print(" :: logging gradient info :: ")
                 grad_composer.backward_info(loss_dict, args.np_weight) # with gradient info accumulated
             else: 

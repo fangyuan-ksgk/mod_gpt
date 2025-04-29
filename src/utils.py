@@ -749,6 +749,7 @@ class RRScheduler:
         
         # Layer rotation setup
         self.layer_indices = list(range(start_layer, end_layer))  # layer 2 onwards
+        self.num_reg_layers = len(self.layer_indices)
         self.current_layer_idx = 0
     
     def step(self, loss_dict):
