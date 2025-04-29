@@ -486,8 +486,32 @@ class YetAnotherMixer2:
             self.grad_info[param_name]["loss_name"].append(loss_name)
             self.grad_info[param_name]["reset"].append(is_reset)
             self.grad_info[param_name]["grad_array"].append(grad_array)
+            
+    def naive_backward_info(self, loss_dict): 
+        param_names = [p[0] for p in self.model.named_parameters() if p[1].requires_grad]
+        params = [p for p in self.model.parameters() if p.requires_grad]
+        assert len(loss_dict) == 1, "torch compile requires exactly one loss for explicit backward pass"
+        loss_name = list(loss_dict.keys())[0]
 
-    def backward_info(self, loss_dict, scale_factor=1.0):
+        reset_flags = []
+        prev_grads = [] 
+        for p in params:
+            if p.grad is not None:
+                reset_flags.append(False)
+                prev_grads.append(p.grad.clone())
+                p.grad.zero_() 
+            else: 
+                print(" None Gradient encountered")
+                reset_flags.append(True)
+                prev_grads.append(torch.zeros_like(p))
+
+        loss_dict[loss_name].backward(retain_graph=False)
+        for i, p in enumerate(params): 
+            p.grad, prev_g_norm, curr_g_norm, cosim, curr_g_array = self._add_grad_info(prev_grads[i], p.grad)
+            self._update_info(param_names[i], prev_g_norm, curr_g_norm, cosim, loss_name, reset_flags[i], curr_g_array)
+
+
+    def backward_info(self, loss_dict):
         param_names = [p[0] for p in self.model.named_parameters() if p[1].requires_grad]
         params = [p for p in self.model.parameters() if p.requires_grad]
         assert len(loss_dict) == 1, "torch compile requires exactly one loss for explicit backward pass"

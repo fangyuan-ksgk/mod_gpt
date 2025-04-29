@@ -16,7 +16,7 @@ import torch
 from torch import nn, Tensor
 import torch.distributed as dist
 
-from src.pcgrad import SimPGrad, YetAnotherMixer
+from src.pcgrad import SimPGrad, YetAnotherMixer, YetAnotherMixer2
 from src.utils import RRScheduler
 from src.utils import plot_training_losses
 
@@ -33,6 +33,8 @@ def parse_args():
     parser.add_argument("--no_reg", action="store_true")
     parser.add_argument("--additive_grad", action="store_true")
     parser.add_argument("--np_weight", type=float, default=1.0)
+    parser.add_argument("--scale_factor", type=float, default=1.1)
+    parser.add_argument("--switch_phase", action="store_true")
     return parser.parse_args()
 
 # -----------------------------------------------------------------------------
@@ -186,7 +188,8 @@ class Hyperparameters:
     no_reg: bool = False
     additive_grad: bool = False
     np_weight: float = 1.0 # weight on non-conflicting gradient, for observing behavior of mbe without backprop on it
-    
+    switch_phase: bool = False
+    scale_factor: float = 1.1
 
 
 cli_args = parse_args()
@@ -284,7 +287,7 @@ def get_lr(step: int):
 ################################################
 
 # grad_composer = SimPGrad(model)
-grad_composer = YetAnotherMixer(model, "entropy")
+grad_composer = YetAnotherMixer2(model, "entropy", scale_factor=args.scale_factor)
 
 # ---------------------------------------------------------
 
@@ -355,8 +358,9 @@ train_steps = args.num_iterations
 loss_record = defaultdict(list)
 scheduler = RRScheduler(train_accumulation_steps, 
                         train_steps,
-                        start_layer=2,
-                        end_layer=model.num_encoder_layers + model.num_decoder_layers - 2) # scheduler for rank regularization
+                        start_layer= 1 if args.switch_phase else 2,
+                        end_layer=model.num_encoder_layers + model.num_decoder_layers - 2,
+                        switch_phase=args.switch_phase) # scheduler for rank regularization
 scheduler.phase = 2 # for observing behavior on mbe loss v.s. entropy loss
 
 for step in range(train_steps + 1):
@@ -431,7 +435,8 @@ for step in range(train_steps + 1):
             else: 
                 grad_composer.backward(loss_dict, args.np_weight)
 
-        scheduler.step()
+        scheduler.step(loss_dict)
+        
     for param in model.parameters():
         param.grad /= train_accumulation_steps
         dist.all_reduce(param.grad, op=dist.ReduceOp.AVG)
