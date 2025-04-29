@@ -35,7 +35,8 @@ def patch_mbe2_diff(x, patch_size=8, stride=1):
     mbe_diff = torch.diff(mbe_values, dim=1).mean()
     return mbe_diff
 
-
+# MBE approximatioon 
+# -----------------------------------------------------------------------------
 def rademacher(shape, dtype=torch.float32, device=DEVICE):
     rand = ((torch.rand(shape) < 0.5)) * 2 - 1
     return rand.to(dtype).to(device)
