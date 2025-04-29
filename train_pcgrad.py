@@ -36,6 +36,8 @@ def parse_args():
     parser.add_argument("--scale_factor", type=float, default=1.1)
     parser.add_argument("--switch_phase", action="store_true")
     parser.add_argument("--log_grad_info", action="store_false")
+    parser.add_argument("--diff_mbe", action="store_true")
+    
     return parser.parse_args()
 
 # -----------------------------------------------------------------------------
@@ -148,7 +150,7 @@ class Muon(torch.optim.Optimizer):
 
 # from src.rg_model import GPT, GPTConfig # random grouping model
 # from src.model import GPT, GPTConfig # original model
-from src.reprank import GPT, GPTConfig # rank regularized model
+from src.reprank import GPT_diff, GPT, GPTConfig # rank regularized model
 
 
 # -----------------------------------------------------------------------------
@@ -192,7 +194,7 @@ class Hyperparameters:
     switch_phase: bool = False
     scale_factor: float = 1.1
     log_grad_info: bool = True
-    
+    diff_mbe: bool = False
 
 cli_args = parse_args()
 if True: # i don't have 8xH100  
@@ -248,8 +250,11 @@ print0("="*100)
 ########################################
 #    Construct model and optimizer     #
 ########################################
-
-model: nn.Module = GPT(model_config).cuda()
+if args.diff_mbe: 
+    model: nn.Module = GPT_diff(model_config).cuda()
+else: 
+    model: nn.Module = GPT(model_config).cuda()
+    
 for m in model.modules():
     if isinstance(m, nn.Embedding):
         m.bfloat16()
@@ -434,9 +439,9 @@ for step in range(train_steps + 1):
         else: 
             if (step % (20 * scheduler.num_reg_layers) < scheduler.num_reg_layers) and args.log_grad_info: 
                 print(" :: logging gradient info :: ")
-                grad_composer.backward_info(loss_dict, args.np_weight) # with gradient info accumulated
+                grad_composer.backward_info(loss_dict) # with gradient info accumulated
             else: 
-                grad_composer.backward(loss_dict, args.np_weight)
+                grad_composer.backward(loss_dict)
 
         scheduler.step(loss_dict)
         

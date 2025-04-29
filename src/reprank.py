@@ -3,7 +3,9 @@
 import torch
 torch.set_float32_matmul_precision('high')
 from .rank_regularizer import patch_mbe2 as patch_mbe
+from .rank_regularizer import patch_mbe_diff as patch_mbe_diff
 RANK_REG_LOSS = "mbe"
+DIFF_RANK_REG_LOSS = "diff_mbe"
 
 # Customized GPT model with low-rank regularization loss 
 # -------------------------------------------------------------------
@@ -76,7 +78,7 @@ class GPTnoconn(nn.Module):
         return {"entropy": loss, "rank_reg": sum(reg_loss.values()) / len(reg_loss) if reg_loss else torch.tensor(0., device=x.device)}
         
 
-# SpeedRun GPT module: Extra skip connection
+# GPT with MBE regularization
 # ---------------------------------------------------------------------------------------
 class GPT(nn.Module):
 
@@ -126,6 +128,67 @@ class GPT(nn.Module):
             x = x + self.skip_weights[i] * skip_connections.pop()
             x, v1 = self.transformer.h[self.num_encoder_layers + i](x, v1, x0, block_mask)
             loss_dict[f"{RANK_REG_LOSS}_{self.num_encoder_layers + i}"] = patch_mbe(x)
+            
+        x = norm(x)
+        logits = self.lm_head(x)
+        logits = 30 * torch.tanh(logits / 30) # @Grad62304977
+        logits = logits.float()
+        loss = F.cross_entropy(logits.view(-1, logits.size(-1)), target.view(-1))
+        loss_dict["entropy"] = loss
+        return loss_dict
+    
+    
+
+# GPT with Differential MBE regularization
+# ---------------------------------------------------------------------------------------
+class GPT_diff(nn.Module):
+
+    def __init__(self, config):
+        super().__init__()
+
+        self.num_encoder_layers = config.n_layer // 2
+        self.num_decoder_layers = config.n_layer - self.num_encoder_layers 
+        self.skip_weights = nn.Parameter(torch.ones(self.num_decoder_layers))
+
+        self.transformer = nn.ModuleDict(dict(
+            wte = nn.Embedding(config.vocab_size, config.n_embd),
+            h = nn.ModuleList([Block(config) for _ in range(config.n_layer)]),
+        ))
+        self.lm_head = CastedLinear(config.n_embd, config.vocab_size)
+        self.lm_head.weight.data.zero_()
+
+        self.alpha = config.alpha 
+        self.window_size = config.window_size
+
+    def forward(self, idx, target, attn_blocksize):
+        """Localized Rank Regularization for Each Block"""
+
+        docs = (idx == 50256).cumsum(1)
+        def document_causal_mask(b, h, q_idx, kv_idx):
+          causal_mask = q_idx >= kv_idx
+          document_mask = docs[b, q_idx] == docs[b, kv_idx]
+          window_mask = q_idx - kv_idx < attn_blocksize
+          return causal_mask & document_mask & window_mask
+
+        S = idx.shape[1]
+        block_mask = create_block_mask(document_causal_mask, None, None, S, S, device="cuda", _compile=True)
+
+        x = self.transformer.wte(idx)
+        x = norm(x)
+        loss_dict = {}
+        
+        x0 = x
+        v1 = None
+
+        skip_connections = []
+        for i in range(self.num_encoder_layers):
+            x, v1 = self.transformer.h[i](x, v1, x0, block_mask)
+            loss_dict[f"{DIFF_RANK_REG_LOSS}_{i}"] = patch_mbe_diff(x)
+            skip_connections.append(x)
+        for i in range(self.num_decoder_layers):
+            x = x + self.skip_weights[i] * skip_connections.pop()
+            x, v1 = self.transformer.h[self.num_encoder_layers + i](x, v1, x0, block_mask)
+            loss_dict[f"{DIFF_RANK_REG_LOSS}_{self.num_encoder_layers + i}"] = patch_mbe_diff(x)
             
         x = norm(x)
         logits = self.lm_head(x)
