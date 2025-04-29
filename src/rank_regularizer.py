@@ -18,6 +18,24 @@ def mbe_alpha2_exact(Z, detach=False, epsilon=1e-7):
     gram_sq = gram.pow(2).sum(dim=(1,2))
     return -torch.log((gram_sq + epsilon) / (gram_trace.pow(2) + epsilon))
 
+# Differential MBE 
+# -----------------------------------------------------------------------------
+def mbe_alpha2_exact2(Z, detach=False, epsilon=1e-7):
+    gram = torch.einsum("bpid,bpjd->bpij", Z, Z)
+    if detach: 
+        gram_trace = torch.diagonal(gram.detach(), dim1=2, dim2=3).sum(dim=2)
+    else:
+        gram_trace = torch.diagonal(gram, dim1=2, dim2=3).sum(dim=2)
+    gram_sq = gram.pow(2).sum(dim=(2,3))
+    return -torch.log((gram_sq + epsilon) / (gram_trace.pow(2) + epsilon))
+
+def patch_mbe2_diff(x, patch_size=8, stride=1): 
+    x_patches = x.unfold(dimension=1, size=patch_size, step=stride)
+    mbe_values = mbe_alpha2_exact2(x_patches)
+    mbe_diff = torch.diff(mbe_values, dim=1).mean()
+    return mbe_diff
+
+
 def rademacher(shape, dtype=torch.float32, device=DEVICE):
     rand = ((torch.rand(shape) < 0.5)) * 2 - 1
     return rand.to(dtype).to(device)

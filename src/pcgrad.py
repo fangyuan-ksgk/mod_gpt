@@ -400,9 +400,10 @@ class YetAnotherMixer:
 
 class YetAnotherMixer2: 
 
-    def __init__(self, model, projective_loss_name):
+    def __init__(self, model, projective_loss_name, scale_factor=1.0):
         self.model = model
         self.projective_loss_name = projective_loss_name
+        self.scale_factor = scale_factor
         self._init_info() # for info logging
         self._scale_projective_component = torch.compile(self._scale_projective_component_noncompiled)
         self.init_priority_grad_cache()
@@ -413,16 +414,16 @@ class YetAnotherMixer2:
             if p.requires_grad: 
                 self.priority_grad_cache.append(torch.zeros_like(p))
                 
-    def _scale_projective_component_noncompiled(self, g, g_calib, scale_factor=1.0):
+    def _scale_projective_component_noncompiled(self, g, g_calib):
         """Scale the projection component of g to g_calib by scale_factor"""
         g_dot = torch.sum(g * g_calib)
         g_calib_norm = torch.sum(g_calib * g_calib)
         if g_calib_norm > 1e-8: 
             g_proj = (g_dot / g_calib_norm) * g_calib
-            g = g + g_proj * (scale_factor - 1)
+            g = g + g_proj * (self.scale_factor - 1)
         return g
     
-    def backward(self, loss_dict, scale_factor=1.0):
+    def backward(self, loss_dict):
         params = [p for p in self.model.parameters() if p.requires_grad]
         loss_name = list(loss_dict.keys())[0]
 
@@ -438,14 +439,14 @@ class YetAnotherMixer2:
                     prev_grads.append(torch.zeros_like(p))
             loss_dict[loss_name].backward(retain_graph=False)
             for p, prev_grad in zip(params, prev_grads):
-                p.grad = self._scale_projective_component(prev_grad, p.grad, scale_factor=scale_factor)
+                p.grad = self._scale_projective_component(prev_grad, p.grad)
 
     def naive_backward(self, loss_dict): 
         params = [p for p in self.model.parameters() if p.requires_grad]
         loss = sum(loss_dict.values())
         loss.backward() 
         
-    def _scale_projective_component_info(self, g, g_calib, scale_factor=1.0):
+    def _scale_projective_component_info(self, g, g_calib):
         # Issue (I). g_calib does not have significant magnitude to scale g. 
         
         g_dot = torch.sum(g * g_calib)
@@ -456,7 +457,7 @@ class YetAnotherMixer2:
         if g_calib_norm * g_norm > 1e-8:
             cosim = g_dot / (g_norm * g_calib_norm)
             g_proj = cosim * g_calib
-            g = g + g_proj * (scale_factor - 1)
+            g = g + g_proj * (self.scale_factor - 1)
             
         return g, g_norm.item(), g_calib_norm.item(), cosim.item(), g
     
@@ -512,7 +513,7 @@ class YetAnotherMixer2:
         else: 
             loss_dict[loss_name].backward(retain_graph=False)
             for i, p in enumerate(params): 
-                p.grad, prev_g_norm, curr_g_norm, cosim, g1_array = self._scale_projective_component_info(prev_grads[i], p.grad, scale_factor=scale_factor)
+                p.grad, prev_g_norm, curr_g_norm, cosim, g1_array = self._scale_projective_component_info(prev_grads[i], p.grad)
                 self._update_info(param_names[i], prev_g_norm, curr_g_norm, cosim, loss_name, reset_flags[i], g1_array)
                 
 
