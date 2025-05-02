@@ -33,7 +33,9 @@ def parse_args():
     parser.add_argument("--no_reg", action="store_true")
     parser.add_argument("--additive_grad", action="store_true")
     parser.add_argument("--np_weight", type=float, default=1.0)
-    parser.add_argument("--scale_factor", type=float, default=1.1)
+    parser.add_argument("--positive_scale_factor", type=float, default=1.0)
+    parser.add_argument("--negative_scale_factor", type=float, default=1.0)
+    parser.add_argument("--proj_product", action="store_true") # use Entropy grad projection times MBE grad magnitude or Entropy grad projection alone for scaling
     parser.add_argument("--switch_phase", action="store_true")
     parser.add_argument("--log_grad_info", action="store_true")
     parser.add_argument("--diff_mbe", action="store_true")
@@ -193,7 +195,9 @@ class Hyperparameters:
     additive_grad: bool = False
     np_weight: float = 1.0 # weight on non-conflicting gradient, for observing behavior of mbe without backprop on it
     switch_phase: bool = False
-    scale_factor: float = 1.1
+    positive_scale_factor: float = 1.0
+    negative_scale_factor: float = 1.0
+    proj_product: bool = False
     log_grad_info: bool = False
     diff_mbe: bool = False
 
@@ -295,7 +299,8 @@ def get_lr(step: int):
 ################################################
 
 # grad_composer = SimPGrad(model)
-grad_composer = YetAnotherMixer2(model, "entropy", scale_factor=args.scale_factor)
+grad_composer = YetAnotherMixer2(model, "entropy", positive_scale_factor=args.positive_scale_factor, negative_scale_factor=args.negative_scale_factor,
+                                 proj_product=args.proj_product)
 
 # ---------------------------------------------------------
 

@@ -400,12 +400,17 @@ class YetAnotherMixer:
 
 class YetAnotherMixer2: 
 
-    def __init__(self, model, projective_loss_name, scale_factor=1.0):
+    def __init__(self, model, projective_loss_name, positive_scale_factor=1.0, negative_scale_factor=1.0, proj_product=False):
         self.model = model
         self.projective_loss_name = projective_loss_name
-        self.scale_factor = scale_factor
+        self.scale_factor = (positive_scale_factor + negative_scale_factor) / 2
+        self.positive_scale_factor = positive_scale_factor 
+        self.negative_scale_factor = negative_scale_factor
         self._init_info() # for info logging
-        self._scale_projective_component = torch.compile(self._scale_projective_component_noncompiled)
+        if proj_product: 
+            self._scale_projective_component = torch.compile(self._scale_projective_component_noncompiled2)
+        else: 
+            self._scale_projective_component = torch.compile(self._scale_projective_component_noncompiled3)
         self.init_priority_grad_cache()
     
     def init_priority_grad_cache(self): 
@@ -413,14 +418,25 @@ class YetAnotherMixer2:
         for p in self.model.parameters(): 
             if p.requires_grad: 
                 self.priority_grad_cache.append(torch.zeros_like(p))
-                
-    def _scale_projective_component_noncompiled(self, g, g_calib):
+    
+    def _scale_projective_component_noncompiled2(self, g, g_calib):
+        """Scale the projection component of g to g_calib by scale_factor"""
+        g_dot = torch.sum(g * g_calib)
+        g_calib_norm = torch.norm(g_calib)
+        if g_calib_norm > 1e-8: 
+            scale_factor = self.positive_scale_factor if g_dot > 0 else self.negative_scale_factor
+            g_proj = (g_dot / g_calib_norm) * g_calib
+            g = g + g_proj * (scale_factor - 1)
+        return g
+    
+    def _scale_projective_component_noncompiled3(self, g, g_calib):
         """Scale the projection component of g to g_calib by scale_factor"""
         g_dot = torch.sum(g * g_calib)
         g_calib_norm = torch.sum(g_calib * g_calib)
         if g_calib_norm > 1e-8: 
+            scale_factor = self.positive_scale_factor if g_dot > 0 else self.negative_scale_factor
             g_proj = (g_dot / g_calib_norm) * g_calib
-            g = g + g_proj * (self.scale_factor - 1)
+            g = g + g_proj * (scale_factor - 1)
         return g
     
     def backward(self, loss_dict):

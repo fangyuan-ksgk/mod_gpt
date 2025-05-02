@@ -722,6 +722,22 @@ def plot_avg_consistency_across_layers(avg_consistency_df, title="Average Gradie
 
 # ------- Scheduler for Rank Regularization -------
 
+PRIOR_WEIGHTS = {
+    "mbe_0": 0.04309166, 
+    "mbe_1": 0.04309166, 
+    "mbe_2": 0.07181943, 
+    "mbe_3": 0.07181943, 
+    "mbe_4": 0.04787962,
+    "mbe_5": 0.06155951, 
+    "mbe_6": 0.08618331, 
+    "mbe_7": 0.10772914, 
+    "mbe_8": 0.14363885, 
+    "mbe_9": 0.21545828, 
+    "mbe_10": 0.21772914,
+    "mbe_11": 0.10772914, 
+}
+
+
 class RRScheduler: 
     # rotate on layer_idx, compute one layer rank regularization loss per train step
     def __init__(self, 
@@ -738,7 +754,7 @@ class RRScheduler:
         self.current_accumulation_step = 0
         self.current_iteration = 0
         self.main_loss_name = main_loss_name
-
+        self.prior_weights = PRIOR_WEIGHTS
 
         # Phase management & early stopping
         # - Phase 1. Memorization / Entropy Drop Fast || Phase 2. Compression - Entropy loss plateauing
@@ -782,3 +798,9 @@ class RRScheduler:
             return self.layer_indices[self.current_layer_idx: self.current_layer_idx + 1]
         else: 
             return []
+        
+    @property
+    def mbe_weight(self): 
+        # weights = {k: v * int(int(k.split("mbe_")[-1]) in self.rr_layer_index) for k,v in self.prior_weights.items()}
+        weights = self.prior_weights
+        return weights
