@@ -723,18 +723,18 @@ def plot_avg_consistency_across_layers(avg_consistency_df, title="Average Gradie
 # ------- Scheduler for Rank Regularization -------
 
 PRIOR_WEIGHTS = {
-    "mbe_0": 0.04309166, 
-    "mbe_1": 0.04309166, 
-    "mbe_2": 0.07181943, 
-    "mbe_3": 0.07181943, 
-    "mbe_4": 0.04787962,
-    "mbe_5": 0.06155951, 
-    "mbe_6": 0.08618331, 
-    "mbe_7": 0.10772914, 
-    "mbe_8": 0.14363885, 
-    "mbe_9": 0.21545828, 
-    "mbe_10": 0.21772914,
-    "mbe_11": 0.10772914, 
+    0: 0.04309166, 
+    1: 0.04309166, 
+    2: 0.07181943, 
+    3: 0.07181943, 
+    4: 0.04787962,
+    5: 0.06155951, 
+    6: 0.08618331, 
+    7: 0.10772914, 
+    8: 0.14363885, 
+    9: 0.21545828, 
+    10: 0.21772914,
+    11: 0.10772914, 
 }
 
 
@@ -748,7 +748,9 @@ class RRScheduler:
                  es_patience=1000, 
                  es_min_delta=0.001,
                  main_loss_name="entropy",
+                 full_mbe = False,
                  switch_phase=False):
+        
         self.num_accumulation_steps = num_accumulation_steps
         self.total_iterations = total_iterations
         self.current_accumulation_step = 0
@@ -769,7 +771,7 @@ class RRScheduler:
         self.layer_indices = list(range(start_layer, end_layer))  # layer 2 onwards
         self.num_reg_layers = len(self.layer_indices)
         self.current_layer_idx = 0
-    
+        self.full_mbe = full_mbe
     def step(self, loss_dict):
         self.current_accumulation_step = (self.current_accumulation_step + 1) % self.num_accumulation_steps
         if self.current_accumulation_step == 0:
@@ -795,12 +797,39 @@ class RRScheduler:
     @property
     def rr_layer_index(self): 
         if self._do_rr(): 
-            return self.layer_indices[self.current_layer_idx: self.current_layer_idx + 1]
+            if not self.full_mbe: 
+                return self.layer_indices[self.current_layer_idx: self.current_layer_idx + 1]
+            else: 
+                return self.layer_indices
         else: 
             return []
         
     @property
     def mbe_weight(self): 
         # weights = {k: v * int(int(k.split("mbe_")[-1]) in self.rr_layer_index) for k,v in self.prior_weights.items()}
-        weights = self.prior_weights
-        return weights
+        weights = np.array([self.prior_weights[i] for i in self.rr_layer_index])
+        weights = weights / weights.sum()
+        return weights.tolist()
+    
+    def process_loss_dict(self, loss_dict): 
+
+        if "diff_mbe" in list(loss_dict.keys()): # weighted sum over all layers 
+            print(f"- backward on diff_mbe loss -")
+            loss_dict = {"diff_mbe": sum(self.prior_weights[layer_idx] * loss_dict[f"diff_mbe_{layer_idx}"] for layer_idx in self.prior_weights) / len(self.prior_weights)}
+            
+        elif len(self.rr_layer_index) == 1: 
+            layer_idx = self.rr_layer_index[0]
+            mbe_loss_name = f"mbe_{layer_idx}"
+            print(f"- backward on {mbe_loss_name} loss -")
+            loss_dict = {mbe_loss_name: loss_dict[mbe_loss_name]}
+            
+        elif len(self.rr_layer_index) == 0:
+            print(f"- backward on entropy loss -")
+            loss_dict = {"entropy": loss_dict["entropy"]}
+            
+        else:
+            avg_mbe_loss = sum([self.prior_weights[layer_idx] * loss_dict[f"mbe_{layer_idx}"] for layer_idx in self.rr_layer_index])
+            print(f"- backward on mbe loss -")
+            loss_dict = {"mbe": avg_mbe_loss}
+            
+        return loss_dict 
