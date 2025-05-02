@@ -459,7 +459,7 @@ class YetAnotherMixer2:
             g_proj = cosim * g_calib
             g = g + g_proj * (self.scale_factor - 1)
             
-        return g, g_norm.item(), g_calib_norm.item(), cosim.item(), g
+        return g, g_norm.item(), g_calib_norm.item(), cosim.item(), g.detach().cpu().to(torch.float16).numpy()
     
     def _add_grad_info(self, g1, g2): 
         g2_array = g2.detach().cpu().to(torch.float16).numpy()
