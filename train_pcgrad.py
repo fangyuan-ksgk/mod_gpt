@@ -330,8 +330,12 @@ for i in range(warmup_steps):
         layer_idx = i % (model.num_encoder_layers)  
         # ------------------------------------------------------------------------
         loss_dict = model.forward(inputs.to(torch.int32), targets, attn_blocksize)
-        mbe_loss = loss_dict[f"mbe_{layer_idx}"]
-        loss_dict = {"mbe": mbe_loss}
+        if args.diff_mbe: 
+            diff_mbe_loss = loss_dict[f"diff_mbe_{layer_idx}"]
+            loss_dict = {"diff_mbe": diff_mbe_loss}
+        else:
+            mbe_loss = loss_dict[f"mbe_{layer_idx}"]
+            loss_dict = {"mbe": mbe_loss}
         print(f" :: Calculating Rank regularization loss for layer {layer_idx+1}")
         
     backward_start = time.time()
@@ -433,7 +437,7 @@ for step in range(train_steps + 1):
             print(f"- backward on entropy loss -")
         else:        
             layer_idx = scheduler.rr_layer_index[0]
-            mbe_loss_name = f"mbe_{layer_idx}"
+            mbe_loss_name = f"mbe_{layer_idx}" if not args.diff_mbe else f"diff_mbe_{layer_idx}"
             print(f"- backward on {mbe_loss_name} loss -")
             loss_dict = {mbe_loss_name: loss_dict[mbe_loss_name]}
         if args.additive_grad: 
