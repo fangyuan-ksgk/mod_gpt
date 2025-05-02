@@ -18,6 +18,14 @@ def mbe_alpha2_exact(Z, detach=False, epsilon=1e-7):
     gram_sq = gram.pow(2).sum(dim=(1,2))
     return -torch.log((gram_sq + epsilon) / (gram_trace.pow(2) + epsilon))
 
+def patch_mbe2(x, patch_size=8): 
+    B, S, D = x.shape 
+    assert S % patch_size == 0, "Sequence length must be divisible by patch size"
+    num_patches = S // patch_size
+    x_reshaped = x.reshape(B, num_patches, patch_size, D).reshape(-1, patch_size, D)    
+    mbe_values = mbe_alpha2_exact(x_reshaped)
+    return mbe_values.mean() 
+
 # Differential MBE 
 # -----------------------------------------------------------------------------
 def mbe_alpha2_exact2(Z, detach=False, epsilon=1e-7):
@@ -29,11 +37,20 @@ def mbe_alpha2_exact2(Z, detach=False, epsilon=1e-7):
     gram_sq = gram.pow(2).sum(dim=(2,3))
     return -torch.log((gram_sq + epsilon) / (gram_trace.pow(2) + epsilon))
 
-def patch_mbe2_diff(x, patch_size=8, stride=1): 
+
+def patch_mbe2_diff(x, patch_size=8, stride=4): 
     x_patches = x.unfold(dimension=1, size=patch_size, step=stride)
     mbe_values = mbe_alpha2_exact2(x_patches)
     mbe_diff = torch.diff(mbe_values, dim=1).mean()
     return mbe_diff
+
+# requires 2x patches compared to 'patch_mbe2' 
+def patch_mbe2_diff2(x, patch_size=8, overlap=4): 
+    B, S, D = x.shape 
+    prefix_patches = x[:, overlap:].unfold(dimension=1, size=patch_size, step=patch_size).transpose(3, 2).view(B, -1, D)
+    suffix_patches = x[:, :-overlap].unfold(dimension=1, size=patch_size, step=patch_size).transpose(3, 2).view(B, -1, D)
+    mbe_diff = mbe_alpha2_exact(suffix_patches) - mbe_alpha2_exact(prefix_patches)
+    return mbe_diff.mean()
 
 # MBE approximatioon 
 # -----------------------------------------------------------------------------
@@ -55,15 +72,6 @@ def mbe_alpha2_hutchison(Z, N=100, detach=False):
     vGGv = torch.einsum("sn,bsn->bs", v, GGv) # gram.pow(2) trace estimate
     trace_est = vGGv.mean(dim=1)
     return - torch.log(trace_est / gram_trace.pow(2))
-
-# Patchwise MBE
-def patch_mbe2(x, patch_size=8): 
-    B, S, D = x.shape 
-    assert S % patch_size == 0, "Sequence length must be divisible by patch size"
-    num_patches = S // patch_size
-    x_reshaped = x.reshape(B, num_patches, patch_size, D).reshape(-1, patch_size, D)    
-    mbe_values = mbe_alpha2_exact(x_reshaped)
-    return mbe_values.mean() 
 
 
 # Stable Rank 
