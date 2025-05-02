@@ -35,8 +35,9 @@ def parse_args():
     parser.add_argument("--np_weight", type=float, default=1.0)
     parser.add_argument("--scale_factor", type=float, default=1.1)
     parser.add_argument("--switch_phase", action="store_true")
-    parser.add_argument("--log_grad_info", action="store_false")
+    parser.add_argument("--log_grad_info", action="store_true")
     parser.add_argument("--diff_mbe", action="store_true")
+    parser.add_argument("--num_iterations", type=int, default=1750)
     
     return parser.parse_args()
 
@@ -193,7 +194,7 @@ class Hyperparameters:
     np_weight: float = 1.0 # weight on non-conflicting gradient, for observing behavior of mbe without backprop on it
     switch_phase: bool = False
     scale_factor: float = 1.1
-    log_grad_info: bool = True
+    log_grad_info: bool = False
     diff_mbe: bool = False
 
 cli_args = parse_args()
