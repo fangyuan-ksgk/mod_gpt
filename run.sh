@@ -16,13 +16,19 @@
 # experiment (3.a.2) | SGP w positive factor 1.0 & negative factor 1.0 | adaptive scale with MBE grad magnitude 
 # torchrun --standalone --nproc_per_node=4 train_pcgrad.py --positive_scale_factor 1.1 --negative_scale_factor 1.1 --proj_product --batch_size=32 
 
+# experiment (3.a.3) | Does larger 'batch_size' for rep entropy improves learning? 
+
+
+
+
 # Explicit Phase transition improves learning ? 
 # - experiment (3.b) | gated phase transition | additive grad compostion (factor=1.0) |
 # torchrun --standalone --nproc_per_node=4 train_pcgrad.py --scale_factor 1.0 --switch_phase --batch_size=32
 
 # Invariant optimal policy gives better MBE regularization ? 
 # - experiment (3.c) | potential based reward shaping (PBRS) | others same as (II.g)
-torchrun --standalone --nproc_per_node=4 train_pcgrad.py --positive_scale_factor 1.1 --negative_scale_factor 1.1 --diff_mbe --batch_size=32
+torchrun --standalone --nproc_per_node=4 train_pcgrad.py --additive_grad --diff_mbe --batch_size=16
+
 
 
 # Experiment Set-Ups (use small step size ~750 to quickly benchmark algorithm performance)

@@ -2,8 +2,8 @@
 # -------------------------------------------------------------------
 import torch
 torch.set_float32_matmul_precision('high')
-from .rank_regularizer import patch_mbe3 as patch_mbe
-from .rank_regularizer import patch_mbe3_diff as patch_mbe_diff
+from .rank_regularizer import patch_mbe2 as patch_mbe
+from .rank_regularizer import patch_mbe2_diff2 as patch_mbe_diff
 RANK_REG_LOSS = "mbe"
 DIFF_RANK_REG_LOSS = "diff_mbe"
 
@@ -99,7 +99,7 @@ class GPT(nn.Module):
         self.alpha = config.alpha 
         self.window_size = config.window_size
 
-    def forward(self, idx, target, attn_blocksize):
+    def forward(self, idx, target, attn_blocksize, patch_size=8):
         """Localized Rank Regularization for Each Block"""
 
         docs = (idx == 50256).cumsum(1)
@@ -122,12 +122,12 @@ class GPT(nn.Module):
         skip_connections = []
         for i in range(self.num_encoder_layers):
             x, v1 = self.transformer.h[i](x, v1, x0, block_mask)
-            loss_dict[f"{RANK_REG_LOSS}_{i}"] = patch_mbe(x)
+            loss_dict[f"{RANK_REG_LOSS}_{i}"] = patch_mbe(x, patch_size)
             skip_connections.append(x)
         for i in range(self.num_decoder_layers):
             x = x + self.skip_weights[i] * skip_connections.pop()
             x, v1 = self.transformer.h[self.num_encoder_layers + i](x, v1, x0, block_mask)
-            loss_dict[f"{RANK_REG_LOSS}_{self.num_encoder_layers + i}"] = patch_mbe(x)
+            loss_dict[f"{RANK_REG_LOSS}_{self.num_encoder_layers + i}"] = patch_mbe(x, patch_size)
             
         x = norm(x)
         logits = self.lm_head(x)
@@ -160,7 +160,7 @@ class GPT_diff(nn.Module):
         self.alpha = config.alpha 
         self.window_size = config.window_size
 
-    def forward(self, idx, target, attn_blocksize):
+    def forward(self, idx, target, attn_blocksize, patch_size=8):
         """Localized Rank Regularization for Each Block"""
 
         docs = (idx == 50256).cumsum(1)
@@ -183,12 +183,12 @@ class GPT_diff(nn.Module):
         skip_connections = []
         for i in range(self.num_encoder_layers):
             x, v1 = self.transformer.h[i](x, v1, x0, block_mask)
-            loss_dict[f"{DIFF_RANK_REG_LOSS}_{i}"] = patch_mbe_diff(x)
+            loss_dict[f"{DIFF_RANK_REG_LOSS}_{i}"] = patch_mbe_diff(x, patch_size)
             skip_connections.append(x)
         for i in range(self.num_decoder_layers):
             x = x + self.skip_weights[i] * skip_connections.pop()
             x, v1 = self.transformer.h[self.num_encoder_layers + i](x, v1, x0, block_mask)
-            loss_dict[f"{DIFF_RANK_REG_LOSS}_{self.num_encoder_layers + i}"] = patch_mbe_diff(x)
+            loss_dict[f"{DIFF_RANK_REG_LOSS}_{self.num_encoder_layers + i}"] = patch_mbe_diff(x, patch_size)
             
         x = norm(x)
         logits = self.lm_head(x)
