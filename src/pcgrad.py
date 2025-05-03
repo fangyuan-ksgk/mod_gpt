@@ -411,13 +411,6 @@ class YetAnotherMixer2:
             self._scale_projective_component = torch.compile(self._scale_projective_component_noncompiled2)
         else: 
             self._scale_projective_component = torch.compile(self._scale_projective_component_noncompiled3)
-        self.init_priority_grad_cache()
-    
-    def init_priority_grad_cache(self): 
-        self.priority_grad_cache = []
-        for p in self.model.parameters(): 
-            if p.requires_grad: 
-                self.priority_grad_cache.append(torch.zeros_like(p))
     
     def _scale_projective_component_noncompiled2(self, g, g_calib):
         """Scale the projection component of g to g_calib by scale_factor"""
