@@ -40,6 +40,10 @@ def parse_args():
     parser.add_argument("--log_grad_info", action="store_true")
     parser.add_argument("--diff_mbe", action="store_true")
     parser.add_argument("--num_iterations", type=int, default=1750)
+    parser.add_argument("--entropy_patience", type=int, default=125)
+    parser.add_argument("--entropy_min_delta", type=float, default=0.01)
+    parser.add_argument("--mbe_patience", type=int, default=125)
+    parser.add_argument("--mbe_min_delta", type=float, default=0.002)
     
     return parser.parse_args()
 
@@ -200,6 +204,10 @@ class Hyperparameters:
     proj_product: bool = False
     log_grad_info: bool = False
     diff_mbe: bool = False
+    entropy_patience=125, 
+    entropy_min_delta: float = 0.01
+    mbe_patience: int = 125
+    mbe_min_delta: float = 0.002
 
 cli_args = parse_args()
 if True: # i don't have 8xH100  
@@ -377,7 +385,11 @@ scheduler = RRScheduler(train_accumulation_steps,
                         train_steps,
                         start_layer=2,
                         end_layer=model.num_encoder_layers + model.num_decoder_layers - 2,
-                        switch_phase=args.switch_phase) # scheduler for rank regularization
+                        switch_phase=args.switch_phase,
+                        entropy_patience=args.entropy_patience, 
+                        entropy_min_delta=args.entropy_min_delta,
+                        mbe_patience=args.mbe_patience,
+                        mbe_min_delta=args.mbe_min_delta) # scheduler for rank regularization
 scheduler.phase = 1 if args.switch_phase else 2
 
 for step in range(train_steps + 1):
@@ -429,9 +441,11 @@ for step in range(train_steps + 1):
         break
 
     # --------------- TRAINING SECTION -----------------
-    for _ in range(train_accumulation_steps): 
+    for accum_step in range(train_accumulation_steps): 
         inputs, targets = next(train_loader)
         loss_dict = model.forward(inputs, targets, attn_blocksize)
+        if accum_step == train_accumulation_steps - 1: 
+            scheduler.step(loss_dict)
         if args.no_reg or len(scheduler.rr_layer_index) == 0: 
             loss_dict = {"entropy": loss_dict["entropy"]}
             print(f"- backward on entropy loss -")
@@ -452,8 +466,7 @@ for step in range(train_steps + 1):
                 grad_composer.backward_info(loss_dict) # with gradient info accumulated
             else: 
                 grad_composer.backward(loss_dict)
-
-        scheduler.step(loss_dict)
+        
         
     for param in model.parameters():
         param.grad /= train_accumulation_steps

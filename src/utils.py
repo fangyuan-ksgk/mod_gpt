@@ -4,6 +4,7 @@ import glob
 import itertools
 import matplotlib.pyplot as plt
 import numpy as np
+from collections import defaultdict
 
 # -----------------------------------------------------------------------------
 # distributed data loader
@@ -745,11 +746,13 @@ class RRScheduler:
                  total_iterations, 
                  start_layer=2,
                  end_layer=12, 
-                 es_patience=1000, 
-                 es_min_delta=0.001,
                  main_loss_name="entropy",
                  full_mbe = False,
-                 switch_phase=False):
+                 switch_phase=False,
+                 entropy_patience=125, 
+                 entropy_min_delta=0.01,
+                 mbe_patience=125,
+                 mbe_min_delta=0.002):
         
         self.num_accumulation_steps = num_accumulation_steps
         self.total_iterations = total_iterations
@@ -757,39 +760,102 @@ class RRScheduler:
         self.current_iteration = 0
         self.main_loss_name = main_loss_name
         self.prior_weights = PRIOR_WEIGHTS
-
-        # Phase management & early stopping
-        # - Phase 1. Memorization / Entropy Drop Fast || Phase 2. Compression - Entropy loss plateauing
-        self.phase = 1
-        self.es_patience = es_patience
-        self.es_min_delta = es_min_delta
-        self.min_entropy = np.inf # log train loss - val interval is bigger than period of learning cycle already ...
-        self.patience_counter = 0 
-        self.switch_phase = switch_phase
         
         # Layer rotation setup
         self.layer_indices = list(range(start_layer, end_layer))  # layer 2 onwards
         self.num_reg_layers = len(self.layer_indices)
         self.current_layer_idx = 0
         self.full_mbe = full_mbe
+        
+        # Phase management & early stopping
+        self.phase = 1  # - Phase 1. Memorization || Phase 2. Compression
+        self.entropy_patience = entropy_patience
+        self.entropy_min_delta = entropy_min_delta
+        self.mbe_patience = mbe_patience
+        self.mbe_min_delta = mbe_min_delta
+        self.min_entropy = np.inf # global best entropy 
+        self.min_mbe_dict = defaultdict(lambda: np.inf)
+        self.memorization_patience_counter = 0 
+        self.compression_patience_counter = 0 
+        self.switch_phase = switch_phase
+        
     def step(self, loss_dict):
         self.current_accumulation_step = (self.current_accumulation_step + 1) % self.num_accumulation_steps
         if self.current_accumulation_step == 0:
             self.current_iteration += 1
             self.current_layer_idx = (self.current_layer_idx + 1) % len(self.layer_indices)
         if (self.main_loss_name in loss_dict) and self.switch_phase: 
-            self._log_loss(loss_dict[self.main_loss_name].item())
+            self._switch_phase(loss_dict)
 
-    def _log_loss(self, loss):
-        improvement = self.min_entropy - loss
-        if abs(improvement) > self.es_min_delta:
-            self.min_entropy = min(self.min_entropy, loss)
-            self.patience_counter = 0 # Reset patience counter
-            self.phase = 1
-        else:
-            self.patience_counter += 1
-            if self.patience_counter >= self.es_patience:
-                self.phase = 2
+    def _switch_phase(self, loss_dict):
+        """
+        Phase transition logic should be symmetric: either loss plateau should trigger phase transition
+           - Global entropy loss plateau (we need to reduce Entropy, therefore 'plateau' means no improvement compared to current best entropy)
+           - Local MBE loss plateau (since we might need to increase MBE in memorization phase, therefore 'plateau' means no consecutive decrease in MBE loss)
+           - 'min_mbe' will be reset at the end of each memorization phase
+           - Update: we need to assume 'all mbe losses' are in the loss_dict
+        """
+        # Extract losses - assuming exactly one entropy loss and one MBE loss
+        entropy_loss = None
+        mbe_loss = None
+        mbe_improvement = 0.0
+        entropy_improvement = 0.0
+        worse_memorization = False 
+        
+        # Find the entropy and MBE losses in the dictionary
+        for loss_name in loss_dict.keys():
+            if "entropy" in loss_name:
+                entropy_loss = loss_dict[loss_name].item()
+                entropy_improvement = max(entropy_improvement, self.min_entropy - entropy_loss)
+                worse_memorization = entropy_loss >= self.min_entropy * 1.1  # 10% tolerance for compression phase's spike
+                self.min_entropy = min(self.min_entropy, entropy_loss)
+            else:
+                mbe_loss = loss_dict[loss_name].item()
+                mbe_improvement = max(mbe_improvement, self.min_mbe_dict[loss_name] - mbe_loss) # any layer's mbe improvement counts | assumption is compression stage doesn't increase MBE level
+                self.min_mbe_dict[loss_name] = min(self.min_mbe_dict[loss_name], mbe_loss)
+        
+        assert mbe_loss is not None, "Missing either MBE or DiffMBE loss in loss_dict"
+        
+        # Determine if progress was made
+        better_memorization = (entropy_improvement > self.entropy_min_delta) and entropy_improvement != np.inf
+        better_compression = (mbe_improvement > self.mbe_min_delta) and mbe_improvement != np.inf
+        
+        # Update counters and best values
+        if better_memorization:
+            self.memorization_patience_counter = 0
+        else: 
+            self.memorization_patience_counter += 1
+            
+        if better_compression: 
+            self.compression_patience_counter = 0
+        else: 
+            self.compression_patience_counter += 1
+            
+        # Check conditions for phase transitions
+        no_patience_for_memorization = self.memorization_patience_counter >= self.entropy_patience
+        no_patience_for_compression = self.compression_patience_counter >= self.mbe_patience
+        
+        print("Conditions:\n", 
+              f"better_memorization: {better_memorization}\n", 
+              f"better_compression: {better_compression}\n", 
+              f"no_patience_for_memorization: {no_patience_for_memorization}\n", 
+              f"no_patience_for_compression: {no_patience_for_compression}\n", 
+              f"worse_memorization: {worse_memorization}\n", 
+              f"current phase: {'Memorization' if self.phase == 1 else 'Compression'}\n")
+        
+        # Handle phase transitions
+        if (no_patience_for_compression or worse_memorization) and self.phase == 2: 
+            if worse_memorization: 
+                print("--> Pulled out of Compression Phase due to worse memorization")
+            print("--> Switch to Memorization Phase")
+            self.phase = 1 
+            self.memorization_patience_counter = 0 
+            self.min_mbe_dict = defaultdict(lambda: np.inf)
+        elif no_patience_for_memorization and self.phase == 1:
+            print("--> Switch to Compression Phase") 
+            self.phase = 2 
+            self.compression_patience_counter = 0 
+            self.min_entropy = np.inf
         
     def _do_rr(self):
         return self.phase == 2 and self.current_accumulation_step % 2 == 1
