@@ -431,12 +431,15 @@ for step in range(train_steps + 1):
     # --------------- TRAINING SECTION -----------------
     for _ in range(train_accumulation_steps): 
         inputs, targets = next(train_loader)
-        loss_dict = model.forward(inputs, targets, attn_blocksize, patch_size=scheduler.patch_size)
+        loss_dict = model.forward(inputs, targets, attn_blocksize)
         if args.no_reg or len(scheduler.rr_layer_index) == 0: 
             loss_dict = {"entropy": loss_dict["entropy"]}
             print(f"- backward on entropy loss -")
         else:        
-            loss_dict = scheduler.process_loss_dict(loss_dict)
+            layer_idx = scheduler.rr_layer_index[0]
+            mbe_loss_name = f"mbe_{layer_idx}" if not args.diff_mbe else f"diff_mbe_{layer_idx}"
+            print(f"- backward on {mbe_loss_name} loss -")
+            loss_dict = {mbe_loss_name: loss_dict[mbe_loss_name]}
         if args.additive_grad: 
             if (step % (20 * scheduler.num_reg_layers) < scheduler.num_reg_layers) and args.log_grad_info: 
                 print(" :: logging gradient info :: ")
@@ -474,6 +477,7 @@ for step in range(train_steps + 1):
 
 print0(f"peak memory allocated: {torch.cuda.max_memory_allocated() // 1024 // 1024} MiB "
        f"reserved: {torch.cuda.max_memory_reserved() // 1024 // 1024} MiB", console=True)
-        
+
+print0(f"loss record:\n{loss_record}", console=True)
 
 dist.destroy_process_group()

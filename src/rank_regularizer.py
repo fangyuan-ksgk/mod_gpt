@@ -70,6 +70,16 @@ def patch_mbe3_diff(x, patch_size=8):
     mbe_vals = mbe_alpha2_exact(x_reshaped)
     return torch.diff(mbe_vals).mean()
 
+# Non-overlap Diff MBE with extra MBE calculation (for logging purpose)
+def patch_mbe3_diff_info(x, patch_size=8): 
+    B, S, D = x.shape 
+    num_patches = S // patch_size
+    assert num_patches > 0, "Sequence length should be bigger than patch size"
+    S = num_patches * patch_size 
+    x_reshaped = x[:, -S:].reshape(B, num_patches, patch_size, D).reshape(-1, patch_size, D)    
+    mbe_vals = mbe_alpha2_exact(x_reshaped)
+    return torch.diff(mbe_vals).mean(), mbe_vals.detach().mean()
+
 # MBE approximatioon 
 # -----------------------------------------------------------------------------
 def rademacher(shape, dtype=torch.float32, device=DEVICE):
