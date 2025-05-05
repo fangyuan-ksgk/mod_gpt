@@ -1010,7 +1010,7 @@ class RRScheduler:
     @property
     def rr_layer_weight(self): 
         if self.rr_layer_index: 
-            return int(self.ib_target) * self.mbe_weight[self.rr_layer_index[0]]
+            return (2 * int(self.ib_target) - 1) * self.mbe_weight[self.rr_layer_index[0]]
         else: 
             return 1.0 # entropy loss weightage
 

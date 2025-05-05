@@ -208,11 +208,13 @@ class Hyperparameters:
     proj_product: bool = False
     log_grad_info: bool = False
     diff_mbe: bool = False
-    entropy_patience=125, 
+    entropy_patience: int = 125
     entropy_min_delta: float = 0.01
     mbe_patience: int = 125
+    inv_mbe_patience: int = 50
     mbe_min_delta: float = 0.002
-    inverse_ib_target: bool = False
+    inverse_ib_target: bool = False # use inverse IB target for regularization
+    include_expansion_phase: bool = False
     patch_schedule: bool = False # curriculum for patch size (MBE)
     init_patch_size: int = 8
     use_prior_weights: bool = False
@@ -398,7 +400,9 @@ scheduler = RRScheduler(train_accumulation_steps,
                         entropy_patience=args.entropy_patience, 
                         entropy_min_delta=args.entropy_min_delta,
                         mbe_patience=args.mbe_patience,
-                        mbe_min_delta=args.mbe_min_delta) # scheduler for rank regularization
+                        inv_mbe_patience=args.inv_mbe_patience,
+                        mbe_min_delta=args.mbe_min_delta,
+                        include_expansion_phase=args.include_expansion_phase) # scheduler for rank regularization
 scheduler.phase = 1 if args.switch_phase else 2
 
 for step in range(train_steps + 1):
