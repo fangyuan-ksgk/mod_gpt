@@ -47,6 +47,7 @@ def parse_args():
     parser.add_argument("--inverse_ib_target", action="store_true")
     parser.add_argument("--patch_schedule", action="store_true")
     parser.add_argumnet("--init_patch_size", type=int, default=8)
+    parser.add_argument("--use_prior_weights", action="store_true")
     
     return parser.parse_args()
 
@@ -214,7 +215,7 @@ class Hyperparameters:
     inverse_ib_target: bool = False
     patch_schedule: bool = False # curriculum for patch size (MBE)
     init_patch_size: int = 8
-    
+    use_prior_weights: bool = False
 cli_args = parse_args()
 if True: # i don't have 8xH100  
     args = Hyperparameters()
@@ -392,6 +393,7 @@ scheduler = RRScheduler(train_accumulation_steps,
                         start_layer=2,
                         end_layer=model.num_encoder_layers + model.num_decoder_layers - 2,
                         switch_phase=args.switch_phase,
+                        use_prior_weights=args.use_prior_weights,
                         ib_target= not args.inverse_ib_target,
                         entropy_patience=args.entropy_patience, 
                         entropy_min_delta=args.entropy_min_delta,

@@ -39,15 +39,18 @@ torchrun --standalone --nproc_per_node=4 train_pcgrad.py --positive_scale_factor
 # - experiment (3.b.1) | gated phase transition | pure regularization | additive composition | Does phase change make it less shitty? 
 torchrun --standalone --nproc_per_node=4 train_pcgrad.py --additive_grad --switch_phase --batch_size=32
 
-# - experiment (3.b.2) | gated phase transition | maximize MBE | additive compostion | Is it just about 'pulling out of local minima'?
+
+# - experiment (3.b.5) | gated phase transition | minimize MBE | additive compostion | use prior weights | MBE weight affects performance? 
+torchrun --standalone --nproc_per_node=4 train_pcgrad.py --additive_grad --switch_phase --use_prior_weights --batch_size=32
+
+# - experiment (3.b.6) | gated phase transition | maximize MBE | additive compostion | Is it just about 'pulling out of local minima'?
 torchrun --standalone --nproc_per_node=4 train_pcgrad.py --additive_grad --switch_phase --inverse_ib_target --batch_size=32
 
-# - experiment (3.b.3) | gated phase transition | minimize MBE | additive composition | patch size curriculum (8 -> 224) | Does randomizing patch size improves performance? 
+# - experiment (3.b.7) | gated phase transition | minimize MBE | additive composition | patch size curriculum (8 -> 224) | Does randomizing patch size improves performance? 
 torchrun --standalone --nproc_per_node=4 train_pcgrad.py --additive_grad --switch_phase --patch_schedule --batch_size=32
 
-# - experiment (3.b.4) | gated phase transition | minimize MBE | additive composition | randomize patch size (32 -> 896) | Bigger patch size improves performance? 
+# - experiment (3.b.8) | gated phase transition | minimize MBE | additive composition | randomize patch size (32 -> 896) | Bigger patch size improves performance? 
 torchrun --standalone --nproc_per_node=4 train_pcgrad.py --additive_grad --switch_phase --patch_schedule --init_patch_size 32 --batch_size=32
-
 
 
 # --------------------------------------------------------------------------------------------------------------------------------------------

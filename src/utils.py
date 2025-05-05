@@ -849,6 +849,7 @@ class RRScheduler:
                  full_mbe = False,
                  switch_phase=False,
                  ib_target=True,
+                 use_prior_weights=False,
                  entropy_patience=125, 
                  entropy_min_delta=0.01,
                  mbe_patience=125,
@@ -859,8 +860,11 @@ class RRScheduler:
         self.current_accumulation_step = 0
         self.current_iteration = 0
         self.main_loss_name = main_loss_name
-        self.prior_weights = PRIOR_WEIGHTS
-        
+        if use_prior_weights: 
+            self.prior_weights = PRIOR_WEIGHTS
+        else: 
+            self.prior_weights = [1.0] * (end_layer - start_layer)
+            
         # Layer rotation setup
         self.layer_indices = list(range(start_layer, end_layer))  # layer 2 onwards
         self.num_reg_layers = len(self.layer_indices)
