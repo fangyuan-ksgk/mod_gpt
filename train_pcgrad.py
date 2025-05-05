@@ -48,6 +48,8 @@ def parse_args():
     parser.add_argument("--patch_schedule", action="store_true")
     parser.add_argument("--init_patch_size", type=int, default=8)
     parser.add_argument("--use_prior_weights", action="store_true")
+    parser.add_argument("--include_expansion_phase", action="store_true")
+    parser.add_argument("--inv_mbe_patience", type=int, default=50)
     
     return parser.parse_args()
 
