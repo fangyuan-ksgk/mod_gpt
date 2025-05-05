@@ -873,12 +873,11 @@ class RRScheduler:
         self.num_reg_layers = len(self.layer_indices)
         self.current_layer_idx = 0
         self.full_mbe = full_mbe
-        # self.ib_target = ib_target
         self.include_inner_cycle = include_inner_cycle
         
         # Phase management & early stopping
         self.phase = 1  # - Phase 1. Memorization (minimize CE) || Phase 2. Compression (IB) || Phase 3. Expansion (inverse IB)
-        if self.include_inner_cycle or ib_target: 
+        if self.include_inner_cycle or (not ib_target): 
             self._inner_phase = 1
         else: 
             self._inner_phase = 0
@@ -992,8 +991,8 @@ class RRScheduler:
             self.compression_patience_counter = 0 
             self.min_entropy = np.inf
         
-    def _do_rr(self):
-        return self.phase == 2 and self.current_accumulation_step % 2 == 1
+    def _do_rr(self): # 1-inner-1-outer schedule could also be changed ...
+        return (self.phase == 2 or self.phase == 3) and self.current_accumulation_step % 2 == 1
         
     @property
     def rr_layer_index(self): 
@@ -1011,7 +1010,7 @@ class RRScheduler:
     def rr_layer_weight(self): 
         if self.rr_layer_index: 
             # FY: compression phase minimize MBE (+1 scale on loss), expansion phase maximize MBE (-1 scale on loss)
-            return (- 2 * int(self.include_inner_cycle) + 1) * self.mbe_weight[self.rr_layer_index[0]]
+            return (- 2 * int(self._inner_phase) + 1) * self.mbe_weight[self.rr_layer_index[0]]
         else: 
             return 1.0 # entropy loss weightage
 
