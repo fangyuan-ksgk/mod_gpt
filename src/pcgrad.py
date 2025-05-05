@@ -519,7 +519,6 @@ class YetAnotherMixer2:
             p.grad, prev_g_norm, curr_g_norm, cosim, curr_g_array = self._add_grad_info(prev_grads[i], p.grad)
             self._update_info(param_names[i], prev_g_norm, curr_g_norm, cosim, loss_name, reset_flags[i], curr_g_array)
 
-
     def backward_info(self, loss_dict):
         param_names = [p[0] for p in self.model.named_parameters() if p[1].requires_grad]
         params = [p for p in self.model.parameters() if p.requires_grad]
@@ -548,7 +547,6 @@ class YetAnotherMixer2:
             for i, p in enumerate(params): 
                 p.grad, prev_g_norm, curr_g_norm, cosim, g1_array = self._scale_projective_component_info(prev_grads[i], p.grad)
                 self._update_info(param_names[i], prev_g_norm, curr_g_norm, cosim, loss_name, reset_flags[i], g1_array)
-                
 
     def save_grad_info(self, path):         
         serializable_grad_info = {}

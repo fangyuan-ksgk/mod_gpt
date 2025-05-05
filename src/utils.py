@@ -5,6 +5,7 @@ import itertools
 import matplotlib.pyplot as plt
 import numpy as np
 from collections import defaultdict
+from matplotlib.animation import FuncAnimation
 
 # -----------------------------------------------------------------------------
 # distributed data loader
@@ -719,6 +720,104 @@ def plot_avg_consistency_across_layers(avg_consistency_df, title="Average Gradie
     plt.legend(title="Parameter Type", bbox_to_anchor=(1.04, 1), loc="upper left")
     plt.tight_layout(rect=[0, 0, 0.85, 1]) # Adjust layout to make space for legend
     plt.show()
+    
+
+# Extract MBE values from experiment data
+def extract_mbe_values1(exp_data):
+    mbe_values = []
+    for iteration_num in sorted(exp_data['progress'].keys()):
+        iteration_data = exp_data['progress'][iteration_num]
+        iteration_mbes = []
+        for key, value in iteration_data.items():
+            if key.startswith('mbe_') and key[-1].isdigit():
+                layer_idx = int(key.split('_')[1])
+                # Ensure the list is long enough
+                while len(iteration_mbes) <= layer_idx:
+                    iteration_mbes.append(None)
+                iteration_mbes[layer_idx] = value
+        mbe_values.append(iteration_mbes)
+    return mbe_values[1:], exp_data["label"]
+
+def extract_mbe_values2(exp_data): 
+    n_ckpt = len(exp_data["record"]["entropy"])
+    mbe_record = [] 
+    for i in range(1, n_ckpt):
+        ckpt_record = []
+        for layer_idx in range(12): 
+            ckpt_record.append(exp_data["record"][f"mbe_{layer_idx}"][i])
+        mbe_record.append(ckpt_record)
+    return mbe_record, exp_data["label"]
+
+def extract_mbe_values(exp_data): 
+    if "progress" in exp_data: 
+        return extract_mbe_values1(exp_data)
+    else: 
+        return extract_mbe_values2(exp_data)
+    
+def create_mbe_animation(mbe_data_list, labels_list, output_file='mbe_animation.gif', iteration_multiplier=125):
+    
+    # Determine number of layers and iterations
+    num_layers = max(max(len(mbe) for mbe in data) for data in mbe_data_list if data)
+    num_iterations = max(len(data) for data in mbe_data_list if data)
+    
+    # Calculate global min and max for consistent y-axis limits
+    all_values = []
+    for mbe_data in mbe_data_list:
+        for mbe_list in mbe_data:
+            for mbe in mbe_list:
+                if mbe is not None:
+                    if isinstance(mbe, (list, tuple)):  # Check if mbe is an iterable
+                        all_values.extend([v for v in mbe if v is not None])
+                    else:  # Handle the case where mbe is a single value (float)
+                        all_values.append(mbe)
+    
+    global_y_min = min(all_values) if all_values else 0
+    global_y_max = max(all_values) if all_values else 1
+    margin = (global_y_max - global_y_min) * 0.1
+    
+    # Color cycle for different experiments
+    colors = ['b', 'r', 'g', 'm', 'c', 'y', 'k', 'orange', 'purple', 'brown', 'pink', 'gray']
+    
+    # Create animation
+    fig, ax = plt.subplots(figsize=(12, 6))
+    
+    def animate(i):
+        # Adjust i to handle the extended final frame
+        actual_i = min(i, num_iterations - 1)
+        
+        ax.clear()
+        
+        # Plot each experiment's data
+        for idx, (mbe_data, label) in enumerate(zip(mbe_data_list, labels_list)):
+            if len(mbe_data) > 0:  # Make sure we have data
+                # If actual_i exceeds available data, use the last available data point
+                data_i = min(actual_i, len(mbe_data) - 1)
+                vals = mbe_data[data_i]
+                x_vals = list(range(len(vals)))
+                color = colors[idx % len(colors)]
+                ax.plot(x_vals, vals, f'{color}-o', label=label)
+        
+        ax.set_xlabel('Layer')
+        ax.set_ylabel('MBE Value')
+        ax.set_title(f'MBE Values Across Layers (Iteration {iteration_multiplier*actual_i})')
+        ax.legend()
+        ax.grid(True)
+        
+        # Use the global y-axis limits for all frames
+        ax.set_ylim(global_y_min - margin, global_y_max + margin)
+        
+        # Set x-axis limits
+        ax.set_xlim(-0.5, num_layers - 0.5)
+    
+    # Add extra frames for the last frame (5 seconds at 2fps = 10 extra frames)
+    extended_frames = num_iterations + 10
+    
+    ani = FuncAnimation(fig, animate, frames=extended_frames, interval=500, repeat=True)
+    
+    # save to gif
+    ani.save(output_file, writer='pillow', fps=2)
+    
+    return ani
 
 
 # ------- Scheduler for Rank Regularization -------
