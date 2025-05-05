@@ -820,7 +820,7 @@ def create_mbe_animation(mbe_data_list, labels_list, output_file='mbe_animation.
     return ani
 
 
-# ------- Scheduler for Rank Regularization -------
+# ------- Scheduler for Rank Regularization || Gated Phase Transition -------
 
 PRIOR_WEIGHTS = {
     0: 0.04309166, 
@@ -848,6 +848,7 @@ class RRScheduler:
                  main_loss_name="entropy",
                  full_mbe = False,
                  switch_phase=False,
+                 ib_target=True,
                  entropy_patience=125, 
                  entropy_min_delta=0.01,
                  mbe_patience=125,
@@ -865,7 +866,7 @@ class RRScheduler:
         self.num_reg_layers = len(self.layer_indices)
         self.current_layer_idx = 0
         self.full_mbe = full_mbe
-        
+        self.ib_target = ib_target
         # Phase management & early stopping
         self.phase = 1  # - Phase 1. Memorization || Phase 2. Compression
         self.entropy_patience = entropy_patience
@@ -962,20 +963,23 @@ class RRScheduler:
     @property
     def rr_layer_index(self): 
         if self._do_rr(): 
-            if not self.full_mbe: 
-                return self.layer_indices[self.current_layer_idx: self.current_layer_idx + 1]
-            else: 
-                return self.layer_indices
+            return self.layer_indices[self.current_layer_idx: self.current_layer_idx + 1]
         else: 
             return []
         
     @property
     def mbe_weight(self): 
-        # weights = {k: v * int(int(k.split("mbe_")[-1]) in self.rr_layer_index) for k,v in self.prior_weights.items()}
-        weights = np.array([self.prior_weights[i] for i in self.rr_layer_index])
+        weights = np.array([self.prior_weights[i] for i in self.layer_indices])
         weights = weights / weights.sum()
         return weights.tolist()
     
+    @property
+    def rr_layer_weight(self): 
+        if self.rr_layer_index: 
+            return int(self.ib_target) * self.prior_weights[self.rr_layer_index[0]]
+        else: 
+            return 1.0 # entropy loss weightage
+
     def process_loss_dict(self, loss_dict): 
 
         if "diff_mbe" in list(loss_dict.keys()): # weighted sum over all layers 

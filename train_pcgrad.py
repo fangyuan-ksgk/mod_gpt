@@ -44,6 +44,7 @@ def parse_args():
     parser.add_argument("--entropy_min_delta", type=float, default=0.01)
     parser.add_argument("--mbe_patience", type=int, default=125)
     parser.add_argument("--mbe_min_delta", type=float, default=0.002)
+    parser.add_argument("--inverse_ib_target", action="store_true")
     
     return parser.parse_args()
 
@@ -208,7 +209,8 @@ class Hyperparameters:
     entropy_min_delta: float = 0.01
     mbe_patience: int = 125
     mbe_min_delta: float = 0.002
-
+    inverse_ib_target: bool = False
+    
 cli_args = parse_args()
 if True: # i don't have 8xH100  
     args = Hyperparameters()
@@ -386,6 +388,7 @@ scheduler = RRScheduler(train_accumulation_steps,
                         start_layer=2,
                         end_layer=model.num_encoder_layers + model.num_decoder_layers - 2,
                         switch_phase=args.switch_phase,
+                        ib_target= not args.inverse_ib_target,
                         entropy_patience=args.entropy_patience, 
                         entropy_min_delta=args.entropy_min_delta,
                         mbe_patience=args.mbe_patience,
@@ -451,9 +454,10 @@ for step in range(train_steps + 1):
             print(f"- backward on entropy loss -")
         else:        
             layer_idx = scheduler.rr_layer_index[0]
+            mbe_weight = scheduler.rr_layer_weight
             mbe_loss_name = f"mbe_{layer_idx}" if not args.diff_mbe else f"diff_mbe_{layer_idx}"
             print(f"- backward on {mbe_loss_name} loss -")
-            loss_dict = {mbe_loss_name: loss_dict[mbe_loss_name]}
+            loss_dict = {mbe_loss_name: loss_dict[mbe_loss_name] * mbe_weight}
         if args.additive_grad: 
             if (step % (20 * scheduler.num_reg_layers) < scheduler.num_reg_layers) and args.log_grad_info: 
                 print(" :: logging gradient info :: ")
