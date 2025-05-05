@@ -854,7 +854,8 @@ class RRScheduler:
                  include_expansion_phase=False,
                  entropy_patience=125, 
                  entropy_min_delta=0.01,
-                 mbe_patience=125,
+                 mbe_patience=100,
+                 inv_mbe_patience=25,
                  mbe_min_delta=0.002):
         
         self.num_accumulation_steps = num_accumulation_steps
@@ -877,10 +878,14 @@ class RRScheduler:
         
         # Phase management & early stopping
         self.phase = 1  # - Phase 1. Memorization (minimize CE) || Phase 2. Compression (IB) || Phase 3. Expansion (inverse IB)
-        self._inner_phase = 1 # - inner phase 1. mem -> comp || 2. mem -> exp 
+        if self.include_expansion_phase: 
+            self._inner_phase = 1
+        else: 
+            self._inner_phase = 0
         self.entropy_patience = entropy_patience
         self.entropy_min_delta = entropy_min_delta
-        self.mbe_patience = mbe_patience
+        self.compression_patience = mbe_patience
+        self.expansion_patience = inv_mbe_patience
         self.mbe_min_delta = mbe_min_delta
         self.min_entropy = np.inf # global best entropy 
         self.min_mbe_dict = defaultdict(lambda: np.inf)
@@ -954,8 +959,8 @@ class RRScheduler:
             
         # Check conditions for phase transitions
         no_patience_for_memorization = self.memorization_patience_counter >= self.entropy_patience
-        no_patience_for_compression = self.compression_patience_counter >= self.mbe_patience
-        no_patience_for_expansion = self.expansion_patience_counter >= self.mbe_patience
+        no_patience_for_compression = self.compression_patience_counter >= self.compression_patience
+        no_patience_for_expansion = self.expansion_patience_counter >= self.expansion_patience
         
         print("Conditions:\n", 
               f"better_memorization: {better_memorization}\n", 
@@ -965,7 +970,7 @@ class RRScheduler:
               f"no_patience_for_compression: {no_patience_for_compression}\n", 
               f"no_patience_for_expansion: {no_patience_for_expansion}\n", 
               f"worse_memorization: {worse_memorization}\n", 
-              f"current phase: {'Memorization' if self.phase == 1 else 'Compression' if self._inner_phase == 1 else 'Expansion'}\n")
+              f"current phase: {'Memorization' if self.phase == 1 else 'Compression' if self.phase == 2 else 'Expansion'}\n")
         
         # Handle phase transitions
         if ((no_patience_for_compression or worse_memorization) and self.phase == 2) or ((no_patience_for_expansion or worse_memorization) and self.phase == 3):
@@ -979,10 +984,10 @@ class RRScheduler:
             if self.include_expansion_phase: 
                 self._inner_phase = (self._inner_phase + 1) % 2
         elif no_patience_for_memorization and self.phase == 1:
-            print("--> Switch to Compression Phase") 
-            if self._inner_phase == 1: 
+            print(f"--> Switch to {'Compression' if self._inner_phase == 0 else 'Expansion'} Phase") 
+            if self._inner_phase == 0: 
                 self.phase = 2 
-            elif self._inner_phase == 2: 
+            elif self._inner_phase == 1: 
                 self.phase = 3 
             self.compression_patience_counter = 0 
             self.min_entropy = np.inf
