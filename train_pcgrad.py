@@ -45,6 +45,8 @@ def parse_args():
     parser.add_argument("--mbe_patience", type=int, default=125)
     parser.add_argument("--mbe_min_delta", type=float, default=0.002)
     parser.add_argument("--inverse_ib_target", action="store_true")
+    parser.add_argument("--patch_schedule", action="store_true")
+    parser.add_argumnet("--init_patch_size", type=int, default=8)
     
     return parser.parse_args()
 
@@ -210,6 +212,8 @@ class Hyperparameters:
     mbe_patience: int = 125
     mbe_min_delta: float = 0.002
     inverse_ib_target: bool = False
+    patch_schedule: bool = False # curriculum for patch size (MBE)
+    init_patch_size: int = 8
     
 cli_args = parse_args()
 if True: # i don't have 8xH100  
@@ -332,14 +336,14 @@ for i in range(warmup_steps):
     print(f" :: Forward propagation starts with inputs & targets of length {inputs.shape[1]}")
     forward_start = time.time() 
     if i % 2 == 0: 
-        loss_dict = model.forward(inputs.to(torch.int32), targets, attn_blocksize)
+        loss_dict = model.forward(inputs.to(torch.int32), targets, attn_blocksize, args.init_patch_size)
         loss_dict = {"entropy": loss_dict["entropy"]}
     else: 
         # Random value created in master_process, broadcasted to all GPUs 
         # ------------------------------------------------------------------------
         layer_idx = i % (model.num_encoder_layers)  
         # ------------------------------------------------------------------------
-        loss_dict = model.forward(inputs.to(torch.int32), targets, attn_blocksize)
+        loss_dict = model.forward(inputs.to(torch.int32), targets, attn_blocksize, args.init_patch_size)
         if args.diff_mbe: 
             diff_mbe_loss = loss_dict[f"diff_mbe_{layer_idx}"]
             loss_dict = {"diff_mbe": diff_mbe_loss}
@@ -398,6 +402,11 @@ scheduler.phase = 1 if args.switch_phase else 2
 for step in range(train_steps + 1):
     last_step = (step == train_steps)
     attn_blocksize = torch.tensor(64*((step/train_steps * (1792 - 64) + 64)//64), dtype=torch.int, device='cuda')
+    
+    if args.patch_schedule: # curriculum for patch size (MBE)
+        patch_size = args.init_patch_size * ((step/train_steps * (1792 - 64) + 64)//64)
+    else: 
+        patch_size = args.init_patch_size
 
     # --------------- VALIDATION SECTION -----------------
     if last_step or (args.val_loss_every > 0 and step % args.val_loss_every == 0):
@@ -413,7 +422,7 @@ for step in range(train_steps + 1):
         with torch.no_grad():
             for i in range(val_steps):
                 inputs, targets = next(val_loader)
-                loss_dict = model.forward(inputs, targets, attn_blocksize)
+                loss_dict = model.forward(inputs, targets, attn_blocksize, args.init_patch_size)
                 for name, loss in loss_dict.items(): 
                     val_loss[name] += loss                
         for name in val_loss: 
@@ -446,7 +455,7 @@ for step in range(train_steps + 1):
     # --------------- TRAINING SECTION -----------------
     for accum_step in range(train_accumulation_steps): 
         inputs, targets = next(train_loader)
-        loss_dict = model.forward(inputs, targets, attn_blocksize)
+        loss_dict = model.forward(inputs, targets, attn_blocksize, patch_size)
         if accum_step == train_accumulation_steps - 1: 
             scheduler.step(loss_dict)
         if args.no_reg or len(scheduler.rr_layer_index) == 0: 

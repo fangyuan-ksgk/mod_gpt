@@ -867,6 +867,7 @@ class RRScheduler:
         self.current_layer_idx = 0
         self.full_mbe = full_mbe
         self.ib_target = ib_target
+        
         # Phase management & early stopping
         self.phase = 1  # - Phase 1. Memorization || Phase 2. Compression
         self.entropy_patience = entropy_patience
