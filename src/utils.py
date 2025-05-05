@@ -851,7 +851,7 @@ class RRScheduler:
                  switch_phase=False,
                  ib_target=True,
                  use_prior_weights=False,
-                 include_expansion_phase=False,
+                 include_inner_cycle=False,
                  entropy_patience=125, 
                  entropy_min_delta=0.01,
                  mbe_patience=100,
@@ -873,12 +873,12 @@ class RRScheduler:
         self.num_reg_layers = len(self.layer_indices)
         self.current_layer_idx = 0
         self.full_mbe = full_mbe
-        self.ib_target = ib_target
-        self.include_expansion_phase = include_expansion_phase
+        # self.ib_target = ib_target
+        self.include_inner_cycle = include_inner_cycle
         
         # Phase management & early stopping
         self.phase = 1  # - Phase 1. Memorization (minimize CE) || Phase 2. Compression (IB) || Phase 3. Expansion (inverse IB)
-        if self.include_expansion_phase: 
+        if self.include_inner_cycle or ib_target: 
             self._inner_phase = 1
         else: 
             self._inner_phase = 0
@@ -981,7 +981,7 @@ class RRScheduler:
             self.memorization_patience_counter = 0 
             self.min_mbe_dict = defaultdict(lambda: np.inf)
             self.max_mbe_dict = defaultdict(lambda: -np.inf)
-            if self.include_expansion_phase: 
+            if self.include_inner_cycle: 
                 self._inner_phase = (self._inner_phase + 1) % 2
         elif no_patience_for_memorization and self.phase == 1:
             print(f"--> Switch to {'Compression' if self._inner_phase == 0 else 'Expansion'} Phase") 
@@ -1010,7 +1010,8 @@ class RRScheduler:
     @property
     def rr_layer_weight(self): 
         if self.rr_layer_index: 
-            return (2 * int(self.ib_target) - 1) * self.mbe_weight[self.rr_layer_index[0]]
+            # FY: compression phase minimize MBE (+1 scale on loss), expansion phase maximize MBE (-1 scale on loss)
+            return (- 2 * int(self.include_inner_cycle) + 1) * self.mbe_weight[self.rr_layer_index[0]]
         else: 
             return 1.0 # entropy loss weightage
 

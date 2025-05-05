@@ -48,7 +48,7 @@ def parse_args():
     parser.add_argument("--patch_schedule", action="store_true")
     parser.add_argument("--init_patch_size", type=int, default=8)
     parser.add_argument("--use_prior_weights", action="store_true")
-    parser.add_argument("--include_expansion_phase", action="store_true")
+    parser.add_argument("--include_inner_cycle", action="store_true")
     parser.add_argument("--inv_mbe_patience", type=int, default=50)
     
     return parser.parse_args()
@@ -216,7 +216,7 @@ class Hyperparameters:
     inv_mbe_patience: int = 50
     mbe_min_delta: float = 0.002
     inverse_ib_target: bool = False # use inverse IB target for regularization
-    include_expansion_phase: bool = False
+    include_inner_cycle: bool = False
     patch_schedule: bool = False # curriculum for patch size (MBE)
     init_patch_size: int = 8
     use_prior_weights: bool = False
@@ -404,7 +404,7 @@ scheduler = RRScheduler(train_accumulation_steps,
                         mbe_patience=args.mbe_patience,
                         inv_mbe_patience=args.inv_mbe_patience,
                         mbe_min_delta=args.mbe_min_delta,
-                        include_expansion_phase=args.include_expansion_phase) # scheduler for rank regularization
+                        include_inner_cycle=args.include_inner_cycle) # scheduler for rank regularization
 scheduler.phase = 1 if args.switch_phase else 2
 
 for step in range(train_steps + 1):
