@@ -851,6 +851,7 @@ class RRScheduler:
                  switch_phase=False,
                  ib_target=True,
                  use_prior_weights=False,
+                 include_expansion_phase=False,
                  entropy_patience=125, 
                  entropy_min_delta=0.01,
                  mbe_patience=125,
@@ -872,18 +873,21 @@ class RRScheduler:
         self.current_layer_idx = 0
         self.full_mbe = full_mbe
         self.ib_target = ib_target
+        self.include_expansion_phase = include_expansion_phase
         
         # Phase management & early stopping
-        self.phase = 1  # - Phase 1. Memorization (minimize CE) || Phase 2. Compression (IB) || Phase 3. Extrapolation (inverse IB)
+        self.phase = 1  # - Phase 1. Memorization (minimize CE) || Phase 2. Compression (IB) || Phase 3. Expansion (inverse IB)
+        self._inner_phase = 1 # - inner phase 1. mem -> comp || 2. mem -> exp 
         self.entropy_patience = entropy_patience
         self.entropy_min_delta = entropy_min_delta
         self.mbe_patience = mbe_patience
         self.mbe_min_delta = mbe_min_delta
         self.min_entropy = np.inf # global best entropy 
         self.min_mbe_dict = defaultdict(lambda: np.inf)
+        self.max_mbe_dict = defaultdict(lambda: -np.inf)
         self.memorization_patience_counter = 0 
         self.compression_patience_counter = 0 
-        self.extrapolation_patience_counter = 0 
+        self.expansion_patience_counter = 0 
         self.switch_phase = switch_phase
         
     def step(self, loss_dict):
@@ -918,14 +922,19 @@ class RRScheduler:
                 self.min_entropy = min(self.min_entropy, entropy_loss)
             else:
                 mbe_loss = loss_dict[loss_name].item()
-                mbe_improvement = max(mbe_improvement, self.min_mbe_dict[loss_name] - mbe_loss) # any layer's mbe improvement counts | assumption is compression stage doesn't increase MBE level
-                self.min_mbe_dict[loss_name] = min(self.min_mbe_dict[loss_name], mbe_loss)
+                if self._inner_phase == 1: 
+                    mbe_improvement = max(mbe_improvement, self.min_mbe_dict[loss_name] - mbe_loss) # any layer's mbe improvement counts | assumption is compression stage doesn't increase MBE level
+                    self.min_mbe_dict[loss_name] = min(self.min_mbe_dict[loss_name], mbe_loss)
+                elif self._inner_phase == 2: 
+                    mbe_improvement = max(mbe_improvement, mbe_loss - self.min_mbe_dict[loss_name])
+                    self.max_mbe_dict[loss_name] = max(self.max_mbe_dict[loss_name], mbe_loss)
         
         assert mbe_loss is not None, "Missing either MBE or DiffMBE loss in loss_dict"
         
         # Determine if progress was made
         better_memorization = (entropy_improvement > self.entropy_min_delta) and entropy_improvement != np.inf
         better_compression = (mbe_improvement > self.mbe_min_delta) and mbe_improvement != np.inf
+        better_expansion = (mbe_improvement > self.mbe_min_delta) and mbe_improvement != np.inf
         
         # Update counters and best values
         if better_memorization:
@@ -938,29 +947,43 @@ class RRScheduler:
         else: 
             self.compression_patience_counter += 1
             
+        if better_expansion: 
+            self.expansion_patience_counter = 0
+        else: 
+            self.expansion_patience_counter += 1
+            
         # Check conditions for phase transitions
         no_patience_for_memorization = self.memorization_patience_counter >= self.entropy_patience
         no_patience_for_compression = self.compression_patience_counter >= self.mbe_patience
+        no_patience_for_expansion = self.expansion_patience_counter >= self.mbe_patience
         
         print("Conditions:\n", 
               f"better_memorization: {better_memorization}\n", 
               f"better_compression: {better_compression}\n", 
+              f"better_expansion: {better_expansion}\n", 
               f"no_patience_for_memorization: {no_patience_for_memorization}\n", 
               f"no_patience_for_compression: {no_patience_for_compression}\n", 
+              f"no_patience_for_expansion: {no_patience_for_expansion}\n", 
               f"worse_memorization: {worse_memorization}\n", 
-              f"current phase: {'Memorization' if self.phase == 1 else 'Compression'}\n")
+              f"current phase: {'Memorization' if self.phase == 1 else 'Compression' if self._inner_phase == 1 else 'Expansion'}\n")
         
         # Handle phase transitions
-        if (no_patience_for_compression or worse_memorization) and self.phase == 2: 
+        if ((no_patience_for_compression or worse_memorization) and self.phase == 2) or ((no_patience_for_expansion or worse_memorization) and self.phase == 3):
             if worse_memorization: 
-                print("--> Pulled out of Compression Phase due to worse memorization")
+                print(f"--> Pulled out of {'Compression' if self.phase == 2 else 'Expansion'} Phase due to worse memorization")
             print("--> Switch to Memorization Phase")
             self.phase = 1 
             self.memorization_patience_counter = 0 
             self.min_mbe_dict = defaultdict(lambda: np.inf)
+            self.max_mbe_dict = defaultdict(lambda: -np.inf)
+            if self.include_expansion_phase: 
+                self._inner_phase = (self._inner_phase + 1) % 2
         elif no_patience_for_memorization and self.phase == 1:
             print("--> Switch to Compression Phase") 
-            self.phase = 2 
+            if self._inner_phase == 1: 
+                self.phase = 2 
+            elif self._inner_phase == 2: 
+                self.phase = 3 
             self.compression_patience_counter = 0 
             self.min_entropy = np.inf
         
