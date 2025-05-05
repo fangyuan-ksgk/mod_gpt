@@ -46,7 +46,7 @@ def parse_args():
     parser.add_argument("--mbe_min_delta", type=float, default=0.002)
     parser.add_argument("--inverse_ib_target", action="store_true")
     parser.add_argument("--patch_schedule", action="store_true")
-    parser.add_argumnet("--init_patch_size", type=int, default=8)
+    parser.add_argument("--init_patch_size", type=int, default=8)
     parser.add_argument("--use_prior_weights", action="store_true")
     
     return parser.parse_args()

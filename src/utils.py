@@ -837,6 +837,7 @@ PRIOR_WEIGHTS = {
     11: 0.10772914, 
 }
 
+NAIVE_WEIGHTS = {i: 1.0 for i in range(12)}
 
 class RRScheduler: 
     # rotate on layer_idx, compute one layer rank regularization loss per train step
@@ -863,7 +864,7 @@ class RRScheduler:
         if use_prior_weights: 
             self.prior_weights = PRIOR_WEIGHTS
         else: 
-            self.prior_weights = [1.0] * (end_layer - start_layer)
+            self.prior_weights = NAIVE_WEIGHTS
             
         # Layer rotation setup
         self.layer_indices = list(range(start_layer, end_layer))  # layer 2 onwards
@@ -873,7 +874,7 @@ class RRScheduler:
         self.ib_target = ib_target
         
         # Phase management & early stopping
-        self.phase = 1  # - Phase 1. Memorization || Phase 2. Compression
+        self.phase = 1  # - Phase 1. Memorization (minimize CE) || Phase 2. Compression (IB) || Phase 3. Extrapolation (inverse IB)
         self.entropy_patience = entropy_patience
         self.entropy_min_delta = entropy_min_delta
         self.mbe_patience = mbe_patience
@@ -882,6 +883,7 @@ class RRScheduler:
         self.min_mbe_dict = defaultdict(lambda: np.inf)
         self.memorization_patience_counter = 0 
         self.compression_patience_counter = 0 
+        self.extrapolation_patience_counter = 0 
         self.switch_phase = switch_phase
         
     def step(self, loss_dict):
@@ -975,13 +977,12 @@ class RRScheduler:
     @property
     def mbe_weight(self): 
         weights = np.array([self.prior_weights[i] for i in self.layer_indices])
-        weights = weights / weights.sum()
-        return weights.tolist()
+        return {i: w for i, w in zip(self.layer_indices, weights.tolist())}
     
     @property
     def rr_layer_weight(self): 
         if self.rr_layer_index: 
-            return int(self.ib_target) * self.prior_weights[self.rr_layer_index[0]]
+            return int(self.ib_target) * self.mbe_weight[self.rr_layer_index[0]]
         else: 
             return 1.0 # entropy loss weightage
 
