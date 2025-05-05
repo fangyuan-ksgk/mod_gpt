@@ -26,11 +26,11 @@ def patch_mbe2(x, patch_size=8):
     mbe_values = mbe_alpha2_exact(x_reshaped)
     return mbe_values.mean() 
 
-def patch_mbe3(x, patch_size=8): 
+def patch_mbe3(x, patch_size): 
     B, S, D = x.shape 
     num_patches = S // patch_size
     assert num_patches > 0, "Sequence length should be bigger than patch size"
-    S = num_patches * patch_size 
+    S = int(num_patches * patch_size)
     x_reshaped = x[:, -S:].reshape(B, num_patches, patch_size, D).reshape(-1, patch_size, D)    
     mbe_values = mbe_alpha2_exact(x_reshaped)
     return mbe_values.mean() 

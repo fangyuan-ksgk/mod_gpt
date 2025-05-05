@@ -510,7 +510,7 @@ class YetAnotherMixer2:
                 prev_grads.append(p.grad.clone())
                 p.grad.zero_() 
             else: 
-                print(" None Gradient encountered")
+                # print(" None Gradient encountered")
                 reset_flags.append(True)
                 prev_grads.append(torch.zeros_like(p))
 

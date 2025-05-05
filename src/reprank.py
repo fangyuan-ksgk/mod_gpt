@@ -69,7 +69,7 @@ class GPTnoconn(nn.Module):
         for i in range(self.num_layers): 
             x, v1 = self.transformer.h[i](x, v1, x0, block_mask)
             if i in reg_layer_indices: 
-                reg_loss[f"{RANK_REG_LOSS}_layer{i+1}"] = patch_mbe(x)
+                reg_loss[f"{RANK_REG_LOSS}_layer{i+1}"] = patch_mbe(x, 8)
 
         x = norm(x)
         logits = self.lm_head(x)
@@ -100,7 +100,7 @@ class GPT(nn.Module):
         self.alpha = config.alpha 
         self.window_size = config.window_size
 
-    def forward(self, idx, target, attn_blocksize, patch_size=8):
+    def forward(self, idx, target, attn_blocksize, patch_size):
         """Localized Rank Regularization for Each Block"""
 
         docs = (idx == 50256).cumsum(1)
@@ -161,7 +161,7 @@ class GPT_diff(nn.Module):
         self.alpha = config.alpha 
         self.window_size = config.window_size
 
-    def forward(self, idx, target, attn_blocksize, patch_size=8):
+    def forward(self, idx, target, attn_blocksize, patch_size):
         """Localized Rank Regularization for Each Block"""
 
         docs = (idx == 50256).cumsum(1)

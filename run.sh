@@ -20,7 +20,7 @@
 # torchrun --standalone --nproc_per_node=4 train_pcgrad.py --positive_scale_factor 1.1 --negative_scale_factor 1.1 --proj_product --batch_size=32 
 
 # experiment (3.a.3) | SGP w ps=1.1 ns=0.9 | scale dot product | (Does scaling dot_product has an effect here?)
-torchrun --standalone --nproc_per_node=4 train_pcgrad.py --positive_scale_factor 1.1 --negative_scale_factor 0.9 --proj_product --batch_size=32
+# torchrun --standalone --nproc_per_node=4 train_pcgrad.py --positive_scale_factor 1.1 --negative_scale_factor 0.9 --proj_product --batch_size=32
 
 # experiment (3.a.4) | SGP w ps=0.9 ns=1.1 | (What if we encourage MBE increase?)
 # torchrun --standalone --nproc_per_node=4 train_pcgrad.py --positive_scale_factor 0.9 --negative_scale_factor 1.1 --batch_size=32
@@ -32,35 +32,35 @@ torchrun --standalone --nproc_per_node=4 train_pcgrad.py --positive_scale_factor
 # torchrun --standalone --nproc_per_node=4 train_pcgrad.py --positive_scale_factor 0.01 --negative_scale_factor 0.01 --batch_size=32 
 
 # experiment (3.a.7) | Maximize MBE | additive composition | (Will maximizing MBE hurt learning?)
-torchrun --standalone --nproc_per_node=4 train_pcgrad.py --additive_grad --inverse_ib_target --batch_size=32
+# torchrun --standalone --nproc_per_node=8 train_pcgrad.py --additive_grad --inverse_ib_target --batch_size=32
 
 # experiment (3.a.8) | Stop MBE momentum | (Will stopping MBE momentum hurts learning?)
-torchrun --standalone --nproc_per_node=4 train_pcgrad.py --positive_scale_factor 0.00 --negative_scale_factor 0.00 --batch_size=32 
+# torchrun --standalone --nproc_per_node=8 train_pcgrad.py --positive_scale_factor 0.00 --negative_scale_factor 0.00 --batch_size=32 
 
 # --------------------------------------------------------------------------------------------------------------------------
 # Algorithm (b). Bio inspired memorization & compression "gated phase transition" ||  Explicit Phase transition improves learning ? 
 # --------------------------------------------------------------------------------------------------------------------------
 
 # - experiment (3.b) | gated phase transition | SGP w. ps=1.1 ns=0.9
-torchrun --standalone --nproc_per_node=4 train_pcgrad.py --positive_scale_factor 1.1 --negative_scale_factor 0.9 --switch_phase --batch_size=32
+# torchrun --standalone --nproc_per_node=8 train_pcgrad.py --positive_scale_factor 1.1 --negative_scale_factor 0.9 --switch_phase --batch_size=32
 
 # - experiment (3.b.1) | gated phase transition | pure regularization | additive composition | Does phase change make it less shitty? 
-torchrun --standalone --nproc_per_node=4 train_pcgrad.py --additive_grad --switch_phase --batch_size=32
+# torchrun --standalone --nproc_per_node=8 train_pcgrad.py --additive_grad --switch_phase --batch_size=32
 
 # - experiment (3.b.5) | gated phase transition | minimize MBE | additive compostion | use prior weights | MBE weight affects performance? 
-torchrun --standalone --nproc_per_node=4 train_pcgrad.py --additive_grad --switch_phase --use_prior_weights --batch_size=32
+# torchrun --standalone --nproc_per_node=8 train_pcgrad.py --additive_grad --switch_phase --use_prior_weights --batch_size=32
 
 # - experiment (3.b.6) | gated phase transition | maximize MBE | additive compostion | Is it just about 'pulling out of local minima'?
-torchrun --standalone --nproc_per_node=4 train_pcgrad.py --additive_grad --switch_phase --inverse_ib_target --batch_size=32
+# torchrun --standalone --nproc_per_node=8 train_pcgrad.py --additive_grad --switch_phase --inverse_ib_target --batch_size=32
 
 # - experiment (3.b.7) | gated phase transition | minimize MBE | additive composition | patch size curriculum (8 -> 224) | Does randomizing patch size improves performance? 
-torchrun --standalone --nproc_per_node=4 train_pcgrad.py --additive_grad --switch_phase --patch_schedule --batch_size=32
+torchrun --standalone --nproc_per_node=8 train_pcgrad.py --additive_grad --switch_phase --patch_schedule --batch_size=32
 
 # - experiment (3.b.8) | gated phase transition | minimize MBE | additive composition | randomize patch size (32 -> 896) | Bigger patch size improves performance? 
-torchrun --standalone --nproc_per_node=4 train_pcgrad.py --additive_grad --switch_phase --patch_schedule --init_patch_size 32 --batch_size=32
+torchrun --standalone --nproc_per_node=8 train_pcgrad.py --additive_grad --switch_phase --patch_schedule --init_patch_size 32 --batch_size=32
 
 # - experiment (3.b.9) | Cycle between memorization (minimize CE) expansion (maximize MBE) and compression (minimize MBE) with patience 125 : 50 : 125 |  
-torchrun --standalone --nproc_per_node=4 train_pcgrad.py --additive_grad --switch_phase --include_inner_cycle --batch_size=32
+torchrun --standalone --nproc_per_node=8 train_pcgrad.py --additive_grad --switch_phase --include_inner_cycle --batch_size=32
 
 # - experiment (3.b.10) | Cycle between memorization (minimize CE) expansion (maximize MBE) and compression (minimize MBE) with patience 125 : 125: 125 |  
-torchrun --standalone --nproc_per_node=4 train_pcgrad.py --additive_grad --switch_phase --include_inner_cycle --batch_size=32
+torchrun --standalone --nproc_per_node=8 train_pcgrad.py --additive_grad --switch_phase --include_inner_cycle --batch_size=32
