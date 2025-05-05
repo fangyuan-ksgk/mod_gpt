@@ -407,15 +407,18 @@ scheduler = RRScheduler(train_accumulation_steps,
                         include_inner_cycle=args.include_inner_cycle) # scheduler for rank regularization
 scheduler.phase = 1 if args.switch_phase else 2
 
+valid_patch_sizes = [8, 16, 32, 64, 128, 256, 512, 1024] # divide train seq len (32 x 1024) & smaller than maximal attention span (1792)
+
 for step in range(train_steps + 1):
     last_step = (step == train_steps)
     attn_blocksize = torch.tensor(64*((step/train_steps * (1792 - 64) + 64)//64), dtype=torch.int, device='cuda')
     
     if args.patch_schedule: # curriculum for patch size (MBE)
-        patch_size = args.init_patch_size * ((step/train_steps * (1792 - 64) + 64)//64)
+        patch_size = args.init_patch_size * ((step/train_steps * (1024 - args.init_patch_size) + args.init_patch_size)//args.init_patch_size)
     else: 
         patch_size = args.init_patch_size
-
+    patch_size = min(valid_patch_sizes, key=lambda x: abs(x - patch_size))
+    
     # --------------- VALIDATION SECTION -----------------
     if last_step or (args.val_loss_every > 0 and step % args.val_loss_every == 0):
         # stop the clock
