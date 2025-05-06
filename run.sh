@@ -65,6 +65,8 @@
 # - experiment (3.b.10) | Cycle between memorization (minimize CE) expansion (maximize MBE) and compression (minimize MBE) with patience 125 : 125: 125 |  
 # torchrun --standalone --nproc_per_node=8 train_pcgrad.py --additive_grad --switch_phase --include_inner_cycle --batch_size=32
 
+# - experiment (3.b.11) | Cycle between memorization (minimize CE) expansion (maximize MBE) and compression (minimize MBE) with patience 125 : 75: 125 | patch size schedule 
+# torchrun --standalone --nproc_per_node=8 train_pcgrad.py --additive_grad --switch_phase --include_inner_cycle --patch_schedule --batch_size=32 --num_iterations=7000
 
 # --------------------------------------------------------------------------------------------------------------------------
 # (IV). Tuning period for cycle phase | fully utilize Information Bottleneck Plane 
