@@ -54,13 +54,27 @@
 # torchrun --standalone --nproc_per_node=8 train_pcgrad.py --additive_grad --switch_phase --inverse_ib_target --batch_size=32
 
 # - experiment (3.b.7) | gated phase transition | minimize MBE | additive composition | patch size curriculum (8 -> 224) | Does randomizing patch size improves performance? 
-torchrun --standalone --nproc_per_node=8 train_pcgrad.py --additive_grad --switch_phase --patch_schedule --batch_size=32
+# torchrun --standalone --nproc_per_node=8 train_pcgrad.py --additive_grad --switch_phase --patch_schedule --batch_size=32
 
 # - experiment (3.b.8) | gated phase transition | minimize MBE | additive composition | randomize patch size (32 -> 896) | Bigger patch size improves performance? 
-torchrun --standalone --nproc_per_node=8 train_pcgrad.py --additive_grad --switch_phase --patch_schedule --init_patch_size 32 --batch_size=32
+# torchrun --standalone --nproc_per_node=8 train_pcgrad.py --additive_grad --switch_phase --patch_schedule --init_patch_size 32 --batch_size=32
 
 # - experiment (3.b.9) | Cycle between memorization (minimize CE) expansion (maximize MBE) and compression (minimize MBE) with patience 125 : 50 : 125 |  
-torchrun --standalone --nproc_per_node=8 train_pcgrad.py --additive_grad --switch_phase --include_inner_cycle --batch_size=32
+# torchrun --standalone --nproc_per_node=8 train_pcgrad.py --additive_grad --switch_phase --include_inner_cycle --batch_size=32
 
 # - experiment (3.b.10) | Cycle between memorization (minimize CE) expansion (maximize MBE) and compression (minimize MBE) with patience 125 : 125: 125 |  
-torchrun --standalone --nproc_per_node=8 train_pcgrad.py --additive_grad --switch_phase --include_inner_cycle --batch_size=32
+# torchrun --standalone --nproc_per_node=8 train_pcgrad.py --additive_grad --switch_phase --include_inner_cycle --batch_size=32
+
+
+# --------------------------------------------------------------------------------------------------------------------------
+# (IV). Tuning period for cycle phase | fully utilize Information Bottleneck Plane 
+# --------------------------------------------------------------------------------------------------------------------------
+
+# - baseline (4.0)
+# torchrun --standalone --nproc_per_node=8 train_pcgrad.py --additive_grad --switch_phase --batch_size=32 --patch_schedule --num_iterations=3500
+
+# - experiment (4.1)
+torchrun --standalone --nproc_per_node=8 train_pcgrad.py --additive_grad --switch_phase --include_inner_cycle --period=5 --patch_schedule --batch_size=32 --num_iterations=3500
+
+# - experiment (4.2)
+torchrun --standalone --nproc_per_node=8 train_pcgrad.py --additive_grad --switch_phase --include_inner_cycle --period=10 --patch_schedule --batch_size=32 --num_iterations=3500

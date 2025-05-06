@@ -852,6 +852,7 @@ class RRScheduler:
                  ib_target=True,
                  use_prior_weights=False,
                  include_inner_cycle=False,
+                 period=5, # how many cycle for each phase
                  entropy_patience=125, 
                  entropy_min_delta=0.01,
                  mbe_patience=100,
@@ -878,9 +879,9 @@ class RRScheduler:
         # Phase management & early stopping
         self.phase = 1  # - Phase 1. Memorization (minimize CE) || Phase 2. Compression (IB) || Phase 3. Expansion (inverse IB)
         if self.include_inner_cycle or (not ib_target): 
-            self._inner_phase = 1
+            self._inner_phase_float = 1.0
         else: 
-            self._inner_phase = 0
+            self._inner_phase_float = 0.0
         self.entropy_patience = entropy_patience
         self.entropy_min_delta = entropy_min_delta
         self.compression_patience = mbe_patience
@@ -893,6 +894,7 @@ class RRScheduler:
         self.compression_patience_counter = 0 
         self.expansion_patience_counter = 0 
         self.switch_phase = switch_phase
+        self.period = period
         
     def step(self, loss_dict):
         self.current_accumulation_step = (self.current_accumulation_step + 1) % self.num_accumulation_steps
@@ -901,6 +903,10 @@ class RRScheduler:
             self.current_layer_idx = (self.current_layer_idx + 1) % len(self.layer_indices)
         if (self.main_loss_name in loss_dict) and self.switch_phase: 
             self._switch_phase(loss_dict)
+            
+    @property 
+    def _inner_phase(self): 
+        return int(self._inner_phase_float)
 
     def _switch_phase(self, loss_dict):
         """
@@ -981,7 +987,8 @@ class RRScheduler:
             self.min_mbe_dict = defaultdict(lambda: np.inf)
             self.max_mbe_dict = defaultdict(lambda: -np.inf)
             if self.include_inner_cycle: 
-                self._inner_phase = (self._inner_phase + 1) % 2
+                self._inner_phase_float = (self._inner_phase_float + 1/self.period) % 2
+                
         elif no_patience_for_memorization and self.phase == 1:
             print(f"--> Switch to {'Compression' if self._inner_phase == 0 else 'Expansion'} Phase") 
             if self._inner_phase == 0: 

@@ -513,6 +513,7 @@ class YetAnotherMixer2:
                 # print(" None Gradient encountered")
                 reset_flags.append(True)
                 prev_grads.append(torch.zeros_like(p))
+                p.grad = torch.zeros_like(p)
 
         loss_dict[loss_name].backward(retain_graph=False)
         for i, p in enumerate(params): 
