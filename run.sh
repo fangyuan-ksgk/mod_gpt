@@ -80,3 +80,12 @@ torchrun --standalone --nproc_per_node=8 train_pcgrad.py --additive_grad --switc
 
 # - experiment (4.2)
 torchrun --standalone --nproc_per_node=8 train_pcgrad.py --additive_grad --switch_phase --include_inner_cycle --period=10 --patch_schedule --batch_size=32 --num_iterations=3500
+
+# - experiment (4.3) | prior weights: valley
+torchrun --standalone --nproc_per_node=8 train_pcgrad.py --additive_grad --switch_phase --use_prior_weights --prior_weight=valley --batch_size=32 --patch_schedule --num_iterations=3500
+
+# - experiment (4.4) | prior weights: mountain
+torchrun --standalone --nproc_per_node=8 train_pcgrad.py --additive_grad --switch_phase --use_prior_weights --prior_weight=mountain --batch_size=32 --patch_schedule --num_iterations=3500
+
+# - experiment (4.5) | prior weights: oscillate
+torchrun --standalone --nproc_per_node=8 train_pcgrad.py --additive_grad --switch_phase --use_prior_weights --prior_weight=oscillate --batch_size=32 --patch_schedule --num_iterations=3500

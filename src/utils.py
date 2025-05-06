@@ -820,9 +820,11 @@ def create_mbe_animation(mbe_data_list, labels_list, output_file='mbe_animation.
     return ani
 
 
-# ------- Scheduler for Rank Regularization || Gated Phase Transition -------
 
-PRIOR_WEIGHTS = {
+
+# Experimental Prior Weights on layer-wise MBE loss 
+# ------------------------------------------------------------------------------------------------
+prior_weights_natural = {
     0: 0.04309166, 
     1: 0.04309166, 
     2: 0.07181943, 
@@ -836,6 +838,65 @@ PRIOR_WEIGHTS = {
     10: 0.21772914,
     11: 0.10772914, 
 }
+
+prior_weights_valley = {
+    # Early layers (input processing) - allow higher MBE to preserve input information
+    0: 0.3,  # Minimal regularization to preserve rich input representations
+    1: 0.4,  # Slight increase in regularization
+    # Middle-early layers (feature extraction) - moderate compression
+    2: 0.8,  # Begin more substantial compression
+    3: 1.0,  # Standard compression weight
+    4: 1.2,  # Increased compression
+    # Middle-late layers (abstraction) - strongest compression
+    5: 1.5,  # Heavy compression to force abstraction
+    6: 1.8,  # Maximum compression to create bottleneck
+    7: 1.5,  # Slightly reduced compression
+    # Late layers (prediction preparation) - moderate compression
+    8: 1.0,  # Standard compression
+    9: 0.8,  # Reduced compression
+    # Final layers (output generation) - lighter touch
+    10: 0.5,  # Light compression to allow task-specific representations
+    11: 0.3   # Minimal regularization on final layer
+}
+
+prior_weights_mountain = {
+    # Early layers - moderate regularization
+    0: 0.8,  # Substantial compression to filter noise early
+    1: 1.2,  # Strong compression to force early abstraction
+    # Middle layers - minimal regularization (creating a "mountain")
+    2: 0.4,  # Reduce compression to allow representation expansion
+    3: 0.3,  # Minimal compression - information expansion zone
+    4: 0.2,  # Lowest compression - maximum information preservation
+    5: 0.2,  # Lowest compression - maximum information preservation
+    6: 0.3,  # Minimal compression - information expansion zone
+    # Later layers - strongest compression
+    7: 1.2,  # Begin aggressive compression
+    8: 1.8,  # Maximum compression to create final bottleneck
+    9: 2.0,  # Extreme compression for efficient final representations
+    10: 1.5, # Strong but reduced compression
+    11: 1.0  # Moderate compression for output layer
+}
+
+prior_weights_oscillate = {
+    # Alternating high and low compression across all layers
+    0: 0.3,   # Low - preserve input information
+    1: 1.5,   # High - force early abstraction
+    2: 0.4,   # Low - allow expansion after compression
+    3: 1.6,   # High - compress again after expansion
+    4: 0.5,   # Low - expansion
+    5: 1.7,   # High - compression
+    6: 0.6,   # Low - expansion
+    7: 1.8,   # High - compression
+    8: 0.7,   # Low - expansion
+    9: 1.9,   # High - maximum compression
+    10: 0.8,  # Low - slight expansion
+    11: 1.0   # Moderate - balanced final layer
+}
+
+# ------------------------------------------------------------------------------------------------
+
+# ------- Scheduler for Rank Regularization || Gated Phase Transition -------
+
 
 NAIVE_WEIGHTS = {i: 1.0 for i in range(12)}
 
@@ -851,6 +912,7 @@ class RRScheduler:
                  switch_phase=False,
                  ib_target=True,
                  use_prior_weights=False,
+                 prior_weight=None,
                  include_inner_cycle=False,
                  period=5, # how many cycle for each phase
                  entropy_patience=125, 
@@ -865,7 +927,14 @@ class RRScheduler:
         self.current_iteration = 0
         self.main_loss_name = main_loss_name
         if use_prior_weights: 
-            self.prior_weights = PRIOR_WEIGHTS
+            if prior_weight == "natural": 
+                self.prior_weights = prior_weights_natural
+            elif prior_weight == "valley": 
+                self.prior_weights = prior_weights_valley
+            elif prior_weight == "mountain": 
+                self.prior_weights = prior_weights_mountain
+            elif prior_weight == "oscillate": 
+                self.prior_weights = prior_weights_oscillate
         else: 
             self.prior_weights = NAIVE_WEIGHTS
             

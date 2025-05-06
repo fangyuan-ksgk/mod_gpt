@@ -51,6 +51,7 @@ def parse_args():
     parser.add_argument("--include_inner_cycle", action="store_true")
     parser.add_argument("--inv_mbe_patience", type=int, default=50)
     parser.add_argument("--period", type=int, default=5)
+    parser.add_argument("--prior_weight", type=str, default="natural")
     
     return parser.parse_args()
 
@@ -222,7 +223,7 @@ class Hyperparameters:
     init_patch_size: int = 8
     use_prior_weights: bool = False
     period: int = 5
-    
+    prior_weight: str = "natural"
 cli_args = parse_args()
 if True: # i don't have 8xH100  
     args = Hyperparameters()
@@ -402,6 +403,7 @@ scheduler = RRScheduler(train_accumulation_steps,
                         switch_phase=args.switch_phase,
                         period=args.period,
                         use_prior_weights=args.use_prior_weights,
+                        prior_weight=args.prior_weight,
                         ib_target= not args.inverse_ib_target,
                         entropy_patience=args.entropy_patience, 
                         entropy_min_delta=args.entropy_min_delta,
