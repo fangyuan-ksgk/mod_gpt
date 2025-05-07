@@ -19,6 +19,7 @@ import torch.distributed as dist
 from src.pcgrad import SimPGrad, YetAnotherMixer, YetAnotherMixer2
 from src.utils import RRScheduler
 from src.utils import plot_training_losses
+from src.arith_exp import create_result_mask, cal_masked_entropy, DigitTokenizer
 
 import argparse
 
@@ -28,6 +29,8 @@ import argparse
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--batch_size", type=int, default=16)
+    parser.add_argument("--train_files", type=str, default="data/fineweb10B/fineweb_train_*.bin")
+    parser.add_argument("--val_files", type=str, default="data/fineweb10B/fineweb_val_*.bin")
     parser.add_argument("--train_seq_len", type=int, default=32*1024)
     parser.add_argument("--val_seq_len", type=int, default=16*1024)
     parser.add_argument("--no_reg", action="store_true")
@@ -52,6 +55,8 @@ def parse_args():
     parser.add_argument("--inv_mbe_patience", type=int, default=50)
     parser.add_argument("--period", type=int, default=5)
     parser.add_argument("--prior_weight", type=str, default="natural")
+    parser.add_argument("--mask_entropy_train", action="store_true")
+    parser.add_argument("--mask_entropy_val", action="store_true")
     
     return parser.parse_args()
 
@@ -165,7 +170,7 @@ class Muon(torch.optim.Optimizer):
 
 # from src.rg_model import GPT, GPTConfig # random grouping model
 # from src.model import GPT, GPTConfig # original model
-from src.reprank import GPT_diff, GPT, GPTConfig # rank regularized model
+from src.reprank import GPT_diff, GPT_mask, GPT, GPTConfig # rank regularized model
 
 
 # -----------------------------------------------------------------------------
@@ -224,6 +229,9 @@ class Hyperparameters:
     use_prior_weights: bool = False
     period: int = 5
     prior_weight: str = "natural"
+    mask_entropy_train: bool = False
+    mask_entropy_val: bool = False
+    
 cli_args = parse_args()
 if True: # i don't have 8xH100  
     args = Hyperparameters()
@@ -275,11 +283,14 @@ print0(nvidia_smi())
 print0("="*100)
 
 
+
 ########################################
 #    Construct model and optimizer     #
 ########################################
 if args.diff_mbe: 
     model: nn.Module = GPT_diff(model_config).cuda()
+elif args.mask_entropy_val: 
+    model: nn.Module = GPT_mask(model_config).cuda()
 else: 
     model: nn.Module = GPT(model_config).cuda()
     
@@ -327,6 +338,16 @@ grad_composer = YetAnotherMixer2(model, "entropy", positive_scale_factor=args.po
 
 # ---------------------------------------------------------
 
+####################################
+# Arithmetic Experiments Tokenizer #
+####################################
+
+if args.mask_entropy_val: 
+    digit_tokenizer = DigitTokenizer() # specific tokenizer for arithmetic experiments 
+
+# ---------------------------------------------------------
+
+
 model: nn.Module = torch.compile(model, dynamic=True)
 
 ########################################
@@ -346,6 +367,9 @@ for i in range(warmup_steps):
     forward_start = time.time() 
     if i % 2 == 0: 
         loss_dict = model.forward(inputs.to(torch.int32), targets, attn_blocksize, args.init_patch_size)
+        if args.mask_entropy_val: 
+            mask = create_result_mask(targets, digit_tokenizer)
+            cal_masked_entropy(loss_dict, mask)
         loss_dict = {"entropy": loss_dict["entropy"]}
     else: 
         # Random value created in master_process, broadcasted to all GPUs 
@@ -353,10 +377,11 @@ for i in range(warmup_steps):
         layer_idx = i % (model.num_encoder_layers)  
         # ------------------------------------------------------------------------
         loss_dict = model.forward(inputs.to(torch.int32), targets, attn_blocksize, args.init_patch_size)
+        
         if args.diff_mbe: 
             diff_mbe_loss = loss_dict[f"diff_mbe_{layer_idx}"]
-            loss_dict = {"diff_mbe": diff_mbe_loss}
-        else:
+            loss_dict = {"diff_mbe": diff_mbe_loss}            
+        else: 
             mbe_loss = loss_dict[f"mbe_{layer_idx}"]
             loss_dict = {"mbe": mbe_loss}
         print(f" :: Calculating Rank regularization loss for layer {layer_idx+1}")
@@ -440,6 +465,9 @@ for step in range(train_steps + 1):
             for i in range(val_steps):
                 inputs, targets = next(val_loader)
                 loss_dict = model.forward(inputs, targets, attn_blocksize, args.init_patch_size)
+                if args.mask_entropy_val: 
+                    mask = create_result_mask(targets, digit_tokenizer)
+                    cal_masked_entropy(loss_dict, mask)
                 for name, loss in loss_dict.items(): 
                     val_loss[name] += loss                
         for name in val_loss: 
@@ -473,6 +501,9 @@ for step in range(train_steps + 1):
     for accum_step in range(train_accumulation_steps): 
         inputs, targets = next(train_loader)
         loss_dict = model.forward(inputs, targets, attn_blocksize, patch_size)
+        if args.mask_entropy_train: 
+            mask = create_result_mask(targets, digit_tokenizer)
+            cal_masked_entropy(loss_dict, mask)
         if accum_step == train_accumulation_steps - 1: 
             scheduler.step(loss_dict)
         if args.no_reg or len(scheduler.rr_layer_index) == 0: 
