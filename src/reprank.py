@@ -225,19 +225,19 @@ class GPT_mask(nn.Module):
         
         S = idx.shape[1]
         
-        # docs = (idx == 1).cumsum(0) # <bos> token indicates end of an arithmetic equation            
-        # def document_causal_mask(b, h, q_idx, kv_idx):
-        #   causal_mask = q_idx >= kv_idx
-        #   document_mask = docs[b, q_idx] == docs[b, kv_idx]
-        #   window_mask = q_idx - kv_idx < attn_blocksize
-        #   return causal_mask & document_mask & window_mask
-        # block_mask = create_block_mask(document_causal_mask, None, None, S, S, device="cuda", _compile=True)
+        docs = (idx == 1).cumsum(0) # <bos> token indicates end of an arithmetic equation            
+        def document_causal_mask(b, h, q_idx, kv_idx):
+          causal_mask = q_idx >= kv_idx
+          document_mask = docs[b, q_idx] == docs[b, kv_idx]
+          window_mask = q_idx - kv_idx < attn_blocksize
+          return causal_mask & document_mask & window_mask
+        block_mask = create_block_mask(document_causal_mask, None, None, S, S, device="cuda", _compile=True)
 
-        # --------------------- Make Shift ver. for local testing ---------------------
-        def causal_mask(b, h, q_idx, kv_idx):
-            return q_idx >= kv_idx
-        block_mask = create_block_mask(causal_mask, None, None, S, S, device="cpu")
-        # --------------------------------------------------------------------------
+        # # --------------------- Make Shift ver. for local testing ---------------------
+        # def causal_mask(b, h, q_idx, kv_idx):
+        #     return q_idx >= kv_idx
+        # block_mask = create_block_mask(causal_mask, None, None, S, S, device="cpu")
+        # # --------------------------------------------------------------------------
 
         x = self.transformer.wte(idx)
         x = norm(x)
