@@ -820,6 +820,119 @@ def create_mbe_animation(mbe_data_list, labels_list, output_file='mbe_animation.
     return ani
 
 
+def plot_dual_metrics(loss_record, names=('l1_positive', 'mbe'), save_path="metrics_curves.png", 
+                      y_labels=None, title="Training Metrics", use_markers=True, same_scale=False):
+    """
+    Plot two metrics with different y-axes.
+    
+    Args:
+        loss_record (dict): Dictionary containing metrics to plot
+        names (tuple): Tuple of (left_metric, right_metric) names to plot
+        save_path (str): Path to save the figure
+        y_labels (tuple): Optional custom labels for y-axes (left, right)
+        title (str): Plot title
+        use_markers (bool): Whether to use markers on the plot lines
+        same_scale (bool): Whether to align the scales of both y-axes
+    """
+    print(f"Plotting metrics: {names[0]} and {names[1]}...")
+    
+    # Create figure and primary axis
+    fig, ax1 = plt.figure(figsize=(10, 6)), plt.gca()
+    
+    # Ensure we have enough data points
+    if names[0] not in loss_record or not loss_record[names[0]]:
+        print(f"Warning: No data for {names[0]}")
+        return
+    
+    x = np.arange(len(loss_record[names[0]]))
+    
+    # Set up default y-axis labels if not provided
+    if y_labels is None:
+        y_labels = (f"{names[0].replace('_', ' ').title()}", f"{names[1].replace('_', ' ').title()}")
+    
+    # Plot first metric on primary y-axis
+    color1 = 'tab:blue'
+    ax1.set_xlabel('Iterations')
+    ax1.set_ylabel(y_labels[0], color=color1)
+    marker1 = 'o-' if use_markers else '-'
+    ax1.plot(x, loss_record[names[0]], marker1, color=color1, label=y_labels[0])
+    ax1.tick_params(axis='y', labelcolor=color1)
+    
+    # Check if we need to compute an aggregate metric
+    if names[1] not in loss_record:
+        # Find all related metrics (those containing the name as substring)
+        related_metrics = [k for k in loss_record.keys() if names[1] in k and k != names[1]]
+        
+        if related_metrics:
+            # Compute average of related metrics
+            loss_record[names[1]] = [sum(loss_record[k][i] for k in related_metrics) / len(related_metrics) 
+                                    for i in range(len(loss_record[related_metrics[0]]))]
+            print(f"Computed aggregate {names[1]} from {len(related_metrics)} related metrics")
+    
+    # Skip second metric if not available
+    if names[1] not in loss_record or not loss_record[names[1]]:
+        print(f"Warning: No data for {names[1]}")
+        ax1.legend(loc='upper right')
+        fig.tight_layout()
+        plt.savefig(save_path, dpi=300)
+        plt.close()
+        print(f"- Plot saved to {save_path}")
+        return
+    
+    # Create secondary y-axis and plot second metric
+    ax2 = ax1.twinx()
+    color2 = 'tab:red'
+    ax2.set_ylabel(y_labels[1], color=color2)
+    marker2 = 's-' if use_markers else '-'
+    ax2.plot(x, loss_record[names[1]], marker2, color=color2, label=y_labels[1])
+    ax2.tick_params(axis='y', labelcolor=color2)
+    
+    # Set same scale for both axes if requested
+    if same_scale:
+        # Get overall min and max values from both metrics
+        all_values = loss_record[names[0]] + loss_record[names[1]]
+        y_min = min(all_values)
+        y_max = max(all_values)
+        # Add 5% padding
+        padding = (y_max - y_min) * 0.05
+        ax1.set_ylim(y_min - padding, y_max + padding)
+        ax2.set_ylim(y_min - padding, y_max + padding)
+        print(f"Using same scale for both axes: [{y_min:.4f}, {y_max:.4f}]")
+    
+    # Plot related individual metrics with lower alpha
+    related_metrics = [k for k in loss_record.keys() if (names[1] in k and k != names[1])]
+    
+    if related_metrics:
+        # Define a colormap for different individual metrics
+        cmap = plt.cm.get_cmap('tab10', len(related_metrics) + 1)
+        
+        for i, k in enumerate(related_metrics):
+            # Try to extract a suffix/index from the key
+            parts = k.split('_')
+            if len(parts) > 1 and parts[-1].isdigit():
+                suffix = parts[-1]
+                label = f"{names[1].replace('_', ' ').title()} {suffix}"
+            else:
+                label = k.replace('_', ' ').title()
+                
+            layer_color = cmap(i)
+            ax2.plot(x, loss_record[k], marker2, color=layer_color, label=label, alpha=0.1)
+    
+    # Add title and grid
+    plt.title(title)
+    ax1.grid(True, alpha=0.3)
+    
+    # Add legend with both axis items
+    lines1, labels1 = ax1.get_legend_handles_labels()
+    lines2, labels2 = ax2.get_legend_handles_labels()
+    ax1.legend(lines1 + lines2, labels1 + labels2, loc='center right')
+    
+    # Adjust layout and save
+    fig.tight_layout()
+    plt.savefig(save_path, dpi=300)
+    plt.close()
+    
+    print(f"- Plot saved to {save_path}")
 
 
 # Experimental Prior Weights on layer-wise MBE loss 
