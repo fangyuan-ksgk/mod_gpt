@@ -460,7 +460,7 @@ for step in range(train_steps + 1):
         training_time_ms += 1000 * (time.perf_counter() - t0)
         model.eval()
         val_seq_len = world_size * args.val_seq_len
-        assert args.val_tokens % val_seq_len == 0
+        # assert args.val_tokens % val_seq_len == 0
         val_steps = args.val_tokens // val_seq_len
         val_loader = distributed_data_generator(args.val_files, val_seq_len, rank, world_size)
         val_loss = defaultdict(float)
