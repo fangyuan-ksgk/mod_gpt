@@ -15,6 +15,31 @@ from src.pcgrad import YetAnotherMixer2
 
 # utils function
 # ------------------------------------------------------------
+
+def sample_p1(n_samples, in_dim=10, std=0.25):
+    half_dim = in_dim // 2
+    first_half = torch.randn(n_samples, half_dim) * std + 1.0
+    second_half = torch.randn(n_samples, in_dim - half_dim) * std
+    return torch.cat([first_half, second_half], dim=1)
+
+def sample_p2(n_samples, in_dim=10, std=0.25):
+    half_dim = in_dim // 2
+    first_half = torch.randn(n_samples, half_dim) * std
+    second_half = torch.randn(n_samples, in_dim - half_dim) * std + 1.0
+    return torch.cat([first_half, second_half], dim=1)
+
+def plot_x1_x2(x1, x2):
+    plt.figure(figsize=(10, 6))
+    plt.scatter(x1[:, 0].numpy(), x1[:, 6].numpy(), color='blue', alpha=0.5, label='x1 distribution')
+    plt.scatter(x2[:, 0].numpy(), x2[:, 6].numpy(), color='red', alpha=0.5, label='x2 distribution')
+    plt.xlabel('Feature 0')
+    plt.ylabel('Feature 500')
+    plt.title('Distribution of x1 and x2 samples (0th & 5th features)')
+    plt.legend()
+    plt.grid(True, linestyle='--', alpha=0.7)
+    plt.show()
+    
+    
 def generate_param_shift(model, direction_vector=None):
     direction_vector = {}
     for name, param in model.named_parameters():
@@ -57,16 +82,20 @@ def build_dataset(train_size, val_size, model, in_dim, param_shift=None):
     if param_shift is None: 
         param_shift = generate_param_shift(model)
     data_size = train_size + val_size 
-    x = torch.randn(data_size, in_dim)
+
+    # sample inputs (p1 & p2)    
+    x1 = sample_p1(data_size, in_dim)
+    x2 = sample_p2(data_size, in_dim)
+    
     model_positive_shift = copy.deepcopy(model)
     mlp_positive_shift = apply_param_shift(model_positive_shift, param_shift, 1.0)
-    y_positive, h_positive = mlp_positive_shift(x)
+    y_positive, h_positive = mlp_positive_shift(x1)
     model_negative_shift = copy.deepcopy(model)
     mlp_negative_shift = apply_param_shift(model_negative_shift, param_shift, -1.0)
-    y_negative, h_negative = mlp_negative_shift(x)
+    y_negative, h_negative = mlp_negative_shift(x2)
     print(f"- Dataset constructed with {data_size} positive & negative samples")
-    trainset = {"positive": (x[:train_size], y_positive.detach()[:train_size]), "negative": (x[:train_size], y_negative.detach()[:train_size])}
-    valset = {"positive": (x[train_size:], y_positive.detach()[train_size:]), "negative": (x[train_size:], y_negative.detach()[train_size:])}
+    trainset = {"positive": (x1[:train_size], y_positive.detach()[:train_size]), "negative": (x2[:train_size], y_negative.detach()[:train_size])}
+    valset = {"positive": (x1[train_size:], y_positive.detach()[train_size:]), "negative": (x2[train_size:], y_negative.detach()[train_size:])}
     return trainset, valset, param_shift
 
 def _get_batch(dataset, group_name, batch_size=32): 
@@ -97,6 +126,8 @@ def decide_group_name(epoch, epochs, mod="positive"):
         return "negative" if epoch < epochs / 2 else "positive"
     if mod == "interleaved": 
         return "positive" if epoch % 2 == 0 else "negative"
+    if mod == "interleaved_reverse": 
+        return "negative" if epoch % 2 == 0 else "positive"
     if mod == "mix": 
         return "mix" 
     
