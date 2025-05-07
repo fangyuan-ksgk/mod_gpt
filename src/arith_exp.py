@@ -181,7 +181,8 @@ def create_result_mask(targets, tokenizer):
 def cal_masked_entropy(loss_dict, mask): 
     loss_dict['entropy'] = (loss_dict['entropy'] * mask).sum() / (mask.sum())
     
-    
+def cal_unmasked_entropy(loss_dict): 
+    loss_dict['entropy'] = loss_dict['entropy'].mean()
     
 # Sanity checker
 # -----------------------------------------------------------

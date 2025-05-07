@@ -19,7 +19,7 @@ import torch.distributed as dist
 from src.pcgrad import SimPGrad, YetAnotherMixer, YetAnotherMixer2
 from src.utils import RRScheduler
 from src.utils import plot_training_losses
-from src.arith_exp import create_result_mask, cal_masked_entropy, DigitTokenizer
+from src.arith_exp import create_result_mask, cal_masked_entropy, DigitTokenizer, cal_unmasked_entropy
 
 import argparse
 
@@ -507,6 +507,9 @@ for step in range(train_steps + 1):
         if args.mask_entropy_train: 
             mask = create_result_mask(targets, digit_tokenizer)
             cal_masked_entropy(loss_dict, mask)
+        elif args.mask_entropy_val:
+            cal_unmasked_entropy(loss_dict)
+        
         if accum_step == train_accumulation_steps - 1: 
             scheduler.step(loss_dict)
         if args.no_reg or len(scheduler.rr_layer_index) == 0: 
