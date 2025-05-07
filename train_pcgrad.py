@@ -233,23 +233,26 @@ class Hyperparameters:
     mask_entropy_val: bool = False
     
 cli_args = parse_args()
-if True: # i don't have 8xH100  
-    args = Hyperparameters()
-    for k, v in vars(cli_args).items():
-        if v is not None:
-            setattr(args, k, v)
+args = Hyperparameters()
+for k, v in vars(cli_args).items():
+    if v is not None:
+        setattr(args, k, v)
 
-    model_config = GPTConfig(
-        flex_kernel_options={
-            "BLOCK_M": 64, "BLOCK_N": 64, # forward
-            "BLOCK_M1": 32, "BLOCK_N1": 64, "BLOCK_M2": 64, "BLOCK_N2": 32 # backwards 
-        }
-    )
-else: 
-    args = Hyperparameters() # default 8xH100
-    model_config = GPTConfig() 
-    assert world_size == 8 # this code is designed for 8xH100
-
+model_config = GPTConfig(
+    flex_kernel_options={
+        "BLOCK_M": 64, "BLOCK_N": 64, # forward
+        "BLOCK_M1": 32, "BLOCK_N1": 64, "BLOCK_M2": 64, "BLOCK_N2": 32 # backwards 
+    }
+)
+if args.mask_entropy_val: # put in long file paths for arithmetic experiments
+    args.val_seq_len = 32*1024
+    args.train_files = "data/multiplication_train*.bin"
+    if "id" in args.val_files: 
+        args.val_files = "data/multiplication_val_id*.bin"
+        args.val_tokens = 157814
+    elif "ood" in args.val_files: 
+        args.val_files = "data/multiplication_val_ood*.bin"
+        args.val_tokens = 278081
 
 assert args.batch_size % (world_size) == 0
 train_accumulation_steps = args.batch_size // world_size # long seq train is more efficient than big batch

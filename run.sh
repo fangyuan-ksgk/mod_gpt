@@ -72,20 +72,36 @@
 # (IV). Tuning period for cycle phase | fully utilize Information Bottleneck Plane 
 # --------------------------------------------------------------------------------------------------------------------------
 
-# - baseline (4.0)
+# - baseline (4.a.0)
 # torchrun --standalone --nproc_per_node=8 train_pcgrad.py --additive_grad --switch_phase --batch_size=32 --patch_schedule --num_iterations=3500
 
-# - experiment (4.1)
-torchrun --standalone --nproc_per_node=8 train_pcgrad.py --additive_grad --switch_phase --include_inner_cycle --period=5 --patch_schedule --batch_size=32 --num_iterations=3500
+# - experiment (4.a.1)
+# torchrun --standalone --nproc_per_node=8 train_pcgrad.py --additive_grad --switch_phase --include_inner_cycle --period=5 --patch_schedule --batch_size=32 --num_iterations=3500
 
-# - experiment (4.2)
-torchrun --standalone --nproc_per_node=8 train_pcgrad.py --additive_grad --switch_phase --include_inner_cycle --period=10 --patch_schedule --batch_size=32 --num_iterations=3500
+# - experiment (4.a.2)
+# torchrun --standalone --nproc_per_node=8 train_pcgrad.py --additive_grad --switch_phase --include_inner_cycle --period=10 --patch_schedule --batch_size=32 --num_iterations=3500
 
-# - experiment (4.3) | prior weights: valley
-torchrun --standalone --nproc_per_node=8 train_pcgrad.py --additive_grad --switch_phase --use_prior_weights --prior_weight=valley --batch_size=32 --patch_schedule --num_iterations=3500
+# - experiment (4.a.3) | prior weights: valley
+# torchrun --standalone --nproc_per_node=8 train_pcgrad.py --additive_grad --switch_phase --use_prior_weights --prior_weight=valley --batch_size=32 --patch_schedule --num_iterations=3500
 
-# - experiment (4.4) | prior weights: mountain
-torchrun --standalone --nproc_per_node=8 train_pcgrad.py --additive_grad --switch_phase --use_prior_weights --prior_weight=mountain --batch_size=32 --patch_schedule --num_iterations=3500
+# - experiment (4.a.4) | prior weights: mountain
+# torchrun --standalone --nproc_per_node=8 train_pcgrad.py --additive_grad --switch_phase --use_prior_weights --prior_weight=mountain --batch_size=32 --patch_schedule --num_iterations=3500
 
-# - experiment (4.5) | prior weights: oscillate
-torchrun --standalone --nproc_per_node=8 train_pcgrad.py --additive_grad --switch_phase --use_prior_weights --prior_weight=oscillate --batch_size=32 --patch_schedule --num_iterations=3500
+# - experiment (4.a.5) | prior weights: oscillate
+# torchrun --standalone --nproc_per_node=8 train_pcgrad.py --additive_grad --switch_phase --use_prior_weights --prior_weight=oscillate --batch_size=32 --patch_schedule --num_iterations=3500
+
+# --------------------------------------------------------------------------------------------------------------------------
+# (V). Arithmetic Experiments | 
+# --------------------------------------------------------------------------------------------------------------------------
+
+# - experiment (5.0) | baseline | arithmetic dataset | in-domain validation 
+torchrun --standalone --nproc_per_node=8 train_pcgrad.py --additive_grad --no_reg --batch_size=16 --num_iterations=875 --mask_entropy_val --val_files=id
+
+# - experiment (5.1) | baseline | arithmetic dataset | out-of-domain validation 
+torchrun --standalone --nproc_per_node=8 train_pcgrad.py --additive_grad --no_reg --batch_size=16 --num_iterations=875 --mask_entropy_val --val_files=ood
+
+# - experiment (5.2) | gated phase transition | arithmetic dataset | in-domain training | gated phase transition
+torchrun --standalone --nproc_per_node=8 train_pcgrad.py --additive_grad --switch_phase --batch_size=32 --num_iterations=875 --mask_entropy_train --val_files=id
+
+# - experiment (5.3) | gated phase transition | arithmetic dataset | out-of-domain training | gated phase transition
+torchrun --standalone --nproc_per_node=8 train_pcgrad.py --additive_grad --switch_phase --batch_size=32 --num_iterations=875 --mask_entropy_train --val_files=ood
