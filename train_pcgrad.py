@@ -249,10 +249,10 @@ if args.mask_entropy_val: # put in long file paths for arithmetic experiments
     args.train_files = "data/multiplication_train*.bin"
     if "id" in args.val_files: 
         args.val_files = "data/multiplication_val_id*.bin"
-        args.val_tokens = 157814
+        args.val_tokens = 163840
     elif "ood" in args.val_files: 
         args.val_files = "data/multiplication_val_ood*.bin"
-        args.val_tokens = 278081
+        args.val_tokens = 294912
 
 assert args.batch_size % (world_size) == 0
 train_accumulation_steps = args.batch_size // world_size # long seq train is more efficient than big batch
