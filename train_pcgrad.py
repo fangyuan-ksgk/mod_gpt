@@ -538,29 +538,29 @@ for step in range(train_steps + 1):
             cal_masked_entropy(loss_dict, mask)
         elif args.mask_entropy_val:
             cal_unmasked_entropy(loss_dict)
-        
-        if accum_step == train_accumulation_steps - 1 and not args.test_guided_early_stop: 
-            scheduler.step(loss_dict)
-        if accum_step == train_accumulation_steps - 1 and args.test_guided_early_stop: 
-            early_stop = False if loss_dict["entropy"] > 0.1 else True # train loss has not converged yet
+            entropy_loss = loss_dict["entropy"].item()
+            
+        if accum_step == train_accumulation_steps - 1:
+            if master_process: 
+                early_stop = False if entropy_loss > 0.8 else early_stop # train loss has not converged yet
+                print0(f" - step:{step}/{train_steps} train entropy: {entropy_loss} | early stop: {early_stop} | phase {scheduler.phase}", console=True)
+            if not args.test_guided_phase_switch: 
+                scheduler.step(loss_dict)
+            
         if args.no_reg or len(scheduler.rr_layer_index) == 0: 
             loss_dict = {"entropy": loss_dict["entropy"]}
-            print(f"- backward on entropy loss -")
         else:        
             layer_idx = scheduler.rr_layer_index[0]
             mbe_weight = scheduler.rr_layer_weight
             mbe_loss_name = f"mbe_{layer_idx}" if not args.diff_mbe else f"diff_mbe_{layer_idx}"
-            print(f"- backward on {mbe_loss_name} loss -")
             loss_dict = {mbe_loss_name: loss_dict[mbe_loss_name] * mbe_weight}
         if args.additive_grad: 
             if (step % (20 * scheduler.num_reg_layers) < scheduler.num_reg_layers) and args.log_grad_info: 
-                print(" :: logging gradient info :: ")
                 grad_composer.naive_backward_info(loss_dict)
             else: 
                 grad_composer.naive_backward(loss_dict)
         else: 
             if (step % (20 * scheduler.num_reg_layers) < scheduler.num_reg_layers) and args.log_grad_info: 
-                print(" :: logging gradient info :: ")
                 grad_composer.backward_info(loss_dict) # with gradient info accumulated
             else: 
                 grad_composer.backward(loss_dict)
