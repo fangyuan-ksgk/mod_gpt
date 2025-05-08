@@ -525,7 +525,8 @@ for step in range(train_steps + 1):
                 cal_masked_entropy(loss_dict, mask)
                 for name, loss in loss_dict.items(): 
                     test_loss[name] += loss
-        scheduler.step(test_loss)   
+        if args.test_guided_phase_switch: 
+            scheduler.step(test_loss)   
         if args.test_guided_early_stop and test_loss["entropy"] > scheduler.min_entropy * (1 + args.entropy_min_delta):
             early_stop = True
             
@@ -541,9 +542,6 @@ for step in range(train_steps + 1):
             entropy_loss = loss_dict["entropy"].item()
             
         if accum_step == train_accumulation_steps - 1:
-            if master_process: 
-                early_stop = False if entropy_loss > 0.8 else early_stop # train loss has not converged yet
-                print0(f" - step:{step}/{train_steps} train entropy: {entropy_loss} | early stop: {early_stop} | phase {scheduler.phase}", console=True)
             if not args.test_guided_phase_switch: 
                 scheduler.step(loss_dict)
             
