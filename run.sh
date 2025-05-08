@@ -94,14 +94,23 @@
 # (V). Arithmetic Experiments | 
 # --------------------------------------------------------------------------------------------------------------------------
 
-# - experiment (5.0) | baseline | arithmetic dataset | in-domain validation 
-torchrun --standalone --nproc_per_node=8 train_pcgrad.py --additive_grad --no_reg --batch_size=16 --num_iterations=875 --mask_entropy_val --val_files=id
+# - experiment (5.0) | baseline | arithmetic dataset | in-domain validation | entropy ~0.003
+# torchrun --standalone --nproc_per_node=4 train_pcgrad.py --additive_grad --no_reg --batch_size=16 --num_iterations=875 --mask_entropy_val --val_files=id
 
-# - experiment (5.1) | baseline | arithmetic dataset | out-of-domain validation 
-torchrun --standalone --nproc_per_node=8 train_pcgrad.py --additive_grad --no_reg --batch_size=16 --num_iterations=875 --mask_entropy_val --val_files=ood
+# - experiment (5.1) | baseline | arithmetic dataset | out-of-domain validation | entropy ~0.4
+# torchrun --standalone --nproc_per_node=4 train_pcgrad.py --additive_grad --no_reg --batch_size=16 --num_iterations=875 --mask_entropy_val --val_files=ood
 
-# - experiment (5.2) | gated phase transition | arithmetic dataset | in-domain training | gated phase transition
-torchrun --standalone --nproc_per_node=8 train_pcgrad.py --additive_grad --switch_phase --batch_size=32 --num_iterations=875 --mask_entropy_train --val_files=id
+# - experiment (5.2) | gated phase transition | arithmetic dataset | in-domain training | in-domain testing | entropy pretty small 
+# torchrun --standalone --nproc_per_node=4 train_pcgrad.py --additive_grad --switch_phase --batch_size=32 --num_iterations=875 --mask_entropy_val --val_files=id
 
-# - experiment (5.3) | gated phase transition | arithmetic dataset | out-of-domain training | gated phase transition
-torchrun --standalone --nproc_per_node=8 train_pcgrad.py --additive_grad --switch_phase --batch_size=32 --num_iterations=875 --mask_entropy_train --val_files=ood
+# - experiment (5.3) | gated phase transition | arithmetic dataset | out-of-domain validation | 875 iteration
+# torchrun --standalone --nproc_per_node=4 train_pcgrad.py --additive_grad --switch_phase --batch_size=32 --num_iterations=875 --mask_entropy_val --val_files=ood
+
+# - experiment (5.4) | gated phase transition | arithmetic dataset | out-of-domain validation | 1750 iteration
+# torchrun --standalone --nproc_per_node=4 train_pcgrad.py --additive_grad --switch_phase --batch_size=32 --num_iterations=1750 --mask_entropy_val --val_files=ood
+
+# - experiment (5.5) | test-guided gated phase transition | arithmetic dataset | out-of-domain validation | 875 iteration 
+torchrun --standalone --nproc_per_node=4 train_pcgrad.py --additive_grad --switch_phase --batch_size=32 --num_iterations=875 --mask_entropy_val --val_files=ood --test_guided_phase_switch
+
+# - experiment (5.6) | baseline | test-guided early stop | arithmetic dataset | out-of-domain validation | 875 iteration
+torchrun --standalone --nproc_per_node=4 train_pcgrad.py --additive_grad --no_reg --batch_size=16 --num_iterations=875 --mask_entropy_val --val_files=ood --test_guided_early_stop
