@@ -262,7 +262,7 @@ if args.mask_entropy_val: # put in long file paths for arithmetic experiments
         args.val_tokens = 294912
     if args.test_guided_early_stop or args.test_guided_phase_switch:
         args.test_files = "data/multiplication_test_ood*.bin"
-        args.test_seq_len = 32*1024
+        args.test_tokens = 278425
 
 assert args.batch_size % (world_size) == 0
 train_accumulation_steps = args.batch_size // world_size # long seq train is more efficient than big batch
