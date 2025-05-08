@@ -1085,10 +1085,18 @@ class RRScheduler:
             self.current_layer_idx = (self.current_layer_idx + 1) % len(self.layer_indices)
         if (self.main_loss_name in loss_dict) and self.switch_phase: 
             self._switch_phase(loss_dict)
+        elif (self.main_loss_name in loss_dict) and not self.switch_phase: 
+            self._update_minimum_entropy_loss(loss_dict)
             
     @property 
     def _inner_phase(self): 
         return int(self._inner_phase_float)
+    
+    def _update_minimum_entropy_loss(self, loss_dict): 
+        for loss_name in loss_dict.keys(): 
+            if "entropy" in loss_name: 
+                entropy_loss = loss_dict[loss_name].item() if hasattr(loss_dict[loss_name], 'item') else loss_dict[loss_name]
+                self.min_entropy = min(self.min_entropy, entropy_loss)
 
     def _switch_phase(self, loss_dict):
         """

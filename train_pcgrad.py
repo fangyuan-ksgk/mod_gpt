@@ -449,11 +449,12 @@ scheduler = RRScheduler(train_accumulation_steps,
                         mbe_min_delta=args.mbe_min_delta,
                         include_inner_cycle=args.include_inner_cycle) # scheduler for rank regularization
 scheduler.phase = 1 if args.switch_phase else 2
+early_stop = False
 
 valid_patch_sizes = [8, 16, 32, 64, 128, 256, 512, 1024] # divide train seq len (32 x 1024) & smaller than maximal attention span (1792)
 
 for step in range(train_steps + 1):
-    last_step = (step == train_steps)
+    last_step = (step == train_steps) or early_stop
     attn_blocksize = torch.tensor(64*((step/train_steps * (1792 - 64) + 64)//64), dtype=torch.int, device='cuda')
     
     if args.patch_schedule: # curriculum for patch size (MBE)
@@ -524,11 +525,10 @@ for step in range(train_steps + 1):
                 cal_masked_entropy(loss_dict, mask)
                 for name, loss in loss_dict.items(): 
                     test_loss[name] += loss
-        if args.test_guided_phase_switch: 
-            scheduler.step(test_loss)   
-        if args.test_guided_early_stop:
-            raise NotImplementedError("Test-guided early stop is not implemented yet | As we're not sure what the landscape looks like")
-
+        scheduler.step(test_loss)   
+        if args.test_guided_early_stop and test_loss["entropy"] > scheduler.min_entropy * (1 + args.entropy_min_delta):
+            early_stop = True
+            
     # --------------- TRAINING SECTION -----------------
     for accum_step in range(train_accumulation_steps): 
         inputs, targets = next(train_loader)
