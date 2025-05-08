@@ -238,6 +238,8 @@ class Hyperparameters:
     mask_entropy_val: bool = False
     test_guided_phase_switch: bool = False
     test_guided_early_stop: bool = False
+    early_stop_start_step: int = 500
+    early_stop_min_delta: float = 0.5
     
 cli_args = parse_args()
 args = Hyperparameters()
@@ -433,6 +435,7 @@ t0 = time.perf_counter()
 # begin training
 train_steps = args.num_iterations
 loss_record = defaultdict(list)
+test_loss_record = defaultdict(list)
 scheduler = RRScheduler(train_accumulation_steps, 
                         train_steps,
                         start_layer=2,
@@ -512,6 +515,7 @@ for step in range(train_steps + 1):
     
     # --------------- TESTING SECTION -----------------
     if args.test_guided_early_stop or args.test_guided_phase_switch:
+        torch.cuda.synchronize()
         model.eval() 
         test_seq_len = world_size * args.test_seq_len
         test_steps = args.test_tokens // test_seq_len
@@ -525,10 +529,28 @@ for step in range(train_steps + 1):
                 cal_masked_entropy(loss_dict, mask)
                 for name, loss in loss_dict.items(): 
                     test_loss[name] += loss
+        for name in test_loss: 
+            test_loss[name] /= test_steps
+        del test_loader
+        for key in test_loss: 
+            dist.all_reduce(test_loss[key], op=dist.ReduceOp.AVG)       
+            test_loss_record[key].append(test_loss[key].item())     
+        test_info = " ".join([f"{item} loss: {value:.4f}" for (item, value) in test_loss.items()])
+        print0(f"[Test info] step:{step}/{train_steps} {test_info}", console=True)
+        model.train()
+        # start the clock again
+        torch.cuda.synchronize()
+                            
         if args.test_guided_phase_switch: 
-            scheduler.step(test_loss)   
-        if args.test_guided_early_stop and test_loss["entropy"] > scheduler.min_entropy * (1 + args.entropy_min_delta):
-            early_stop = True
+            scheduler.step(test_loss)               
+            
+        if args.test_guided_early_stop:
+            should_early_stop = torch.tensor([0], dtype=torch.int32, device="cuda")
+            if rank == 0 and test_loss["entropy"] > test_loss_record["entropy"][-1] * (1 + args.early_stop_min_delta) and step >= args.early_stop_start_step:
+                should_early_stop[0] = 1
+            # Broadcast the decision from rank 0 to all processes
+            dist.broadcast(should_early_stop, src=0)
+            early_stop = bool(should_early_stop.item())
             
     # --------------- TRAINING SECTION -----------------
     for accum_step in range(train_accumulation_steps): 
