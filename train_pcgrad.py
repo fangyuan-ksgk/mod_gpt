@@ -541,6 +541,8 @@ for step in range(train_steps + 1):
         
         if accum_step == train_accumulation_steps - 1 and not args.test_guided_early_stop: 
             scheduler.step(loss_dict)
+        if accum_step == train_accumulation_steps - 1 and args.test_guided_early_stop: 
+            early_stop = False if loss_dict["entropy"] > 0.1 else True # train loss has not converged yet
         if args.no_reg or len(scheduler.rr_layer_index) == 0: 
             loss_dict = {"entropy": loss_dict["entropy"]}
             print(f"- backward on entropy loss -")
