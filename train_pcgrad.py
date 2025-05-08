@@ -31,6 +31,7 @@ def parse_args():
     parser.add_argument("--batch_size", type=int, default=16)
     parser.add_argument("--train_files", type=str, default="data/fineweb10B/fineweb_train_*.bin")
     parser.add_argument("--val_files", type=str, default="data/fineweb10B/fineweb_val_*.bin")
+    parser.add_argument("--test_files", type=str, default="data/multiplication_test_ood*.bin")
     parser.add_argument("--train_seq_len", type=int, default=32*1024)
     parser.add_argument("--val_seq_len", type=int, default=16*1024)
     parser.add_argument("--no_reg", action="store_true")
@@ -57,6 +58,8 @@ def parse_args():
     parser.add_argument("--prior_weight", type=str, default="natural")
     parser.add_argument("--mask_entropy_train", action="store_true")
     parser.add_argument("--mask_entropy_val", action="store_true")
+    parser.add_argument("--test_guided_phase_switch", action="store_true")
+    parser.add_argument("--test_guided_early_stop", action="store_true")
     
     return parser.parse_args()
 
@@ -196,9 +199,11 @@ class Hyperparameters:
     # data
     train_files : str = "data/fineweb10B/fineweb_train_*.bin" # input .bin to train on
     val_files : str = "data/fineweb10B/fineweb_val_*.bin" # input .bin to eval validation loss on
+    test_files : str = "data/multiplication_test_ood*.bin" # input .bin to eval test loss on
     val_tokens : int = 10485760 # how many tokens of validation data? it's important to keep this fixed for consistent comparisons
     train_seq_len : int = 32*1024 # FlexAttention sequence length (per GPU)
     val_seq_len : int = 4*64*1024 # FlexAttention sequence length for validation (per GPU)
+    test_seq_len : int = 32*1024
     batch_size : int = 8 # Batch size, across all devices
     # optimization
     num_iterations : int = 1750 # number of iterations to run
@@ -231,6 +236,8 @@ class Hyperparameters:
     prior_weight: str = "natural"
     mask_entropy_train: bool = False
     mask_entropy_val: bool = False
+    test_guided_phase_switch: bool = False
+    test_guided_early_stop: bool = False
     
 cli_args = parse_args()
 args = Hyperparameters()
@@ -253,10 +260,12 @@ if args.mask_entropy_val: # put in long file paths for arithmetic experiments
     elif "ood" in args.val_files: 
         args.val_files = "data/multiplication_val_ood*.bin"
         args.val_tokens = 294912
+    if args.test_guided_early_stop or args.test_guided_phase_switch:
+        args.test_files = "data/multiplication_test_ood*.bin"
+        args.test_seq_len = 32*1024
 
 assert args.batch_size % (world_size) == 0
 train_accumulation_steps = args.batch_size // world_size # long seq train is more efficient than big batch
-
     
 # begin logging
 logfile = None
@@ -499,6 +508,26 @@ for step in range(train_steps + 1):
                 torch.save(log, f"logs/{run_id}/state_step{step:06d}.pt") 
         # the last step only has the validation loop, so break to avoid training
         break
+    
+    # --------------- TESTING SECTION -----------------
+    if args.test_guided_early_stop or args.test_guided_phase_switch:
+        model.eval() 
+        test_seq_len = world_size * args.test_seq_len
+        test_steps = args.test_tokens // test_seq_len
+        test_loader = distributed_data_generator(args.test_files, test_seq_len, rank, world_size)
+        test_loss = defaultdict(float)
+        with torch.no_grad():
+            for i in range(test_steps):
+                inputs, targets = next(test_loader)
+                loss_dict = model.forward(inputs, targets, attn_blocksize, args.init_patch_size)
+                mask = create_result_mask(targets, digit_tokenizer)
+                cal_masked_entropy(loss_dict, mask)
+                for name, loss in loss_dict.items(): 
+                    test_loss[name] += loss
+        if args.test_guided_phase_switch: 
+            scheduler.step(test_loss)   
+        if args.test_guided_early_stop:
+            raise NotImplementedError("Test-guided early stop is not implemented yet | As we're not sure what the landscape looks like")
 
     # --------------- TRAINING SECTION -----------------
     for accum_step in range(train_accumulation_steps): 
@@ -510,7 +539,7 @@ for step in range(train_steps + 1):
         elif args.mask_entropy_val:
             cal_unmasked_entropy(loss_dict)
         
-        if accum_step == train_accumulation_steps - 1: 
+        if accum_step == train_accumulation_steps - 1 and not args.test_guided_early_stop: 
             scheduler.step(loss_dict)
         if args.no_reg or len(scheduler.rr_layer_index) == 0: 
             loss_dict = {"entropy": loss_dict["entropy"]}

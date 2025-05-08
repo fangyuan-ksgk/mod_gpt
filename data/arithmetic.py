@@ -136,6 +136,10 @@ def generate_multiplication_dataset(tokenizer, min_digit_train, max_digit_train,
     # write val split (OOD)
     valset = generate_multiplication_examples(min_digit_val, max_digit_val, min_digit_val, max_digit_val, num_val_examples)
     val_ood_meta = write_multiplication_dataset(valset, tokenizer, f"{filename_pattern}_val_ood", shard_size)
+    
+    # write test split (OOD) | Used for out-of-domain validation (switch between test and valdation apologies)
+    testset = generate_multiplication_examples(min_digit_val, max_digit_val, min_digit_val, max_digit_val, num_val_examples)
+    test_ood_meta = write_multiplication_dataset(testset, tokenizer, f"{filename_pattern}_test_ood", shard_size)
 
     # write val split (ID)
     valset = generate_multiplication_examples(min_digit_train, max_digit_train, min_digit_train, max_digit_train, num_val_examples)
@@ -146,13 +150,15 @@ def generate_multiplication_dataset(tokenizer, min_digit_train, max_digit_train,
     print(f"Training examples: {num_train_examples:,} examples with {min_digit_train}-{max_digit_train} digits ({num_train_examples * 2 / (1024**2):.3f} MB), stored in {filename_pattern}_train.bin")
     print(f"Validation (ID) examples: {num_val_examples:,} examples with {min_digit_train}-{max_digit_train} digits ({num_val_examples * 2 / (1024**2):.3f} MB), stored in {filename_pattern}_val_id.bin")
     print(f"Validation (OOD) examples: {num_val_examples:,} examples with {min_digit_val}-{max_digit_val} digits ({num_val_examples * 2 / (1024**2):.3f} MB), stored in {filename_pattern}_val_ood.bin")
+    print(f"Test (OOD) examples: {num_val_examples:,} examples with {min_digit_val}-{max_digit_val} digits ({num_val_examples * 2 / (1024**2):.3f} MB), stored in {filename_pattern}_test_ood.bin")
     if shard_size:
         print(f"Data sharded with {shard_size:,} tokens per shard")
     
     return {"vocab_size": tokenizer.vocab_size,
      "train_seq_len": train_meta["token_count"],
      "val_ood_seq_len": val_ood_meta["token_count"],
-     "val_id_seq_len": val_id_meta["token_count"]} 
+     "val_id_seq_len": val_id_meta["token_count"],
+     "test_ood_seq_len": test_ood_meta["token_count"]} 
 
 
 # ----------------------------------------------------------------------------------

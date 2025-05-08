@@ -1108,12 +1108,12 @@ class RRScheduler:
         # Find the entropy and MBE losses in the dictionary
         for loss_name in loss_dict.keys():
             if "entropy" in loss_name:
-                entropy_loss = loss_dict[loss_name].item()
+                entropy_loss = loss_dict[loss_name].item() if hasattr(loss_dict[loss_name], 'item') else loss_dict[loss_name]
                 entropy_improvement = max(entropy_improvement, self.min_entropy - entropy_loss)
                 worse_memorization = entropy_loss >= self.min_entropy * 1.1  # 10% tolerance for compression phase's spike
                 self.min_entropy = min(self.min_entropy, entropy_loss)
             else:
-                mbe_loss = loss_dict[loss_name].item()
+                mbe_loss = loss_dict[loss_name].item() if hasattr(loss_dict[loss_name], 'item') else loss_dict[loss_name]
                 if self._inner_phase == 1: 
                     mbe_improvement = max(mbe_improvement, self.min_mbe_dict[loss_name] - mbe_loss) # any layer's mbe improvement counts | assumption is compression stage doesn't increase MBE level
                     self.min_mbe_dict[loss_name] = min(self.min_mbe_dict[loss_name], mbe_loss)
