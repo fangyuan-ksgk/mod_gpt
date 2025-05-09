@@ -555,8 +555,8 @@ class YetAnotherMixer2:
             serializable_grad_info[param_name] = {k: np.array(v) if k == "curr_grad" else v 
                                                 for k, v in dict(info).items()}
             
-        fig_path = path.split("/grad_step001750")[0]
-        plot_grad_info(serializable_grad_info, save_dir=fig_path)
+        # fig_path = path.split("/grad_step001750")[0]
+        # plot_grad_info(serializable_grad_info, save_dir=fig_path)
         
         with open(path, "wb") as f:  # Note: changed to binary mode
             pickle.dump(serializable_grad_info, f)
