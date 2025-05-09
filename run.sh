@@ -9,6 +9,11 @@
 # Algorithm (a). Projective Gradient Scaling (PGS) ||  Gradient surgery for asymmetric enhanced oscillation solves 'constraint minimization of MBE'
 # ------------------------------------------------------------------------------------------------------------------------------------------------------
 
+
+# Re-run Experiment to collect gradient info (for better plots) | Baseline 
+torchrun --standalone --nproc_per_node=4 train_pcgrad.py --positive_scale_factor 1.0 --negative_scale_factor 1.0 --batch_size=32 --log_grad_info
+
+
 # - experiment (3.a) | scaling projective gradient w factor 1.1 (per accumulation step) | no phase transition
 # torchrun --standalone --nproc_per_node=4 train_pcgrad.py --scale_factor 1.1 --batch_size=32
 # - Issue 1. MBE does not drop compared to baseline 

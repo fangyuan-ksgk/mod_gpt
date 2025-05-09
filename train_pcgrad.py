@@ -573,7 +573,7 @@ for step in range(train_steps + 1):
             layer_idx = scheduler.rr_layer_index[0]
             mbe_weight = scheduler.rr_layer_weight
             mbe_loss_name = f"mbe_{layer_idx}" if not args.diff_mbe else f"diff_mbe_{layer_idx}"
-            loss_dict = {mbe_loss_name: loss_dict[mbe_loss_name] * mbe_weight}
+            loss_dict = {mbe_loss_name: loss_dict[mbe_loss_name]}
         if args.additive_grad: 
             if (step % (20 * scheduler.num_reg_layers) < scheduler.num_reg_layers) and args.log_grad_info: 
                 grad_composer.naive_backward_info(loss_dict)

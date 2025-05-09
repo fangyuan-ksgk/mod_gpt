@@ -468,7 +468,7 @@ class YetAnotherMixer2:
             g_proj = cosim * g_calib
             g = g + g_proj * (self.scale_factor - 1)
             
-        return g, g_norm.item(), g_calib_norm.item(), cosim.item(), g.detach().cpu().to(torch.float16).numpy()
+        return g, g_norm.item(), g_calib_norm.item(), cosim.item(), g_calib.detach().cpu().to(torch.float16).numpy()
     
     def _add_grad_info(self, g1, g2): 
         g2_array = g2.detach().cpu().to(torch.float16).numpy()
@@ -541,13 +541,13 @@ class YetAnotherMixer2:
             loss_dict[loss_name].backward(retain_graph=False)
             for i, p in enumerate(params): 
                 
-                p.grad, prev_g_norm, curr_g_norm, cosim, g1_array = self._add_grad_info(prev_grads[i], p.grad)
-                self._update_info(param_names[i], prev_g_norm, curr_g_norm, cosim, loss_name, reset_flags[i], g1_array)
+                p.grad, prev_g_norm, curr_g_norm, cosim, g2_array = self._add_grad_info(prev_grads[i], p.grad)
+                self._update_info(param_names[i], prev_g_norm, curr_g_norm, cosim, loss_name, reset_flags[i], g2_array)
         else: 
             loss_dict[loss_name].backward(retain_graph=False)
             for i, p in enumerate(params): 
-                p.grad, prev_g_norm, curr_g_norm, cosim, g1_array = self._scale_projective_component_info(prev_grads[i], p.grad)
-                self._update_info(param_names[i], prev_g_norm, curr_g_norm, cosim, loss_name, reset_flags[i], g1_array)
+                p.grad, prev_g_norm, curr_g_norm, cosim, g2_array = self._scale_projective_component_info(prev_grads[i], p.grad)
+                self._update_info(param_names[i], prev_g_norm, curr_g_norm, cosim, loss_name, reset_flags[i], g2_array)
 
     def save_grad_info(self, path):         
         serializable_grad_info = {}
@@ -555,8 +555,8 @@ class YetAnotherMixer2:
             serializable_grad_info[param_name] = {k: np.array(v) if k == "curr_grad" else v 
                                                 for k, v in dict(info).items()}
             
-        # plot grad info
-        plot_grad_info(serializable_grad_info, save_dir=path)
+        fig_path = path.split("grad_step001750")[0]
+        plot_grad_info(serializable_grad_info, save_dir=fig_path)
         
         with open(path, "wb") as f:  # Note: changed to binary mode
             pickle.dump(serializable_grad_info, f)
