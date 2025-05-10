@@ -581,6 +581,10 @@ for step in range(train_steps + 1):
                 grad_composer.naive_backward(loss_dict)
         else: 
             if (step % (20 * scheduler.num_reg_layers) < scheduler.num_reg_layers) and args.log_grad_info: 
+                if len(scheduler.rr_layer_index) > 0:
+                    print0(f" - step: {step} | accum step: {accum_step} | mbe layer: {layer_idx} | scheduler internal idx: {scheduler.current_layer_idx} | scheduler phase: {scheduler.phase}")
+                else: 
+                    print0(f" - step: {step} | accum step: {accum_step} | pure entropy loss")
                 grad_composer.backward_info(loss_dict) # with gradient info accumulated
             else: 
                 grad_composer.backward(loss_dict)
