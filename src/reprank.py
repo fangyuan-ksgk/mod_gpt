@@ -231,7 +231,7 @@ class GPT_mask(nn.Module):
           document_mask = docs[b, q_idx] == docs[b, kv_idx]
           window_mask = q_idx - kv_idx < attn_blocksize
           return causal_mask & document_mask & window_mask
-        block_mask = create_block_mask(document_causal_mask, None, None, S, S, device="cuda", _compile=True)
+        block_mask = create_block_mask(document_causal_mask, None, None, S, S, device="cpu", _compile=False)
 
         # # --------------------- Make Shift ver. for local testing ---------------------
         # def causal_mask(b, h, q_idx, kv_idx):

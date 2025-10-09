@@ -51,7 +51,7 @@ class Rotary(torch.nn.Module):
 
 
 class CausalSelfAttention(nn.Module):
-    def __init__(self, dim, n_head, flex_kernel_options=None, eval_randomize=False):
+    def __init__(self, dim, n_head, flex_kernel_options=None):
         super().__init__()
         assert dim % n_head == 0, "Embedding dimension must be divisible by number of heads"
         self.dim = dim
