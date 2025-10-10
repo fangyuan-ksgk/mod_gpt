@@ -25,8 +25,19 @@ def infer_level(indices: torch.Tensor, vocab_sizes: torch.Tensor):
     levels = (indices_expanded < vocab_sizes.cumsum(dim=0)).int().argmax(dim=-1)
     return levels
 
+get_level_mask_tokens = lambda vocab_sizes: torch.cat(
+    (
+        torch.tensor([0]),
+        torch.cumsum(vocab_sizes, dim=0)
+    )
+)
 
-# New version, aligned with GPT architecture, without level-embedding
+
+# TBD. Include 'recursion' into GAT 
+# - (1). add prev representation into abstract embedding
+# - (2). optionally update abstract token index (or only update its embedding)
+# - (3). KV-cache eviction
+
 class GAT(nn.Module): 
 
     def __init__(self, config):
@@ -39,7 +50,6 @@ class GAT(nn.Module):
         self.skip_weights = nn.Parameter(torch.ones(self.num_decoder_layers))
 
         self.vocab_sizes = torch.tensor(config.vocab_sizes)
-        self.level_mask_tokens = torch.cumsum(self.vocab_sizes, dim=0)
         self.vocab_size = sum(self.vocab_sizes)
 
         self.transformer = nn.ModuleDict(dict(
@@ -106,58 +116,96 @@ class GAT(nn.Module):
         logits = 30 * torch.tanh(logits / 30)
         logits = logits.float()
         
-        predict_mask = torch.roll(denoise_mask, 1, dims=1) # prev token embedding predict next token
-        predict_mask[:, 0] = False
+        predict_mask = torch.roll(denoise_mask, -1, dims=1) # prev token embedding predict next token
+        predict_mask[:, -1] = False
         
         return logits[predict_mask]
 
-
-
-def decode_logits(logits: torch.Tensor, levels: torch.Tensor, 
-                  level_mask_tokens: torch.Tensor, temperature: float = 0.0):
+def get_logits_mask(level, vocab_sizes):
     """
-    Decode logits constrained to valid vocabulary for each level.
-    
-    Args:
-        logits: [num_tokens, vocab_size]
-        levels: [num_tokens] level for each token
-        level_mask_tokens: Cumulative vocabulary boundaries
-        temperature: Sampling temperature
+    Mask logits to only allow tokens from a specific level.
     """
-    # Mask out level boundaries
-    logits[:, level_mask_tokens[1:]] = float('-inf')
-    
-    # Constrain to valid vocab range per level
-    start_logits = level_mask_tokens[levels]
-    end_logits = level_mask_tokens[levels + 1]
-    vocab_indices = torch.arange(logits.size(-1), device="cpu")
-    mask = (vocab_indices >= start_logits.unsqueeze(-1)) & (vocab_indices < end_logits.unsqueeze(-1))
-    logits = torch.where(mask, logits, torch.tensor(float('-inf'), device="cpu"))
-    
-    if temperature == 0.0:
-        return torch.argmax(logits, dim=-1)
-    else:
-        return torch.multinomial(F.softmax(logits / temperature, dim=-1), num_samples=1).squeeze(-1)
+    level_starts = torch.cat([torch.tensor([0], device=vocab_sizes.device), torch.cumsum(vocab_sizes, dim=0)[:-1] + 1])
+    level_ends = torch.cumsum(vocab_sizes, dim=0)
 
+    start_logits = level_starts[level]
+    end_logits = level_ends[level]
+    
+    vocab_indices = torch.arange(sum(vocab_sizes), device=vocab_sizes.device)
+    mask = (vocab_indices.unsqueeze(0) >= start_logits.unsqueeze(-1)) & (vocab_indices.unsqueeze(0) < end_logits.unsqueeze(-1))
+    
+    return mask
 
 def parallel_denoise(model, idx, num_iterations=5, memory_span=128, temperature=0.0):
     """Simple denoising loop using the model's denoise method."""
     idx = idx.clone()
+    levels = infer_level(idx, model.vocab_sizes)
     
+    denoise_mask = levels > 0 # to-be-extended (t_search etc.)
+    denoise_mask[:, 0] = False # can't denoise first token, no context
+    if not denoise_mask.any():
+        return idx
+
+    denoise_levels = levels[denoise_mask]
+    mask = get_logits_mask(denoise_levels, model.vocab_sizes)
+
     for _ in range(num_iterations):
-        current_levels = infer_level(idx, model.vocab_sizes)
-        denoise_mask = current_levels > 0  # All abstract tokens
-        
-        if not denoise_mask.any():
-            break
-        
         logits = model.denoise(idx, denoise_mask, memory_span)
-        target_levels = current_levels[denoise_mask]
-        new_tokens = decode_logits(logits, target_levels, model.level_mask_tokens, temperature)
+        logits = torch.where(mask, logits, torch.tensor(float('-inf'), device="cpu")) # process on logits via masking
+
+        if temperature == 0.0:
+            new_tokens = torch.argmax(logits, dim=-1)
+        else:
+            new_tokens = torch.multinomial(F.softmax(logits / temperature, dim=-1), num_samples=1).squeeze(-1)
+
         idx[denoise_mask] = new_tokens
     
     return idx
 
 
-# Generate function can also be external to the trained GAT model
-# Key is to test the optimization for GAT for now
+def generate(model, idx, max_new_tokens, temperature=0.0, abstraction_interval=10, memory_span=128):
+    """
+    Continues generating a sequence of tokens from the model, given a starting sequence `idx`.
+    """
+    levels = infer_level(idx, model.vocab_sizes)
+    abstract_token_indices = (levels > 0).nonzero(as_tuple=True)
+    if abstract_token_indices[1].numel() > 0:
+        last_abstract_pos = abstract_token_indices[1][-1].item()
+    else:
+        last_abstract_pos = -1
+
+    mask_level_0 = get_logits_mask(torch.tensor([0], device=model.device), model.vocab_sizes)
+    mask_level_1 = get_logits_mask(torch.tensor([1], device=model.device), model.vocab_sizes)
+
+    for _ in range(max_new_tokens):
+        x = model._forward_pass(idx, memory_span)
+        logits = model.lm_head(x)
+        logits = 30 * torch.tanh(logits / 30)
+        logits = logits.float()
+        logits = logits[:, -1, :] # Get logits for the next token
+
+        current_pos = idx.size(1)
+
+        if current_pos - last_abstract_pos >= abstraction_interval:
+            mask = mask_level_1
+            last_abstract_pos = current_pos # Update position of the new abstract token
+        else:
+            mask = mask_level_0
+
+        processed_logits = torch.where(mask.to(logits.device), logits, torch.tensor(float('-inf'), device=logits.device))
+
+        if temperature == 0.0:
+            next_token = torch.argmax(processed_logits, dim=-1, keepdim=True)
+        else:
+            probs = F.softmax(processed_logits / temperature, dim=-1)
+            next_token = torch.multinomial(probs, num_samples=1)
+        
+        idx = torch.cat((idx, next_token), dim=1)
+
+    # --- Test-Time Abstraction Search (Commented Out) ---
+    # For higher quality generation, we can run parallel_denoise after generating
+    # the full sequence to refine the abstract tokens.
+    #
+    # idx = parallel_denoise(model, idx, num_iterations=5, memory_span=128, temperature=temperature)
+    
+    return idx 

@@ -3,3 +3,5 @@ data/openweb10B/
 .data/openweb10B
 .data/openweb10B/
 *.pyc
+logs/* 
+*.png
