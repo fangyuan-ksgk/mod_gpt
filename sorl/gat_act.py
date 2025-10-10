@@ -1,3 +1,5 @@
+# GAT with recursion + adaptive stop
+
 from sorl.model import Block, CastedLinear, create_block_mask
 from dataclasses import dataclass, field
 from typing import Optional, List, Tuple
@@ -63,7 +65,7 @@ class GAT(nn.Module):
         self._compile = config._compile
 
 
-    def _forward_pass(self, idx: torch.Tensor, memory_span: int):
+    def _forward_pass(self, idx: torch.Tensor, abstract_repr: torch.Tensor, abstract_mask: torch.Tensor, memory_span: int):
 
         docs = (idx == BOS_TOKEN_ID).cumsum(1)
         
@@ -81,6 +83,7 @@ class GAT(nn.Module):
         block_mask = create_block_mask(causal_mask, None, None, S, S, device=self.device, _compile=self._compile)
 
         x = self.transformer.wte(idx)
+        x[abstract_mask] += abstract_repr # recursion
         x = norm(x)
         x0 = x
         v1 = None
@@ -98,9 +101,9 @@ class GAT(nn.Module):
         x = norm(x)
         return x
 
+    def forward(self, idx, target, abstract_repr, abstract_mask, memory_span):
 
-    def forward(self, idx, target, memory_span):
-        x = self._forward_pass(idx, memory_span)
+        x = self._forward_pass(idx, abstract_repr, abstract_mask, memory_span)
         logits = self.lm_head(x)
         logits = 30 * torch.tanh(logits / 30)
         logits = logits.float()
@@ -108,18 +111,20 @@ class GAT(nn.Module):
         loss = F.cross_entropy(logits.view(-1, logits.size(-1)), target.view(-1), reduction="none")
         return loss
 
+    def denoise(self, idx: torch.Tensor, abstract_mask: torch.Tensor, abstract_repr: torch.Tensor, memory_span: int):
 
-    def denoise(self, idx: torch.Tensor, denoise_mask: torch.Tensor, memory_span: int):
-
-        x = self._forward_pass(idx, memory_span)
+        x = self._forward_pass(idx, abstract_repr, abstract_mask, memory_span)
         logits = self.lm_head(x)
         logits = 30 * torch.tanh(logits / 30)
         logits = logits.float()
         
-        predict_mask = torch.roll(denoise_mask, -1, dims=1) # prev token embedding predict next token
+        predict_mask = torch.roll(abstract_mask, -1, dims=1) # prev token embedding predict next token
         predict_mask[:, -1] = False
+
+        abstract_repr = x[abstract_mask]
         
-        return logits[predict_mask]
+        return logits[predict_mask], abstract_repr
+
 
 # Generation & Denoising Gadget (Detached from gradient graph)
 # ------------------------------------------------------------------------------------------------
@@ -144,16 +149,18 @@ def parallel_denoise(model, idx, num_iterations=5, memory_span=128, temperature=
     idx = idx.clone()
     levels = infer_level(idx, model.vocab_sizes)
     
-    denoise_mask = levels > 0 # to-be-extended (t_search etc.)
-    denoise_mask[:, 0] = False # can't denoise first token, no context
-    if not denoise_mask.any():
+    abstract_mask = levels > 0 # to-be-extended (t_search etc.)
+    abstract_mask[:, 0] = False # can't denoise first token, no context
+    if not abstract_mask.any():
         return idx
 
-    denoise_levels = levels[denoise_mask]
-    mask = get_logits_mask(denoise_levels, model.vocab_sizes)
+    abstract_levels = levels[abstract_mask]
+    mask = get_logits_mask(abstract_levels, model.vocab_sizes)
+    # (To be Checked) - use 'level-mask-token' wte as the initial abstract representation
+    abstract_repr = model.transformer.wte(idx[abstract_mask]) # or just use zero-out ver.
 
-    for _ in range(num_iterations):
-        logits = model.denoise(idx, denoise_mask, memory_span)
+    for _ in range(num_iterations-1):
+        logits, abstract_repr = model.denoise(idx, abstract_mask, abstract_repr, memory_span)
         logits = torch.where(mask, logits, torch.tensor(float('-inf'), device="cpu")) # process on logits via masking
 
         if temperature == 0.0:
@@ -161,54 +168,14 @@ def parallel_denoise(model, idx, num_iterations=5, memory_span=128, temperature=
         else:
             new_tokens = torch.multinomial(F.softmax(logits / temperature, dim=-1), num_samples=1).squeeze(-1)
 
-        idx[denoise_mask] = new_tokens
+        idx[abstract_mask] = new_tokens
     
     return idx
 
 
-def generate(model, idx, max_new_tokens, temperature=0.0, abstraction_interval=10, memory_span=128):
-    """
-    Continues generating a sequence of tokens from the model, given a starting sequence `idx`.
-    """
-    levels = infer_level(idx, model.vocab_sizes)
-    abstract_token_indices = (levels > 0).nonzero(as_tuple=True)
-    if abstract_token_indices[1].numel() > 0:
-        last_abstract_pos = abstract_token_indices[1][-1].item()
-    else:
-        last_abstract_pos = -1
-
-    mask_level_0 = get_logits_mask(torch.tensor([0], device=model.device), model.vocab_sizes)
-    mask_level_1 = get_logits_mask(torch.tensor([1], device=model.device), model.vocab_sizes)
-
-    for _ in range(max_new_tokens):
-        x = model._forward_pass(idx, memory_span)
-        logits = model.lm_head(x)
-        logits = 30 * torch.tanh(logits / 30)
-        logits = logits.float()
-        logits = logits[:, -1, :] # Get logits for the next token
-
-        current_pos = idx.size(1)
-
-        if current_pos - last_abstract_pos >= abstraction_interval:
-            mask = mask_level_1
-            last_abstract_pos = current_pos # Update position of the new abstract token
-        else:
-            mask = mask_level_0
-
-        processed_logits = torch.where(mask.to(logits.device), logits, torch.tensor(float('-inf'), device=logits.device))
-
-        if temperature == 0.0:
-            next_token = torch.argmax(processed_logits, dim=-1, keepdim=True)
-        else:
-            probs = F.softmax(processed_logits / temperature, dim=-1)
-            next_token = torch.multinomial(probs, num_samples=1)
-        
-        idx = torch.cat((idx, next_token), dim=1)
-
-    # --- Test-Time Abstraction Search (Commented Out) ---
-    # For higher quality generation, we can run parallel_denoise after generating
-    # the full sequence to refine the abstract tokens.
-    #
-    # idx = parallel_denoise(model, idx, num_iterations=5, memory_span=128, temperature=temperature)
-    
-    return idx 
+# 1-step-backprop training gadget
+# -------------------------------------------------------
+# def forward_with_recursion
+# with torch.no_grad(): tokens = parallel_denoise(...)
+# idx, target =  tokens[..., :-1], tokens[..., 1:]
+# model.forward(idx, target)
