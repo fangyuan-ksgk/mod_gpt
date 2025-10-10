@@ -61,6 +61,8 @@ class GAT(nn.Module):
         self.lm_head = CastedLinear(config.n_embd, self.vocab_size)
         self.lm_head.weight.data.zero_() # @Grad62304977
 
+        self.stop_head = CastedLinear(config.n_embd, 2) # decide when to stop recursion
+
         self.device = config.device
         self._compile = config._compile
 
@@ -84,6 +86,7 @@ class GAT(nn.Module):
 
         x = self.transformer.wte(idx)
         x[abstract_mask] += abstract_repr # recursion
+
         x = norm(x)
         x0 = x
         v1 = None
@@ -99,11 +102,12 @@ class GAT(nn.Module):
             x, v1 = self.transformer.h[self.num_encoder_layers + i](x, v1, x0, block_mask)
 
         x = norm(x)
-        return x
+        stop_logits = self.stop_head(x[abstract_mask])
+        return x, stop_logits
 
     def forward(self, idx, target, abstract_repr, abstract_mask, memory_span):
 
-        x = self._forward_pass(idx, abstract_repr, abstract_mask, memory_span)
+        x, _ = self._forward_pass(idx, abstract_repr, abstract_mask, memory_span)
         logits = self.lm_head(x)
         logits = 30 * torch.tanh(logits / 30)
         logits = logits.float()
