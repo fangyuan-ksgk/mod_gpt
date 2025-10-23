@@ -61,8 +61,9 @@ class GAT(nn.Module):
         self.lm_head = CastedLinear(config.n_embd, self.vocab_size)
         self.lm_head.weight.data.zero_() # @Grad62304977
 
-        self.stop_head = CastedLinear(config.n_embd, 2) # decide when to stop recursion
-
+        # ACT should be done by argmax criteria (on trajectory chunk)
+        self.n_embd = config.n_embd
+      
         self.device = config.device
         self._compile = config._compile
 
@@ -102,32 +103,64 @@ class GAT(nn.Module):
             x, v1 = self.transformer.h[self.num_encoder_layers + i](x, v1, x0, block_mask)
 
         x = norm(x)
-        stop_logits = self.stop_head(x[abstract_mask])
-        return x, stop_logits
+        return x
 
-    def forward(self, idx, target, abstract_repr, abstract_mask, memory_span):
 
-        x, _ = self._forward_pass(idx, abstract_repr, abstract_mask, memory_span)
-        logits = self.lm_head(x)
-        logits = 30 * torch.tanh(logits / 30)
-        logits = logits.float()
-        
-        loss = F.cross_entropy(logits.view(-1, logits.size(-1)), target.view(-1), reduction="none")
-        return loss
+    def _compute_act(logits, idx, abstract_mask, act_threshold: float = 0.9):
 
-    def denoise(self, idx: torch.Tensor, abstract_mask: torch.Tensor, abstract_repr: torch.Tensor, memory_span: int):
+        with torch.no_grad():
+            predictions = logits.argmax(dim=-1)
+
+            pred_matches_target = (predictions[:, :-1] == idx[:, 1:])
+            trajectory_mask_shifted = ~abstract_mask[:, 1:]
+
+            trajectory_correct = (pred_matches_target & trajectory_mask_shifted).float()
+            trajectory_total = trajectory_mask_shifted.float()
+
+            # ACT: deterministic, threshold based
+            accuracy = trajectory_correct.sum(dim=1) / (trajectory_total.sum(dim=1) + 1e-8)
+            has_abstract = (abstract_mask.sum(dim=1) > 0)
+            should_stop = (accuracy > act_threshold) | ~has_abstract
+
+        return should_stop
+
+
+    def forward(self, idx, abstract_repr, abstract_mask, memory_span):
+        """idx is the full token sequence"""
 
         x = self._forward_pass(idx, abstract_repr, abstract_mask, memory_span)
         logits = self.lm_head(x)
         logits = 30 * torch.tanh(logits / 30)
         logits = logits.float()
-        
-        predict_mask = torch.roll(abstract_mask, -1, dims=1) # prev token embedding predict next token
-        predict_mask[:, -1] = False
+        act = self._compute_act(logits, idx, abstract_mask)
 
+        # --- recursion ----
         abstract_repr = x[abstract_mask]
+
+        # --- loss --- 
+        loss = F.cross_entropy(
+            logits[:, :-1].contiguous().view(-1, logits.size(-1)), 
+            idx[:, 1:].contiguous().view(-1), 
+            reduction="none"
+        )
+
+        return loss, logits.detach(), abstract_repr.detach(), act
+
+
+    def denoise(self, idx, abstract_repr, abstract_mask, denoise_mask, memory_span): 
+        # Question 1. what's 'denoise_mask'? why don't we just use 'abstract_mask' instead?
+        #             is there some special usage of it or ways to initialize it?
         
-        return logits[predict_mask], abstract_repr
+        x = self._forward_pass(idx, abstract_repr, abstract_mask, memory_span)
+        logits = self.lm_head(x)
+        logits = 30 * torch.tanh(logits / 30)
+        logits = logits.float()
+        
+        predict_mask = torch.roll(denoise_mask, -1, dims=1) # prev token embedding predict next token
+        predict_mask[:, -1] = False
+        
+        return logits[predict_mask]
+
 
 
 # Generation & Denoising Gadget (Detached from gradient graph)
@@ -148,24 +181,30 @@ def get_logits_mask(level, vocab_sizes):
     
     return mask
 
-def parallel_denoise(model, idx, num_iterations=5, memory_span=128, temperature=0.0):
+def parallel_denoise(model, idx, num_iterations=5, memory_span=1024, temperature=0.0):
     """Simple denoising loop using the model's denoise method."""
+    # (TBD)
+    # - ACT logits determine early stop of recursion
+    # - "should_stop" target computed with argmax criteria (on trajectory tokens)
+    # - act stop loss should be computed and added to the main loss
+
     idx = idx.clone()
     levels = infer_level(idx, model.vocab_sizes)
     
     abstract_mask = levels > 0 # to-be-extended (t_search etc.)
     abstract_mask[:, 0] = False # can't denoise first token, no context
+    abstract_repr = torch.zeros(abstract_mask.sum(), model.n_embd, device=idx.device)    
+
     if not abstract_mask.any():
-        return idx
+        return idx, abstract_mask, abstract_repr
 
     abstract_levels = levels[abstract_mask]
     mask = get_logits_mask(abstract_levels, model.vocab_sizes)
-    # (To be Checked) - use 'level-mask-token' wte as the initial abstract representation
-    abstract_repr = model.transformer.wte(idx[abstract_mask]) # or just use zero-out ver.
 
-    for _ in range(num_iterations-1):
-        logits, abstract_repr = model.denoise(idx, abstract_mask, abstract_repr, memory_span)
-        logits = torch.where(mask, logits, torch.tensor(float('-inf'), device="cpu")) # process on logits via masking
+    for _ in range(num_iterations):
+        logits, abstract_repr, q = model.denoise(idx, abstract_mask, abstract_repr, memory_span)
+
+        logits = torch.where(mask, logits, torch.tensor(float('-inf'), device=model.device)) # process on logits via masking
 
         if temperature == 0.0:
             new_tokens = torch.argmax(logits, dim=-1)
@@ -173,13 +212,25 @@ def parallel_denoise(model, idx, num_iterations=5, memory_span=128, temperature=
             new_tokens = torch.multinomial(F.softmax(logits / temperature, dim=-1), num_samples=1).squeeze(-1)
 
         idx[abstract_mask] = new_tokens
+
+        if q[0] > q[1]: # ACT stop 
+            break
     
-    return idx
+    return idx, abstract_mask, abstract_repr, q
 
 
-# 1-step-backprop training gadget
+# 1-step-backprop training gadget (fixed compute-time ver.)
 # -------------------------------------------------------
-# def forward_with_recursion
-# with torch.no_grad(): tokens = parallel_denoise(...)
-# idx, target =  tokens[..., :-1], tokens[..., 1:]
-# model.forward(idx, target)
+# def deep_supervision(model, token_ids, num_iterations=5, memory_span=1024, temperature=0.0): 
+#     with torch.no_grad(): 
+
+
+
+def forward_with_recursion(model, token_ids, num_iterations=5, memory_span=1024, temperature=0.0): 
+    with torch.no_grad(): 
+        token_ids, abstract_mask, abstract_repr, q = parallel_denoise(model, token_ids, num_iterations, memory_span, temperature)
+    
+    idx, target =  token_ids[..., :-1].contiguous(), token_ids[..., 1:].contiguous()
+    ppt = model.forward(idx, target, abstract_repr, abstract_mask[:, :-1], memory_span)
+
+    return ppt
