@@ -68,7 +68,7 @@ class GAT(nn.Module):
         self._compile = config._compile
 
 
-    def _forward_pass(self, idx: torch.Tensor, abstract_repr: torch.Tensor, abstract_mask: torch.Tensor, memory_span: int):
+    def _forward_pass(self, idx: torch.Tensor, abstract_repr: torch.Tensor, recursion_mask: torch.Tensor, memory_span: int):
 
         docs = (idx == BOS_TOKEN_ID).cumsum(1)
         
@@ -86,7 +86,7 @@ class GAT(nn.Module):
         block_mask = create_block_mask(causal_mask, None, None, S, S, device=self.device, _compile=self._compile)
 
         x = self.transformer.wte(idx)
-        x[abstract_mask] += abstract_repr # recursion
+        x[recursion_mask] += abstract_repr # recursion
 
         x = norm(x)
         x0 = x
@@ -107,7 +107,7 @@ class GAT(nn.Module):
 
 
     def _compute_act(logits, idx, abstract_mask, act_threshold: float = 0.9):
-
+        
         with torch.no_grad():
             predictions = logits.argmax(dim=-1)
 
@@ -128,14 +128,14 @@ class GAT(nn.Module):
     def forward(self, idx, abstract_repr, abstract_mask, memory_span):
         """idx is the full token sequence"""
 
-        x = self._forward_pass(idx, abstract_repr, abstract_mask, memory_span)
+        x = self._forward_pass(idx, abstract_repr, abstract_mask, memory_span) # continuous recursion
         logits = self.lm_head(x)
         logits = 30 * torch.tanh(logits / 30)
         logits = logits.float()
         act = self._compute_act(logits, idx, abstract_mask)
 
         # --- recursion ----
-        abstract_repr = x[abstract_mask]
+        abstract_repr = x[abstract_mask] # continuous recursion
 
         # --- loss --- 
         loss = F.cross_entropy(
@@ -147,16 +147,14 @@ class GAT(nn.Module):
         return loss, logits.detach(), abstract_repr.detach(), act
 
 
-    def denoise(self, idx, abstract_repr, abstract_mask, denoise_mask, memory_span): 
-        # Question 1. what's 'denoise_mask'? why don't we just use 'abstract_mask' instead?
-        #             is there some special usage of it or ways to initialize it?
-        
-        x = self._forward_pass(idx, abstract_repr, abstract_mask, memory_span)
+    def denoise(self, idx, abstract_repr, recursion_mask, memory_span): 
+ 
+        x = self._forward_pass(idx, abstract_repr, recursion_mask, memory_span)
         logits = self.lm_head(x)
         logits = 30 * torch.tanh(logits / 30)
         logits = logits.float()
         
-        predict_mask = torch.roll(denoise_mask, -1, dims=1) # prev token embedding predict next token
+        predict_mask = torch.roll(recursion_mask, -1, dims=1) # prev token embedding predict next token
         predict_mask[:, -1] = False
         
         return logits[predict_mask]
@@ -191,9 +189,9 @@ def parallel_denoise(model, idx, num_iterations=5, memory_span=1024, temperature
     idx = idx.clone()
     levels = infer_level(idx, model.vocab_sizes)
     
-    abstract_mask = levels > 0 # to-be-extended (t_search etc.)
-    abstract_mask[:, 0] = False # can't denoise first token, no context
-    abstract_repr = torch.zeros(abstract_mask.sum(), model.n_embd, device=idx.device)    
+    recursion_mask = levels > 0 # to-be-extended (t_search etc.)
+    recursion_mask[:, 0] = False # can't denoise first token, no context
+    abstract_repr = torch.zeros(recursion_mask.sum(), model.n_embd, device=idx.device)    
 
     if not abstract_mask.any():
         return idx, abstract_mask, abstract_repr
@@ -202,7 +200,7 @@ def parallel_denoise(model, idx, num_iterations=5, memory_span=1024, temperature
     mask = get_logits_mask(abstract_levels, model.vocab_sizes)
 
     for _ in range(num_iterations):
-        logits, abstract_repr, q = model.denoise(idx, abstract_mask, abstract_repr, memory_span)
+        logits, abstract_repr, act = model.denoise(idx, abstract_mask, abstract_repr, memory_span)
 
         logits = torch.where(mask, logits, torch.tensor(float('-inf'), device=model.device)) # process on logits via masking
 
