@@ -68,7 +68,7 @@ class GAT(nn.Module):
         self._compile = config._compile
 
 
-    def _forward_pass(self, idx: torch.Tensor, abstract_repr: torch.Tensor, recursion_mask: torch.Tensor, memory_span: int):
+    def _forward_pass(self, idx: torch.Tensor, abstract_repr: torch.Tensor, abstract_mask: torch.Tensor, memory_span: int):
 
         docs = (idx == BOS_TOKEN_ID).cumsum(1)
         
@@ -86,7 +86,7 @@ class GAT(nn.Module):
         block_mask = create_block_mask(causal_mask, None, None, S, S, device=self.device, _compile=self._compile)
 
         x = self.transformer.wte(idx)
-        x[recursion_mask] += abstract_repr # recursion
+        x[abstract_mask] += abstract_repr # recursion
 
         x = norm(x)
         x0 = x
@@ -105,26 +105,6 @@ class GAT(nn.Module):
         x = norm(x)
         return x
 
-
-    def _compute_act(logits, idx, abstract_mask, act_threshold: float = 0.9):
-        
-        with torch.no_grad():
-            predictions = logits.argmax(dim=-1)
-
-            pred_matches_target = (predictions[:, :-1] == idx[:, 1:])
-            trajectory_mask_shifted = ~abstract_mask[:, 1:]
-
-            trajectory_correct = (pred_matches_target & trajectory_mask_shifted).float()
-            trajectory_total = trajectory_mask_shifted.float()
-
-            # ACT: deterministic, threshold based
-            accuracy = trajectory_correct.sum(dim=1) / (trajectory_total.sum(dim=1) + 1e-8)
-            has_abstract = (abstract_mask.sum(dim=1) > 0)
-            should_stop = (accuracy > act_threshold) | ~has_abstract
-
-        return should_stop
-
-
     def forward(self, idx, abstract_repr, abstract_mask, memory_span):
         """idx is the full token sequence"""
 
@@ -132,7 +112,7 @@ class GAT(nn.Module):
         logits = self.lm_head(x)
         logits = 30 * torch.tanh(logits / 30)
         logits = logits.float()
-        act = self._compute_act(logits, idx, abstract_mask)
+        act = compute_act(logits, idx, abstract_mask)
 
         # --- recursion ----
         abstract_repr = x[abstract_mask] # continuous recursion
@@ -163,6 +143,24 @@ class GAT(nn.Module):
 
 # Generation & Denoising Gadget (Detached from gradient graph)
 # ------------------------------------------------------------------------------------------------
+def compute_act(logits, idx, abstract_mask, act_threshold: float = 0.9):
+        
+    with torch.no_grad():
+        predictions = logits.argmax(dim=-1)
+
+        pred_matches_target = (predictions[:, :-1] == idx[:, 1:])
+        trajectory_mask_shifted = ~abstract_mask[:, 1:]
+
+        trajectory_correct = (pred_matches_target & trajectory_mask_shifted).float()
+        trajectory_total = trajectory_mask_shifted.float()
+
+        # ACT: deterministic, threshold based
+        accuracy = trajectory_correct.sum(dim=1) / (trajectory_total.sum(dim=1) + 1e-8)
+        has_abstract = (abstract_mask.sum(dim=1) > 0)
+        should_stop = (accuracy > act_threshold) | ~has_abstract
+
+    return should_stop
+
 
 def get_logits_mask(level, vocab_sizes):
     """
@@ -179,42 +177,61 @@ def get_logits_mask(level, vocab_sizes):
     
     return mask
 
-def parallel_denoise(model, idx, num_iterations=5, memory_span=1024, temperature=0.0):
-    """Simple denoising loop using the model's denoise method."""
-    # (TBD)
-    # - ACT logits determine early stop of recursion
-    # - "should_stop" target computed with argmax criteria (on trajectory tokens)
-    # - act stop loss should be computed and added to the main loss
 
-    idx = idx.clone()
+def recursion(model, idx, max_iterations=5, memory_span=1024, temperature=0.0):
+    """
+    Perform iterative recursion with continuous and discrete updates.
+    - continuous & discrete recursion 
+    - ACT-based early stopping
+    - loss computation at each iteration
+    """
+    idx = idx.clone() 
+    
+    # Initialize masks and representations
     levels = infer_level(idx, model.vocab_sizes)
+    abs_mask = levels > 0 
+    abs_mask[:, 0] = False
+    recursion_mask = abs_mask.clone()
     
-    recursion_mask = levels > 0 # to-be-extended (t_search etc.)
-    recursion_mask[:, 0] = False # can't denoise first token, no context
-    abstract_repr = torch.zeros(recursion_mask.sum(), model.n_embd, device=idx.device)    
+    abstract_repr = torch.zeros(abs_mask.sum(), model.n_embd, device=idx.device)
+    
+    losses = [] 
+    for iteration in range(max_iterations):
 
-    if not abstract_mask.any():
-        return idx, abstract_mask, abstract_repr
-
-    abstract_levels = levels[abstract_mask]
-    mask = get_logits_mask(abstract_levels, model.vocab_sizes)
-
-    for _ in range(num_iterations):
-        logits, abstract_repr, act = model.denoise(idx, abstract_mask, abstract_repr, memory_span)
-
-        logits = torch.where(mask, logits, torch.tensor(float('-inf'), device=model.device)) # process on logits via masking
-
+        # --- forward pass ---
+        loss, logits, new_abs_repr, act = model.forward(idx, abstract_repr, abs_mask, memory_span)
+        losses.append(loss)
+        
+        # --- ACT early stop --- 
+        recursion_mask = recursion_mask & ~act.unsqueeze(1)
+        if not recursion_mask.any(): 
+            break 
+        
+        # --- discrete recursion
+        predict_mask = torch.roll(recursion_mask, -1, dims=1)
+        predict_mask[:, -1] = False
+        recursion_logits = logits[predict_mask]
+        
+        recursion_levels = levels[recursion_mask]
+        logits_mask = get_logits_mask(recursion_levels, model.vocab_sizes)
+        recursion_logits = torch.where(logits_mask, recursion_logits, 
+                                      torch.tensor(float('-inf'), device=model.device))
+        
         if temperature == 0.0:
-            new_tokens = torch.argmax(logits, dim=-1)
+            recursion_tokens = torch.argmax(recursion_logits, dim=-1)
         else:
-            new_tokens = torch.multinomial(F.softmax(logits / temperature, dim=-1), num_samples=1).squeeze(-1)
-
-        idx[abstract_mask] = new_tokens
-
-        if q[0] > q[1]: # ACT stop 
-            break
+            recursion_tokens = torch.multinomial(F.softmax(recursion_logits / temperature, dim=-1), 
+                                                num_samples=1).squeeze(-1)
+        
+        idx[recursion_mask] = recursion_tokens
+        
+        # --- continuous recursion --- 
+        update_mask = recursion_mask[abs_mask].unsqueeze(-1)
+        abstract_repr = torch.where(update_mask, new_abs_repr, abstract_repr)
     
-    return idx, abstract_mask, abstract_repr, q
+    total_loss = sum(losses) / len(losses) if losses else torch.tensor(0.0)
+    
+    return idx, abstract_repr, total_loss
 
 
 # 1-step-backprop training gadget (fixed compute-time ver.)
@@ -224,11 +241,11 @@ def parallel_denoise(model, idx, num_iterations=5, memory_span=1024, temperature
 
 
 
-def forward_with_recursion(model, token_ids, num_iterations=5, memory_span=1024, temperature=0.0): 
-    with torch.no_grad(): 
-        token_ids, abstract_mask, abstract_repr, q = parallel_denoise(model, token_ids, num_iterations, memory_span, temperature)
+# def forward_with_recursion(model, token_ids, num_iterations=5, memory_span=1024, temperature=0.0): 
+#     with torch.no_grad(): 
+#         token_ids, abstract_mask, abstract_repr, q = parallel_denoise(model, token_ids, num_iterations, memory_span, temperature)
     
-    idx, target =  token_ids[..., :-1].contiguous(), token_ids[..., 1:].contiguous()
-    ppt = model.forward(idx, target, abstract_repr, abstract_mask[:, :-1], memory_span)
+#     idx, target =  token_ids[..., :-1].contiguous(), token_ids[..., 1:].contiguous()
+#     ppt = model.forward(idx, target, abstract_repr, abstract_mask[:, :-1], memory_span)
 
-    return ppt
+#     return ppt
