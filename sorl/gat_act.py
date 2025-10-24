@@ -34,11 +34,6 @@ get_level_mask_tokens = lambda vocab_sizes: torch.cat(
     )
 )
 
-# TBD. Include 'recursion' into GAT 
-# - (1). add prev representation into abstract embedding
-# - (2). optionally update abstract token index (or only update its embedding)
-# - (3). KV-cache eviction (secondary to pre-train experiment etc.)
-
 class GAT(nn.Module): 
 
     def __init__(self, config):
@@ -152,6 +147,7 @@ def compute_act(logits, idx, abstract_mask, act_threshold: float = 0.9):
 
 def get_next_token_level(seq_length, abstraction_interval):
     # assumes L=2 (to be extended)
+    assert seq_length > 0, "Sequence length must be greater than 0"
     return 1 if (seq_length % abstraction_interval == 0) else 0
 
 def get_logits_mask(level, vocab_sizes):
@@ -215,7 +211,7 @@ def recursion(model, idx, max_iterations=5, n_continuous=1, memory_span=1024, te
     losses = [] 
     for iteration in range(max_iterations): 
 
-        # --- recursion --- 
+        # --- recursion (no grad) --- 
         with torch.no_grad(): 
             for _ in range(n_continuous): 
                 abstract_repr, x = _continuous_recursion_step(
@@ -226,7 +222,7 @@ def recursion(model, idx, max_iterations=5, n_continuous=1, memory_span=1024, te
             logits = model._compute_logits(x)   
             idx = _discrete_recursion_step(model, idx, logits, recursion_mask, temperature)
             
-        # --- loss ---
+        # --- loss (with grad) ---
         loss, logits, _, act = model.forward(idx, abstract_repr, abs_mask, memory_span)
         losses.append(loss)
 
@@ -295,13 +291,12 @@ def generate(model, idx, max_new_tokens=50,
   
     idx = idx.clone()
 
-    with torch.no_grad(): 
-        for _ in range(max_new_tokens): 
-            # --- search --- 
-            idx, logits = search(model, idx, max_iterations, n_continuous, memory_span, temperature, K)
+    for _ in range(max_new_tokens): 
+        # --- search --- 
+        idx, logits = search(model, idx, max_iterations, n_continuous, memory_span, temperature, K)
 
-            # --- decode --- 
-            next_token_id = rythmic_decode(logits, model, K, temperature)
-            idx = torch.cat((idx, next_token_id), dim=1)
+        # --- decode --- 
+        next_token_id = rythmic_decode(logits, model, K, temperature)
+        idx = torch.cat((idx, next_token_id), dim=1)
 
     return idx
