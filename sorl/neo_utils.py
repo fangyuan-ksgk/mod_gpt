@@ -1,0 +1,79 @@
+import torch
+from sorl.gat_act import BOS_TOKEN_ID, search, GAT
+
+def infer_rythmic_insert_mask(tokens, K):
+    assert tokens.shape[0] == 1, "only one sample is supported"
+    within_doc_pos = torch.zeros_like(tokens, dtype=torch.long)
+    for b in range(tokens.shape[0]):
+        pos_counter = 0
+        for i in range(tokens.shape[1]):
+            if tokens[b, i] == BOS_TOKEN_ID:
+                pos_counter = 0
+            within_doc_pos[b, i] = pos_counter
+            pos_counter += 1
+
+    insert_mask = (within_doc_pos % K == 0) & (within_doc_pos > 0)
+
+    return insert_mask
+
+def insert_tokens(tokens, insert_mask, placeholder_token):
+    """Vectorized insertion of placeholder tokens at masked positions."""
+    batch_size, seq_len = tokens.shape
+    
+    cumsum_mask = torch.cumsum(insert_mask.long(), dim=1)
+    shift = torch.cat([torch.zeros(batch_size, 1, dtype=torch.long, device=tokens.device), 
+                       cumsum_mask[:, :-1]], dim=1)
+    
+    original_positions = torch.arange(seq_len, device=tokens.device).unsqueeze(0).expand(batch_size, -1)
+    new_positions = original_positions + shift
+    
+    max_new_len = seq_len + cumsum_mask[:, -1].max().item()
+    expanded_tokens = torch.full((batch_size, max_new_len), placeholder_token,
+                                 dtype=tokens.dtype, device=tokens.device)
+    
+    batch_indices = torch.arange(batch_size, device=tokens.device).unsqueeze(1).expand(-1, seq_len)
+    expanded_tokens[batch_indices, new_positions] = tokens
+    
+    return expanded_tokens
+
+def sorl_rollout(data: torch.Tensor, model: GAT, n: int, K: int, max_iterations: int, n_continuous: int, memory_span: int, temperature: float):
+    """
+    Perform rollout with 1 greedy sample and (n-1) stochastic samples.
+    """
+    assert n > 1, "n must be greater than 1"
+    assert data.shape[0] == 1, "only single sample supported"
+
+    # --- repeat data & add placeholder tokens ---
+    insert_mask = infer_rythmic_insert_mask(data, K)
+    repeat_data = data.repeat_interleave(n, dim=0)
+    insert_mask = insert_mask.repeat_interleave(n, dim=0)
+    repeat_data = insert_tokens(repeat_data, insert_mask, model.vocab_sizes[0].item())
+
+    # --- search --- 
+    greedy_data, _ = search(model, repeat_data[:1], max_iterations=max_iterations, 
+                            n_continuous=n_continuous, memory_span=memory_span, 
+                            temperature=0.0, K=K)
+    stochastic_data, _ = search(model, repeat_data[1:], max_iterations=max_iterations, 
+                                n_continuous=n_continuous, memory_span=memory_span, 
+                                temperature=temperature, K=K)
+
+    combined_data = torch.cat([greedy_data, stochastic_data], dim=0)
+
+    return combined_data
+
+def avg_ppt_per_sample(ppt, ppt_idx):
+    """Vectorized: average perplexity per document per rollout."""
+    n_r, n_d = ppt.shape[0], ppt_idx.max().item()
+    idx = (torch.arange(n_r, device=ppt.device)[:, None] * n_d + ppt_idx - 1).reshape(-1)
+    sums = torch.zeros(n_r * n_d, device=ppt.device).scatter_add_(0, idx, ppt.reshape(-1))
+    counts = torch.zeros(n_r * n_d, device=ppt.device).scatter_add_(0, idx, torch.ones_like(ppt.reshape(-1)))
+    return (sums / counts.clamp(min=1)).reshape(n_r, n_d)
+
+def select_best_per_doc(search_data, ppt):
+    """Select best rollout per document and stitch together."""
+    doc_idx = (search_data == BOS_TOKEN_ID).cumsum(dim=1)
+    doc_ppt = avg_ppt_per_sample(ppt, doc_idx[:,1:])
+    best_rollout_per_doc = doc_ppt.argmin(dim=0)
+    rollout_for_each_pos = best_rollout_per_doc[doc_idx[0] - 1]
+    best_seq = search_data[rollout_for_each_pos, torch.arange(search_data.shape[1], device=search_data.device)]
+    return best_seq.unsqueeze(0), doc_ppt

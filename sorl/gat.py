@@ -6,7 +6,7 @@ import torch.nn.functional as F
 from sorl.model import norm
 import torch.nn as nn
 
-BOS_TOKEN_ID = 50526
+BOS_TOKEN_ID = 50256
 
 @dataclass
 class GATConfig:

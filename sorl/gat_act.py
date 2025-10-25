@@ -8,7 +8,7 @@ import torch.nn.functional as F
 from sorl.model import norm
 import torch.nn as nn
 
-BOS_TOKEN_ID = 50526
+BOS_TOKEN_ID = 50256
 
 @dataclass
 class GATConfig:
@@ -22,10 +22,14 @@ class GATConfig:
 
 
 def infer_level(indices: torch.Tensor, vocab_sizes: torch.Tensor):
+    if indices.dtype in [torch.uint8, torch.uint16, torch.uint32, torch.uint64]:
+        indices = indices.long()
+    
     vocab_sizes = vocab_sizes.to(indices.device)
     indices_expanded = indices.unsqueeze(-1)
     levels = (indices_expanded < vocab_sizes.cumsum(dim=0)).int().argmax(dim=-1)
     return levels
+
 
 get_level_mask_tokens = lambda vocab_sizes: torch.cat(
     (
@@ -120,9 +124,11 @@ class GAT(nn.Module):
             idx[:, 1:].contiguous().view(-1), 
             reduction="none"
         )
-
+        
+        # Don't predict: (1) what comes after BOS, (2) BOS itself
+        bos_pos_mask = torch.logical_and(idx[:, :-1] != BOS_TOKEN_ID, idx[:, 1:] != BOS_TOKEN_ID).view(-1).float()        
+        loss = loss * bos_pos_mask
         return loss, logits.detach(), abstract_repr.detach(), act
-
 
 
 # Generation & Denoising Gadget (Detached from gradient graph)
@@ -197,7 +203,7 @@ def _discrete_recursion_step(model, idx, logits, recursion_mask, temperature=0.0
 
 # Recursion with per-iteration loss & detaching
 # ------------------------------------------------------------------------------------------------
-def recursion(model, idx, max_iterations=5, n_continuous=1, memory_span=1024, temperature=0.0):
+def recursion(model, idx, max_iterations=5, n_continuous=1, do_discrete=True, memory_span=1024, temperature=0.0):
 
     idx = idx.clone() 
 
@@ -220,7 +226,8 @@ def recursion(model, idx, max_iterations=5, n_continuous=1, memory_span=1024, te
 
             x = model._forward_pass(idx, abstract_repr, abs_mask, memory_span)
             logits = model._compute_logits(x)   
-            idx = _discrete_recursion_step(model, idx, logits, recursion_mask, temperature)
+            if do_discrete:
+                idx = _discrete_recursion_step(model, idx, logits, recursion_mask, temperature)
             
         # --- loss (with grad) ---
         loss, logits, _, act = model.forward(idx, abstract_repr, abs_mask, memory_span)
