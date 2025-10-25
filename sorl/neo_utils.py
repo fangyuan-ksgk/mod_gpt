@@ -1,5 +1,5 @@
 import torch
-from sorl.gat_act import BOS_TOKEN_ID, search, GAT
+from sorl.gat_act import BOS_TOKEN_ID, search, GAT, recursion
 
 def infer_rythmic_insert_mask(tokens, K):
     assert tokens.shape[0] == 1, "only one sample is supported"
@@ -77,3 +77,28 @@ def select_best_per_doc(search_data, ppt):
     rollout_for_each_pos = best_rollout_per_doc[doc_idx[0] - 1]
     best_seq = search_data[rollout_for_each_pos, torch.arange(search_data.shape[1], device=search_data.device)]
     return best_seq.unsqueeze(0), doc_ppt
+
+def sorl_search(tokens, model, n=3, K=3, max_iterations=1, 
+                n_continuous=0, memory_span=1024, temperature=1.0):
+    """
+    Complete SoRL search pipeline:
+    1. Generate n rollouts (1 greedy + (n-1) stochastic)
+    2. Evaluate rollouts via recursion
+    3. Select best rollout per document
+    """
+    # Generate rollouts
+    search_data = sorl_rollout(tokens, model, n=n, K=K, 
+                               max_iterations=max_iterations,
+                               n_continuous=n_continuous, 
+                               memory_span=memory_span, 
+                               temperature=temperature)
+    
+    # Evaluate rollouts
+    _, ppt = recursion(model, search_data, max_iterations=max_iterations, 
+                      n_continuous=n_continuous, do_discrete=False)
+    ppt = ppt.reshape(search_data.shape[0], -1)
+    
+    # Select best rollouts
+    best_data, doc_ppt = select_best_per_doc(search_data, ppt)
+    
+    return best_data, doc_ppt
