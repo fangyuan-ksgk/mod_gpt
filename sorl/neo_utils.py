@@ -1,5 +1,5 @@
 import torch
-from sorl.gat_act import BOS_TOKEN_ID, search, GAT, recursion
+from sorl.gat_act import BOS_TOKEN_ID, search, GAT, recursion, infer_level
 
 def infer_rythmic_insert_mask(tokens, K):
     assert tokens.shape[0] == 1, "only one sample is supported"
@@ -69,36 +69,66 @@ def avg_ppt_per_sample(ppt, ppt_idx):
     counts = torch.zeros(n_r * n_d, device=ppt.device).scatter_add_(0, idx, torch.ones_like(ppt.reshape(-1)))
     return (sums / counts.clamp(min=1)).reshape(n_r, n_d)
 
-def select_best_per_doc(search_data, ppt):
+def select_best_per_doc(search_data, ppt, levels):
     """Select best rollout per document and stitch together."""
+    trajectory_mask = (levels[:, 1:] == 0).float()
+    trajectory_ppt = ppt * trajectory_mask
     doc_idx = (search_data == BOS_TOKEN_ID).cumsum(dim=1)
-    doc_ppt = avg_ppt_per_sample(ppt, doc_idx[:,1:])
+    doc_ppt = avg_ppt_per_sample(trajectory_ppt, doc_idx[:,1:])
+
     best_rollout_per_doc = doc_ppt.argmin(dim=0)
     rollout_for_each_pos = best_rollout_per_doc[doc_idx[0] - 1]
-    best_seq = search_data[rollout_for_each_pos, torch.arange(search_data.shape[1], device=search_data.device)]
-    return best_seq.unsqueeze(0), doc_ppt
 
-def sorl_search(tokens, model, n=3, K=3, max_iterations=1, 
+    best_seq = search_data[rollout_for_each_pos, torch.arange(search_data.shape[1], device=search_data.device)]
+    best_ppt = ppt[rollout_for_each_pos[1:], torch.arange(ppt.shape[1], device=ppt.device)]
+    
+    doc_ppt = doc_ppt.detach()
+    best_ppt_advantage = (doc_ppt.mean(dim=0) - doc_ppt.min(dim=0).values) / doc_ppt.mean(dim=0).clamp(min=1e-8) # evaluate purpose
+    return best_seq.unsqueeze(0), best_ppt, best_ppt_advantage
+
+def sorl_search(tokens, model, n=3, K=3, max_iterations=1,
                 n_continuous=0, memory_span=1024, temperature=1.0):
     """
     Complete SoRL search pipeline:
     1. Generate n rollouts (1 greedy + (n-1) stochastic)
     2. Evaluate rollouts via recursion
     3. Select best rollout per document
+    Returns: 
+    - best_data: Best rollout per document [1, seq_len]
+    - best_ppt: Perplexity of best rollout [seq_len - 1]
     """
-    # Generate rollouts
+    # --- generate rollouts ---
     search_data = sorl_rollout(tokens, model, n=n, K=K, 
                                max_iterations=max_iterations,
                                n_continuous=n_continuous, 
                                memory_span=memory_span, 
                                temperature=temperature)
     
-    # Evaluate rollouts
-    _, ppt = recursion(model, search_data, max_iterations=max_iterations, 
-                      n_continuous=n_continuous, do_discrete=False)
+    # --- evaluate rollouts ---
+    _, ppt = recursion(model, search_data, max_iterations=1, 
+                    n_continuous=n_continuous, do_discrete=False)
     ppt = ppt.reshape(search_data.shape[0], -1)
     
-    # Select best rollouts
-    best_data, doc_ppt = select_best_per_doc(search_data, ppt)
+    # --- select best rollouts (based on trajectory perplexity) ---
+    levels = infer_level(search_data, model.vocab_sizes)
+    best_data, best_ppt, best_ppt_advantage = select_best_per_doc(search_data, ppt, levels)
     
-    return best_data, doc_ppt
+    return best_data, best_ppt, best_ppt_advantage
+
+
+# (TBD). optional 'loss_mask' argument for QA task
+# --------------------------------------------------
+# - [Reflection 1] it's not clear why we need to 'separate' loss for trajectory with loss for abstraction right? 
+#                  for instance, best_ppt.mean() is the simplest training target here
+
+def compute_loss(best_data, model, best_ppt):
+    """Compute trajectory and abstraction loss from sorl_search output."""
+    
+    levels = infer_level(best_data, model.vocab_sizes)[:, 1:]
+    
+    traj_mask = (levels == 0).float()[0]
+    traj_loss = (best_ppt * traj_mask).sum() / traj_mask.sum().clamp(min=1)
+    abs_mask = 1 - traj_mask
+    abs_loss = (best_ppt * abs_mask).sum() / abs_mask.sum().clamp(min=1) if abs_mask.sum() > 0 else torch.tensor(0.0)
+    
+    return traj_loss, abs_loss
