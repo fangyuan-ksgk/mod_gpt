@@ -5,3 +5,4 @@ data/openweb10B/
 *.pyc
 logs/* 
 *.png
+*.bin

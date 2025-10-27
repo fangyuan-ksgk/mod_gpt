@@ -190,8 +190,9 @@ def _discrete_recursion_step(model, idx, logits, recursion_mask, temperature=0.0
     
     recursion_levels = levels[recursion_mask]
     logits_mask = get_logits_mask(recursion_levels, model.vocab_sizes)
+    logits_mask = logits_mask.to(recursion_logits.device)
     recursion_logits = torch.where(logits_mask, recursion_logits, 
-                                    torch.tensor(float('-inf'), device=model.device))
+                                    torch.tensor(float('-inf'), device=recursion_logits.device))
     
     if temperature == 0.0:
         new_tokens = torch.argmax(recursion_logits, dim=-1)
