@@ -37,6 +37,22 @@ def distributed_data_generator(filename_pattern: str, sequence_length: int, rank
         pos += sequence_length
         yield inputs, targets
 
+def distributed_data_generator_sorl(filename_pattern: str, sequence_length: int, rank : int, world_size : int):
+    files = [Path(file) for file in sorted(glob.glob(filename_pattern))]
+    assert sequence_length % world_size == 0
+    local_seq_len = sequence_length // world_size
+    file_iter = itertools.cycle(files) # iter(files) instead if you want to do 1-epoch training
+    tokens, pos = _load_data_shard(next(file_iter)), 0
+    while True:
+        if pos + sequence_length + 1 >= len(tokens):
+            tokens, pos = _load_data_shard(next(file_iter)), 0
+        buf = tokens[pos + rank * local_seq_len:][:local_seq_len + 1]        
+        idx = buf[None, :-1].to(device="cuda", dtype=torch.int32, non_blocking=True)
+        pos += sequence_length
+        yield idx
+
+# TBD. optionally include 'loss_mask' in the data generator
+
 # -------------------------------------------------------------------------------
 
 

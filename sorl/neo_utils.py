@@ -130,13 +130,13 @@ def sorl_search(tokens, model, n=3, K=3, max_iterations=1,
 # - [Reflection 1] it's not clear why we need to 'separate' loss for trajectory with loss for abstraction right? 
 #                  for instance, best_ppt.mean() is the simplest training target here
 
-def compute_loss(best_data, model, n_continuous: int = 0):
+def compute_loss(best_data, model, memory_span: int, n_continuous: int = 0):
     """Compute trajectory and abstraction loss from sorl_search output."""
-    _, best_ppt = recursion(model, best_data, max_iterations=1, n_continuous=n_continuous, do_discrete=False)
+    _, best_ppt = recursion(model, best_data, max_iterations=1, n_continuous=n_continuous, do_discrete=False, memory_span=memory_span)
     best_ppt = best_ppt.reshape(best_data.shape[0], -1)
 
     levels = infer_level(best_data, model.vocab_sizes)[:, 1:]
-    
+
     traj_mask = (levels == 0).float()[0]
     traj_loss = (best_ppt * traj_mask).sum() / traj_mask.sum().clamp(min=1)
     abs_mask = 1 - traj_mask
