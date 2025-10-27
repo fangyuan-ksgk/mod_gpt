@@ -36,11 +36,11 @@ def insert_tokens(tokens, insert_mask, placeholder_token):
     
     return expanded_tokens
 
+@torch.no_grad()
 def sorl_rollout(data: torch.Tensor, model: GAT, n: int, K: int, max_iterations: int, n_continuous: int, memory_span: int, temperature: float):
     """
     Perform rollout with 1 greedy sample and (n-1) stochastic samples.
     """
-    assert n > 1, "n must be greater than 1"
     assert data.shape[0] == 1, "only single sample supported"
 
     # --- repeat data & add placeholder tokens ---
@@ -53,18 +53,22 @@ def sorl_rollout(data: torch.Tensor, model: GAT, n: int, K: int, max_iterations:
     greedy_data, _ = search(model, repeat_data[:1], max_iterations=max_iterations, 
                             n_continuous=n_continuous, memory_span=memory_span, 
                             temperature=0.0, K=K)
-    stochastic_data, _ = search(model, repeat_data[1:], max_iterations=max_iterations, 
-                                n_continuous=n_continuous, memory_span=memory_span, 
-                                temperature=temperature, K=K)
 
-    combined_data = torch.cat([greedy_data, stochastic_data], dim=0)
+    if n == 1: 
+        return greedy_data
+    else: 
+        stochastic_data, _ = search(model, repeat_data[1:], max_iterations=max_iterations, 
+                                    n_continuous=n_continuous, memory_span=memory_span, 
+                                    temperature=temperature, K=K)
 
-    return combined_data
+        combined_data = torch.cat([greedy_data, stochastic_data], dim=0)
+        return combined_data
 
 def avg_ppt_per_sample(ppt, ppt_idx):
-    """Vectorized: average perplexity per document per rollout."""
-    n_r, n_d = ppt.shape[0], ppt_idx.max().item()
-    idx = (torch.arange(n_r, device=ppt.device)[:, None] * n_d + ppt_idx - 1).reshape(-1)
+    """Average perplexity per document, per rollout."""
+    n_r = ppt.shape[0]
+    n_d = ppt_idx.max().item() + 1  # +1 because 0-indexed
+    idx = (torch.arange(n_r, device=ppt.device)[:, None] * n_d + ppt_idx).reshape(-1)
     sums = torch.zeros(n_r * n_d, device=ppt.device).scatter_add_(0, idx, ppt.reshape(-1))
     counts = torch.zeros(n_r * n_d, device=ppt.device).scatter_add_(0, idx, torch.ones_like(ppt.reshape(-1)))
     return (sums / counts.clamp(min=1)).reshape(n_r, n_d)
@@ -85,6 +89,9 @@ def select_best_per_doc(search_data, ppt, levels):
     doc_ppt = doc_ppt.detach()
     best_ppt_advantage = (doc_ppt.mean(dim=0) - doc_ppt.min(dim=0).values) / doc_ppt.mean(dim=0).clamp(min=1e-8) # evaluate purpose
     return best_seq.unsqueeze(0), best_ppt, best_ppt_advantage
+
+# Reflection 1. what if we have a 'information bottleneck mask' to mute future influence 
+#               applied to both ACT & selection? 
 
 def sorl_search(tokens, model, n=3, K=3, max_iterations=1,
                 n_continuous=0, memory_span=1024, temperature=1.0):
@@ -114,6 +121,7 @@ def sorl_search(tokens, model, n=3, K=3, max_iterations=1,
     best_data, best_ppt, best_ppt_advantage = select_best_per_doc(search_data, ppt, levels)
     
     return best_data, best_ppt, best_ppt_advantage
+
 
 
 # (TBD). optional 'loss_mask' argument for QA task

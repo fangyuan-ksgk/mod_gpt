@@ -121,7 +121,7 @@ class GAT(nn.Module):
         # --- loss --- 
         loss = F.cross_entropy(
             logits[:, :-1].contiguous().view(-1, logits.size(-1)), 
-            idx[:, 1:].contiguous().view(-1), 
+            idx[:, 1:].contiguous().view(-1).long(), 
             reduction="none"
         )
         
@@ -163,6 +163,7 @@ def get_logits_mask(level, vocab_sizes):
     level_starts = torch.cat([torch.tensor([0], device=vocab_sizes.device), torch.cumsum(vocab_sizes, dim=0)[:-1] + 1])
     level_ends = torch.cumsum(vocab_sizes, dim=0)
 
+    level = level.to(vocab_sizes.device)
     start_logits = level_starts[level]
     end_logits = level_ends[level]
     
@@ -198,7 +199,7 @@ def _discrete_recursion_step(model, idx, logits, recursion_mask, temperature=0.0
         new_tokens = torch.multinomial(F.softmax(recursion_logits / temperature, dim=-1), 
                                         num_samples=1).squeeze(-1)
     
-    idx[recursion_mask] = new_tokens
+    idx[recursion_mask] = new_tokens.to(idx.dtype)
     return idx
 
 # Recursion with per-iteration loss & detaching
