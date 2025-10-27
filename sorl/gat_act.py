@@ -84,7 +84,10 @@ class GAT(nn.Module):
         block_mask = create_block_mask(causal_mask, None, None, S, S, device=self.device, _compile=self._compile)
 
         x = self.transformer.wte(idx)
-        x[abstract_mask] += abstract_repr # recursion (additive)
+        if abstract_mask.any():
+            update = torch.zeros_like(x)
+            update[abstract_mask] = abstract_repr
+            x = x + update
 
         x = norm(x)
         x0 = x
