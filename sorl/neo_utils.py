@@ -112,9 +112,10 @@ def sorl_search(tokens, model, n=3, K=3, max_iterations=1,
                                temperature=temperature)
     
     # --- evaluate rollouts ---
-    _, ppt = recursion(model, search_data, max_iterations=1, 
-                    n_continuous=n_continuous, do_discrete=False)
-    ppt = ppt.reshape(search_data.shape[0], -1)
+    with torch.no_grad(): 
+        _, ppt = recursion(model, search_data, max_iterations=1, 
+                        n_continuous=n_continuous, do_discrete=False)
+        ppt = ppt.reshape(search_data.shape[0], -1)
     
     # --- select best rollouts (based on trajectory perplexity) ---
     levels = infer_level(search_data, model.vocab_sizes)
@@ -129,9 +130,11 @@ def sorl_search(tokens, model, n=3, K=3, max_iterations=1,
 # - [Reflection 1] it's not clear why we need to 'separate' loss for trajectory with loss for abstraction right? 
 #                  for instance, best_ppt.mean() is the simplest training target here
 
-def compute_loss(best_data, model, best_ppt):
+def compute_loss(best_data, model, n_continuous: int = 0):
     """Compute trajectory and abstraction loss from sorl_search output."""
-    
+    _, best_ppt = recursion(model, best_data, max_iterations=1, n_continuous=n_continuous, do_discrete=False)
+    best_ppt = best_ppt.reshape(best_data.shape[0], -1)
+
     levels = infer_level(best_data, model.vocab_sizes)[:, 1:]
     
     traj_mask = (levels == 0).float()[0]
