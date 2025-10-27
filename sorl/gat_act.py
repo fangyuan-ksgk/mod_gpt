@@ -206,7 +206,7 @@ def _discrete_recursion_step(model, idx, logits, recursion_mask, temperature=0.0
     idx[recursion_mask] = new_tokens.to(idx.dtype)
     return idx
 
-# Recursion with per-iteration loss & detaching
+# Recursion with per-iteration loss & detaching (Deep supervision style loss computation)
 # ------------------------------------------------------------------------------------------------
 def recursion(model, idx, max_iterations=5, n_continuous=1, do_discrete=True, memory_span=1024, temperature=0.0):
 
