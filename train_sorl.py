@@ -188,6 +188,7 @@ class Hyperparameters:
     cooldown_frac : float = 0.4 # fraction of training spent cooling down the learning rate
     # architecture
     vocab_size : int = 50257
+    abstract_vocab_size : int = 256
     # evaluation and logging
     val_loss_every : int = 125 # every how many steps to evaluate val loss? 0 for only at the end
     save_checkpoint : bool = False
@@ -212,6 +213,7 @@ model_config = GATConfig(
         "BLOCK_M": 64, "BLOCK_N": 64, # forward
         "BLOCK_M1": 32, "BLOCK_N1": 64, "BLOCK_M2": 64, "BLOCK_N2": 32 # backwards 
     }
+    vocab_sizes=[args.vocab_size, args.abstract_vocab_size]
 )
 
 assert args.batch_size % (world_size) == 0
