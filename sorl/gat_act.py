@@ -290,7 +290,6 @@ def search(model, idx, max_iterations, n_continuous, memory_span, temperature, K
         idx = _discrete_recursion_step(model, idx, logits, recursion_mask, temperature)
         
         act = compute_act(logits, idx, abs_mask)
-
         recursion_mask = recursion_mask & ~act.unsqueeze(1)
         if not recursion_mask.any():
             break

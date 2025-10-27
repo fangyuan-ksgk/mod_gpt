@@ -92,6 +92,7 @@ def select_best_per_doc(search_data, ppt, levels):
 
 # Reflection 1. what if we have a 'information bottleneck mask' to mute future influence 
 #               applied to both ACT & selection? 
+import time
 
 def sorl_search(tokens, model, n=3, K=3, max_iterations=1,
                 n_continuous=0, memory_span=1024, temperature=1.0):
@@ -105,22 +106,24 @@ def sorl_search(tokens, model, n=3, K=3, max_iterations=1,
     - best_ppt: Perplexity of best rollout [seq_len - 1]
     """
     # --- generate rollouts ---
+    t0 = time.time()
     search_data = sorl_rollout(tokens, model, n=n, K=K, 
                                max_iterations=max_iterations,
                                n_continuous=n_continuous, 
                                memory_span=memory_span, 
                                temperature=temperature)
-    
+    t1 = time.time()    
     # --- evaluate rollouts ---
     with torch.no_grad(): 
         _, ppt = recursion(model, search_data, max_iterations=1, 
                         n_continuous=n_continuous, do_discrete=False)
         ppt = ppt.reshape(search_data.shape[0], -1)
-    
+    t2 = time.time()
     # --- select best rollouts (based on trajectory perplexity) ---
     levels = infer_level(search_data, model.vocab_sizes)
     best_data, best_ppt, best_ppt_advantage = select_best_per_doc(search_data, ppt, levels)
-    
+    t3 = time.time()
+    print(f" sorl_search time: {t3 - t0} seconds, rollout: {t1 - t0} seconds, recursion time: {t2 - t1} seconds, selection time: {t3 - t2} seconds")
     return best_data, best_ppt, best_ppt_advantage
 
 
