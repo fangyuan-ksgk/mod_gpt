@@ -368,17 +368,16 @@ for step in range(train_steps + 1):
                 tokens = next(val_loader)
                 search_tokens, search_ppt, search_adv = sorl_search(tokens, model, n=args.n, K=args.K, max_iterations=args.max_iterations, n_continuous=args.n_continuous, memory_span=memory_span, temperature=args.temperature)
                 traj_loss, abs_loss = compute_loss(search_tokens, model, memory_span, n_continuous=args.n_continuous)
-                val_loss["traj_loss"] += traj_loss.item() 
-                val_loss["abs_loss"] += abs_loss.item() 
-                val_loss["search_advantage"] += search_adv.mean().item()
+                val_loss["traj_loss"] += traj_loss
+                val_loss["abs_loss"] += abs_loss
+                val_loss["search_advantage"] += search_adv.mean()
                 
         for name in val_loss: 
             val_loss[name] /= val_steps
-            loss_record[name].append(val_loss[name].item())
+            dist.all_reduce(val_loss[name], op=dist.ReduceOp.AVG)            
+            loss_record[name].append(val_loss[name])
 
-        del val_loader
-        for key in val_loss: 
-            dist.all_reduce(val_loss[key], op=dist.ReduceOp.AVG)            
+        del val_loader           
         val_info = " ".join([f"{item} loss: {value:.4f}" for (item, value) in val_loss.items()])
         print0(f"step:{step}/{train_steps} {val_info} train_time:{training_time_ms:.0f}ms step_avg:{training_time_ms/max(step, 1):.2f}ms", console=True)
         model.train()
@@ -404,7 +403,7 @@ for step in range(train_steps + 1):
         traj_loss, abs_loss = compute_loss(search_tokens, model, memory_span, n_continuous=args.n_continuous)
         loss = traj_loss + abs_loss
         loss.backward()
-        print0(f" - step: {step} | accum step: {accum_step}")
+        print0(f" - step: {step} | accum step: {accum_step} | traj_loss: {traj_loss.item()} | abs_loss: {abs_loss.item()} | search_advantage: {search_adv.mean().item()}")
         
     for param in model.parameters():
         param.grad /= train_accumulation_steps
