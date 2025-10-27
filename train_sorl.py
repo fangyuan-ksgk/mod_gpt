@@ -209,11 +209,11 @@ for k, v in vars(cli_args).items():
         setattr(args, k, v)
 
 model_config = GATConfig(
+    vocab_sizes=[args.vocab_size, args.abstract_vocab_size],
     flex_kernel_options={
-        "BLOCK_M": 64, "BLOCK_N": 64, # forward
-        "BLOCK_M1": 32, "BLOCK_N1": 64, "BLOCK_M2": 64, "BLOCK_N2": 32 # backwards 
+        "BLOCK_M": 64, "BLOCK_N": 64,
+        "BLOCK_M1": 32, "BLOCK_N1": 64, "BLOCK_M2": 64, "BLOCK_N2": 32
     }
-    vocab_sizes=[args.vocab_size, args.abstract_vocab_size]
 )
 
 assert args.batch_size % (world_size) == 0
