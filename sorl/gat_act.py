@@ -86,7 +86,7 @@ class GAT(nn.Module):
         x = self.transformer.wte(idx)
         if abstract_mask.any():
             update = torch.zeros_like(x)
-            update[abstract_mask] = abstract_repr
+            update[abstract_mask] = abstract_repr.to(x.dtype)
             x = x + update
 
         x = norm(x)
