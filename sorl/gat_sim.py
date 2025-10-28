@@ -103,16 +103,12 @@ class GAT(nn.Module):
         x = norm(x)
         return x
 
-    def _compute_logits(self, x):
-        logits = self.lm_head(x)
-        logits = 30 * torch.tanh(logits / 30)
-        return logits.float()
-
     def forward(self, idx, memory_span):
-        """idx is the full token sequence"""
 
         x = self._forward_pass(idx, memory_span)
-        logits = self._compute_logits(x)
+        logits = self.lm_head(x)
+        logits = 30 * torch.tanh(logits / 30)
+        logits = logits.float()
 
         # --- loss --- 
         loss = F.cross_entropy(
@@ -125,6 +121,19 @@ class GAT(nn.Module):
         bos_pos_mask = torch.logical_and(idx[:, :-1] != BOS_TOKEN_ID, idx[:, 1:] != BOS_TOKEN_ID).view(-1).float()        
         loss = loss * bos_pos_mask
         return loss, logits.detach()
+
+    def denoise(self, idx, memory_span, recursion_mask): 
+
+        x = self._forward_pass(idx, memory_span)
+        logits = self.lm_head(x)
+        logits = 30 * torch.tanh(logits / 30)
+        logits = logits.float()
+
+        predict_mask = torch.roll(recursion_mask, -1, dims=1)
+        predict_mask[:, -1] = False
+        recursion_logits = logits[predict_mask]
+        return recursion_logits
+
 
 def get_next_token_level(seq_length, abstraction_interval):
     # assumes L=2 (to be extended)
@@ -147,13 +156,11 @@ def get_logits_mask(level, vocab_sizes):
     
     return mask
 
-def _discrete_recursion_step(model, idx, logits, recursion_mask, temperature=0.0):
+def _discrete_recursion_step(model, idx, recursion_mask, memory_span, temperature=0.0):
     """Perform one step of discrete recursion, updating idx in-place."""
     levels = infer_level(idx, model.vocab_sizes)
     
-    predict_mask = torch.roll(recursion_mask, -1, dims=1)
-    predict_mask[:, -1] = False
-    recursion_logits = logits[predict_mask]
+    recursion_logits = model.denoise(idx, memory_span, recursion_mask)
     
     recursion_levels = levels[recursion_mask]
     logits_mask = get_logits_mask(recursion_levels, model.vocab_sizes)
@@ -188,7 +195,7 @@ def recursion(model, idx, max_iterations=5, n_continuous=1, do_discrete=True, me
         # --- recursion (no grad) --- 
         with torch.no_grad(): 
             if do_discrete:
-                idx = _discrete_recursion_step(model, idx, logits, recursion_mask, temperature)
+                idx = _discrete_recursion_step(model, idx, recursion_mask, memory_span, temperature)
             
         # --- loss (with grad) ---
         loss, logits = model.forward(idx,memory_span)
@@ -198,7 +205,7 @@ def recursion(model, idx, max_iterations=5, n_continuous=1, do_discrete=True, me
 
     return idx, total_loss
 
-@torch.no_grad()
+
 def search(model, idx, max_iterations, n_continuous, memory_span, temperature, K):
     """Recursion without loss computation"""
     idx = idx.clone() 
