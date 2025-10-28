@@ -305,7 +305,8 @@ for i in range(warmup_steps):
     # GAT specific function 
     # --- sorl search --- 
     search_start = time.time()
-    search_tokens, search_ppt, search_adv = sorl_search(tokens, model, n=args.n, K=args.K, max_iterations=args.max_iterations, memory_span=memory_span, temperature=args.temperature)
+    with torch.no_grad():
+        search_tokens, search_ppt, search_adv = sorl_search(tokens, model, n=args.n, K=args.K, max_iterations=args.max_iterations, memory_span=memory_span, temperature=args.temperature)
     search_end = time.time()
     print(f" :: Sorl search takes {search_end - search_start} second")
     # --- compute loss --- 
@@ -338,7 +339,7 @@ print("--------"*10)
 print("Train & Evaluation")
 
 train_loader = distributed_data_generator(args.train_files, world_size * args.train_seq_len, rank, world_size)
-print0(f"- [DEBUG] train seq len: {world_size * args.train_seq_len} | val seq len: {args.val_seq_len}") 
+print(f"- [DEBUG] train seq len: {world_size * args.train_seq_len} | val seq len: {args.val_seq_len}") 
 
 training_time_ms = 0
 # start the clock
@@ -373,7 +374,7 @@ for step in range(train_steps + 1):
                 val_loss["traj_loss"] += traj_loss
                 val_loss["abs_loss"] += abs_loss
                 val_loss["search_advantage"] += search_adv.mean()
-                print0(f" - [DEBUG] step: {step} | val_loss: {traj_loss.item()} | abs_loss: {abs_loss.item()} | search_advantage: {search_adv.mean().item()}")
+                print(f" - [DEBUG] step: {step} | val_loss: {traj_loss.item()} | abs_loss: {abs_loss.item()} | search_advantage: {search_adv.mean().item()}")
 
         for name in val_loss: 
             val_loss[name] /= val_steps
@@ -402,7 +403,8 @@ for step in range(train_steps + 1):
     # --------------- TRAINING SECTION -----------------
     for accum_step in range(train_accumulation_steps): 
         tokens = next(train_loader)
-        search_tokens, search_ppt, search_adv = sorl_search(tokens, model, n=args.n, K=args.K, max_iterations=args.max_iterations, memory_span=memory_span, temperature=args.temperature)
+        with torch.no_grad(): 
+            search_tokens, search_ppt, search_adv = sorl_search(tokens, model, n=args.n, K=args.K, max_iterations=args.max_iterations, memory_span=memory_span, temperature=args.temperature)
         traj_loss, abs_loss = compute_loss(search_tokens, model, memory_span=memory_span)
         loss = traj_loss + abs_loss
         loss.backward()
