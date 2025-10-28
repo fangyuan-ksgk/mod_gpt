@@ -51,14 +51,14 @@ def sorl_rollout(data: torch.Tensor, model: GAT, n: int, K: int, max_iterations:
     repeat_data = insert_tokens(repeat_data, insert_mask, model.vocab_sizes[0].item())
 
     # --- search --- 
-    greedy_data, _ = search(model, repeat_data[:1], max_iterations=max_iterations, 
+    greedy_data, _ = recursion(model, repeat_data[:1], max_iterations=max_iterations, 
                             n_continuous=n_continuous, memory_span=memory_span, 
                             temperature=0.0, K=K)
 
     if n == 1: 
         return greedy_data
     else: 
-        stochastic_data, _ = search(model, repeat_data[1:], max_iterations=max_iterations, 
+        stochastic_data, _ = recursion(model, repeat_data[1:], max_iterations=max_iterations, 
                                     n_continuous=n_continuous, memory_span=memory_span, 
                                     temperature=temperature, K=K)
 

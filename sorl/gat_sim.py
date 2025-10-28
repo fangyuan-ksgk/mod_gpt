@@ -143,80 +143,45 @@ def get_logits_mask(level, vocab_sizes):
     
     return mask
 
-def denoise(model, idx, memory_span, recursion_mask):     
-    loss, logits = model.forward(idx, memory_span)
+@torch.compile
+def extract_and_sample(logits, idx, recursion_mask, vocab_sizes, temperature):
+    """Compiled helper: extract masked logits and sample."""
+    levels = infer_level(idx, vocab_sizes)
     
     predict_mask = torch.roll(recursion_mask, -1, dims=1)
     predict_mask[:, -1] = False
     recursion_logits = logits[predict_mask]
-    return recursion_logits
-
-def _discrete_recursion_step(model, idx, recursion_mask, memory_span, temperature=0.0):
-    """Perform one step of discrete recursion, updating idx in-place."""
-    levels = infer_level(idx, model.vocab_sizes)
-
-    recursion_logits = denoise(model, idx, memory_span, recursion_mask)
     
-    # process on logits to force token-level
     recursion_levels = levels[recursion_mask]
-    logits_mask = get_logits_mask(recursion_levels, model.vocab_sizes)
-    logits_mask = logits_mask.to(recursion_logits.device)
+    logits_mask = get_logits_mask(recursion_levels, vocab_sizes)
     recursion_logits = torch.where(
-        logits_mask, 
-        recursion_logits, 
+        logits_mask.to(recursion_logits.device),
+        recursion_logits,
         float('-inf')
     )
-
+    
     if temperature == 0.0:
         new_tokens = torch.argmax(recursion_logits, dim=-1)
     else:
-        new_tokens = torch.multinomial(F.softmax(recursion_logits / temperature, dim=-1), 
-                                        num_samples=1).squeeze(-1)
-    
+        probs = F.softmax(recursion_logits / temperature, dim=-1)
+        new_tokens = torch.multinomial(probs, num_samples=1).squeeze(-1)
+
     idx[recursion_mask] = new_tokens.to(idx.dtype)
     return idx
-
+    
 def recursion(model, idx, max_iterations=5, n_continuous=1, do_discrete=True, memory_span=1024, temperature=0.0):
 
-    idx = idx.clone() 
-
     levels = infer_level(idx, model.vocab_sizes)
-    abs_mask = levels > 0 
-    abs_mask[:, 0] = False # don't need to evict tokens during generation, we have sparse attention
-    recursion_mask = abs_mask.clone()
+    recursion_mask = levels > 0 
+    recursion_mask[:, 0] = False
 
-    abstract_repr = torch.zeros(abs_mask.sum(), model.n_embd, device=idx.device)
-
-    losses = [] 
-    for iteration in range(max_iterations): 
-
-        # --- recursion (no grad) --- 
-        with torch.no_grad(): 
-            if do_discrete:
-                idx = _discrete_recursion_step(model, idx, recursion_mask, memory_span, temperature)
-            
-        # --- loss (with grad) ---
-        loss, logits = model.forward(idx,memory_span)
-        losses.append(loss)
-
-    total_loss = sum(losses) / len(losses)
-
-    return idx, total_loss
-
-
-def search(model, idx, max_iterations, n_continuous, memory_span, temperature, K):
-    """Recursion without loss computation"""
-    idx = idx.clone() 
-        
-    levels = infer_level(idx, model.vocab_sizes)
-    abs_mask = levels > 0 
-    abs_mask[:, 0] = False
-    recursion_mask = abs_mask.clone()
-
-    for iteration in range(max_iterations): 
-
-        x = model._forward_pass(idx, memory_span)
-        logits = model._compute_logits(x)   
-        idx = _discrete_recursion_step(model, idx, logits, recursion_mask, temperature)
+    for _ in range(max_iterations): 
+        _, logits = model.forward(idx, memory_span)
+        idx = extract_and_sample(
+            logits, idx, recursion_mask, model.vocab_sizes, temperature
+        )
     
-    return idx, logits
+    # -- evaluation --
+    loss, _ = model.forward(idx, memory_span)
+
+    return idx, loss
