@@ -52,6 +52,15 @@ class GAT(nn.Module):
         self.register_buffer('vocab_sizes', torch.tensor(config.vocab_sizes))
         self.vocab_size = sum(self.vocab_sizes)
 
+        
+        level_starts = torch.cat([torch.tensor([0]), 
+                                  torch.cumsum(self.vocab_sizes, dim=0)[:-1] + 1])
+        level_ends = torch.cumsum(self.vocab_sizes, dim=0)
+        
+        self.register_buffer('level_starts', level_starts)
+        self.register_buffer('level_ends', level_ends)
+        
+
         self.transformer = nn.ModuleDict(dict(
             wte = nn.Embedding(self.vocab_size, config.n_embd),
             h = nn.ModuleList([Block(config) for _ in range(config.n_layer)]),
@@ -150,13 +159,8 @@ def extract_and_sample(logits, idx, recursion_mask, vocab_sizes, temperature):
     predict_mask[:, -1] = False
     recursion_logits = logits[predict_mask]
     
-    recursion_levels = levels[recursion_mask]
-    logits_mask = get_logits_mask(recursion_levels, vocab_sizes)
-    recursion_logits = torch.where(
-        logits_mask,
-        recursion_logits,
-        float('-inf')
-    )
+    abstract_start = vocab_sizes[0]
+    recursion_logits[:, abstract_start:] = float('-inf')
     
     if temperature == 0.0:
         new_tokens = torch.argmax(recursion_logits, dim=-1)
