@@ -180,7 +180,7 @@ class Hyperparameters:
     val_files : str = "data/fineweb10B/fineweb_val_*.bin" # input .bin to eval validation loss on
     val_tokens : int = 10485760 # how many tokens of validation data? it's important to keep this fixed for consistent comparisons
     train_seq_len : int = 32*1024 # FlexAttention sequence length (per GPU)
-    val_seq_len : int = 64*1024 # FlexAttention sequence length for validation (per GPU)
+    val_seq_len : int = 32*1024 # FlexAttention sequence length for validation (per GPU)
     batch_size : int = 8 # Batch size, across all devices
     # optimization
     num_iterations : int = 1750 # number of iterations to run
