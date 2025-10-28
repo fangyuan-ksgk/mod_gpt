@@ -1,5 +1,6 @@
 import torch
 from sorl.gat_act import BOS_TOKEN_ID, search, GAT, recursion, infer_level
+# from sorl.gat_sim import BOS_TOKEN_ID, search, GAT, recursion, infer_level
 
 def infer_rythmic_insert_mask(tokens, K):
     assert tokens.shape[0] == 1, "only one sample is supported"
@@ -135,6 +136,7 @@ def sorl_search(tokens, model, n=3, K=3, max_iterations=1,
 
 def compute_loss(best_data, model, memory_span: int, n_continuous: int = 0):
     """Compute trajectory and abstraction loss from sorl_search output."""
+
     _, best_ppt = recursion(model, best_data, max_iterations=1, n_continuous=n_continuous, do_discrete=False, memory_span=memory_span)
     best_ppt = best_ppt.reshape(best_data.shape[0], -1)
 
