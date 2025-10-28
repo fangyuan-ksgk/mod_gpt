@@ -340,6 +340,8 @@ print("--------"*10)
 print("Train & Evaluation")
 
 train_loader = distributed_data_generator(args.train_files, world_size * args.train_seq_len, rank, world_size)
+print0(f"- [DEBUG] train seq len: {world_size * args.train_seq_len} | val seq len: {args.val_seq_len}") 
+
 training_time_ms = 0
 # start the clock
 torch.cuda.synchronize()
@@ -373,7 +375,8 @@ for step in range(train_steps + 1):
                 val_loss["traj_loss"] += traj_loss
                 val_loss["abs_loss"] += abs_loss
                 val_loss["search_advantage"] += search_adv.mean()
-                
+                print0(f" - [DEBUG] step: {step} | val_loss: {traj_loss.item()} | abs_loss: {abs_loss.item()} | search_advantage: {search_adv.mean().item()}")
+
         for name in val_loss: 
             val_loss[name] /= val_steps
             dist.all_reduce(val_loss[name], op=dist.ReduceOp.AVG)            
