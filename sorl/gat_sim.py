@@ -21,16 +21,6 @@ class GATConfig:
     device: str = "cuda" if torch.cuda.is_available() else "cpu"
     _compile: bool = True if device == "cuda" else False
 
-
-def infer_level(indices: torch.Tensor, vocab_sizes: torch.Tensor):
-    if indices.dtype in [torch.uint8, torch.uint16, torch.uint32, torch.uint64]:
-        indices = indices.long()
-    
-    indices_expanded = indices.unsqueeze(-1)
-    levels = (indices_expanded < vocab_sizes.cumsum(dim=0)).int().argmax(dim=-1)
-    return levels
-
-
 get_level_mask_tokens = lambda vocab_sizes: torch.cat(
     (
         torch.tensor([0]),
@@ -79,7 +69,7 @@ class GAT(nn.Module):
 
         docs = (idx == BOS_TOKEN_ID).cumsum(1)
         
-        levels = infer_level(idx, self.vocab_sizes)
+        levels = (idx >= self.vocab_sizes[0]).long()
 
         def causal_mask(b, h, q_idx, kv_idx):
             causal_mask = q_idx >= kv_idx
@@ -153,7 +143,6 @@ def get_logits_mask(level, vocab_sizes):
 @torch.compile
 def extract_and_sample(logits, idx, recursion_mask, vocab_sizes, temperature):
     """Compiled helper: extract masked logits and sample."""
-    levels = infer_level(idx, vocab_sizes)
     
     predict_mask = torch.roll(recursion_mask, -1, dims=1)
     predict_mask[:, -1] = False
@@ -173,8 +162,7 @@ def extract_and_sample(logits, idx, recursion_mask, vocab_sizes, temperature):
     
 def recursion(model, idx, max_iterations=5, memory_span=1024, temperature=0.0):
 
-    levels = infer_level(idx, model.vocab_sizes)
-    recursion_mask = levels > 0 
+    recursion_mask = (idx >= model.vocab_sizes[0])
     recursion_mask[:, 0] = False
 
     for _ in range(max_iterations): 

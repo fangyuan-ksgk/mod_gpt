@@ -1,6 +1,6 @@
 import torch
 # from sorl.gat_act import BOS_TOKEN_ID, search, GAT, recursion, infer_level
-from sorl.gat_sim import BOS_TOKEN_ID, GAT, recursion, infer_level
+from sorl.gat_sim import BOS_TOKEN_ID, GAT, recursion
 
 @torch.compile
 def infer_rythmic_insert_mask(tokens, K):
@@ -116,7 +116,7 @@ def sorl_search(tokens, model, n=3, K=3, max_iterations=1,
     search_ppt = search_ppt.reshape(search_data.shape[0], -1)
    
     # --- select best rollouts (based on trajectory perplexity) ---
-    levels = infer_level(search_data, model.vocab_sizes)
+    levels = (search_data >= model.vocab_sizes[0]).long()
     best_data, best_ppt, best_ppt_advantage = select_best_per_doc(search_data, search_ppt, levels)
     return best_data, best_ppt, best_ppt_advantage
 
@@ -133,7 +133,7 @@ def compute_loss(best_data, model, memory_span: int, n_continuous: int = 0):
     best_ppt, _ = model.forward(best_data, memory_span)
     best_ppt = best_ppt.reshape(best_data.shape[0], -1)
 
-    levels = infer_level(best_data, model.vocab_sizes)[:, 1:]
+    levels = (best_data >= model.vocab_sizes[0]).long()[:, 1:]
 
     traj_mask = (levels == 0).float()[0]
     traj_loss = (best_ppt * traj_mask).sum() / traj_mask.sum().clamp(min=1)
