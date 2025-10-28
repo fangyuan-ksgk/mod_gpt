@@ -122,17 +122,6 @@ class GAT(nn.Module):
         loss = loss * bos_pos_mask
         return loss, logits.detach()
 
-    def denoise(self, idx, memory_span, recursion_mask): 
-
-        _, logits = self.forward(idx, memory_span)
-
-        predict_mask = torch.roll(recursion_mask, -1, dims=1)
-        predict_mask[:, -1] = False
-        recursion_logits = logits[predict_mask]
-        
-        return recursion_logits
-
-
 def get_next_token_level(seq_length, abstraction_interval):
     # assumes L=2 (to be extended)
     assert seq_length > 0, "Sequence length must be greater than 0"
@@ -154,18 +143,30 @@ def get_logits_mask(level, vocab_sizes):
     
     return mask
 
+def denoise(model, idx, memory_span, recursion_mask):     
+    loss, logits = model.forward(idx, memory_span)
+    
+    predict_mask = torch.roll(recursion_mask, -1, dims=1)
+    predict_mask[:, -1] = False
+    recursion_logits = logits[predict_mask]
+    return recursion_logits
+
 def _discrete_recursion_step(model, idx, recursion_mask, memory_span, temperature=0.0):
     """Perform one step of discrete recursion, updating idx in-place."""
     levels = infer_level(idx, model.vocab_sizes)
+
+    recursion_logits = denoise(model, idx, memory_span, recursion_mask)
     
-    recursion_logits = model.denoise(idx, memory_span, recursion_mask)
-    
+    # process on logits to force token-level
     recursion_levels = levels[recursion_mask]
     logits_mask = get_logits_mask(recursion_levels, model.vocab_sizes)
     logits_mask = logits_mask.to(recursion_logits.device)
-    recursion_logits = torch.where(logits_mask, recursion_logits, 
-                                    torch.tensor(float('-inf'), device=recursion_logits.device))
-    
+    recursion_logits = torch.where(
+        logits_mask, 
+        recursion_logits, 
+        float('-inf')
+    )
+
     if temperature == 0.0:
         new_tokens = torch.argmax(recursion_logits, dim=-1)
     else:
@@ -174,7 +175,6 @@ def _discrete_recursion_step(model, idx, recursion_mask, memory_span, temperatur
     
     idx[recursion_mask] = new_tokens.to(idx.dtype)
     return idx
-
 
 def recursion(model, idx, max_iterations=5, n_continuous=1, do_discrete=True, memory_span=1024, temperature=0.0):
 
