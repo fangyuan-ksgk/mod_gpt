@@ -2,19 +2,20 @@ import torch
 # from sorl.gat_act import BOS_TOKEN_ID, search, GAT, recursion, infer_level
 from sorl.gat_sim import BOS_TOKEN_ID, GAT, recursion, infer_level
 
+@torch.compile
 def infer_rythmic_insert_mask(tokens, K):
-    assert tokens.shape[0] == 1, "only one sample is supported"
-    within_doc_pos = torch.zeros_like(tokens, dtype=torch.long)
-    for b in range(tokens.shape[0]):
-        pos_counter = 0
-        for i in range(tokens.shape[1]):
-            if tokens[b, i] == BOS_TOKEN_ID:
-                pos_counter = 0
-            within_doc_pos[b, i] = pos_counter
-            pos_counter += 1
-
+    batch_size, seq_len = tokens.shape
+    assert batch_size == 1, "only one sample supported"
+    positions = torch.arange(seq_len, device=tokens.device).unsqueeze(0)
+    
+    is_bos = (tokens == BOS_TOKEN_ID).long()
+    bos_cumsum = is_bos.cumsum(dim=1)
+    bos_offsets = torch.zeros(batch_size, seq_len + 1, device=tokens.device, dtype=torch.long)
+    
+    bos_positions = positions * is_bos
+    bos_offsets.scatter_add_(1, bos_cumsum, bos_positions)
+    within_doc_pos = positions - bos_offsets.gather(1, bos_cumsum)
     insert_mask = (within_doc_pos % K == 0) & (within_doc_pos > 0)
-
     return insert_mask
 
 def insert_tokens(tokens, insert_mask, placeholder_token):
@@ -38,7 +39,7 @@ def insert_tokens(tokens, insert_mask, placeholder_token):
     return expanded_tokens
 
 @torch.no_grad()
-def sorl_rollout(data: torch.Tensor, model: GAT, n: int, K: int, max_iterations: int, n_continuous: int, memory_span: int, temperature: float):
+def sorl_rollout(data: torch.Tensor, model: GAT, n: int, K: int, max_iterations: int, memory_span: int, temperature: float):
     """
     Perform rollout with 1 greedy sample and (n-1) stochastic samples.
     """
@@ -47,20 +48,18 @@ def sorl_rollout(data: torch.Tensor, model: GAT, n: int, K: int, max_iterations:
 
     # --- repeat data & add placeholder tokens ---
     insert_mask = infer_rythmic_insert_mask(data, K)
-    data = insert_tokens(data, insert_mask, model.vocab_sizes[0].item())[:, :data_len]
+    data = insert_tokens(data, insert_mask, model.vocab_sizes[0].item())[:, :data_len] # avoids recompilation
     repeat_data = data.repeat_interleave(n, dim=0)
 
     # --- search --- 
     greedy_data, greedy_ppt = recursion(model, repeat_data[:1], max_iterations=max_iterations, 
-                            n_continuous=n_continuous, memory_span=memory_span, 
-                            temperature=0.0)
+                            memory_span=memory_span, temperature=0.0)
 
     if n == 1: 
         return greedy_data, greedy_ppt
     else: 
         stochastic_data, stochastic_ppt = recursion(model, repeat_data[1:], max_iterations=max_iterations, 
-                                    n_continuous=n_continuous, memory_span=memory_span, 
-                                    temperature=temperature)
+                                    memory_span=memory_span, temperature=temperature)
 
         combined_data = torch.cat([greedy_data, stochastic_data], dim=0)
         combined_ppt = torch.cat([greedy_ppt, stochastic_ppt], dim=0)
@@ -76,6 +75,7 @@ def avg_ppt_per_sample(ppt, ppt_idx):
     counts = torch.zeros(n_r * n_d, device=ppt.device).scatter_add_(0, idx, torch.ones_like(ppt.reshape(-1)))
     return (sums / counts.clamp(min=1)).reshape(n_r, n_d)
 
+@torch.compile
 def select_best_per_doc(search_data, ppt, levels):
     """Select best rollout per document and stitch together."""
     trajectory_mask = (levels[:, 1:] == 0).float()
@@ -98,7 +98,7 @@ def select_best_per_doc(search_data, ppt, levels):
 import time
 
 def sorl_search(tokens, model, n=3, K=3, max_iterations=1,
-                n_continuous=0, memory_span=1024, temperature=1.0):
+                memory_span=1024, temperature=1.0):
     """
     Complete SoRL search pipeline:
     1. Generate n rollouts (1 greedy + (n-1) stochastic)
@@ -111,7 +111,6 @@ def sorl_search(tokens, model, n=3, K=3, max_iterations=1,
     # --- generate & evaluate rollouts ---
     search_data, search_ppt = sorl_rollout(tokens, model, n=n, K=K, 
                                max_iterations=max_iterations,
-                               n_continuous=n_continuous, 
                                memory_span=memory_span, 
                                temperature=temperature)
     search_ppt = search_ppt.reshape(search_data.shape[0], -1)
