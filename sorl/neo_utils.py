@@ -138,6 +138,6 @@ def compute_loss(best_data, model, memory_span: int, n_continuous: int = 0):
     traj_mask = (levels == 0).float()[0]
     traj_loss = (best_ppt * traj_mask).sum() / traj_mask.sum().clamp(min=1)
     abs_mask = 1 - traj_mask
-    abs_loss = (best_ppt * abs_mask).sum() / abs_mask.sum().clamp(min=1) if abs_mask.sum() > 0 else torch.tensor(0.0)
+    abs_loss = (best_ppt * abs_mask).sum() / abs_mask.sum().clamp(min=1) if abs_mask.sum() > 0 else torch.tensor(0.0, device=best_ppt.device, dtype=best_ppt.dtype)
     
     return traj_loss, abs_loss
