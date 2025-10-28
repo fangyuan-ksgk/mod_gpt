@@ -40,7 +40,6 @@ def parse_args():
     parser.add_argument("--n", type=int, default=2)
     parser.add_argument("--K", type=int, default=8)
     parser.add_argument("--max_iterations", type=int, default=1)
-    parser.add_argument("--n_continuous", type=int, default=0)
     parser.add_argument("--temperature", type=float, default=1.0)
     return parser.parse_args()
 
@@ -154,7 +153,7 @@ class Muon(torch.optim.Optimizer):
 # from src.model import GPT, GPTConfig
 
 # GAT model
-from sorl.gat_act import GAT, GATConfig
+from sorl.gat_sim import GAT, GATConfig
 from sorl.neo_utils import sorl_search, compute_loss
 
 # -----------------------------------------------------------------------------
@@ -199,7 +198,6 @@ class Hyperparameters:
     n: int = 2 # number of candidates to rollout
     K: int = 8 # abstract ratio
     max_iterations: int = 1 # max number of iterations to search
-    n_continuous: int = 0 # number of continuous iterations to search
     temperature: float = 1.0 # temperature for search
     
 cli_args = parse_args()
@@ -307,11 +305,11 @@ for i in range(warmup_steps):
     # GAT specific function 
     # --- sorl search --- 
     search_start = time.time()
-    search_tokens, search_ppt, search_adv = sorl_search(tokens, model, n=args.n, K=args.K, max_iterations=args.max_iterations, n_continuous=args.n_continuous, memory_span=memory_span, temperature=args.temperature)
+    search_tokens, search_ppt, search_adv = sorl_search(tokens, model, n=args.n, K=args.K, max_iterations=args.max_iterations, memory_span=memory_span, temperature=args.temperature)
     search_end = time.time()
     print(f" :: Sorl search takes {search_end - search_start} second")
     # --- compute loss --- 
-    traj_loss, abs_loss = compute_loss(search_tokens, model, n_continuous=args.n_continuous)
+    traj_loss, abs_loss = compute_loss(search_tokens, model, memory_span=memory_span)
     forward_end = time.time()
     print(f" :: Loss computation takes {forward_end - search_end} second")
     # --- backward --- 
@@ -370,8 +368,8 @@ for step in range(train_steps + 1):
         with torch.no_grad():
             for i in range(val_steps):
                 tokens = next(val_loader)
-                search_tokens, search_ppt, search_adv = sorl_search(tokens, model, n=args.n, K=args.K, max_iterations=args.max_iterations, n_continuous=args.n_continuous, memory_span=memory_span, temperature=args.temperature)
-                traj_loss, abs_loss = compute_loss(search_tokens, model, memory_span, n_continuous=args.n_continuous)
+                search_tokens, search_ppt, search_adv = sorl_search(tokens, model, n=args.n, K=args.K, max_iterations=args.max_iterations, memory_span=memory_span, temperature=args.temperature)
+                traj_loss, abs_loss = compute_loss(search_tokens, model, memory_span=memory_span)
                 val_loss["traj_loss"] += traj_loss
                 val_loss["abs_loss"] += abs_loss
                 val_loss["search_advantage"] += search_adv.mean()
@@ -404,8 +402,8 @@ for step in range(train_steps + 1):
     # --------------- TRAINING SECTION -----------------
     for accum_step in range(train_accumulation_steps): 
         tokens = next(train_loader)
-        search_tokens, search_ppt, search_adv = sorl_search(tokens, model, n=args.n, K=args.K, max_iterations=args.max_iterations, n_continuous=args.n_continuous, memory_span=memory_span, temperature=args.temperature)
-        traj_loss, abs_loss = compute_loss(search_tokens, model, memory_span, n_continuous=args.n_continuous)
+        search_tokens, search_ppt, search_adv = sorl_search(tokens, model, n=args.n, K=args.K, max_iterations=args.max_iterations, memory_span=memory_span, temperature=args.temperature)
+        traj_loss, abs_loss = compute_loss(search_tokens, model, memory_span=memory_span)
         loss = traj_loss + abs_loss
         loss.backward()
         print0(f" - step: {step} | accum step: {accum_step} | traj_loss: {traj_loss.item()} | abs_loss: {abs_loss.item()} | search_advantage: {search_adv.mean().item()}")
