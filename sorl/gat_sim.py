@@ -125,13 +125,13 @@ class GAT(nn.Module):
     def denoise(self, idx, memory_span, recursion_mask): 
 
         x = self._forward_pass(idx, memory_span)
-        logits = self.lm_head(x)
-        logits = 30 * torch.tanh(logits / 30)
-        logits = logits.float()
 
         predict_mask = torch.roll(recursion_mask, -1, dims=1)
         predict_mask[:, -1] = False
-        recursion_logits = logits[predict_mask]
+
+        x = x[predict_mask]
+        recursion_logits = self.lm_head(x)
+        recursion_logits = 30 * torch.tanh(recursion_logits / 30)
         return recursion_logits
 
 
