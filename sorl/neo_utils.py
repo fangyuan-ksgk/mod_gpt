@@ -75,7 +75,7 @@ def avg_ppt_per_sample(ppt, ppt_idx):
     counts = torch.zeros(n_r * n_d, device=ppt.device).scatter_add_(0, idx, torch.ones_like(ppt.reshape(-1)))
     return (sums / counts.clamp(min=1)).reshape(n_r, n_d)
 
-@torch.compile
+
 def select_best_per_doc(search_data, ppt, levels):
     """Select best rollout per document and stitch together."""
     trajectory_mask = (levels[:, 1:] == 0).float()
