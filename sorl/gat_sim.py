@@ -26,7 +26,6 @@ def infer_level(indices: torch.Tensor, vocab_sizes: torch.Tensor):
     if indices.dtype in [torch.uint8, torch.uint16, torch.uint32, torch.uint64]:
         indices = indices.long()
     
-    vocab_sizes = vocab_sizes.to(indices.device)
     indices_expanded = indices.unsqueeze(-1)
     levels = (indices_expanded < vocab_sizes.cumsum(dim=0)).int().argmax(dim=-1)
     return levels
@@ -50,7 +49,7 @@ class GAT(nn.Module):
         # Add learnable skip connection weights for decoder layers
         self.skip_weights = nn.Parameter(torch.ones(self.num_decoder_layers))
 
-        self.vocab_sizes = torch.tensor(config.vocab_sizes)
+        self.register_buffer('vocab_sizes', torch.tensor(config.vocab_sizes))
         self.vocab_size = sum(self.vocab_sizes)
 
         self.transformer = nn.ModuleDict(dict(
@@ -134,7 +133,6 @@ def get_logits_mask(level, vocab_sizes):
     level_starts = torch.cat([torch.tensor([0], device=vocab_sizes.device), torch.cumsum(vocab_sizes, dim=0)[:-1] + 1])
     level_ends = torch.cumsum(vocab_sizes, dim=0)
 
-    level = level.to(vocab_sizes.device)
     start_logits = level_starts[level]
     end_logits = level_ends[level]
     
@@ -155,7 +153,7 @@ def extract_and_sample(logits, idx, recursion_mask, vocab_sizes, temperature):
     recursion_levels = levels[recursion_mask]
     logits_mask = get_logits_mask(recursion_levels, vocab_sizes)
     recursion_logits = torch.where(
-        logits_mask.to(recursion_logits.device),
+        logits_mask,
         recursion_logits,
         float('-inf')
     )
@@ -169,7 +167,7 @@ def extract_and_sample(logits, idx, recursion_mask, vocab_sizes, temperature):
     idx[recursion_mask] = new_tokens.to(idx.dtype)
     return idx
     
-def recursion(model, idx, max_iterations=5, n_continuous=1, do_discrete=True, memory_span=1024, temperature=0.0):
+def recursion(model, idx, max_iterations=5, memory_span=1024, temperature=0.0):
 
     levels = infer_level(idx, model.vocab_sizes)
     recursion_mask = levels > 0 

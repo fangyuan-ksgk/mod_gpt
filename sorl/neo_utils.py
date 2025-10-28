@@ -1,6 +1,6 @@
 import torch
-from sorl.gat_act import BOS_TOKEN_ID, search, GAT, recursion, infer_level
-# from sorl.gat_sim import BOS_TOKEN_ID, search, GAT, recursion, infer_level
+# from sorl.gat_act import BOS_TOKEN_ID, search, GAT, recursion, infer_level
+from sorl.gat_sim import BOS_TOKEN_ID, GAT, recursion, infer_level
 
 def infer_rythmic_insert_mask(tokens, K):
     assert tokens.shape[0] == 1, "only one sample is supported"
@@ -43,27 +43,29 @@ def sorl_rollout(data: torch.Tensor, model: GAT, n: int, K: int, max_iterations:
     Perform rollout with 1 greedy sample and (n-1) stochastic samples.
     """
     assert data.shape[0] == 1, "only single sample supported"
+    data_len = data.shape[1]
 
     # --- repeat data & add placeholder tokens ---
     insert_mask = infer_rythmic_insert_mask(data, K)
+    data = insert_tokens(data, insert_mask, model.vocab_sizes[0].item())[:, :data_len]
     repeat_data = data.repeat_interleave(n, dim=0)
-    insert_mask = insert_mask.repeat_interleave(n, dim=0)
-    repeat_data = insert_tokens(repeat_data, insert_mask, model.vocab_sizes[0].item())
 
     # --- search --- 
-    greedy_data, _ = recursion(model, repeat_data[:1], max_iterations=max_iterations, 
+    greedy_data, greedy_ppt = recursion(model, repeat_data[:1], max_iterations=max_iterations, 
                             n_continuous=n_continuous, memory_span=memory_span, 
-                            temperature=0.0, K=K)
+                            temperature=0.0)
 
     if n == 1: 
-        return greedy_data
+        return greedy_data, greedy_ppt
     else: 
-        stochastic_data, _ = recursion(model, repeat_data[1:], max_iterations=max_iterations, 
+        stochastic_data, stochastic_ppt = recursion(model, repeat_data[1:], max_iterations=max_iterations, 
                                     n_continuous=n_continuous, memory_span=memory_span, 
-                                    temperature=temperature, K=K)
+                                    temperature=temperature)
 
         combined_data = torch.cat([greedy_data, stochastic_data], dim=0)
-        return combined_data
+        combined_ppt = torch.cat([greedy_ppt, stochastic_ppt], dim=0)
+        return combined_data, combined_ppt
+
 
 def avg_ppt_per_sample(ppt, ppt_idx):
     """Average perplexity per document, per rollout."""
@@ -106,25 +108,17 @@ def sorl_search(tokens, model, n=3, K=3, max_iterations=1,
     - best_data: Best rollout per document [1, seq_len]
     - best_ppt: Perplexity of best rollout [seq_len - 1]
     """
-    # --- generate rollouts ---
-    t0 = time.time()
-    search_data = sorl_rollout(tokens, model, n=n, K=K, 
+    # --- generate & evaluate rollouts ---
+    search_data, search_ppt = sorl_rollout(tokens, model, n=n, K=K, 
                                max_iterations=max_iterations,
                                n_continuous=n_continuous, 
                                memory_span=memory_span, 
                                temperature=temperature)
-    t1 = time.time()    
-    # --- evaluate rollouts ---
-    with torch.no_grad(): 
-        _, ppt = recursion(model, search_data, max_iterations=1, 
-                        n_continuous=n_continuous, do_discrete=False)
-        ppt = ppt.reshape(search_data.shape[0], -1)
-    t2 = time.time()
+    search_ppt = search_ppt.reshape(search_data.shape[0], -1)
+   
     # --- select best rollouts (based on trajectory perplexity) ---
     levels = infer_level(search_data, model.vocab_sizes)
-    best_data, best_ppt, best_ppt_advantage = select_best_per_doc(search_data, ppt, levels)
-    t3 = time.time()
-    print(f" sorl_search time: {t3 - t0} seconds, rollout: {t1 - t0} seconds, recursion time: {t2 - t1} seconds, selection time: {t3 - t2} seconds")
+    best_data, best_ppt, best_ppt_advantage = select_best_per_doc(search_data, search_ppt, levels)
     return best_data, best_ppt, best_ppt_advantage
 
 
@@ -137,7 +131,7 @@ def sorl_search(tokens, model, n=3, K=3, max_iterations=1,
 def compute_loss(best_data, model, memory_span: int, n_continuous: int = 0):
     """Compute trajectory and abstraction loss from sorl_search output."""
 
-    _, best_ppt = recursion(model, best_data, max_iterations=1, n_continuous=n_continuous, do_discrete=False, memory_span=memory_span)
+    best_ppt, _ = model.forward(best_data, memory_span)
     best_ppt = best_ppt.reshape(best_data.shape[0], -1)
 
     levels = infer_level(best_data, model.vocab_sizes)[:, 1:]
