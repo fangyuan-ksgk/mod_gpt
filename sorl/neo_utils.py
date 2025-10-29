@@ -6,8 +6,8 @@ from sorl.gat_sim import BOS_TOKEN_ID, GAT, recursion
 def infer_rythmic_insert_mask(tokens, K):
     batch_size, seq_len = tokens.shape
     assert batch_size == 1, "only one sample supported"
-    positions = torch.arange(seq_len, device=tokens.device).unsqueeze(0)
-    
+    positions = torch.arange(1, seq_len + 1, device=tokens.device).unsqueeze(0)
+
     is_bos = (tokens == BOS_TOKEN_ID).long()
     bos_cumsum = is_bos.cumsum(dim=1)
     bos_offsets = torch.zeros(batch_size, seq_len + 1, device=tokens.device, dtype=torch.long)

@@ -149,7 +149,7 @@ def extract_and_sample(logits, idx, recursion_mask, vocab_sizes, temperature):
     recursion_logits = logits[predict_mask]
     
     abstract_start = vocab_sizes[0]
-    recursion_logits[:, abstract_start:] = float('-inf')
+    recursion_logits[:, :abstract_start] = float('-inf')
     
     if temperature == 0.0:
         new_tokens = torch.argmax(recursion_logits, dim=-1)
