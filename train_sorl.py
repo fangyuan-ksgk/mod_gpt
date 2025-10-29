@@ -31,7 +31,7 @@ def parse_args():
     parser.add_argument("--val_files", type=str, default="data/fineweb10B/fineweb_val_*.bin")
     parser.add_argument("--test_files", type=str, default="data/multiplication_test_ood*.bin")
     parser.add_argument("--train_seq_len", type=int, default=32*1024)
-    parser.add_argument("--val_seq_len", type=int, default=16*1024)
+    parser.add_argument("--val_seq_len", type=int, default=32*1024)
     parser.add_argument("--log_grad_info", action="store_true")
     parser.add_argument("--num_iterations", type=int, default=1750)
     parser.add_argument("--use_prior_weights", action="store_true")
@@ -339,7 +339,7 @@ print("--------"*10)
 print("Train & Evaluation")
 
 train_loader = distributed_data_generator(args.train_files, world_size * args.train_seq_len, rank, world_size)
-print(f"- [DEBUG] train seq len: {world_size * args.train_seq_len} | val seq len: {args.val_seq_len}") 
+print(f"- [DEBUG] train seq len: {world_size * args.train_seq_len} | val seq len: {world_size *args.val_seq_len} | warmup seq len: {args.train_seq_len}") 
 
 training_time_ms = 0
 # start the clock
