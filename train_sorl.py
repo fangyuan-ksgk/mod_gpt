@@ -374,7 +374,6 @@ for step in range(train_steps + 1):
                 val_loss["traj_loss"] += traj_loss
                 val_loss["abs_loss"] += abs_loss
                 val_loss["search_advantage"] += search_adv.mean()
-                print(f" - [DEBUG] step: {step} | val_loss: {traj_loss.item()} | abs_loss: {abs_loss.item()} | search_advantage: {search_adv.mean().item()}")
 
         for name in val_loss: 
             val_loss[name] /= val_steps
