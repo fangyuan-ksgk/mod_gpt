@@ -216,10 +216,10 @@ print0("="*100)
 ########################################
 
 model_config = GPTConfig(
-    vocab_size=args.vocab_size, 
-    num_layers=12,
-    num_heads=6,
-    model_dim=768,
+    vocab_size=50304, 
+    n_layer=12,
+    n_head=6,
+    n_embd=768,
     flex_kernel_options={
         "BLOCK_M": 64, "BLOCK_N": 64,
         "BLOCK_M1": 32, "BLOCK_N1": 64, "BLOCK_M2": 64, "BLOCK_N2": 32
