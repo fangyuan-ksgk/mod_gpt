@@ -11,6 +11,8 @@ from torch.nn.attention.flex_attention import flex_attention, create_block_mask
 def norm(x):
     return F.rms_norm(x, (x.size(-1),))
 
+def next_multiple_of_n(v: float | int, *, n: int):
+    return next(x for x in range(n, int(v) + 1 + n, n) if x >= v)
 
 class CastedLinear(nn.Linear):
     def __init__(self, in_features, out_features):
