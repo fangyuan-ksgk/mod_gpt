@@ -283,7 +283,7 @@ warmup_steps = 10
 initial_state = dict(model=copy.deepcopy(model.state_dict()),
                      optimizers=[copy.deepcopy(opt.state_dict()) for opt in optimizers]) # save the initial state
 for _ in range(warmup_steps):
-    inputs = targets = torch.randint(0, args.vocab_size, size=(args.train_seq_len,), device="cuda")
+    inputs = targets = torch.randint(0, args.vocab_size, size=(1, args.train_seq_len - 1), device="cuda")
     model(inputs.to(torch.int32), targets, get_window_size_blocks(0)).backward()
     for opt in optimizers:
         opt.step()
