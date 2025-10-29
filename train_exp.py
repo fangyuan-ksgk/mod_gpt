@@ -148,8 +148,8 @@ def distributed_data_generator(filename_pattern: str, batch_size: int, rank : in
         if pos + batch_size + 1 >= len(tokens):
             tokens, pos = _load_data_shard(next(file_iter)), 0
         buf = tokens[pos + rank * local_batch_size:][:local_batch_size + 1]
-        inputs = buf[:-1].to(device="cuda", dtype=torch.int32, non_blocking=True) # no sync on host side;
-        targets = buf[1:].to(device="cuda", dtype=torch.int64, non_blocking=True) # H2D in another stream isn't helpful.
+        inputs = buf[None, :-1].to(device="cuda", dtype=torch.int32, non_blocking=True) # no sync on host side;
+        targets = buf[None, 1:].to(device="cuda", dtype=torch.int64, non_blocking=True) # H2D in another stream isn't helpful.
         pos += batch_size
         yield inputs, targets
 
@@ -234,7 +234,7 @@ for param in model.parameters():
     dist.broadcast(param.detach(), 0)
 
 # collect the parameters to optimize
-hidden_matrix_params = [p for n, p in model.blocks.named_parameters() if p.ndim >= 2 and "embed" not in n]
+hidden_matrix_params = [p for n,p in model.transformer.h.named_parameters() if p.ndim >= 2 and "embed" not in n]
 embed_params = [p for n, p in model.named_parameters() if "embed" in n]
 scalar_params = [p for p in model.parameters() if p.ndim < 2]
 head_params = [model.lm_head.weight]
