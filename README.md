@@ -9,3 +9,13 @@ python data/cached_fineweb10B.py 8 # downloads only the first 800M training toke
 python data/arithmetic.py # generate arithmetic dataset
 bash run.sh
 ```
+
+For baseline (GPT-2), run 
+```bash
+torchrun --standalone --nproc_per_node=1 train_base.py
+```
+
+For SoRL, run 
+```bash
+torchrun --standalone --nproc_per_node=1 train_sorl.py
+```
