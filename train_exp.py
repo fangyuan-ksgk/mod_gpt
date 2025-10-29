@@ -168,6 +168,7 @@ class Hyperparameters:
     val_tokens = 10485760 # how many tokens of validation data? it's important to keep this fixed for consistent comparisons
     train_seq_len = 32*1024 # FlexAttention sequence length
     val_seq_len = 32*1024 # FlexAttention sequence length for validation
+    batch_size = 16 # Batch size
     # optimization
     num_iterations = 1770 # number of iterations to run
     cooldown_frac = 0.4 # fraction of training spent cooling down the learning rate
@@ -188,6 +189,8 @@ torch.cuda.set_device(device)
 dist.init_process_group(backend="nccl", device_id=device)
 dist.barrier()
 master_process = (rank == 0) # this process will do logging, checkpointing etc.
+assert args.batch_size % (world_size) == 0
+train_accumulation_steps = args.batch_size // world_size
 
 # begin logging
 logfile = None
@@ -431,10 +434,9 @@ for step in range(train_steps + 1):
         break
 
     # --------------- TRAINING SECTION -----------------
-    inputs, targets = next(train_loader)
-    model(inputs, targets, get_window_size_blocks(step)).backward()
-    #for param in model.parameters():
-    #    dist.all_reduce(param.grad, op=dist.ReduceOp.AVG)
+    for _ in range(train_accumulation_steps): 
+        inputs, targets = next(train_loader)
+        model(inputs, targets, get_window_size_blocks(step)).backward()   
     wait_for_gradients() # does the same thing as commented two lines above, but faster
 
     # set optimization hyperparameters
