@@ -7,6 +7,8 @@ from typing import Optional
 import torch.nn.functional as F
 from dataclasses import dataclass
 from torch.nn.attention.flex_attention import flex_attention, create_block_mask
+flex_attention = torch.compile(flex_attention, dynamic=False)
+create_block_mask = torch.compile(create_block_mask, dynamic=False)
 
 def norm(x):
     return F.rms_norm(x, (x.size(-1),))

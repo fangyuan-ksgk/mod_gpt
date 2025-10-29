@@ -1,3 +1,7 @@
+# This script only work on 8xH100 
+# - it doesn't scale up 'gradient accumulation' steps when n_GPU << 8. 
+# - it seems faster only because the resulting accumulation step is constant (1). 
+
 import os
 import sys
 with open(sys.argv[0]) as f:

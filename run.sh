@@ -10,6 +10,8 @@
 # ------------------------------------------------------------------------------------------------------------------------------------------------------
 
 
+torchrun --standalone --nproc_per_node=1 train_exp.py --batch_size=16
+
 # Re-run Experiment to collect gradient info (for better plots) | Baseline 
 torchrun --standalone --nproc_per_node=4 train_pcgrad.py --positive_scale_factor 1.0 --negative_scale_factor 1.0 --batch_size=32 --log_grad_info
 
