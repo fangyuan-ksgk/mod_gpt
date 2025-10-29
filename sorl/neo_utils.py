@@ -1,6 +1,7 @@
 import torch
 # from sorl.gat_act import BOS_TOKEN_ID, search, GAT, recursion, infer_level
 from sorl.gat_sim import BOS_TOKEN_ID, GAT, recursion
+from typing import Optional
 
 @torch.compile
 def infer_rythmic_insert_mask(tokens, K):
@@ -98,7 +99,7 @@ def select_best_per_doc(search_data, ppt, levels):
 import time
 
 def sorl_search(tokens, model, n=3, K=3, max_iterations=1,
-                memory_span=1024, temperature=1.0):
+                memory_span=1024, temperature=1.0, loss_mask: Optional[torch.Tensor] = None):
     """
     Complete SoRL search pipeline:
     1. Generate n rollouts (1 greedy + (n-1) stochastic)
@@ -114,11 +115,13 @@ def sorl_search(tokens, model, n=3, K=3, max_iterations=1,
                                memory_span=memory_span, 
                                temperature=temperature)
     search_ppt = search_ppt.reshape(search_data.shape[0], -1)
-   
+    if loss_mask is not None:
+        search_ppt *= loss_mask[:, 1:]
+
     # --- select best rollouts (based on trajectory perplexity) ---
     levels = (search_data >= model.vocab_sizes[0]).long()
     best_data, best_ppt, best_ppt_advantage = select_best_per_doc(search_data, search_ppt, levels)
-    return best_data, best_ppt, best_ppt_advantage
+    return best_data, best_ppt, best_ppt_advantage.mean()
 
 
 
@@ -127,11 +130,13 @@ def sorl_search(tokens, model, n=3, K=3, max_iterations=1,
 # - [Reflection 1] it's not clear why we need to 'separate' loss for trajectory with loss for abstraction right? 
 #                  for instance, best_ppt.mean() is the simplest training target here
 
-def compute_loss(best_data, model, memory_span: int, n_continuous: int = 0):
+def compute_loss(best_data, model, memory_span: int, loss_mask: Optional[torch.Tensor] = None):
     """Compute trajectory and abstraction loss from sorl_search output."""
 
     best_ppt, _ = model.forward(best_data, memory_span)
     best_ppt = best_ppt.reshape(best_data.shape[0], -1)
+    if loss_mask is not None:
+        best_ppt *= loss_mask[:, 1:]
 
     levels = (best_data >= model.vocab_sizes[0]).long()[:, 1:]
 

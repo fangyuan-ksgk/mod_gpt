@@ -10,6 +10,7 @@ from sorl.model import norm
 import torch.nn as nn
 
 BOS_TOKEN_ID = 50256
+# BOS_TOKEN_ID = 15 | for copy & paste experiment
 
 @dataclass
 class GATConfig:
@@ -149,7 +150,7 @@ def extract_and_sample(logits, idx, recursion_mask, vocab_sizes, temperature):
     recursion_logits = logits[predict_mask]
     
     abstract_start = vocab_sizes[0]
-    recursion_logits[:, :abstract_start] = float('-inf')
+    recursion_logits[:, :abstract_start + 1] = float('-inf')
     
     if temperature == 0.0:
         new_tokens = torch.argmax(recursion_logits, dim=-1)
