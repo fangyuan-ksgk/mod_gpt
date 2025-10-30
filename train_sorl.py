@@ -37,7 +37,7 @@ def parse_args():
     parser.add_argument("--use_prior_weights", action="store_true")
     parser.add_argument("--prior_weight", type=str, default="natural")
 
-    parser.add_argument("--n", type=int, default=2)
+    parser.add_argument("--num_rollouts", type=int, default=2)
     parser.add_argument("--K", type=int, default=8)
     parser.add_argument("--max_iterations", type=int, default=1)
     parser.add_argument("--temperature", type=float, default=1.0)
@@ -197,7 +197,7 @@ class Hyperparameters:
     use_prior_weights: bool = False
     prior_weight: str = "natural"
     # sorl specific
-    n: int = 2 # number of candidates to rollout
+    num_rollouts: int = 2 # number of candidates to rollout
     K: int = 8 # abstract ratio
     max_iterations: int = 1 # max number of iterations to search
     temperature: float = 1.0 # temperature for search
@@ -318,7 +318,7 @@ for i in range(warmup_steps):
     # --- sorl search --- 
     search_start = time.time()
     with torch.no_grad():
-        search_tokens, search_ppt, search_adv = sorl_search(tokens, model, n=args.n, K=args.K, max_iterations=args.max_iterations, memory_span=memory_span, temperature=args.temperature)
+        search_tokens, search_ppt, search_adv = sorl_search(tokens, model, n=args.num_rollouts, K=args.K, max_iterations=args.max_iterations, memory_span=memory_span, temperature=args.temperature)
     search_end = time.time()
     print(f" :: Sorl search takes {search_end - search_start} second")
     # --- compute loss --- 
@@ -384,7 +384,7 @@ for step in range(train_steps + 1):
         with torch.no_grad():
             for i in range(val_steps):
                 tokens = next(val_loader)
-                search_tokens, search_ppt, search_adv = sorl_search(tokens, model, n=args.n, K=args.K, max_iterations=args.max_iterations, memory_span=memory_span, temperature=10.0)
+                search_tokens, search_ppt, search_adv = sorl_search(tokens, model, n=args.num_rollouts, K=args.K, max_iterations=args.max_iterations, memory_span=memory_span, temperature=10.0)
                 traj_loss, abs_loss = compute_loss(search_tokens, model, memory_span=memory_span)
                 val_loss["traj_loss"] += traj_loss
                 val_loss["abs_loss"] += abs_loss
@@ -418,7 +418,7 @@ for step in range(train_steps + 1):
     for accum_step in range(train_accumulation_steps): 
         tokens = next(train_loader)
         with torch.no_grad(): 
-            search_tokens, search_ppt, search_adv = sorl_search(tokens, model, n=args.n, K=args.K, max_iterations=args.max_iterations, memory_span=memory_span, temperature=args.temperature)
+            search_tokens, search_ppt, search_adv = sorl_search(tokens, model, n=args.num_rollouts, K=args.K, max_iterations=args.max_iterations, memory_span=memory_span, temperature=args.temperature)
         traj_loss, abs_loss = compute_loss(search_tokens, model, memory_span=memory_span)
         loss = traj_loss + abs_loss
         loss.backward()

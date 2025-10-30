@@ -35,7 +35,7 @@ torchrun --standalone --nproc_per_node=$N_GPUS train_sorl.py \
   --train_seq_len $TRAIN_SEQ_LEN \
   --val_seq_len $VAL_SEQ_LEN \
   --num_iterations $NUM_ITERATIONS \
-  --n 1 \
+  --num_rollouts 1 \
   --K 8 \
   --max_iterations 0 \
   --temperature 0.0
@@ -48,7 +48,7 @@ torchrun --standalone --nproc_per_node=$N_GPUS train_sorl.py \
   --train_seq_len $TRAIN_SEQ_LEN \
   --val_seq_len $VAL_SEQ_LEN \
   --num_iterations $NUM_ITERATIONS \
-  --n 2 \
+  --num_rollouts 2 \
   --K 8 \
   --max_iterations 1 \
   --temperature 1.0
@@ -66,7 +66,7 @@ torchrun --standalone --nproc_per_node=$N_GPUS train_sorl.py \
   --train_seq_len $TRAIN_SEQ_LEN \
   --val_seq_len $VAL_SEQ_LEN \
   --num_iterations $NUM_ITERATIONS \
-  --n 2 \
+  --num_rollouts 2 \
   --K 8 \
   --max_iterations 1 \
   --temperature 1.0 \
@@ -81,7 +81,7 @@ torchrun --standalone --nproc_per_node=$N_GPUS train_sorl.py \
   --train_seq_len $TRAIN_SEQ_LEN \
   --val_seq_len $VAL_SEQ_LEN \
   --num_iterations $NUM_ITERATIONS \
-  --n 2 \
+  --num_rollouts 2 \
   --K 8 \
   --max_iterations 1 \
   --temperature 1.0
@@ -101,7 +101,7 @@ for VOCAB in 64 256 512; do
     --train_seq_len $TRAIN_SEQ_LEN \
     --val_seq_len $VAL_SEQ_LEN \
     --num_iterations $NUM_ITERATIONS \
-    --n 2 \
+    --num_rollouts 2 \
     --K 8 \
     --max_iterations 1 \
     --temperature 1.0 \
@@ -122,7 +122,7 @@ for K in 2 8 32; do
     --train_seq_len $TRAIN_SEQ_LEN \
     --val_seq_len $VAL_SEQ_LEN \
     --num_iterations $NUM_ITERATIONS \
-    --n 2 \
+    --num_rollouts 2 \
     --K $K \
     --max_iterations 1 \
     --temperature 1.0
@@ -142,7 +142,7 @@ for TEMP in 0.1 0.5 1.0 2.0 5.0 10.0; do
     --train_seq_len $TRAIN_SEQ_LEN \
     --val_seq_len $VAL_SEQ_LEN \
     --num_iterations $NUM_ITERATIONS \
-    --n 2 \
+    --num_rollouts 2 \
     --K 8 \
     --max_iterations 1 \
     --temperature $TEMP
@@ -162,7 +162,7 @@ for ITERS in 2 3; do
     --train_seq_len $TRAIN_SEQ_LEN \
     --val_seq_len $VAL_SEQ_LEN \
     --num_iterations $NUM_ITERATIONS \
-    --n 2 \
+    --num_rollouts 2 \
     --K 8 \
     --max_iterations $ITERS \
     --temperature 1.0
@@ -182,7 +182,7 @@ for N in 2 4; do
     --train_seq_len $TRAIN_SEQ_LEN \
     --val_seq_len $VAL_SEQ_LEN \
     --num_iterations $NUM_ITERATIONS \
-    --n $N \
+    --num_rollouts $N \
     --K 8 \
     --max_iterations 1 \
     --temperature 1.0
