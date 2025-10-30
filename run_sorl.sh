@@ -1,13 +1,13 @@
 # Experiment Script for SoRL
 
 # Common settings
-BATCH_SIZE=16
+BATCH_SIZE=15
 TRAIN_FILES="data/fineweb10B/fineweb_train_*.bin"
 VAL_FILES="data/fineweb10B/fineweb_val_*.bin"
 TRAIN_SEQ_LEN=$((16 * 1024))  # 16K tokens (fits in 48GB)
 VAL_SEQ_LEN=$((16 * 1024))
 NUM_ITERATIONS=1750
-N_GPUS=2
+N_GPUS=3
 
 # ============================================================================
 # BASELINE EXPERIMENTS
