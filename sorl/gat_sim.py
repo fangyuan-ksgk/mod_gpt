@@ -9,8 +9,8 @@ import torch.nn.functional as F
 from sorl.model import norm
 import torch.nn as nn
 
-BOS_TOKEN_ID = 50256
-# BOS_TOKEN_ID = 15 | for copy & paste experiment
+# BOS_TOKEN_ID = 50256
+BOS_TOKEN_ID = 15
 
 @dataclass
 class GATConfig:
@@ -176,3 +176,8 @@ def recursion(model, idx, max_iterations=5, memory_span=1024, temperature=0.0):
     loss, _ = model.forward(idx, memory_span)
 
     return idx, loss
+
+
+# Missing: generate functional
+# def generate(model, idx, max_iterations=5, memory_span=1024, temperature=0.0):
+#     raise NotImplementedError("generate function is not implemented")
