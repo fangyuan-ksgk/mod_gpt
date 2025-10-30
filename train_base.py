@@ -195,13 +195,22 @@ for k, v in vars(cli_args).items():
     if v is not None:
         setattr(args, k, v)
 
-model_config = GPTConfig(
-    vocab_size=args.vocab_size,
-    flex_kernel_options={
-        "BLOCK_M": 64, "BLOCK_N": 64,
-        "BLOCK_M1": 32, "BLOCK_N1": 64, "BLOCK_M2": 64, "BLOCK_N2": 32
-    }
-)
+if "40" in torch.cuda.get_device_properties("cuda").name: 
+    model_config = GPTConfig(
+        vocab_size=args.vocab_size,
+        flex_kernel_options={
+            "BLOCK_M": 32, "BLOCK_N": 32,
+            "BLOCK_M1": 32, "BLOCK_N1": 64, "BLOCK_M2": 64, "BLOCK_N2": 32
+        }
+    )
+else:     
+    model_config = GPTConfig(
+        vocab_size=args.vocab_size,
+        flex_kernel_options={
+            "BLOCK_M": 64, "BLOCK_N": 64,
+            "BLOCK_M1": 32, "BLOCK_N1": 64, "BLOCK_M2": 64, "BLOCK_N2": 32
+        }
+    )
 
 assert args.batch_size % (world_size) == 0
 train_accumulation_steps = args.batch_size // world_size # long seq train is more efficient than big batch
