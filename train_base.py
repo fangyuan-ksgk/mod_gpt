@@ -145,10 +145,7 @@ class Muon(torch.optim.Optimizer):
 
 # -----------------------------------------------------------------------------
 # PyTorch nn.Module definitions for the GPT-2 model
-# from src.model import GPT, GPTConfig
-
-# GAT model
-from sorl.model import GPT, GPTConfig
+from src.model import GPT, GPTConfig
 
 # -----------------------------------------------------------------------------
 
@@ -338,8 +335,9 @@ early_stop = False
 
 for step in range(train_steps + 1):
     last_step = (step == train_steps) or early_stop
+
     # memory_span = torch.tensor(64*(((1 - step/train_steps) * (1792 - 64) + 64)//64), dtype=torch.int, device='cuda')
-    memory_span = torch.tensor(1792, dtype=torch.int, device='cuda') # keep static
+    attn_blocksize = torch.tensor(1792, dtype=torch.int, device='cuda') # keep static
 
     # --------------- VALIDATION SECTION -----------------
     if last_step or (args.val_loss_every > 0 and step % args.val_loss_every == 0):
@@ -355,7 +353,7 @@ for step in range(train_steps + 1):
         with torch.no_grad():
             for i in range(val_steps):
                 inputs, targets = next(val_loader)
-                loss = model(inputs, targets)
+                loss = model(inputs, targets, attn_blocksize)
                 val_loss["cross_entropy"] += loss
 
         for name in val_loss: 
@@ -385,7 +383,7 @@ for step in range(train_steps + 1):
     # --------------- TRAINING SECTION -----------------
     for accum_step in range(train_accumulation_steps): 
         inputs, targets = next(train_loader)
-        loss = model(inputs, targets)
+        loss = model(inputs, targets, attn_blocksize)
         loss.backward()
         print0(f" - step: {step} | accum step: {accum_step} | cross_entropy: {loss.item()}")
         
