@@ -160,7 +160,7 @@ from sorl.neo_utils import sorl_search, compute_loss
 
 # -----------------------------------------------------------------------------
 
-from src import distributed_data_generator_sorl as distributed_data_generator
+from src.utils import distributed_data_generator_sorl as distributed_data_generator
 
 # -----------------------------------------------------------------------------
 # int main

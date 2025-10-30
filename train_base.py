@@ -149,7 +149,7 @@ from src.model import GPT, GPTConfig
 
 # -----------------------------------------------------------------------------
 
-from src import distributed_data_generator as distributed_data_generator
+from src.utils import distributed_data_generator
 
 # -----------------------------------------------------------------------------
 # int main
