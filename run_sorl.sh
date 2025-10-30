@@ -7,19 +7,19 @@ VAL_SEQ_LEN=$((16 * 1024))
 NUM_ITERATIONS=1750
 N_GPUS=3
 
-# ============================================================================
-# BASELINE EXPERIMENTS
-# ============================================================================
+# # ============================================================================
+# # BASELINE EXPERIMENTS
+# # ============================================================================
 
-echo "========================================="
-echo "BASELINE: No Abstraction (Standard GPT)"
-echo "========================================="
+# echo "========================================="
+# echo "BASELINE: No Abstraction (Standard GPT)"
+# echo "========================================="
 
-torchrun --standalone --nproc_per_node=$N_GPUS train_base.py \
-  --batch_size $BATCH_SIZE \
-  --train_seq_len $TRAIN_SEQ_LEN \
-  --val_seq_len $VAL_SEQ_LEN \
-  --num_iterations $NUM_ITERATIONS
+# torchrun --standalone --nproc_per_node=$N_GPUS train_base.py \
+#   --batch_size $BATCH_SIZE \
+#   --train_seq_len $TRAIN_SEQ_LEN \
+#   --val_seq_len $VAL_SEQ_LEN \
+#   --num_iterations $NUM_ITERATIONS
 
 
 # ============================================================================
@@ -128,6 +128,14 @@ for K in 2 8 32; do
     --temperature 1.0
 done
 
+
+# Common settings
+BATCH_SIZE=15
+TRAIN_SEQ_LEN=$((16 * 1024))  # 16K tokens (fits in 48GB)
+VAL_SEQ_LEN=$((16 * 1024))
+NUM_ITERATIONS=1750
+N_GPUS=3
+
 # ============================================================================
 # HYPOTHESIS 5: Temperature matters
 # ============================================================================
@@ -135,7 +143,7 @@ done
 echo "========================================="
 echo "EXP 5: Ablate Temperature"
 echo "========================================="
-for TEMP in 0.1 0.5 1.0 2.0 5.0 10.0; do
+for TEMP in 0.5 2.0 5.0 10.0; do
   echo "Testing temperature=$TEMP"
   torchrun --standalone --nproc_per_node=$N_GPUS train_sorl.py \
     --batch_size $BATCH_SIZE \
@@ -171,6 +179,12 @@ done
 # ============================================================================
 # HYPOTHESIS 7: Number of rollouts (n)
 # ============================================================================
+
+BATCH_SIZE=15
+TRAIN_SEQ_LEN=$((16 * 1024))  # 16K tokens (fits in 48GB)
+VAL_SEQ_LEN=$((16 * 1024))
+NUM_ITERATIONS=1750
+N_GPUS=3
 
 echo "========================================="
 echo "EXP 7: Ablate Number of Rollouts"

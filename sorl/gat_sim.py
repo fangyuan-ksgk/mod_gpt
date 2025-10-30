@@ -66,7 +66,7 @@ class GAT(nn.Module):
         self._compile = config._compile
 
 
-    def _forward_pass(self, idx: torch.Tensor, memory_span: int):
+    def _forward_pass(self, idx: torch.Tensor, memory_span: int, attn_blocksize: int):
 
         docs = (idx == BOS_TOKEN_ID).cumsum(1)
         
@@ -75,10 +75,11 @@ class GAT(nn.Module):
         def causal_mask(b, h, q_idx, kv_idx):
             causal_mask = q_idx >= kv_idx
             document_mask = docs[b, q_idx] == docs[b, kv_idx]
+            window_mask = q_idx - kv_idx < attn_blocksize
             is_higher_level = levels[b, kv_idx] > 0
             is_recent = (q_idx - kv_idx) <= memory_span
             memory_compression_mask = is_higher_level | is_recent 
-            return causal_mask & document_mask & memory_compression_mask
+            return causal_mask & document_mask & window_mask & memory_compression_mask
 
         S = idx.shape[1]
         block_mask = create_block_mask(causal_mask, None, None, S, S, device=self.device, _compile=self._compile)
@@ -102,9 +103,9 @@ class GAT(nn.Module):
         x = norm(x)
         return x
 
-    def forward(self, idx, memory_span):
+    def forward(self, idx, memory_span, attn_blocksize):
 
-        x = self._forward_pass(idx, memory_span)
+        x = self._forward_pass(idx, memory_span, attn_blocksize)
         logits = self.lm_head(x)
         logits = 30 * torch.tanh(logits / 30)
         logits = logits.float()
@@ -161,23 +162,23 @@ def extract_and_sample(logits, idx, recursion_mask, vocab_sizes, temperature):
     idx[recursion_mask] = new_tokens.to(idx.dtype)
     return idx
     
-def recursion(model, idx, max_iterations=5, memory_span=1024, temperature=0.0):
+def recursion(model, idx, max_iterations=5, memory_span=1792, attn_blocksize=1792, temperature=0.0):
 
     recursion_mask = (idx >= model.vocab_sizes[0])
     recursion_mask[:, 0] = False
 
     for _ in range(max_iterations): 
-        _, logits = model.forward(idx, memory_span)
+        _, logits = model.forward(idx, memory_span, attn_blocksize)
         idx = extract_and_sample(
             logits, idx, recursion_mask, model.vocab_sizes, temperature
         )
     
     # -- evaluation --
-    loss, _ = model.forward(idx, memory_span)
+    loss, _ = model.forward(idx, memory_span, attn_blocksize)
 
     return idx, loss
 
 
 # Missing: generate functional
 # def generate(model, idx, max_iterations=5, memory_span=1024, temperature=0.0):
-#     raise NotImplementedError("generate function is not implemented")
+    # raise NotImplementedError("generate function is not implemented")

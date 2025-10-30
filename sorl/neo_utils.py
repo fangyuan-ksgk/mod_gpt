@@ -40,7 +40,7 @@ def insert_tokens(tokens, insert_mask, placeholder_token):
     return expanded_tokens
 
 @torch.no_grad()
-def sorl_rollout(data: torch.Tensor, model: GAT, n: int, K: int, max_iterations: int, memory_span: int, temperature: float):
+def sorl_rollout(data: torch.Tensor, model: GAT, n: int, K: int, max_iterations: int, memory_span: int, attn_blocksize: int, temperature: float):
     """
     Perform rollout with 1 greedy sample and (n-1) stochastic samples.
     """
@@ -54,13 +54,13 @@ def sorl_rollout(data: torch.Tensor, model: GAT, n: int, K: int, max_iterations:
 
     # --- search --- 
     greedy_data, greedy_ppt = recursion(model, repeat_data[:1], max_iterations=max_iterations, 
-                            memory_span=memory_span, temperature=0.0)
+                            memory_span=memory_span, attn_blocksize=attn_blocksize, temperature=0.0)
 
     if n == 1: 
         return greedy_data, greedy_ppt
     else: 
         stochastic_data, stochastic_ppt = recursion(model, repeat_data[1:], max_iterations=max_iterations, 
-                                    memory_span=memory_span, temperature=temperature)
+                                    memory_span=memory_span, attn_blocksize=attn_blocksize, temperature=temperature)
 
         combined_data = torch.cat([greedy_data, stochastic_data], dim=0)
         combined_ppt = torch.cat([greedy_ppt, stochastic_ppt], dim=0)
@@ -99,7 +99,7 @@ def select_best_per_doc(search_data, ppt, levels):
 import time
 
 def sorl_search(tokens, model, n=3, K=3, max_iterations=1,
-                memory_span=1024, temperature=1.0, loss_mask: Optional[torch.Tensor] = None):
+                memory_span=1792, attn_blocksize=1792, temperature=1.0, loss_mask: Optional[torch.Tensor] = None):
     """
     Complete SoRL search pipeline:
     1. Generate n rollouts (1 greedy + (n-1) stochastic)
@@ -112,7 +112,8 @@ def sorl_search(tokens, model, n=3, K=3, max_iterations=1,
     # --- generate & evaluate rollouts ---
     search_data, search_ppt = sorl_rollout(tokens, model, n=n, K=K, 
                                max_iterations=max_iterations,
-                               memory_span=memory_span, 
+                               memory_span=memory_span,
+                               attn_blocksize=attn_blocksize,
                                temperature=temperature)
     search_ppt = search_ppt.reshape(search_data.shape[0], -1)
     if loss_mask is not None:
@@ -130,10 +131,10 @@ def sorl_search(tokens, model, n=3, K=3, max_iterations=1,
 # - [Reflection 1] it's not clear why we need to 'separate' loss for trajectory with loss for abstraction right? 
 #                  for instance, best_ppt.mean() is the simplest training target here
 
-def compute_loss(best_data, model, memory_span: int, loss_mask: Optional[torch.Tensor] = None):
+def compute_loss(best_data, model, memory_span: int, attn_blocksize: int, loss_mask: Optional[torch.Tensor] = None):
     """Compute trajectory and abstraction loss from sorl_search output."""
 
-    best_ppt, _ = model.forward(best_data, memory_span)
+    best_ppt, _ = model.forward(best_data, memory_span, attn_blocksize)
     best_ppt = best_ppt.reshape(best_data.shape[0], -1)
     if loss_mask is not None:
         best_ppt *= loss_mask[:, 1:]

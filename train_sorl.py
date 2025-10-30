@@ -307,7 +307,7 @@ warmup_steps = 20
 initial_state = dict(model=copy.deepcopy(model.state_dict()),
                      optimizers=[copy.deepcopy(opt.state_dict()) for opt in optimizers]) # save the initial state
 
-# attn_blocksize = torch.tensor(64, dtype=torch.int, device="cuda") # <-- this introduces further complication
+attn_blocksize = torch.tensor(64, dtype=torch.int, device="cuda")
 memory_span = torch.tensor(1792, dtype=torch.int, device="cuda")
 
 for i in range(warmup_steps):
@@ -318,11 +318,11 @@ for i in range(warmup_steps):
     # --- sorl search --- 
     search_start = time.time()
     with torch.no_grad():
-        search_tokens, search_ppt, search_adv = sorl_search(tokens, model, n=args.num_rollouts, K=args.K, max_iterations=args.max_iterations, memory_span=memory_span, temperature=args.temperature)
+        search_tokens, search_ppt, search_adv = sorl_search(tokens, model, n=args.num_rollouts, K=args.K, max_iterations=args.max_iterations, memory_span=memory_span, attn_blocksize=attn_blocksize, temperature=args.temperature)
     search_end = time.time()
     print(f" :: Sorl search takes {search_end - search_start} second")
     # --- compute loss --- 
-    traj_loss, abs_loss = compute_loss(search_tokens, model, memory_span=memory_span)
+    traj_loss, abs_loss = compute_loss(search_tokens, model, memory_span=memory_span, attn_blocksize=attn_blocksize)
     forward_end = time.time()
     print(f" :: Loss computation takes {forward_end - search_end} second")
     # --- backward --- 
@@ -351,7 +351,6 @@ print("--------"*10)
 print("Train & Evaluation")
 
 train_loader = distributed_data_generator(args.train_files, world_size * args.train_seq_len, rank, world_size)
-print(f"- [DEBUG] train seq len: {world_size * args.train_seq_len} | val seq len: {world_size *args.val_seq_len} | warmup seq len: {args.train_seq_len}") 
 
 training_time_ms = 0
 # start the clock
@@ -365,6 +364,8 @@ early_stop = False
 
 for step in range(train_steps + 1):
     last_step = (step == train_steps) or early_stop
+    
+    attn_blocksize = torch.tensor(64*((step/train_steps * (1792 - 64) + 64)//64), dtype=torch.int, device='cuda')
     if args.use_static_memory_span:
         memory_span = torch.tensor(1792, dtype=torch.int, device='cuda') # keep static
     else:
@@ -384,8 +385,9 @@ for step in range(train_steps + 1):
         with torch.no_grad():
             for i in range(val_steps):
                 tokens = next(val_loader)
-                search_tokens, search_ppt, search_adv = sorl_search(tokens, model, n=args.num_rollouts, K=args.K, max_iterations=args.max_iterations, memory_span=memory_span, temperature=10.0)
-                traj_loss, abs_loss = compute_loss(search_tokens, model, memory_span=memory_span)
+                search_tokens, search_ppt, search_adv = sorl_search(tokens, model, n=args.num_rollouts, K=args.K, max_iterations=args.max_iterations, 
+                                                                    memory_span=memory_span, attn_blocksize=attn_blocksize, temperature=10.0)
+                traj_loss, abs_loss = compute_loss(search_tokens, model, memory_span=memory_span, attn_blocksize=attn_blocksize)
                 val_loss["traj_loss"] += traj_loss
                 val_loss["abs_loss"] += abs_loss
                 val_loss["search_advantage"] += search_adv.mean()
@@ -418,8 +420,9 @@ for step in range(train_steps + 1):
     for accum_step in range(train_accumulation_steps): 
         tokens = next(train_loader)
         with torch.no_grad(): 
-            search_tokens, search_ppt, search_adv = sorl_search(tokens, model, n=args.num_rollouts, K=args.K, max_iterations=args.max_iterations, memory_span=memory_span, temperature=args.temperature)
-        traj_loss, abs_loss = compute_loss(search_tokens, model, memory_span=memory_span)
+            search_tokens, search_ppt, search_adv = sorl_search(tokens, model, n=args.num_rollouts, K=args.K, max_iterations=args.max_iterations, 
+                                                                memory_span=memory_span, attn_blocksize=attn_blocksize, temperature=args.temperature)
+        traj_loss, abs_loss = compute_loss(search_tokens, model, memory_span=memory_span, attn_blocksize=attn_blocksize)
         loss = traj_loss + abs_loss
         loss.backward()
         print0(f" - step: {step} | accum step: {accum_step} | traj_loss: {traj_loss.item()} | abs_loss: {abs_loss.item()} | search_advantage: {search_adv.mean().item()}")
