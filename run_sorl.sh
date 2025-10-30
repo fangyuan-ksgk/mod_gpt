@@ -2,8 +2,6 @@
 
 # Common settings
 BATCH_SIZE=15
-TRAIN_FILES="data/fineweb10B/fineweb_train_*.bin"
-VAL_FILES="data/fineweb10B/fineweb_val_*.bin"
 TRAIN_SEQ_LEN=$((16 * 1024))  # 16K tokens (fits in 48GB)
 VAL_SEQ_LEN=$((16 * 1024))
 NUM_ITERATIONS=1750
@@ -19,8 +17,6 @@ echo "========================================="
 
 torchrun --standalone --nproc_per_node=$N_GPUS train_base.py \
   --batch_size $BATCH_SIZE \
-  --train_files $TRAIN_FILES \
-  --val_files $VAL_FILES \
   --train_seq_len $TRAIN_SEQ_LEN \
   --val_seq_len $VAL_SEQ_LEN \
   --num_iterations $NUM_ITERATIONS
@@ -36,8 +32,6 @@ echo "Keeps placeholder tokens at abstract positions"
 echo "========================================="
 torchrun --standalone --nproc_per_node=$N_GPUS train_sorl.py \
   --batch_size $BATCH_SIZE \
-  --train_files $TRAIN_FILES \
-  --val_files $VAL_FILES \
   --train_seq_len $TRAIN_SEQ_LEN \
   --val_seq_len $VAL_SEQ_LEN \
   --num_iterations $NUM_ITERATIONS \
@@ -51,8 +45,6 @@ echo "EXP 1b: Full SoRL with Search (baseline)"
 echo "========================================="
 torchrun --standalone --nproc_per_node=$N_GPUS train_sorl.py \
   --batch_size $BATCH_SIZE \
-  --train_files $TRAIN_FILES \
-  --val_files $VAL_FILES \
   --train_seq_len $TRAIN_SEQ_LEN \
   --val_seq_len $VAL_SEQ_LEN \
   --num_iterations $NUM_ITERATIONS \
@@ -71,8 +63,6 @@ echo "Tests if memory compression is necessary"
 echo "========================================="
 torchrun --standalone --nproc_per_node=$N_GPUS train_sorl.py \
   --batch_size $BATCH_SIZE \
-  --train_files $TRAIN_FILES \
-  --val_files $VAL_FILES \
   --train_seq_len $TRAIN_SEQ_LEN \
   --val_seq_len $VAL_SEQ_LEN \
   --num_iterations $NUM_ITERATIONS \
@@ -88,8 +78,6 @@ echo "Default behavior: 1792 -> 64 over training"
 echo "========================================="
 torchrun --standalone --nproc_per_node=$N_GPUS train_sorl.py \
   --batch_size $BATCH_SIZE \
-  --train_files $TRAIN_FILES \
-  --val_files $VAL_FILES \
   --train_seq_len $TRAIN_SEQ_LEN \
   --val_seq_len $VAL_SEQ_LEN \
   --num_iterations $NUM_ITERATIONS \
@@ -110,8 +98,6 @@ for VOCAB in 64 256 512; do
   echo "Testing abstract_vocab_size=$VOCAB"
   torchrun --standalone --nproc_per_node=$N_GPUS train_sorl.py \
     --batch_size $BATCH_SIZE \
-    --train_files $TRAIN_FILES \
-    --val_files $VAL_FILES \
     --train_seq_len $TRAIN_SEQ_LEN \
     --val_seq_len $VAL_SEQ_LEN \
     --num_iterations $NUM_ITERATIONS \
@@ -133,8 +119,6 @@ for K in 2 8 32; do
   echo "Testing K=$K (insert abstract token every $K trajectory tokens)"
   torchrun --standalone --nproc_per_node=$N_GPUS train_sorl.py \
     --batch_size $BATCH_SIZE \
-    --train_files $TRAIN_FILES \
-    --val_files $VAL_FILES \
     --train_seq_len $TRAIN_SEQ_LEN \
     --val_seq_len $VAL_SEQ_LEN \
     --num_iterations $NUM_ITERATIONS \
@@ -155,8 +139,6 @@ for TEMP in 0.1 0.5 1.0 2.0 5.0 10.0; do
   echo "Testing temperature=$TEMP"
   torchrun --standalone --nproc_per_node=$N_GPUS train_sorl.py \
     --batch_size $BATCH_SIZE \
-    --train_files $TRAIN_FILES \
-    --val_files $VAL_FILES \
     --train_seq_len $TRAIN_SEQ_LEN \
     --val_seq_len $VAL_SEQ_LEN \
     --num_iterations $NUM_ITERATIONS \
@@ -177,8 +159,6 @@ for ITERS in 2 3; do
   echo "Testing max_iterations=$ITERS"
   torchrun --standalone --nproc_per_node=$N_GPUS train_sorl.py \
     --batch_size $BATCH_SIZE \
-    --train_files $TRAIN_FILES \
-    --val_files $VAL_FILES \
     --train_seq_len $TRAIN_SEQ_LEN \
     --val_seq_len $VAL_SEQ_LEN \
     --num_iterations $NUM_ITERATIONS \
@@ -199,8 +179,6 @@ for N in 2 4; do
   echo "Testing n=$N (1 greedy + $(($N-1)) stochastic)"
   torchrun --standalone --nproc_per_node=$N_GPUS train_sorl.py \
     --batch_size $BATCH_SIZE \
-    --train_files $TRAIN_FILES \
-    --val_files $VAL_FILES \
     --train_seq_len $TRAIN_SEQ_LEN \
     --val_seq_len $VAL_SEQ_LEN \
     --num_iterations $NUM_ITERATIONS \
