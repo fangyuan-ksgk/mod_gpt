@@ -1,6 +1,11 @@
 # Experiment (III). 
 
 # Baseline | entropy minimization only
+torchrun --standalone --nproc_per_node=1 train_exp.py
+
+torchrun --standalone --nproc_per_node=1 train_pcgrad.py --batch_size=16
+
+# Baseline | entropy minimization only
 # torchrun --standalone --nproc_per_node=4 train_pcgrad.py --scale_factor 1.0 --batch_size=32
 # Baseline | entropy & mbe | additive composition | shitty 
 # torchrun --standalone --nproc_per_node=4 train_pcgrad.py --additive_grad --batch_size=16 

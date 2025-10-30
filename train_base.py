@@ -329,7 +329,8 @@ early_stop = False
 
 for step in range(train_steps + 1):
     last_step = (step == train_steps) or early_stop
-    memory_span = torch.tensor(64*(((1 - step/train_steps) * (1792 - 64) + 64)//64), dtype=torch.int, device='cuda')
+    # memory_span = torch.tensor(64*(((1 - step/train_steps) * (1792 - 64) + 64)//64), dtype=torch.int, device='cuda')
+    memory_span = torch.tensor(1792, dtype=torch.int, device='cuda') # keep static
 
     # --------------- VALIDATION SECTION -----------------
     if last_step or (args.val_loss_every > 0 and step % args.val_loss_every == 0):

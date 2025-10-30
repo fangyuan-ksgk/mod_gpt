@@ -41,6 +41,8 @@ def parse_args():
     parser.add_argument("--K", type=int, default=8)
     parser.add_argument("--max_iterations", type=int, default=1)
     parser.add_argument("--temperature", type=float, default=1.0)
+    parser.add_argument("--use_static_memory_span", action="store_true", default=False)
+    parser.add_argument("--abstract_vocab_size", type=int, default=256)
     return parser.parse_args()
 
 # -----------------------------------------------------------------------------
@@ -207,7 +209,7 @@ for k, v in vars(cli_args).items():
         setattr(args, k, v)
 
 # check SRAM
-if "A40" in torch.cuda.get_device_properties("cuda").name: 
+if "40" in torch.cuda.get_device_properties("cuda").name: 
     model_config = GATConfig(
         vocab_sizes=[args.vocab_size, args.abstract_vocab_size],
         flex_kernel_options={
@@ -363,7 +365,10 @@ early_stop = False
 
 for step in range(train_steps + 1):
     last_step = (step == train_steps) or early_stop
-    memory_span = torch.tensor(64*(((1 - step/train_steps) * (1792 - 64) + 64)//64), dtype=torch.int, device='cuda')
+    if args.use_static_memory_span:
+        memory_span = torch.tensor(1792, dtype=torch.int, device='cuda') # keep static
+    else:
+        memory_span = torch.tensor(64*(((1 - step/train_steps) * (1792 - 64) + 64)//64), dtype=torch.int, device='cuda')
 
     # --------------- VALIDATION SECTION -----------------
     if last_step or (args.val_loss_every > 0 and step % args.val_loss_every == 0):
@@ -379,7 +384,7 @@ for step in range(train_steps + 1):
         with torch.no_grad():
             for i in range(val_steps):
                 tokens = next(val_loader)
-                search_tokens, search_ppt, search_adv = sorl_search(tokens, model, n=args.n, K=args.K, max_iterations=args.max_iterations, memory_span=memory_span, temperature=args.temperature)
+                search_tokens, search_ppt, search_adv = sorl_search(tokens, model, n=args.n, K=args.K, max_iterations=args.max_iterations, memory_span=memory_span, temperature=10.0)
                 traj_loss, abs_loss = compute_loss(search_tokens, model, memory_span=memory_span)
                 val_loss["traj_loss"] += traj_loss
                 val_loss["abs_loss"] += abs_loss
