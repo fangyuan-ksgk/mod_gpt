@@ -450,6 +450,18 @@ for step in range(train_steps + 1):
 print0(f"peak memory allocated: {torch.cuda.max_memory_allocated() // 1024 // 1024} MiB "
        f"reserved: {torch.cuda.max_memory_reserved() // 1024 // 1024} MiB", console=True)
 
+print0("Experiment configuration: \n", console=True)
+print0(f"-- batch_size: {args.batch_size}", console=True)
+print0(f"-- train_seq_len: {args.train_seq_len}", console=True)
+print0(f"-- val_seq_len: {args.val_seq_len}", console=True)
+print0(f"-- num_iterations: {args.num_iterations}", console=True)
+print0(f"-- num_rollouts: {args.num_rollouts}", console=True)
+print0(f"-- K: {args.K}", console=True)
+print0(f"-- max_iterations: {args.max_iterations}", console=True)
+print0(f"-- temperature: {args.temperature}", console=True)
+print0(f"-- use_static_memory_span: {args.use_static_memory_span}", console=True)
+print0(f"-- abstract_vocab_size: {args.abstract_vocab_size}", console=True)
+
 print0(f"loss record:\n{loss_record}", console=True)
 
 dist.destroy_process_group()

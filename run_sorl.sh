@@ -11,15 +11,15 @@ N_GPUS=3
 # # BASELINE EXPERIMENTS
 # # ============================================================================
 
-# echo "========================================="
-# echo "BASELINE: No Abstraction (Standard GPT)"
-# echo "========================================="
+echo "========================================="
+echo "BASELINE: No Abstraction (Standard GPT)"
+echo "========================================="
 
-# torchrun --standalone --nproc_per_node=$N_GPUS train_base.py \
-#   --batch_size $BATCH_SIZE \
-#   --train_seq_len $TRAIN_SEQ_LEN \
-#   --val_seq_len $VAL_SEQ_LEN \
-#   --num_iterations $NUM_ITERATIONS
+torchrun --standalone --nproc_per_node=$N_GPUS train_base.py \
+  --batch_size $BATCH_SIZE \
+  --train_seq_len $TRAIN_SEQ_LEN \
+  --val_seq_len $VAL_SEQ_LEN \
+  --num_iterations $NUM_ITERATIONS
 
 
 # ============================================================================

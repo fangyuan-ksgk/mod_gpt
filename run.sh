@@ -4,6 +4,18 @@
 torchrun --standalone --nproc_per_node=1 train_exp.py
 
 torchrun --standalone --nproc_per_node=1 train_pcgrad.py --batch_size=16
+torchrun --standalone --nproc_per_node=2 train_base.py --batch_size=16
+
+torchrun --nproc_per_node=1 train_base.py --batch_size=16
+torchrun --standalone --nproc_per_node=2 train_base.py --batch_size=16
+
+torchrun --standalone --nproc_per_node=1 train_base.py --batch_size=16 --train_seq_len=16384 --val_seq_len=16384
+
+torchrun --standalone --nproc_per_node=2 train_base.py --batch_size=16 --train_seq_len=16384 --val_seq_len=16384
+
+
+torchrun --standalone --nproc_per_node=1 train_sorl.py --batch_size=16
+
 
 # Baseline | entropy minimization only
 # torchrun --standalone --nproc_per_node=4 train_pcgrad.py --scale_factor 1.0 --batch_size=32

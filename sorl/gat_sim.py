@@ -178,7 +178,31 @@ def recursion(model, idx, max_iterations=5, memory_span=1792, attn_blocksize=179
 
     return idx, loss
 
+def generate(model, idx, K, max_iterations=0, memory_span=1792, attn_blocksize=1792, temperature=0.0):
+    
+    # --- prefix recursion ---
+    recursion_mask = (idx >= model.vocab_sizes[0])
+    recursion_mask[:, 0] = False
+    for _ in range(max_iterations): 
+        _, logits = model.forward(idx, memory_span, attn_blocksize)
+        idx = extract_and_sample(
+            logits, idx, recursion_mask, model.vocab_sizes, temperature
+        )
+    
+    # --- rhythmic generation ---
+    _, logits = model.forward(idx, memory_span, attn_blocksize)
+    
+    # --- decide next token level --- 
+    next_abstract_mask = (recursion_mask[:, -K:].sum(dim=1) == 0)
+    next_token_logits = logits[:, -1]
+    next_token_logits[:, :model.vocab_sizes[0]][next_abstract_mask] = float('-inf')  
+    next_token_logits[:, model.vocab_sizes[0]:][~next_abstract_mask] = float('-inf')
 
-# Missing: generate functional
-# def generate(model, idx, max_iterations=5, memory_span=1024, temperature=0.0):
-    # raise NotImplementedError("generate function is not implemented")
+    if temperature == 0.0:
+        new_tokens = torch.argmax(next_token_logits, dim=-1)
+    else:
+        probs = F.softmax(next_token_logits / temperature, dim=-1)
+        new_tokens = torch.multinomial(probs, num_samples=1).squeeze(-1)
+
+    idx = torch.cat((idx, new_tokens.unsqueeze(1)), dim=1)
+    return idx
