@@ -40,7 +40,6 @@ def print_stats(name, times, memories, peak_memories=None):
 # ============================================================================
 # Benchmark Functions
 # ============================================================================
-
 def benchmark_forward_no_grad(model, tokens, memory_span, num_runs=10, warmup=3):
     """Benchmark: Forward pass without gradient tracking"""
     print("\n[1/5] Benchmarking: Forward (no grad)")
@@ -52,18 +51,23 @@ def benchmark_forward_no_grad(model, tokens, memory_span, num_runs=10, warmup=3)
         for _ in range(warmup):
             model(tokens, memory_span=memory_span)
     
+    torch.cuda.empty_cache()  # Clean before benchmark
+    
     # Benchmark
     with torch.no_grad():
         for i in range(num_runs):
             torch.cuda.empty_cache()
             with GPUMemoryMonitor() as mon:
                 loss, logits = model(tokens, memory_span=memory_span)
+                # Explicitly delete to free memory
+                del loss, logits
             
             times.append(mon.time_elapsed)
             memories.append(mon.memory_used)
             peaks.append(mon.peak_memory)
             print(f"  Run {i+1}/{num_runs}: {mon.time_elapsed*1000:.1f}ms", end='\r')
     
+    torch.cuda.empty_cache()  # Clean after benchmark
     print_stats("Forward (no grad)", times, memories, peaks)
     return times, memories, peaks
 
@@ -76,8 +80,12 @@ def benchmark_forward_with_grad(model, tokens, memory_span, num_runs=10, warmup=
     
     # Warmup
     for _ in range(warmup):
+        model.zero_grad()
         loss, logits = model(tokens, memory_span=memory_span)
-        loss = loss.mean()
+        # Clean up computation graph
+        del loss, logits
+    
+    torch.cuda.empty_cache()  # Clean before benchmark
     
     # Benchmark
     for i in range(num_runs):
@@ -86,13 +94,19 @@ def benchmark_forward_with_grad(model, tokens, memory_span, num_runs=10, warmup=
         
         with GPUMemoryMonitor() as mon:
             loss, logits = model(tokens, memory_span=memory_span)
-            loss = loss.mean()
+            loss_mean = loss.mean()
+            # Store value but release graph
+            loss_value = loss_mean.item()
+        
+        # CRITICAL: Delete tensors to free computation graph
+        del loss, logits, loss_mean
         
         times.append(mon.time_elapsed)
         memories.append(mon.memory_used)
         peaks.append(mon.peak_memory)
         print(f"  Run {i+1}/{num_runs}: {mon.time_elapsed*1000:.1f}ms", end='\r')
     
+    torch.cuda.empty_cache()  # Clean after benchmark
     print_stats("Forward (with grad)", times, memories, peaks)
     return times, memories, peaks
 
@@ -108,13 +122,17 @@ def benchmark_backward(model, tokens, memory_span, num_runs=10, warmup=3):
         model.zero_grad()
         loss, _ = model(tokens, memory_span=memory_span)
         loss.mean().backward()
+        model.zero_grad()  # Clear gradients
+    
+    torch.cuda.empty_cache()  # Clean before benchmark
     
     # Benchmark
     for i in range(num_runs):
+        # Aggressive cleanup
         torch.cuda.empty_cache()
         model.zero_grad()
         
-        # Forward first
+        # Forward first (not timed)
         loss, _ = model(tokens, memory_span=memory_span)
         loss_scalar = loss.mean()
         
@@ -122,11 +140,16 @@ def benchmark_backward(model, tokens, memory_span, num_runs=10, warmup=3):
         with GPUMemoryMonitor() as mon:
             loss_scalar.backward()
         
+        # Clean up immediately
+        model.zero_grad()
+        del loss, loss_scalar
+        
         times.append(mon.time_elapsed)
         memories.append(mon.memory_used)
         peaks.append(mon.peak_memory)
         print(f"  Run {i+1}/{num_runs}: {mon.time_elapsed*1000:.1f}ms", end='\r')
     
+    torch.cuda.empty_cache()  # Clean after benchmark
     print_stats("Backward", times, memories, peaks)
     return times, memories, peaks
 
@@ -141,8 +164,11 @@ def benchmark_recursion(model, tokens, memory_span, max_iterations=5, num_runs=5
     with torch.no_grad():
         for _ in range(warmup):
             tokens_copy = tokens.clone()
-            recursion(model, tokens_copy, max_iterations=max_iterations, 
+            idx, loss = recursion(model, tokens_copy, max_iterations=max_iterations, 
                      memory_span=memory_span, temperature=0.0)
+            del idx, loss, tokens_copy
+    
+    torch.cuda.empty_cache()  # Clean before benchmark
     
     # Benchmark
     with torch.no_grad():
@@ -154,11 +180,15 @@ def benchmark_recursion(model, tokens, memory_span, max_iterations=5, num_runs=5
                 idx, loss = recursion(model, tokens_copy, max_iterations=max_iterations,
                                      memory_span=memory_span, temperature=0.0)
             
+            # Clean up
+            del idx, loss, tokens_copy
+            
             times.append(mon.time_elapsed)
             memories.append(mon.memory_used)
             peaks.append(mon.peak_memory)
             print(f"  Run {i+1}/{num_runs}: {mon.time_elapsed*1000:.1f}ms", end='\r')
     
+    torch.cuda.empty_cache()  # Clean after benchmark
     print_stats(f"Recursion ({max_iterations} iters)", times, memories, peaks)
     return times, memories, peaks
 
@@ -174,6 +204,9 @@ def benchmark_full_iteration(model, tokens, memory_span, num_runs=10, warmup=3):
         model.zero_grad()
         loss, _ = model(tokens, memory_span=memory_span)
         loss.mean().backward()
+        model.zero_grad()
+    
+    torch.cuda.empty_cache()  # Clean before benchmark
     
     # Benchmark
     for i in range(num_runs):
@@ -184,11 +217,16 @@ def benchmark_full_iteration(model, tokens, memory_span, num_runs=10, warmup=3):
             loss, _ = model(tokens, memory_span=memory_span)
             loss.mean().backward()
         
+        # Clean up
+        model.zero_grad()
+        del loss
+        
         times.append(mon.time_elapsed)
         memories.append(mon.memory_used)
         peaks.append(mon.peak_memory)
         print(f"  Run {i+1}/{num_runs}: {mon.time_elapsed*1000:.1f}ms", end='\r')
     
+    torch.cuda.empty_cache()  # Clean after benchmark
     print_stats("Full Iteration", times, memories, peaks)
     return times, memories, peaks
 
