@@ -125,6 +125,28 @@ def sorl_search(tokens, model, n=3, K=3, max_iterations=1,
     return best_data, best_ppt, best_ppt_advantage.mean()
 
 
+def sorl_evaluate(tokens, model, n=2, K=4, max_iterations=1, memory_span=1792, attn_blocksize=1792, temperature=1.0, loss_mask: Optional[torch.Tensor] = None):
+    """
+    Search & Check greedy rollout advantage
+    """
+    search_data, search_ppt = sorl_rollout(tokens, model, n=n, K=K, 
+                               max_iterations=max_iterations,
+                               memory_span=memory_span,
+                               attn_blocksize=attn_blocksize,
+                               temperature=temperature)
+    search_ppt = search_ppt.reshape(search_data.shape[0], -1)
+    if loss_mask is not None:
+        search_ppt *= loss_mask[:, 1:]
+
+    # --- greedy rollout's advantage over avg. stochastic rollout ---
+    raw_ppt_adv = (search_ppt[1:].mean(dim=0) - search_ppt[0]) / (search_ppt[1:].mean(dim=0) + 1e-8)
+    traj_mask = (search_data[0, 1:] < model.vocab_sizes[0]).float()
+    bos_pos_mask = torch.logical_and(search_data[0, :-1] != BOS_TOKEN_ID, search_data[0, 1:] != BOS_TOKEN_ID).view(-1).float()  
+    search_adv = (raw_ppt_adv * traj_mask * bos_pos_mask).sum() / (bos_pos_mask * traj_mask).sum()
+
+    return search_data[:1], search_ppt[:1], search_adv
+
+
 
 # (TBD). optional 'loss_mask' argument for QA task
 # --------------------------------------------------
