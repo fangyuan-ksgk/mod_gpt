@@ -1,6 +1,7 @@
 import torch
 # from sorl.gat_act import BOS_TOKEN_ID, search, GAT, recursion, infer_level
-from sorl.gat_sim import BOS_TOKEN_ID, GAT, recursion
+from sorl.gat_sim import BOS_TOKEN_ID, GAT, recursion, extract_and_sample
+import torch.nn.functional as F
 from typing import Optional
 
 @torch.compile
@@ -179,3 +180,32 @@ def compute_loss(best_data, model, memory_span: int, attn_blocksize: int, loss_m
     abs_loss = (best_ppt * abs_mask).sum() / abs_mask.sum().clamp(min=1) if abs_mask.sum() > 0 else torch.tensor(0.0, device=best_ppt.device, dtype=best_ppt.dtype)
     
     return traj_loss, abs_loss
+
+
+def generate(model, idx, K, max_iterations=0, memory_span=1792, attn_blocksize=1792, temperature=0.0):
+    
+    # --- insert placeholder tokens ---
+    insert_mask = infer_rythmic_insert_mask(idx, K, model.vocab_sizes[0])
+    idx = insert_tokens(idx, insert_mask, model.vocab_sizes[0].item())
+
+    # --- prefix recursion (abstraction) ---
+    recursion_mask = (idx >= model.vocab_sizes[0])
+    recursion_mask[:, 0] = False
+    for _ in range(max_iterations): 
+        _, logits = model.forward(idx, memory_span, attn_blocksize)
+        idx = extract_and_sample(
+            logits, idx, recursion_mask, model.vocab_sizes, temperature
+        )
+    
+    # --- generate next trajectory token ---
+    _, logits = model.forward(idx, memory_span, attn_blocksize)
+    next_token_logits = logits[:, -1, :model.vocab_sizes[0]]
+
+    if temperature == 0.0:
+        new_tokens = torch.argmax(next_token_logits, dim=-1)
+    else:
+        probs = F.softmax(next_token_logits / temperature, dim=-1)
+        new_tokens = torch.multinomial(probs, num_samples=1).squeeze(-1)
+
+    idx = torch.cat((idx, new_tokens.unsqueeze(1)), dim=1)
+    return idx
