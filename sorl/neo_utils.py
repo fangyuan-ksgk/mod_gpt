@@ -144,8 +144,12 @@ def sorl_evaluate(tokens, model, n=2, K=4, max_iterations=1, memory_span=1792, a
     bos_pos_mask = torch.logical_and(search_data[0, :-1] != BOS_TOKEN_ID, search_data[0, 1:] != BOS_TOKEN_ID).view(-1).float()  
     search_adv = (raw_ppt_adv * traj_mask * bos_pos_mask).sum() / (bos_pos_mask * traj_mask).sum()
 
-    return search_data[:1], search_ppt[:1], search_adv
-
+    greedy_ppt = search_ppt[0]
+    traj_loss = (greedy_ppt * traj_mask).sum() / traj_mask.sum().clamp(min=1)
+    abs_mask = 1 - traj_mask
+    abs_loss = (greedy_ppt * abs_mask).sum() / abs_mask.sum().clamp(min=1) if abs_mask.sum() > 0 else torch.tensor(0.0, device=greedy_ppt.device, dtype=greedy_ppt.dtype)
+    
+    return search_data[:1], search_adv, traj_loss, abs_loss
 
 
 # (TBD). optional 'loss_mask' argument for QA task

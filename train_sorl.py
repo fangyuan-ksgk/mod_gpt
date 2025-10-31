@@ -156,7 +156,7 @@ class Muon(torch.optim.Optimizer):
 
 # GAT model
 from sorl.gat_sim import GAT, GATConfig
-from sorl.neo_utils import sorl_search, compute_loss
+from sorl.neo_utils import sorl_search, compute_loss, sorl_evaluate
 
 # -----------------------------------------------------------------------------
 
@@ -385,12 +385,11 @@ for step in range(train_steps + 1):
         with torch.no_grad():
             for i in range(val_steps):
                 tokens = next(val_loader)
-                search_tokens, search_ppt, search_adv = sorl_search(tokens, model, n=args.num_rollouts, K=args.K, max_iterations=args.max_iterations, 
+                val_tokens, val_adv, val_traj_loss, val_abs_loss = sorl_evaluate(tokens, model, n=args.num_rollouts, K=args.K, max_iterations=args.max_iterations, 
                                                                     memory_span=memory_span, attn_blocksize=attn_blocksize, temperature=10.0)
-                traj_loss, abs_loss = compute_loss(search_tokens, model, memory_span=memory_span, attn_blocksize=attn_blocksize)
-                val_loss["traj_loss"] += traj_loss
-                val_loss["abs_loss"] += abs_loss
-                val_loss["search_advantage"] += search_adv.mean()
+                val_loss["traj_loss"] += val_traj_loss
+                val_loss["abs_loss"] += val_abs_loss
+                val_loss["search_advantage"] += val_adv.mean()
 
         for name in val_loss: 
             val_loss[name] /= val_steps
