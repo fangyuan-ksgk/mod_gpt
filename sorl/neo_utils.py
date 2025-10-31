@@ -4,18 +4,24 @@ from sorl.gat_sim import BOS_TOKEN_ID, GAT, recursion
 from typing import Optional
 
 @torch.compile
-def infer_rythmic_insert_mask(tokens, K):
+def infer_rythmic_insert_mask(tokens, K, traj_vocab_size):
     batch_size, seq_len = tokens.shape
     assert batch_size == 1, "only one sample supported"
     positions = torch.arange(1, seq_len + 1, device=tokens.device).unsqueeze(0)
 
     is_bos = (tokens == BOS_TOKEN_ID).long()
     bos_cumsum = is_bos.cumsum(dim=1)
-    bos_offsets = torch.zeros(batch_size, seq_len + 1, device=tokens.device, dtype=torch.long)
+    is_abstract = (tokens >= traj_vocab_size).long()
     
-    bos_positions = positions * is_bos
-    bos_offsets.scatter_add_(1, bos_cumsum, bos_positions)
-    within_doc_pos = positions - bos_offsets.gather(1, bos_cumsum)
+    # Find last BOS or abstraction in each document
+    is_bos_or_abstract = torch.maximum(is_bos, is_abstract)
+    last_ref_pos = torch.zeros(batch_size, seq_len + 1, device=tokens.device, dtype=torch.long)
+    ref_positions = torch.where(is_bos_or_abstract > 0, positions, torch.tensor(0, device=tokens.device))
+    last_ref_pos.scatter_reduce_(1, bos_cumsum, ref_positions, reduce='amax', include_self=False)
+    
+    reference_pos = last_ref_pos.gather(1, bos_cumsum)
+    within_doc_pos = positions - reference_pos
+    
     insert_mask = (within_doc_pos % K == 0) & (within_doc_pos > 0)
     return insert_mask
 
@@ -40,7 +46,8 @@ def insert_tokens(tokens, insert_mask, placeholder_token):
     return expanded_tokens
 
 @torch.no_grad()
-def sorl_rollout(data: torch.Tensor, model: GAT, n: int, K: int, max_iterations: int, memory_span: int, attn_blocksize: int, temperature: float):
+def sorl_rollout(data: torch.Tensor, model: GAT, n: int, K: int, max_iterations: int, memory_span: int, attn_blocksize: int, temperature: float,
+                 truncate_seq_len: bool = True):
     """
     Perform rollout with 1 greedy sample and (n-1) stochastic samples.
     """
@@ -48,8 +55,10 @@ def sorl_rollout(data: torch.Tensor, model: GAT, n: int, K: int, max_iterations:
     data_len = data.shape[1]
 
     # --- repeat data & add placeholder tokens ---
-    insert_mask = infer_rythmic_insert_mask(data, K)
-    data = insert_tokens(data, insert_mask, model.vocab_sizes[0].item())[:, :data_len] # avoids recompilation
+    insert_mask = infer_rythmic_insert_mask(data, K, model.vocab_sizes[0])
+    data = insert_tokens(data, insert_mask, model.vocab_sizes[0].item())
+    if truncate_seq_len:
+        data = data[:, :data_len] # avoids recompilation
     repeat_data = data.repeat_interleave(n, dim=0)
 
     # --- search --- 
@@ -99,7 +108,7 @@ def select_best_per_doc(search_data, ppt, levels):
 import time
 
 def sorl_search(tokens, model, n=3, K=3, max_iterations=1,
-                memory_span=1792, attn_blocksize=1792, temperature=1.0, loss_mask: Optional[torch.Tensor] = None):
+                memory_span=1792, attn_blocksize=1792, temperature=1.0, truncate_seq_len: bool = True, loss_mask: Optional[torch.Tensor] = None):
     """
     Complete SoRL search pipeline:
     1. Generate n rollouts (1 greedy + (n-1) stochastic)
@@ -114,7 +123,8 @@ def sorl_search(tokens, model, n=3, K=3, max_iterations=1,
                                max_iterations=max_iterations,
                                memory_span=memory_span,
                                attn_blocksize=attn_blocksize,
-                               temperature=temperature)
+                               temperature=temperature,
+                               truncate_seq_len=truncate_seq_len)
     search_ppt = search_ppt.reshape(search_data.shape[0], -1)
 
     # --- select best rollouts (based on trajectory perplexity) ---
@@ -124,7 +134,7 @@ def sorl_search(tokens, model, n=3, K=3, max_iterations=1,
 
 
 def sorl_evaluate(tokens, model, n=2, K=4, max_iterations=1, memory_span=1792, attn_blocksize=1792, temperature=1.0,
-                  loss_mask: Optional[torch.Tensor] = None):
+                  loss_mask: Optional[torch.Tensor] = None, truncate_seq_len: bool = True):
     """
     Search & Check greedy rollout advantage
     """
@@ -132,7 +142,8 @@ def sorl_evaluate(tokens, model, n=2, K=4, max_iterations=1, memory_span=1792, a
                                max_iterations=max_iterations,
                                memory_span=memory_span,
                                attn_blocksize=attn_blocksize,
-                               temperature=temperature)
+                               temperature=temperature,
+                               truncate_seq_len=truncate_seq_len)
     search_ppt = search_ppt.reshape(search_data.shape[0], -1)
 
     # --- greedy rollout's advantage over avg. stochastic rollout ---
