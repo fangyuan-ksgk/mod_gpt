@@ -116,8 +116,6 @@ def sorl_search(tokens, model, n=3, K=3, max_iterations=1,
                                attn_blocksize=attn_blocksize,
                                temperature=temperature)
     search_ppt = search_ppt.reshape(search_data.shape[0], -1)
-    if loss_mask is not None:
-        search_ppt *= loss_mask[:, 1:]
 
     # --- select best rollouts (based on trajectory perplexity) ---
     levels = (search_data >= model.vocab_sizes[0]).long()
@@ -125,7 +123,8 @@ def sorl_search(tokens, model, n=3, K=3, max_iterations=1,
     return best_data, best_ppt, best_ppt_advantage.mean()
 
 
-def sorl_evaluate(tokens, model, n=2, K=4, max_iterations=1, memory_span=1792, attn_blocksize=1792, temperature=1.0, loss_mask: Optional[torch.Tensor] = None):
+def sorl_evaluate(tokens, model, n=2, K=4, max_iterations=1, memory_span=1792, attn_blocksize=1792, temperature=1.0,
+                  loss_mask: Optional[torch.Tensor] = None):
     """
     Search & Check greedy rollout advantage
     """
@@ -135,8 +134,6 @@ def sorl_evaluate(tokens, model, n=2, K=4, max_iterations=1, memory_span=1792, a
                                attn_blocksize=attn_blocksize,
                                temperature=temperature)
     search_ppt = search_ppt.reshape(search_data.shape[0], -1)
-    if loss_mask is not None:
-        search_ppt *= loss_mask[:, 1:]
 
     # --- greedy rollout's advantage over avg. stochastic rollout ---
     raw_ppt_adv = (search_ppt[1:].mean(dim=0) - search_ppt[0]) / (search_ppt[1:].mean(dim=0) + 1e-8)
@@ -162,8 +159,6 @@ def compute_loss(best_data, model, memory_span: int, attn_blocksize: int, loss_m
 
     best_ppt, _ = model.forward(best_data, memory_span, attn_blocksize)
     best_ppt = best_ppt.reshape(best_data.shape[0], -1)
-    if loss_mask is not None:
-        best_ppt *= loss_mask[:, 1:]
 
     levels = (best_data >= model.vocab_sizes[0]).long()[:, 1:]
 
