@@ -28,7 +28,7 @@ class CopyPasteDataLoader:
         data = samples.flatten().unsqueeze(0)  # [1, batch_size*(2*seq_len+2)]
         
         mask = torch.ones_like(samples, dtype=torch.float)
-        mask[:, self.seq_len + 1] = 0.0  # Placeholder is at position seq_len+1
+        mask[:, :self.seq_len] = 0.0
         loss_mask = mask.flatten().unsqueeze(0)
         
         return data, loss_mask

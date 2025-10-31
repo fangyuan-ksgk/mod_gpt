@@ -9,8 +9,8 @@ import torch.nn.functional as F
 from sorl.model import norm
 import torch.nn as nn
 
-BOS_TOKEN_ID = 50256
-# BOS_TOKEN_ID = 15
+# BOS_TOKEN_ID = 50256
+BOS_TOKEN_ID = 15
 
 @dataclass
 class GATConfig:
