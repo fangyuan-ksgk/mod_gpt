@@ -197,16 +197,28 @@ def sorl_evaluate(tokens, model, n=2, K=4, max_iterations=1, memory_span=1792, a
                                truncate_seq_len=truncate_seq_len)
     search_ppt = search_ppt.reshape(search_data.shape[0], -1)
 
-    # --- greedy rollout's advantage over avg. stochastic rollout ---
+    # Get valid positions
+    bos_pos_mask = torch.logical_and(
+        search_data[:, :-1] != BOS_TOKEN_ID, 
+        search_data[:, 1:] != BOS_TOKEN_ID
+    ).float()
+    
+    traj_mask = (search_data[:, 1:] < model.vocab_sizes[0]).float()
+    
+    # --- greedy rollout's advantage ---
+    valid_traj_mask = bos_pos_mask * traj_mask
     raw_ppt_adv = (search_ppt[1:].mean(dim=0) - search_ppt[0]) / (search_ppt[1:].mean(dim=0) + 1e-8)
-    traj_mask = (search_data[0, 1:] < model.vocab_sizes[0]).float()
-    bos_pos_mask = torch.logical_and(search_data[0, :-1] != BOS_TOKEN_ID, search_data[0, 1:] != BOS_TOKEN_ID).view(-1).float()  
-    search_adv = (raw_ppt_adv * traj_mask * bos_pos_mask).sum() / (bos_pos_mask * traj_mask).sum()
+    search_adv = (raw_ppt_adv * valid_traj_mask[0]).sum() / valid_traj_mask[0].sum().clamp(min=1)
 
+    # --- losses ---
     greedy_ppt = search_ppt[0]
-    traj_loss = (greedy_ppt * traj_mask).sum() / traj_mask.sum().clamp(min=1)
-    abs_mask = 1 - traj_mask
-    abs_loss = (greedy_ppt * abs_mask).sum() / abs_mask.sum().clamp(min=1) if abs_mask.sum() > 0 else torch.tensor(0.0, device=greedy_ppt.device, dtype=greedy_ppt.dtype)
+    abs_mask = 1 - traj_mask[0]
+    
+    valid_traj = valid_traj_mask[0]
+    valid_abs = bos_pos_mask[0] * abs_mask
+    
+    traj_loss = (greedy_ppt * valid_traj).sum() / valid_traj.sum().clamp(min=1)
+    abs_loss = (greedy_ppt * valid_abs).sum() / valid_abs.sum().clamp(min=1)
     
     return search_data[:1], search_adv, traj_loss, abs_loss
 
@@ -224,11 +236,18 @@ def compute_loss(best_data, model, memory_span: int, attn_blocksize: int, loss_m
 
     levels = (best_data >= model.vocab_sizes[0]).long()[:, 1:]
 
+    bos_pos_mask = torch.logical_and(
+        best_data[:, :-1] != BOS_TOKEN_ID, 
+        best_data[:, 1:] != BOS_TOKEN_ID
+    ).float()
     traj_mask = (levels == 0).float()[0]
-    traj_loss = (best_ppt * traj_mask).sum() / traj_mask.sum().clamp(min=1)
     abs_mask = 1 - traj_mask
-    abs_loss = (best_ppt * abs_mask).sum() / abs_mask.sum().clamp(min=1) if abs_mask.sum() > 0 else torch.tensor(0.0, device=best_ppt.device, dtype=best_ppt.dtype)
-    
+
+    valid_traj_mask = bos_pos_mask[0] * traj_mask
+    valid_abs_mask = bos_pos_mask[0] * abs_mask
+
+    traj_loss = (best_ppt[0] * valid_traj_mask).sum() / valid_traj_mask.sum().clamp(min=1)
+    abs_loss = (best_ppt[0] * valid_abs_mask).sum() / valid_abs_mask.sum().clamp(min=1)
     return traj_loss, abs_loss
 
 
