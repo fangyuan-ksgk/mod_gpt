@@ -46,6 +46,7 @@ echo "========================================="
 echo "H1: GAPT + SoRL vs Baseline SoRL"
 echo "========================================="
 
+
 # H1a: Baseline SoRL (no GAPT)
 echo "Running: SoRL baseline (no GAPT)..."
 torchrun --standalone --nproc_per_node=$N_GPUS train_sorl.py \
@@ -57,6 +58,7 @@ torchrun --standalone --nproc_per_node=$N_GPUS train_sorl.py \
   --K 8 \
   --max_iterations 2 \
   --temperature 10.0
+
 
 # H1b: SoRL + GAPT
 echo "Running: SoRL + GAPT..."
