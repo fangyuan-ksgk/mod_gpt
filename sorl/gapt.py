@@ -32,6 +32,13 @@ class GatedPhaseTransition:
         if min_loss == float('inf') or min_loss == 0:
             return 0.0
         return (min_loss - current_loss) / min_loss.clamp(min=1e-6)
+
+    def _weight_loss(self, main_loss: float, auxiliary_loss: float) -> float:
+        """Weight the loss based on the phase"""
+        if self.phi == 1:
+            return main_loss
+        elif self.phi == 2:
+            return main_loss + auxiliary_loss
     
     def step(self, main_loss: float, auxiliary_loss: float, verbose: bool = False):
         """
@@ -80,5 +87,5 @@ class GatedPhaseTransition:
         if verbose and prev_phi != self.phi:
             print(f"  [GAPT] Phase transition: {prev_phi} → {self.phi}")
             print(f"         main_loss={main_loss:.4f}, aux_loss={auxiliary_loss:.4f}")
-        
-        return self.phi
+
+        return self._weight_loss(main_loss, auxiliary_loss)
