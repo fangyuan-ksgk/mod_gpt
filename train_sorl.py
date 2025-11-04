@@ -211,7 +211,7 @@ class Hyperparameters:
     min_memory_span: int = 64 # minimum memory span
     use_curiosity_reward: bool = False # use curiosity reward
     use_greedy_retention: bool = False # use greedy retention in sorl search (it stablize abstraction at the cost of hurting traj perplexity)
-    
+
 cli_args = parse_args()
 args = Hyperparameters()
 for k, v in vars(cli_args).items():
@@ -410,7 +410,7 @@ for step in range(train_steps + 1):
                 val_loss["traj_loss"] += val_traj_loss
                 val_loss["abs_loss"] += val_abs_loss
                 val_loss["search_advantage"] += val_adv.mean()
-                val_loss["util_rate"] += util_rate
+                val_loss["util_rate"] += torch.tensor(util_rate, device=val_traj_loss.device)
 
         for name in val_loss: 
             val_loss[name] /= val_steps
