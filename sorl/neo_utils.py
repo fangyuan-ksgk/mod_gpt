@@ -119,7 +119,8 @@ def select_best_per_doc(search_data, ppt, levels):
     trajectory_mask = (levels[:, 1:] == 0).float()
     trajectory_ppt = ppt * trajectory_mask
     
-    doc_idx = (search_data == BOS_TOKEN_ID).cumsum(dim=1) - 1    
+    doc_idx = (search_data == BOS_TOKEN_ID).cumsum(dim=1)
+    doc_idx = doc_idx - doc_idx.min(dim=1, keepdim=True).values # idx starts from 0  
     doc_ppt = avg_ppt_per_sample(trajectory_ppt, doc_idx[:,1:])
 
     min_doc_ppt, best_rollout_per_doc = doc_ppt.min(dim=0)
