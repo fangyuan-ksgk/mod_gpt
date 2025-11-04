@@ -43,6 +43,9 @@ def parse_args():
     parser.add_argument("--temperature", type=float, default=1.0)
     parser.add_argument("--use_static_memory_span", action="store_true", default=False)
     parser.add_argument("--abstract_vocab_size", type=int, default=256)
+    parser.add_argument("--use_gapt", action="store_true", default=False) # focus on traj perplexity, treat abs loss as auxiliary loss
+    parser.add_argument("--min_memory_span", type=int, default=64) # control verbatim memory span
+    parser.add_argument("--use_curiosity_reward", action="store_true", default=False) # to encourage exploration in abstraction space
     return parser.parse_args()
 
 # -----------------------------------------------------------------------------
@@ -156,7 +159,8 @@ class Muon(torch.optim.Optimizer):
 
 # GAT model
 from sorl.gat_sim import GAT, GATConfig
-from sorl.neo_utils import sorl_search, compute_loss, sorl_evaluate
+from sorl.neo_utils import sorl_search, sorl_search_v2, compute_loss, sorl_evaluate
+from sorl.eval import compute_vocab_utilization_rate
 
 # -----------------------------------------------------------------------------
 
@@ -201,7 +205,10 @@ class Hyperparameters:
     K: int = 8 # abstract ratio
     max_iterations: int = 1 # max number of iterations to search
     temperature: float = 1.0 # temperature for search
-    
+    use_gapt: bool = False # use GAPT
+    min_memory_span: int = 64 # minimum memory span
+    use_curiosity_reward: bool = False # use curiosity reward
+
 cli_args = parse_args()
 args = Hyperparameters()
 for k, v in vars(cli_args).items():
@@ -318,11 +325,11 @@ for i in range(warmup_steps):
     # --- sorl search --- 
     search_start = time.time()
     with torch.no_grad():
-        search_tokens, search_ppt, search_adv = sorl_search(tokens, model, n=args.num_rollouts, K=args.K, max_iterations=args.max_iterations, memory_span=memory_span, attn_blocksize=attn_blocksize, temperature=args.temperature)
+        search_tokens, search_ppt, search_adv, pt_curiosity = sorl_search_v2(tokens, model, n=args.num_rollouts, K=args.K, max_iterations=args.max_iterations, memory_span=memory_span, attn_blocksize=attn_blocksize, temperature=args.temperature)
     search_end = time.time()
     print(f" :: Sorl search takes {search_end - search_start} second")
     # --- compute loss --- 
-    traj_loss, abs_loss = compute_loss(search_tokens, model, memory_span=memory_span, attn_blocksize=attn_blocksize)
+    traj_loss, abs_loss = compute_loss(search_tokens, model, memory_span=memory_span, attn_blocksize=attn_blocksize, per_pos_curiosity=pt_curiosity)
     forward_end = time.time()
     print(f" :: Loss computation takes {forward_end - search_end} second")
     # --- backward --- 
@@ -352,6 +359,11 @@ print("Train & Evaluation")
 
 train_loader = distributed_data_generator(args.train_files, world_size * args.train_seq_len, rank, world_size)
 
+# --- GAPT ---
+from sorl.gapt import GatedPhaseTransition
+gapt = GatedPhaseTransition()
+# -------------
+
 training_time_ms = 0
 # start the clock
 torch.cuda.synchronize()
@@ -364,12 +376,11 @@ early_stop = False
 
 for step in range(train_steps + 1):
     last_step = (step == train_steps) or early_stop
-    
-    attn_blocksize = torch.tensor(64*((step/train_steps * (1792 - 64) + 64)//64), dtype=torch.int, device='cuda')
+    attn_blocksize = torch.tensor(64*((step/train_steps * (1792 - 64) + 64)//64), dtype=torch.int, device='cuda')    
     if args.use_static_memory_span:
         memory_span = torch.tensor(1792, dtype=torch.int, device='cuda') # keep static
     else:
-        memory_span = torch.tensor(64*(((1 - step/train_steps) * (1792 - 64) + 64)//64), dtype=torch.int, device='cuda')
+        memory_span = torch.tensor(64*(((1 - step/train_steps) * (1792 - args.min_memory_span) + args.min_memory_span)//64), dtype=torch.int, device='cuda')
 
     # --------------- VALIDATION SECTION -----------------
     if last_step or (args.val_loss_every > 0 and step % args.val_loss_every == 0):
@@ -387,9 +398,11 @@ for step in range(train_steps + 1):
                 tokens = next(val_loader)
                 val_tokens, val_adv, val_traj_loss, val_abs_loss = sorl_evaluate(tokens, model, n=args.num_rollouts, K=args.K, max_iterations=args.max_iterations, 
                                                                     memory_span=memory_span, attn_blocksize=attn_blocksize, temperature=10.0)
+                util_rate = compute_vocab_utilization_rate(val_tokens, model)
                 val_loss["traj_loss"] += val_traj_loss
                 val_loss["abs_loss"] += val_abs_loss
                 val_loss["search_advantage"] += val_adv.mean()
+                val_loss["util_rate"] += util_rate
 
         for name in val_loss: 
             val_loss[name] /= val_steps
@@ -419,10 +432,20 @@ for step in range(train_steps + 1):
     for accum_step in range(train_accumulation_steps): 
         tokens = next(train_loader)
         with torch.no_grad(): 
-            search_tokens, search_ppt, search_adv = sorl_search(tokens, model, n=args.num_rollouts, K=args.K, max_iterations=args.max_iterations, 
+            search_tokens, search_ppt, search_adv, pt_curiosity = sorl_search_v2(tokens, model, n=args.num_rollouts, K=args.K, max_iterations=args.max_iterations, 
                                                                 memory_span=memory_span, attn_blocksize=attn_blocksize, temperature=args.temperature)
-        traj_loss, abs_loss = compute_loss(search_tokens, model, memory_span=memory_span, attn_blocksize=attn_blocksize)
-        loss = traj_loss + abs_loss
+
+        # --- compute loss --- 
+        if args.use_curiosity_reward: 
+            traj_loss, abs_loss = compute_loss(search_tokens, model, memory_span=memory_span, attn_blocksize=attn_blocksize, per_pos_curiosity=pt_curiosity)
+        else:
+            traj_loss, abs_loss = compute_loss(search_tokens, model, memory_span=memory_span, attn_blocksize=attn_blocksize)
+        
+        if args.use_gapt: 
+            loss = gapt.step(traj_loss, abs_loss, verbose=False)
+        else: 
+            loss = traj_loss + abs_loss
+        
         loss.backward()
         print0(f" - step: {step} | accum step: {accum_step} | traj_loss: {traj_loss.item()} | abs_loss: {abs_loss.item()} | search_advantage: {search_adv.mean().item()}")
         
@@ -460,6 +483,9 @@ print0(f"-- max_iterations: {args.max_iterations}", console=True)
 print0(f"-- temperature: {args.temperature}", console=True)
 print0(f"-- use_static_memory_span: {args.use_static_memory_span}", console=True)
 print0(f"-- abstract_vocab_size: {args.abstract_vocab_size}", console=True)
+print0(f"-- use_gapt: {args.use_gapt}", console=True)
+print0(f"-- use_curiosity_reward: {args.use_curiosity_reward}", console=True)
+print0(f"-- min_memory_span: {args.min_memory_span}", console=True)
 
 print0(f"loss record:\n{loss_record}", console=True)
 

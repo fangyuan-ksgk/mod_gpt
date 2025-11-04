@@ -6,7 +6,7 @@ def compute_vocab_utilization_rate(data: torch.Tensor, model):
     n_unique_abs_tokens = data[(data >= si) & (data < ei)].unique().size(0)
     n_total_abs_tokens = (ei - si).item()
     abs_util_rate = n_unique_abs_tokens / n_total_abs_tokens
-    print(f" Total abs tokens: {n_total_abs_tokens} | Unique abs tokens: {n_unique_abs_tokens} | Abs util rate: {abs_util_rate * 100:.2f}%")
+    # print(f" Total abs tokens: {n_total_abs_tokens} | Unique abs tokens: {n_unique_abs_tokens} | Abs util rate: {abs_util_rate * 100:.2f}%")
     return abs_util_rate
 
 # def eval_cp(model, tokens, K, max_iterations, memory_span, seq_len, loader, temperature=0.0, num_samples=100):
