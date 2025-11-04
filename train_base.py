@@ -413,12 +413,6 @@ print0("Experiment configuration: \n", console=True)
 print0(f"-- batch_size: {args.batch_size}", console=True)
 print0(f"-- train_seq_len: {args.train_seq_len}", console=True)
 print0(f"-- val_seq_len: {args.val_seq_len}", console=True)
-print0(f"-- num_iterations: {args.num_iterations}", console=True)
-print0(f"-- num_rollouts: {args.num_rollouts}", console=True)
-print0(f"-- K: {args.K}", console=True)
-print0(f"-- max_iterations: {args.max_iterations}", console=True)
-print0(f"-- temperature: {args.temperature}", console=True)
-
 print0(f"loss record:\n{loss_record}", console=True)
 
 dist.destroy_process_group()

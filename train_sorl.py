@@ -46,6 +46,8 @@ def parse_args():
     parser.add_argument("--use_gapt", action="store_true", default=False) # focus on traj perplexity, treat abs loss as auxiliary loss
     parser.add_argument("--min_memory_span", type=int, default=64) # control verbatim memory span
     parser.add_argument("--use_curiosity_reward", action="store_true", default=False) # to encourage exploration in abstraction space
+    parser.add_argument("--use_greedy_retention", action="store_true", default=False) # use greedy retention in sorl search (it stablize abstraction at the cost of hurting traj perplexity)
+
     return parser.parse_args()
 
 # -----------------------------------------------------------------------------
@@ -159,7 +161,7 @@ class Muon(torch.optim.Optimizer):
 
 # GAT model
 from sorl.gat_sim import GAT, GATConfig
-from sorl.neo_utils import sorl_search, sorl_search_v2, compute_loss, sorl_evaluate
+from sorl.neo_utils import compute_loss, sorl_evaluate
 from sorl.eval import compute_vocab_utilization_rate
 
 # -----------------------------------------------------------------------------
@@ -208,7 +210,8 @@ class Hyperparameters:
     use_gapt: bool = False # use GAPT
     min_memory_span: int = 64 # minimum memory span
     use_curiosity_reward: bool = False # use curiosity reward
-
+    use_greedy_retention: bool = False # use greedy retention in sorl search (it stablize abstraction at the cost of hurting traj perplexity)
+    
 cli_args = parse_args()
 args = Hyperparameters()
 for k, v in vars(cli_args).items():
@@ -262,6 +265,11 @@ def nvidia_smi():
 print0(nvidia_smi())
 print0("="*100)
 
+# --- sorl search ---
+if args.use_greedy_retention: 
+    from sorl.neo_utils import sorl_search as sorl_search 
+else: 
+    from sorl.neo_utils import sorl_search_v2 as sorl_search 
 
 ########################################
 #    Construct model and optimizer     #
@@ -325,7 +333,7 @@ for i in range(warmup_steps):
     # --- sorl search --- 
     search_start = time.time()
     with torch.no_grad():
-        search_tokens, search_ppt, search_adv, pt_curiosity = sorl_search_v2(tokens, model, n=args.num_rollouts, K=args.K, max_iterations=args.max_iterations, memory_span=memory_span, attn_blocksize=attn_blocksize, temperature=args.temperature)
+        search_tokens, search_ppt, search_adv, pt_curiosity = sorl_search(tokens, model, n=args.num_rollouts, K=args.K, max_iterations=args.max_iterations, memory_span=memory_span, attn_blocksize=attn_blocksize, temperature=args.temperature)
     search_end = time.time()
     print(f" :: Sorl search takes {search_end - search_start} second")
     # --- compute loss --- 
@@ -432,7 +440,7 @@ for step in range(train_steps + 1):
     for accum_step in range(train_accumulation_steps): 
         tokens = next(train_loader)
         with torch.no_grad(): 
-            search_tokens, search_ppt, search_adv, pt_curiosity = sorl_search_v2(tokens, model, n=args.num_rollouts, K=args.K, max_iterations=args.max_iterations, 
+            search_tokens, search_ppt, search_adv, pt_curiosity = sorl_search(tokens, model, n=args.num_rollouts, K=args.K, max_iterations=args.max_iterations, 
                                                                 memory_span=memory_span, attn_blocksize=attn_blocksize, temperature=args.temperature)
 
         # --- compute loss --- 
