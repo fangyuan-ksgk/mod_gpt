@@ -228,27 +228,27 @@ def sorl_evaluate(tokens, model, n=2, K=4, max_iterations=1, memory_span=1792, a
 # - [Reflection 1] it's not clear why we need to 'separate' loss for trajectory with loss for abstraction right? 
 #                  for instance, best_ppt.mean() is the simplest training target here
 
-def compute_loss(best_data, model, memory_span: int, attn_blocksize: int, loss_mask: Optional[torch.Tensor] = None):
-    """Compute trajectory and abstraction loss from sorl_search output."""
+# def compute_loss(best_data, model, memory_span: int, attn_blocksize: int, loss_mask: Optional[torch.Tensor] = None):
+#     """Compute trajectory and abstraction loss from sorl_search output."""
 
-    best_ppt, _ = model.forward(best_data, memory_span, attn_blocksize)
-    best_ppt = best_ppt.reshape(best_data.shape[0], -1)
+#     best_ppt, _ = model.forward(best_data, memory_span, attn_blocksize)
+#     best_ppt = best_ppt.reshape(best_data.shape[0], -1)
 
-    levels = (best_data >= model.vocab_sizes[0]).long()[:, 1:]
+#     levels = (best_data >= model.vocab_sizes[0]).long()[:, 1:]
 
-    bos_pos_mask = torch.logical_and(
-        best_data[:, :-1] != BOS_TOKEN_ID, 
-        best_data[:, 1:] != BOS_TOKEN_ID
-    ).float()
-    traj_mask = (levels == 0).float()[0]
-    abs_mask = 1 - traj_mask
+#     bos_pos_mask = torch.logical_and(
+#         best_data[:, :-1] != BOS_TOKEN_ID, 
+#         best_data[:, 1:] != BOS_TOKEN_ID
+#     ).float()
+#     traj_mask = (levels == 0).float()[0]
+#     abs_mask = 1 - traj_mask
 
-    valid_traj_mask = bos_pos_mask[0] * traj_mask
-    valid_abs_mask = bos_pos_mask[0] * abs_mask
+#     valid_traj_mask = bos_pos_mask[0] * traj_mask
+#     valid_abs_mask = bos_pos_mask[0] * abs_mask
 
-    traj_loss = (best_ppt[0] * valid_traj_mask).sum() / valid_traj_mask.sum().clamp(min=1)
-    abs_loss = (best_ppt[0] * valid_abs_mask).sum() / valid_abs_mask.sum().clamp(min=1)
-    return traj_loss, abs_loss
+#     traj_loss = (best_ppt[0] * valid_traj_mask).sum() / valid_traj_mask.sum().clamp(min=1)
+#     abs_loss = (best_ppt[0] * valid_abs_mask).sum() / valid_abs_mask.sum().clamp(min=1)
+#     return traj_loss, abs_loss
 
 
 def generate(model, idx, K, max_iterations=0, memory_span=1792, attn_blocksize=1792, temperature=0.0):
@@ -278,3 +278,43 @@ def generate(model, idx, K, max_iterations=0, memory_span=1792, attn_blocksize=1
 
     idx = torch.cat((idx, new_tokens.unsqueeze(1)), dim=1)
     return idx
+
+
+# ----- loss with abstract entropy regularization ----
+
+def compute_abstract_entropy(logits, tokens, model):
+
+    abs_mask = (tokens >= model.vocab_sizes[0]).bool()[:, 1:]
+    assert abs_mask.shape[0] == 1, "assume batch size is 1"
+
+    abs_logits = logits[:, :-1][:, abs_mask[0]][..., model.vocab_sizes[0] + 1:]
+    log_Z = torch.logsumexp(abs_logits, dim=-1)
+    expected_logit = (torch.softmax(abs_logits, dim=-1) * abs_logits).sum(dim=-1)
+    per_pos_entropy = log_Z - expected_logit
+    
+    return per_pos_entropy.mean()
+
+def compute_loss(best_data, model, memory_span: int, attn_blocksize: int, loss_mask: Optional[torch.Tensor] = None):
+
+    """Compute trajectory and abstraction loss from sorl_search output."""
+
+    best_ppt, logits = model.forward(best_data, memory_span, attn_blocksize)
+    best_ppt = best_ppt.reshape(best_data.shape[0], -1)
+
+    abs_entropy = compute_abstract_entropy(logits, best_data, model)
+
+    levels = (best_data >= model.vocab_sizes[0]).long()[:, 1:]
+
+    bos_pos_mask = torch.logical_and(
+        best_data[:, :-1] != BOS_TOKEN_ID, 
+        best_data[:, 1:] != BOS_TOKEN_ID
+    ).float()
+    traj_mask = (levels == 0).float()[0]
+    abs_mask = 1 - traj_mask
+
+    valid_traj_mask = bos_pos_mask[0] * traj_mask
+    valid_abs_mask = bos_pos_mask[0] * abs_mask
+
+    traj_loss = (best_ppt[0] * valid_traj_mask).sum() / valid_traj_mask.sum().clamp(min=1)
+    abs_loss = (best_ppt[0] * valid_abs_mask).sum() / valid_abs_mask.sum().clamp(min=1)
+    return traj_loss, abs_loss, abs_entropy

@@ -120,7 +120,9 @@ class GAT(nn.Module):
         # Don't predict: (1) what comes after BOS, (2) BOS itself
         bos_pos_mask = torch.logical_and(idx[:, :-1] != BOS_TOKEN_ID, idx[:, 1:] != BOS_TOKEN_ID).view(-1).float()        
         loss = loss * bos_pos_mask
-        return loss, logits.detach()
+        
+        # return loss, logits.detach()
+        return loss, logits
 
 def get_next_token_level(seq_length, abstraction_interval):
     # assumes L=2 (to be extended)
