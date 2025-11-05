@@ -330,21 +330,9 @@ for i in range(warmup_steps):
     inputs = targets = torch.randint(0, args.vocab_size, size=(1, args.train_seq_len,), device="cuda")
     print(f" :: Forward propagation starts with inputs & targets of length {inputs.shape[1]}")
     forward_start = time.time() 
-    if i % 2 == 0: 
-        loss_dict = model.forward(inputs.to(torch.int32), targets, attn_blocksize, args.init_patch_size)
-        compute_loss(loss_dict)
-        loss_dict = {"entropy": loss_dict["entropy"]}
-    else: 
-        # Random value created in master_process, broadcasted to all GPUs 
-        # ------------------------------------------------------------------------
-        layer_idx = i % (model.num_encoder_layers)  
-        # ------------------------------------------------------------------------
-        loss_dict = model.forward(inputs.to(torch.int32), targets, attn_blocksize, args.init_patch_size)
-        
-        mbe_loss = loss_dict[f"mbe_{layer_idx}"]
-        loss_dict = {"mbe": mbe_loss}
-        print(f" :: Calculating Rank regularization loss for layer {layer_idx+1}")
-        
+    loss_dict = model.forward(inputs.to(torch.int32), targets, attn_blocksize, args.init_patch_size)
+    compute_loss(loss_dict)
+    loss_dict = {"entropy": loss_dict["entropy"], "mbe": sum(v for k, v in loss_dict.items() if k.startswith("mbe_"))}
     backward_start = time.time()
     loss_name = ', '.join(loss_dict.keys())
     print(f" :: Forward computation of loss [{loss_name}] takes {backward_start - forward_start} second")
@@ -433,20 +421,23 @@ for step in range(train_steps + 1):
     for accum_step in range(train_accumulation_steps): 
         inputs, targets = next(train_loader)
         loss_dict = model.forward(inputs, targets, attn_blocksize, args.patch_size)
-        compute_loss(loss_dict)
-            
-        if accum_step == train_accumulation_steps - 1:
-            gapt.step(loss_dict["entropy"], loss_dict["mbe"], verbose=False)
+        compute_loss(loss_dict)  
 
-        # What's the deal with below gadget? rotating across layers? 
-        # ----------------------------------------------------------
-        # (TBD 1). Add layer idx schedule logic 
-        if args.no_reg or True == 0: # rotation to CE loss only
+        # --- aggregate loss ---
+        loss_dict = {
+            "entropy": loss_dict["entropy"],
+            "mbe": sum(v for k, v in loss_dict.items() if k.startswith("mbe_"))
+        }
+        if args.no_reg: 
             loss_dict = {"entropy": loss_dict["entropy"]}
-        else: 
-            layer_idx = 1 # decided by the scheduler
-            loss_dict = {f"mbe_{layer_idx}": loss_dict[f"mbe_{layer_idx}"]}
-        
+        elif args.use_gapt:
+            loss = gapt.step(loss_dict["entropy"], loss_dict["mbe"], verbose=False)
+            loss_name = "entropy" if gapt.phi == 1 else "mbe"
+            loss_dict = {loss_name: loss}
+        else:
+            loss_dict = {"combined": loss_dict["entropy"] + args.mbe_weight * loss_dict["mbe"]}
+
+        # --- backward ---
         if args.log_grad_info: 
             grad_tracker.backward_with_tracking(loss_dict)
         else: 
