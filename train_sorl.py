@@ -47,6 +47,8 @@ def parse_args():
     parser.add_argument("--min_memory_span", type=int, default=64) # control verbatim memory span
     parser.add_argument("--use_curiosity_reward", action="store_true", default=False) # to encourage exploration in abstraction space
     parser.add_argument("--use_greedy_retention", action="store_true", default=False) # use greedy retention in sorl search (it stablize abstraction at the cost of hurting traj perplexity)
+    parser.add_argument("--traj_perplexity_patience", type=int, default=5) # patience for traj perplexity
+    parser.add_argument("--abs_perplexity_patience", type=int, default=5) # patience for abstract perplexity
 
     return parser.parse_args()
 
@@ -211,6 +213,8 @@ class Hyperparameters:
     min_memory_span: int = 64 # minimum memory span
     use_curiosity_reward: bool = False # use curiosity reward
     use_greedy_retention: bool = False # use greedy retention in sorl search (it stablize abstraction at the cost of hurting traj perplexity)
+    traj_perplexity_patience: int = 5 # patience for traj perplexity
+    abs_perplexity_patience: int = 5 # patience for abstract perplexity
 
 cli_args = parse_args()
 args = Hyperparameters()
@@ -369,7 +373,7 @@ train_loader = distributed_data_generator(args.train_files, world_size * args.tr
 
 # --- GAPT ---
 from sorl.gapt import GatedPhaseTransition
-gapt = GatedPhaseTransition()
+gapt = GatedPhaseTransition(p_m=args.traj_perplexity_patience, p_a=args.abs_perplexity_patience)
 # -------------
 
 training_time_ms = 0
