@@ -13,7 +13,7 @@ BATCH_SIZE=30  # Closer to benchmark batch_size=32
 TRAIN_SEQ_LEN=$((16 * 1024))
 VAL_SEQ_LEN=$((16 * 1024))
 NUM_ITERATIONS=1750
-N_GPUS=1
+N_GPUS=3
 
 # ============================================================================
 # BASELINE EXPERIMENTS
