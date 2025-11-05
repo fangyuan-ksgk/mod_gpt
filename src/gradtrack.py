@@ -5,17 +5,11 @@ import torch
 from collections import defaultdict
 import pickle
 import numpy as np
-from .utils import compute_gradient_cosine_similarities
-
-# Issue 1. 
-# - the 'retain_graph=True' conflict with pytorch means we need to do multiple backward pass (one for each loss)
-# - this is extremely wasteful and makes things slow 
 
 class GradientTracker:
     """
     Lightweight class to track gradient statistics during training.
-    Computes cosine similarity, norms, and stores gradient information
-    across different loss functions without any gradient surgery.
+    Tracks only norms and cosine similarities (no full gradient storage).
     """
     
     def __init__(self, model):
@@ -30,7 +24,7 @@ class GradientTracker:
             if p.requires_grad and p.numel() > 1
         }
     
-    def _add_grad_info(self, g1, g2):
+    def _compute_grad_stats(self, g1, g2):
         """
         Compute gradient statistics: norms and cosine similarity.
         
@@ -39,9 +33,8 @@ class GradientTracker:
             g2: Current gradient from backward pass
             
         Returns:
-            combined_grad, g1_norm, g2_norm, cosine_similarity, g2_array
+            combined_grad, g1_norm, g2_norm, cosine_similarity
         """
-        g2_array = g2.detach().cpu().to(torch.float16).numpy()
         g1_norm = torch.norm(g1)
         g2_norm = torch.norm(g2)
         
@@ -50,23 +43,16 @@ class GradientTracker:
         else:
             cosim = torch.tensor(0.)
             
-        return g1 + g2, g1_norm.item(), g2_norm.item(), cosim.item(), g2_array
+        return g1 + g2, g1_norm.item(), g2_norm.item(), cosim.item()
     
-    def _update_info(self, param_name, prev_g_norm, curr_g_norm, cosim, loss_name, is_reset, grad_array):
+    def _update_info(self, param_name, prev_g_norm, curr_g_norm, cosim, loss_name, is_reset):
         """Store gradient statistics for a parameter"""
         if param_name in self.grad_info:
-            if is_reset:
-                # Compute pairwise cosine similarities when starting new accumulation
-                self.grad_info[param_name]["grad_angles"] += \
-                    compute_gradient_cosine_similarities(self.grad_info[param_name])
-                self.grad_info[param_name]["grad_array"] = []  # Clear cache
-            
             self.grad_info[param_name]["prev_grad_norm"].append(prev_g_norm)
             self.grad_info[param_name]["curr_grad_norm"].append(curr_g_norm)
             self.grad_info[param_name]["cosine_similarity"].append(cosim)
             self.grad_info[param_name]["loss_name"].append(loss_name)
             self.grad_info[param_name]["reset"].append(is_reset)
-            self.grad_info[param_name]["grad_array"].append(grad_array)
     
     def backward_with_tracking(self, loss_dict):
         """
@@ -99,23 +85,20 @@ class GradientTracker:
         
         # Track gradient statistics
         for i, p in enumerate(params):
-            p.grad, prev_g_norm, curr_g_norm, cosim, curr_g_array = \
-                self._add_grad_info(prev_grads[i], p.grad)
+            p.grad, prev_g_norm, curr_g_norm, cosim = \
+                self._compute_grad_stats(prev_grads[i], p.grad)
             self._update_info(
                 param_names[i], prev_g_norm, curr_g_norm, cosim, 
-                loss_name, reset_flags[i], curr_g_array
+                loss_name, reset_flags[i]
             )
     
     def save_grad_info(self, path):
         """Save gradient tracking information to disk"""
         serializable_grad_info = {}
         for param_name, info in self.grad_info.items():
-            serializable_grad_info[param_name] = {
-                k: np.array(v) if k == "curr_grad" else v 
-                for k, v in dict(info).items()
-            }
+            serializable_grad_info[param_name] = dict(info)
         
         with open(path, "wb") as f:
             pickle.dump(serializable_grad_info, f)
         
-        print(f"Gradient info saved to {path}")
+        print(f"Gradient statistics saved to {path}")
