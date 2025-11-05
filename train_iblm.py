@@ -7,19 +7,13 @@ with open(sys.argv[0]) as f:
 import uuid
 import time
 import copy
-import random
 from dataclasses import dataclass
 from collections import defaultdict
 
-import numpy as np
 import torch
 from torch import nn, Tensor
 import torch.distributed as dist
-
-from src.pcgrad import SimPGrad, YetAnotherMixer, YetAnotherMixer2
-from src.utils import RRScheduler
-from src.utils import plot_training_losses
-from src.arith_exp import create_result_mask, compute_loss, DigitTokenizer
+from src.utils import plot_training_losses, compute_loss
 
 import argparse
 
@@ -42,7 +36,10 @@ def parse_args():
     parser.add_argument("--entropy_min_delta", type=float, default=0.01)
     parser.add_argument("--mbe_patience", type=int, default=125)
     parser.add_argument("--mbe_min_delta", type=float, default=0.002)
+    parser.add_argument("--entropy_spike_tolerance", type=float, default=0.1)
     parser.add_argument("--patch_size", type=int, default=8)
+    parser.add_argument("--mbe_weight", type=float, default=1.0)
+    parser.add_argument("--use_gapt", action="store_true")
     
     return parser.parse_args()
 
@@ -194,10 +191,13 @@ class Hyperparameters:
     save_checkpoint : bool = False
     no_reg: bool = False
     switch_phase: bool = False # use gapt
+    mbe_weight: float = 1.0
+    use_gapt: bool = False
 
     log_grad_info: bool = False
     entropy_patience: int = 125
     entropy_min_delta: float = 0.01
+    entropy_spike_tolerance: float = 0.1
     mbe_patience: int = 125
     inv_mbe_patience: int = 50
     mbe_min_delta: float = 0.002
@@ -205,7 +205,7 @@ class Hyperparameters:
 
     use_prior_weights: bool = False
     prior_weight: str = "natural"
-    
+
 cli_args = parse_args()
 args = Hyperparameters()
 for k, v in vars(cli_args).items():
@@ -248,7 +248,6 @@ def nvidia_smi():
     return subprocess.run(["nvidia-smi"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True).stdout
 print0(nvidia_smi())
 print0("="*100)
-
 
 
 ########################################
@@ -300,16 +299,7 @@ from src.gapt import GatedPhaseTransition
 grad_tracker = GradTracker(model)
 gapt = GatedPhaseTransition(p_m = args.entropy_patience, p_a = args.mbe_patience, 
                             tau_plateau_m = args.entropy_min_delta, tau_plateau_a = args.mbe_min_delta, 
-                            tau_spike = args.entropy_min_delta)
-
-# ---------------------------------------------------------
-
-####################################
-# Arithmetic Experiments Tokenizer #
-####################################
-
-if args.mask_entropy_val: 
-    digit_tokenizer = DigitTokenizer() # specific tokenizer for arithmetic experiments 
+                            tau_spike = args.entropy_spike_tolerance)
 
 # ---------------------------------------------------------
 
@@ -330,7 +320,7 @@ for i in range(warmup_steps):
     inputs = targets = torch.randint(0, args.vocab_size, size=(1, args.train_seq_len,), device="cuda")
     print(f" :: Forward propagation starts with inputs & targets of length {inputs.shape[1]}")
     forward_start = time.time() 
-    loss_dict = model.forward(inputs.to(torch.int32), targets, attn_blocksize, args.init_patch_size)
+    loss_dict = model.forward(inputs.to(torch.int32), targets, attn_blocksize, args.patch_size)
     compute_loss(loss_dict)
     loss_dict = {"entropy": loss_dict["entropy"], "mbe": sum(v for k, v in loss_dict.items() if k.startswith("mbe_"))}
     backward_start = time.time()
@@ -431,6 +421,14 @@ for step in range(train_steps + 1):
         if args.no_reg: 
             loss_dict = {"entropy": loss_dict["entropy"]}
         elif args.use_gapt:
+            # ------------------------------------------------------------------------------------
+            # Reflection 1. 
+            # - change phase when batch changes instead of parameter changes is un-reasonable
+            # - increasing 'patience' accomodate this error
+            # - this is currently saying "change phase when encounter a hard data batch" ...
+            # - the ideal case should be to "change when optimization leads to spike in loss ..."
+            # - "patience" is a parameter that needs to be tuned
+            # ------------------------------------------------------------------------------------
             loss = gapt.step(loss_dict["entropy"], loss_dict["mbe"], verbose=False)
             loss_name = "entropy" if gapt.phi == 1 else "mbe"
             loss_dict = {loss_name: loss}

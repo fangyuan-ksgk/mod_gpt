@@ -1249,3 +1249,11 @@ class RRScheduler:
             loss_dict = {"mbe": avg_mbe_loss}
             
         return loss_dict 
+
+from typing import Optional
+
+def compute_loss(loss_dict: dict, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
+    if mask is not None:
+        loss_dict['entropy'] = (loss_dict['entropy'] * mask).sum() / (mask.sum())
+    else:
+        loss_dict['entropy'] = loss_dict['entropy'].mean()

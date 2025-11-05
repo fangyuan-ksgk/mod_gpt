@@ -174,12 +174,6 @@ def create_result_mask(targets, tokenizer):
                     mask[b, equals_pos+1:eos_pos] = 1.0
             i += 1
     return mask
-
-def compute_loss(loss_dict: dict, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
-    if mask is not None:
-        loss_dict['entropy'] = (loss_dict['entropy'] * mask).sum() / (mask.sum())
-    else:
-        loss_dict['entropy'] = loss_dict['entropy'].mean()
     
 # Sanity checker
 # -----------------------------------------------------------

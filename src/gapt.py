@@ -288,7 +288,7 @@ class GatedPhaseTransition:
         prev_phi = self.phi
 
         if self.phi == 1:  # Main objective phase
-            if gain_m > self.tau_plateau: 
+            if gain_m > self.tau_plateau_m: 
                 self.s_m = 0
             else: 
                 self.s_m += 1
@@ -304,7 +304,7 @@ class GatedPhaseTransition:
                 self.s_a = 0
                 self.phi = 1
             else:
-                if gain_a > self.tau_plateau:  
+                if gain_a > self.tau_plateau_a:  
                     self.s_a = 0
                 else: 
                     self.s_a += 1
