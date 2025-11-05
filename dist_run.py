@@ -68,6 +68,9 @@ def test_2_cuda():
         print(f"❌ FAILED: CUDA initialization error: {e}")
         return False
 
+# This is the problematic part ... 
+# ---------------------------------
+
 def test_3_distributed_init():
     """Test 3: Initialize distributed process group"""
     print("\n" + "="*60)
@@ -78,23 +81,49 @@ def test_3_distributed_init():
     world_size = int(os.environ["WORLD_SIZE"])
     local_rank = int(os.environ["LOCAL_RANK"])
     
+    # Print network info
+    master_addr = os.environ.get("MASTER_ADDR")
+    master_port = os.environ.get("MASTER_PORT")
+    print_all(f"Master address: {master_addr}:{master_port}", rank)
+    
+    # Test hostname resolution
+    try:
+        import socket
+        ip = socket.gethostbyname(master_addr)
+        print_all(f"Resolved {master_addr} -> {ip}", rank)
+    except Exception as e:
+        print_all(f"⚠️  Hostname resolution failed: {e}", rank)
+    
     try:
         device = torch.device("cuda", local_rank)
         torch.cuda.set_device(device)
         
-        print_all(f"Initializing process group (backend=nccl)...", rank)
-        dist.init_process_group(backend="nccl", device_id=device)
+        # Set NCCL environment variables for better debugging
+        os.environ["NCCL_DEBUG"] = "INFO"  # Verbose NCCL logging
+        os.environ["NCCL_TIMEOUT"] = "300"  # 5 minutes timeout
+        os.environ["NCCL_BLOCKING_WAIT"] = "1"  # Show where it blocks
         
-        print_all(f"Barrier test...", rank)
+        print_all(f"Initializing process group (backend=nccl)...", rank)
+        print_all(f"Device: {device}, Local rank: {local_rank}", rank)
+        
+        # Initialize with explicit timeout
+        dist.init_process_group(
+            backend="nccl", 
+            device_id=device,
+            timeout=torch.distributed.timedelta(seconds=300)  # 5 min timeout
+        )
+        
+        print_all(f"Init complete, testing barrier...", rank)
         dist.barrier()
         
-        print_all(f"Initialized! World size: {world_size}", rank)
+        print_all(f"Barrier passed! World size: {world_size}", rank)
         print("✅ PASSED: Distributed initialized successfully")
         return True
+        
     except Exception as e:
-        print(f"❌ FAILED: Distributed initialization error: {e}")
+        print_all(f"❌ FAILED: {type(e).__name__}: {e}", rank)
         import traceback
-        traceback.print_exc()
+        print_all(traceback.format_exc(), rank)
         return False
 
 def test_4_communication():
