@@ -68,6 +68,11 @@ def test_2_cuda():
         print(f"❌ FAILED: CUDA initialization error: {e}")
         return False
 
+# Source: 
+# 'init_process_group' code line leads to error. 
+# Hypothesis: 
+# 1. 'device_id' should not be used in 'init_process_group'
+
 def test_3_distributed_init():
     """Test 3: Initialize distributed process group"""
     print("\n" + "="*60)
@@ -79,11 +84,14 @@ def test_3_distributed_init():
     local_rank = int(os.environ["LOCAL_RANK"])
     
     try:
+        # Set device BEFORE init
         device = torch.device("cuda", local_rank)
         torch.cuda.set_device(device)
         
         print_all(f"Initializing process group (backend=nccl)...", rank)
-        dist.init_process_group(backend="nccl", device_id=device)
+        
+        # Don't pass device_id - PyTorch will use the one set above
+        dist.init_process_group(backend="nccl")
         
         print_all(f"Barrier test...", rank)
         dist.barrier()
@@ -92,9 +100,9 @@ def test_3_distributed_init():
         print("✅ PASSED: Distributed initialized successfully")
         return True
     except Exception as e:
-        print(f"❌ FAILED: Distributed initialization error: {e}")
+        print_all(f"❌ FAILED: Distributed initialization error: {e}", rank)
         import traceback
-        traceback.print_exc()
+        print_all(traceback.format_exc(), rank)
         return False
 
 def test_4_communication():
