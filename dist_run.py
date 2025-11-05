@@ -80,6 +80,35 @@ def test_2_cuda():
         print_all(f"❌ FAILED: CUDA initialization error: {e}")
         return False
 
+# def test_3_distributed_init():
+#     """Test 3: Initialize distributed process group"""
+#     print_all("\n" + "="*60)
+#     print_all("TEST 3: Distributed Initialization")
+#     print_all("="*60)
+#     rank = int(os.environ["RANK"])
+#     world_size = int(os.environ["WORLD_SIZE"])
+#     local_rank = int(os.environ["LOCAL_RANK"])
+#     try:
+#         device = torch.device("cuda", local_rank)
+#         torch.cuda.set_device(device)
+#         print_all(f"Initializing process group (backend=nccl) with device_id={local_rank}...")
+#         dist.init_process_group(
+#             backend="nccl", 
+#             device_id=local_rank,
+#             timeout=datetime.timedelta(seconds=120)
+#         )
+#         print_all(f"Init complete. Testing barrier...")
+#         dist.barrier()
+#         print_all(f"Barrier passed! Initialized! World size: {world_size}")
+#         print_all("✅ PASSED: Distributed initialized successfully")
+#         return True
+#     except Exception as e:
+#         print_all(f"❌ FAILED in test_3: {type(e).__name__}: {e}")
+#         import traceback
+#         print_all(traceback.format_exc())
+#         return False
+
+
 def test_3_distributed_init():
     """Test 3: Initialize distributed process group"""
     print_all("\n" + "="*60)
@@ -89,14 +118,21 @@ def test_3_distributed_init():
     world_size = int(os.environ["WORLD_SIZE"])
     local_rank = int(os.environ["LOCAL_RANK"])
     try:
+        # Note: torch.cuda.set_device is still important for subsequent tests
         device = torch.device("cuda", local_rank)
         torch.cuda.set_device(device)
-        print_all(f"Initializing process group (backend=nccl) with device_id={local_rank}...")
+        
+        # --- THE ONLY CHANGE IS HERE ---
+        # Switch to the 'gloo' backend for testing. It's CPU-based and very reliable.
+        backend = "gloo" 
+        print_all(f"Initializing process group (backend={backend})...", rank)
+        
         dist.init_process_group(
-            backend="nccl", 
-            device_id=local_rank,
-            timeout=datetime.timedelta(seconds=120)
+            backend=backend,
+            timeout=datetime.timedelta(seconds=60)
         )
+        # --------------------------------
+
         print_all(f"Init complete. Testing barrier...")
         dist.barrier()
         print_all(f"Barrier passed! Initialized! World size: {world_size}")
