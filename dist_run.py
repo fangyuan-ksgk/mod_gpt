@@ -68,9 +68,6 @@ def test_2_cuda():
         print(f"❌ FAILED: CUDA initialization error: {e}")
         return False
 
-# This is the problematic part ... 
-# ---------------------------------
-
 def test_3_distributed_init():
     """Test 3: Initialize distributed process group"""
     print("\n" + "="*60)
