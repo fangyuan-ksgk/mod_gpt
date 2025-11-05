@@ -227,7 +227,7 @@ class GatedPhaseTransition:
     Gated Phase Transition (GAPT) : https://arxiv.org/pdf/2505.08727
     with percentage-based thresholds.
     """
-    def __init__(self, tau_plateau: float = 0.01, tau_spike: float = 0.1, 
+    def __init__(self, tau_plateau_m: float = 0.01, tau_plateau_a: float = 0.01, tau_spike: float = 0.1, 
                  p_m: int = 5, p_a: int = 5):
         """
         Args:
@@ -236,7 +236,8 @@ class GatedPhaseTransition:
             p_m: Patience for main objective (steps without improvement)
             p_c: Patience for auxiliary objective (steps without improvement)
         """
-        self.tau_plateau = tau_plateau  # % improvement needed to avoid plateau
+        self.tau_plateau_m = tau_plateau_m  # % improvement needed to avoid plateau
+        self.tau_plateau_a = tau_plateau_a # % improvement needed to avoid plateau
         self.tau_spike = tau_spike      # % degradation that triggers phase switch
         self.p_m = p_m
         self.p_a = p_a
@@ -248,31 +249,41 @@ class GatedPhaseTransition:
         self.min_m = float('inf')
         self.min_a = float('inf')
 
-    def _relative_gain(self, current_loss: float, min_loss: float) -> float:
+    def _relative_gain(self, current_loss: torch.Tensor, min_loss: float) -> float:
         """Calculate percentage improvement (negative = degradation)"""
-        if min_loss == float('inf') or min_loss == 0:
+        if min_loss == float('inf') or abs(min_loss) < 1e-9:
             return 0.0
-        return (min_loss - current_loss) / min_loss.clamp(min=1e-6)
+        current_val = current_loss.detach().item() if torch.is_tensor(current_loss) else current_loss
+        return (min_loss - current_val) / max(abs(min_loss), 1e-6)
 
-    def _weight_loss(self, main_loss: float, auxiliary_loss: float) -> float:
+    def _weight_loss(self, main_loss: torch.Tensor, auxiliary_loss: torch.Tensor) -> torch.Tensor:
         """Weight the loss based on the phase"""
         if self.phi == 1:
             return main_loss
         elif self.phi == 2:
             return main_loss + auxiliary_loss
+        return main_loss # fallback
     
-    def step(self, main_loss: float, auxiliary_loss: float, verbose: bool = False):
+    def step(self, main_loss: torch.Tensor, auxiliary_loss: torch.Tensor, 
+             verbose: bool = False) -> torch.Tensor:
         """
         Update phase based on loss dynamics.
         
         Returns:
-            phi: Current phase (1=main, 2=compression)
+             weighted_loss: Weighted loss tensor suitable for .backward()
         """
+        main_val = main_loss.detach().item()
+        aux_val = auxiliary_loss.detach().item()
+
+        if not (torch.isfinite(main_loss) and torch.isfinite(auxiliary_loss)):
+            print(f"WARNING: Non-finite loss detected! main={main_val}, aux={aux_val}")
+            return main_loss  # Fallback to main loss only
+
         gain_m = self._relative_gain(main_loss, self.min_m)
         gain_a = self._relative_gain(auxiliary_loss, self.min_a)
         
-        self.min_m = min(self.min_m, main_loss)
-        self.min_a = min(self.min_a, auxiliary_loss)
+        self.min_m = min(self.min_m, main_val)
+        self.min_a = min(self.min_a, aux_val)
 
         prev_phi = self.phi
 
@@ -289,7 +300,7 @@ class GatedPhaseTransition:
         elif self.phi == 2:  # Main + Auxiliary phase
             if gain_m < -self.tau_spike:  
                 if verbose:
-                    print(f"  [GAPT] Main loss spiked: {gain_m:.3f} < {-self.tau_spike:.3f}")
+                    print(f"  [GAPT] Main loss spiked: {-gain_m*100:.2f}% > {self.tau_spike*100:.2f}%")
                 self.s_a = 0
                 self.phi = 1
             else:
@@ -307,6 +318,6 @@ class GatedPhaseTransition:
         
         if verbose and prev_phi != self.phi:
             print(f"  [GAPT] Phase transition: {prev_phi} → {self.phi}")
-            print(f"         main_loss={main_loss:.4f}, aux_loss={auxiliary_loss:.4f}")
+            print(f"         main_loss={main_val:.4f}, aux_loss={aux_val:.4f}")
 
         return self._weight_loss(main_loss, auxiliary_loss)

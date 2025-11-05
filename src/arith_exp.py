@@ -8,6 +8,7 @@ import torch
 import os
 from tqdm import tqdm
 from pathlib import Path
+from typing import Optional
 
 # Per-digit tokenizer 
 # ------------------------------------------------------------
@@ -146,10 +147,6 @@ def create_result_mask(targets, tokenizer):
             i += 1
     return mask
 
-def cal_masked_entropy(loss_dict, mask): 
-    loss_dict['entropy'] = (loss_dict['entropy'] * mask).sum() / (mask.sum())
-
-
 
 # Mask Entropy : Designed specifically for arithmetic experiments 
 # ---------------------------------------------------------------------------------
@@ -178,11 +175,11 @@ def create_result_mask(targets, tokenizer):
             i += 1
     return mask
 
-def cal_masked_entropy(loss_dict, mask): 
-    loss_dict['entropy'] = (loss_dict['entropy'] * mask).sum() / (mask.sum())
-    
-def cal_unmasked_entropy(loss_dict): 
-    loss_dict['entropy'] = loss_dict['entropy'].mean()
+def compute_loss(loss_dict: dict, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
+    if mask is not None:
+        loss_dict['entropy'] = (loss_dict['entropy'] * mask).sum() / (mask.sum())
+    else:
+        loss_dict['entropy'] = loss_dict['entropy'].mean()
     
 # Sanity checker
 # -----------------------------------------------------------

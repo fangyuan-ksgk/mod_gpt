@@ -61,13 +61,15 @@ torchrun --standalone --nproc_per_node=$N_GPUS train_sorl.py \
 
 
 # H1b: SoRL + GAPT : This one produces error, halting the entire script.
+# -------------------------------------------------------------
+# - Debug from here
 
-torchrun --standalone --nproc_per_node=$N_GPUS train_base.py \
-  --batch_size $BATCH_SIZE \
-  --train_seq_len $TRAIN_SEQ_LEN \
-  --val_seq_len $VAL_SEQ_LEN \
-  --num_iterations $NUM_ITERATIONS
-  
+BATCH_SIZE=30  # Closer to benchmark batch_size=32
+TRAIN_SEQ_LEN=$((16 * 1024))
+VAL_SEQ_LEN=$((16 * 1024))
+NUM_ITERATIONS=1750
+N_GPUS=3
+
 echo "Running: SoRL + GAPT..."
 torchrun --standalone --nproc_per_node=$N_GPUS train_sorl.py \
   --batch_size $BATCH_SIZE \
@@ -79,6 +81,37 @@ torchrun --standalone --nproc_per_node=$N_GPUS train_sorl.py \
   --max_iterations 2 \
   --temperature 10.0 \
   --use_gapt
+
+BATCH_SIZE=30  # Closer to benchmark batch_size=32
+TRAIN_SEQ_LEN=$((16 * 1024))
+VAL_SEQ_LEN=$((16 * 1024))
+NUM_ITERATIONS=1750
+N_GPUS=3
+
+echo "Running: SoRL baseline (no GAPT)..."
+torchrun --standalone --nproc_per_node=$N_GPUS train_sorl.py \
+  --batch_size $BATCH_SIZE \
+  --train_seq_len $TRAIN_SEQ_LEN \
+  --val_seq_len $VAL_SEQ_LEN \
+  --num_iterations $NUM_ITERATIONS \
+  --num_rollouts 2 \
+  --K 8 \
+  --max_iterations 2 \
+  --temperature 10.0 \
+  --use_greedy_retention
+
+echo "Running: SoRL + GAPT..."
+torchrun --standalone --nproc_per_node=$N_GPUS train_sorl.py \
+  --batch_size $BATCH_SIZE \
+  --train_seq_len $TRAIN_SEQ_LEN \
+  --val_seq_len $VAL_SEQ_LEN \
+  --num_iterations $NUM_ITERATIONS \
+  --num_rollouts 2 \
+  --K 8 \
+  --max_iterations 2 \
+  --temperature 10.0 \
+  --use_gapt \
+  --use_greedy_retention
 
 # ============================================================================
 # HYPOTHESIS 2: SoRL v2 (no greedy) > SoRL (greedy retention)

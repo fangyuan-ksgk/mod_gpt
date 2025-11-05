@@ -91,6 +91,12 @@ class GradientTracker:
                 param_names[i], prev_g_norm, curr_g_norm, cosim, 
                 loss_name, reset_flags[i]
             )
+
+    def backward(self, loss_dict, retain_graph=False): 
+        # backward without tracking
+        assert len(loss_dict) == 1, "Requires exactly one loss per backward call"
+        loss_name = list(loss_dict.keys())[0]
+        loss_dict[loss_name].backward(retain_graph=retain_graph)
     
     def save_grad_info(self, path):
         """Save gradient tracking information to disk"""
