@@ -30,6 +30,10 @@ torchrun --standalone \
   --nproc_per_node=2 \
   --master_addr=127.0.0.1 \
   --master_port=29500 \
-  dist_run.py
+  train_base.py \
+    --batch_size 16 \
+    --num_iterations 1750 \
+    --train_seq_len 8192 \
+    --val_seq_len 8192
 
 echo "--- Test finished ---"
