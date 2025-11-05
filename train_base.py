@@ -159,9 +159,8 @@ rank = int(os.environ["RANK"])
 world_size = int(os.environ["WORLD_SIZE"])
 assert torch.cuda.is_available()
 device = torch.device("cuda", int(os.environ["LOCAL_RANK"]))
-local_rank = int(os.environ["LOCAL_RANK"])
 torch.cuda.set_device(device)
-dist.init_process_group(backend="nccl", device_id=local_rank)
+dist.init_process_group(backend="nccl", device_id=device)
 dist.barrier()
 master_process = (rank == 0) # this process will do logging, checkpointing etc.
 
