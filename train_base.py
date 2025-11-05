@@ -145,7 +145,7 @@ class Muon(torch.optim.Optimizer):
 
 # -----------------------------------------------------------------------------
 # PyTorch nn.Module definitions for the GPT-2 model
-from src.model import GPT, GPTConfig
+from src.model import GPT, GPTConfig # This is the out-dated non-residual connected model
 
 # -----------------------------------------------------------------------------
 

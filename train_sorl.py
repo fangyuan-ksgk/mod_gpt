@@ -494,6 +494,7 @@ print0(f"-- abstract_vocab_size: {args.abstract_vocab_size}", console=True)
 print0(f"-- use_gapt: {args.use_gapt}", console=True)
 print0(f"-- use_curiosity_reward: {args.use_curiosity_reward}", console=True)
 print0(f"-- min_memory_span: {args.min_memory_span}", console=True)
+print0(f"-- use_greedy_retention: {args.use_greedy_retention}", console=True)
 
 print0(f"loss record:\n{loss_record}", console=True)
 

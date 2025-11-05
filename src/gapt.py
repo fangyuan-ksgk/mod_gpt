@@ -10,8 +10,9 @@ RANK_REG_LOSS = "mbe"
 from torch import nn
 from typing import Optional 
 import torch.nn.functional as F
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from .model import CastedLinear, Block, create_block_mask, norm
+import time
 
 @dataclass
 class GPTConfig:
@@ -20,12 +21,71 @@ class GPTConfig:
     n_head : int = 6
     n_embd : int = 768
     flex_kernel_options: Optional[dict] = None
-    alpha: float = 0.1 # weight of rep rank regularizaiton
-    window_size: int = 64
+    device: str = "cuda" if torch.cuda.is_available() else "cpu"
+    _compile: bool = True if device == "cuda" else False
 
 
 # GPT with MBE regularization
 # ---------------------------------------------------------------------------------------
+# class GPT(nn.Module):
+
+#     def __init__(self, config):
+#         super().__init__()
+
+#         self.num_encoder_layers = config.n_layer // 2
+#         self.num_decoder_layers = config.n_layer - self.num_encoder_layers 
+#         self.skip_weights = nn.Parameter(torch.ones(self.num_decoder_layers))
+
+#         self.transformer = nn.ModuleDict(dict(
+#             wte = nn.Embedding(config.vocab_size, config.n_embd),
+#             h = nn.ModuleList([Block(config) for _ in range(config.n_layer)]),
+#         ))
+#         self.lm_head = CastedLinear(config.n_embd, config.vocab_size)
+#         self.lm_head.weight.data.zero_()
+
+#         self.device = config.device
+#         self._compile = config._compile
+
+#     def forward(self, idx, target, attn_blocksize, patch_size):
+#         """Localized Rank Regularization for Each Block"""
+
+#         docs = (idx == 50256).cumsum(1)
+#         def document_causal_mask(b, h, q_idx, kv_idx):
+#           causal_mask = q_idx >= kv_idx
+#           document_mask = docs[b, q_idx] == docs[b, kv_idx]
+#           window_mask = q_idx - kv_idx < attn_blocksize
+#           return causal_mask & document_mask & window_mask
+
+#         S = idx.shape[1]
+#         block_mask = create_block_mask(document_causal_mask, None, None, S, S, device=self.device, _compile=self._compile)
+
+#         x = self.transformer.wte(idx)
+#         x = norm(x)
+#         loss_dict = {}
+        
+#         x0 = x
+#         v1 = None
+
+#         skip_connections = []
+#         for i in range(self.num_encoder_layers):
+#             x, v1 = self.transformer.h[i](x, v1, x0, block_mask)
+#             loss_dict[f"{RANK_REG_LOSS}_{i}"] = patch_mbe(x, patch_size)
+#             skip_connections.append(x)
+#         for i in range(self.num_decoder_layers):
+#             x = x + self.skip_weights[i] * skip_connections.pop()
+#             x, v1 = self.transformer.h[self.num_encoder_layers + i](x, v1, x0, block_mask)
+#             loss_dict[f"{RANK_REG_LOSS}_{self.num_encoder_layers + i}"] = patch_mbe(x, patch_size)
+            
+#         x = norm(x)
+#         logits = self.lm_head(x)
+#         logits = 30 * torch.tanh(logits / 30) # @Grad62304977
+#         logits = logits.float()
+#         loss = F.cross_entropy(logits.view(-1, logits.size(-1)), target.view(-1))
+#         loss_dict["entropy"] = loss
+#         return loss_dict
+
+
+
 class GPT(nn.Module):
 
     def __init__(self, config):
@@ -42,12 +102,18 @@ class GPT(nn.Module):
         self.lm_head = CastedLinear(config.n_embd, config.vocab_size)
         self.lm_head.weight.data.zero_()
 
-        self.alpha = config.alpha 
-        self.window_size = config.window_size
+        self.device = config.device
+        self._compile = config._compile
+        self.enable_timing = False  # Toggle for timing
 
     def forward(self, idx, target, attn_blocksize, patch_size):
         """Localized Rank Regularization for Each Block"""
-
+        timings = {} if self.enable_timing else None
+        
+        # ===== Block Mask Creation =====
+        if self.enable_timing:
+            t0 = time.perf_counter()
+        
         docs = (idx == 50256).cumsum(1)
         def document_causal_mask(b, h, q_idx, kv_idx):
           causal_mask = q_idx >= kv_idx
@@ -56,32 +122,102 @@ class GPT(nn.Module):
           return causal_mask & document_mask & window_mask
 
         S = idx.shape[1]
-        block_mask = create_block_mask(document_causal_mask, None, None, S, S, device="cuda", _compile=True)
+        block_mask = create_block_mask(document_causal_mask, None, None, S, S, device=self.device, _compile=self._compile)
+        
+        if self.enable_timing:
+            timings['block_mask_creation'] = (time.perf_counter() - t0) * 1000
+            t0 = time.perf_counter()
 
+        # ===== Embedding + Norm =====
         x = self.transformer.wte(idx)
         x = norm(x)
         loss_dict = {}
         
+        if self.enable_timing:
+            timings['embedding_norm'] = (time.perf_counter() - t0) * 1000
+        
         x0 = x
         v1 = None
 
+        # ===== Encoder Layers =====
         skip_connections = []
         for i in range(self.num_encoder_layers):
+            if self.enable_timing:
+                t0 = time.perf_counter()
+            
             x, v1 = self.transformer.h[i](x, v1, x0, block_mask)
+            
+            if self.enable_timing:
+                timings[f'encoder_layer_{i}_forward'] = (time.perf_counter() - t0) * 1000
+                t0 = time.perf_counter()
+            
             loss_dict[f"{RANK_REG_LOSS}_{i}"] = patch_mbe(x, patch_size)
+            
+            if self.enable_timing:
+                timings[f'encoder_layer_{i}_mbe'] = (time.perf_counter() - t0) * 1000
+            
             skip_connections.append(x)
+        
+        # ===== Decoder Layers =====
         for i in range(self.num_decoder_layers):
+            if self.enable_timing:
+                t0 = time.perf_counter()
+            
             x = x + self.skip_weights[i] * skip_connections.pop()
             x, v1 = self.transformer.h[self.num_encoder_layers + i](x, v1, x0, block_mask)
+            
+            if self.enable_timing:
+                timings[f'decoder_layer_{i}_forward'] = (time.perf_counter() - t0) * 1000
+                t0 = time.perf_counter()
+            
             loss_dict[f"{RANK_REG_LOSS}_{self.num_encoder_layers + i}"] = patch_mbe(x, patch_size)
             
+            if self.enable_timing:
+                timings[f'decoder_layer_{i}_mbe'] = (time.perf_counter() - t0) * 1000
+        
+        # ===== Output Head + Loss =====
+        if self.enable_timing:
+            t0 = time.perf_counter()
+        
         x = norm(x)
         logits = self.lm_head(x)
-        logits = 30 * torch.tanh(logits / 30) # @Grad62304977
+        logits = 30 * torch.tanh(logits / 30)
         logits = logits.float()
         loss = F.cross_entropy(logits.view(-1, logits.size(-1)), target.view(-1))
         loss_dict["entropy"] = loss
+        
+        if self.enable_timing:
+            timings['output_head_loss'] = (time.perf_counter() - t0) * 1000
+            loss_dict["_timings"] = timings
+            self._print_timing_summary(timings)
+        
         return loss_dict
+    
+    def _print_timing_summary(self, timings):
+        """Print a formatted timing summary"""
+        print("\n" + "="*60)
+        print("⏱️  Forward Pass Timing Breakdown (ms)")
+        print("="*60)
+        
+        # Group timings
+        setup_time = timings.get('block_mask_creation', 0) + timings.get('embedding_norm', 0)
+        encoder_forward = sum(v for k, v in timings.items() if 'encoder' in k and 'forward' in k)
+        encoder_mbe = sum(v for k, v in timings.items() if 'encoder' in k and 'mbe' in k)
+        decoder_forward = sum(v for k, v in timings.items() if 'decoder' in k and 'forward' in k)
+        decoder_mbe = sum(v for k, v in timings.items() if 'decoder' in k and 'mbe' in k)
+        output_time = timings.get('output_head_loss', 0)
+        
+        total_time = setup_time + encoder_forward + encoder_mbe + decoder_forward + decoder_mbe + output_time
+        
+        print(f"Setup (mask + embed):     {setup_time:8.2f} ms  ({setup_time/total_time*100:5.1f}%)")
+        print(f"Encoder Forward:          {encoder_forward:8.2f} ms  ({encoder_forward/total_time*100:5.1f}%)")
+        print(f"Encoder MBE:              {encoder_mbe:8.2f} ms  ({encoder_mbe/total_time*100:5.1f}%)")
+        print(f"Decoder Forward:          {decoder_forward:8.2f} ms  ({decoder_forward/total_time*100:5.1f}%)")
+        print(f"Decoder MBE:              {decoder_mbe:8.2f} ms  ({decoder_mbe/total_time*100:5.1f}%)")
+        print(f"Output (head + loss):     {output_time:8.2f} ms  ({output_time/total_time*100:5.1f}%)")
+        print("-" * 60)
+        print(f"TOTAL:                    {total_time:8.2f} ms")
+        print("=" * 60 + "\n")
 
 
 # Gated Phase Transition 

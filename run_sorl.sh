@@ -60,7 +60,14 @@ torchrun --standalone --nproc_per_node=$N_GPUS train_sorl.py \
   --temperature 10.0
 
 
-# H1b: SoRL + GAPT
+# H1b: SoRL + GAPT : This one produces error, halting the entire script.
+
+torchrun --standalone --nproc_per_node=$N_GPUS train_base.py \
+  --batch_size $BATCH_SIZE \
+  --train_seq_len $TRAIN_SEQ_LEN \
+  --val_seq_len $VAL_SEQ_LEN \
+  --num_iterations $NUM_ITERATIONS
+  
 echo "Running: SoRL + GAPT..."
 torchrun --standalone --nproc_per_node=$N_GPUS train_sorl.py \
   --batch_size $BATCH_SIZE \

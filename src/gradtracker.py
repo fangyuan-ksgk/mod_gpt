@@ -54,7 +54,7 @@ class GradientTracker:
             self.grad_info[param_name]["loss_name"].append(loss_name)
             self.grad_info[param_name]["reset"].append(is_reset)
     
-    def backward_with_tracking(self, loss_dict):
+    def backward_with_tracking(self, loss_dict, retain_graph = False):
         """
         Perform standard backward pass while tracking gradient statistics.
         
@@ -81,7 +81,7 @@ class GradientTracker:
                 p.grad = torch.zeros_like(p)
         
         # Standard backward pass
-        loss_dict[loss_name].backward(retain_graph=False)
+        loss_dict[loss_name].backward(retain_graph=retain_graph)
         
         # Track gradient statistics
         for i, p in enumerate(params):

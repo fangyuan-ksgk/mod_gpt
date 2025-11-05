@@ -7,8 +7,10 @@ from typing import Optional
 import torch.nn.functional as F
 from dataclasses import dataclass
 from torch.nn.attention.flex_attention import flex_attention, create_block_mask
-flex_attention = torch.compile(flex_attention, dynamic=False)
-create_block_mask = torch.compile(create_block_mask, dynamic=False)
+
+if torch.cuda.is_available():
+    flex_attention = torch.compile(flex_attention, dynamic=False)
+    create_block_mask = torch.compile(create_block_mask, dynamic=False)
 
 def norm(x):
     return F.rms_norm(x, (x.size(-1),))
@@ -136,6 +138,8 @@ class GPTConfig:
     n_head : int = 6
     n_embd : int = 768
     flex_kernel_options: Optional[dict] = None
+    device: str = "cuda" if torch.cuda.is_available() else "cpu"
+    _compile: bool = True if device == "cuda" else False
 
 
 class GPT(nn.Module):
@@ -155,6 +159,8 @@ class GPT(nn.Module):
         ))
         self.lm_head = CastedLinear(config.n_embd, config.vocab_size)
         self.lm_head.weight.data.zero_() # @Grad62304977
+        self.device = config.device
+        self._compile = config._compile
 
     def forward(self, idx, target, attn_blocksize):
 
@@ -166,8 +172,7 @@ class GPT(nn.Module):
           return causal_mask & document_mask & window_mask
 
         S = idx.shape[1]
-        block_mask = create_block_mask(document_causal_mask, None, None, S, S, device="cuda", _compile=True)
-
+        block_mask = create_block_mask(document_causal_mask, None, None, S, S, device=self.device, _compile=self._compile)
         # forward the GPT model itself
         x = self.transformer.wte(idx)
         x = norm(x) # @Grad62304977
