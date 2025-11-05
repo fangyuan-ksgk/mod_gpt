@@ -4,6 +4,10 @@
 # =================================================================
 # Environment Fixes for NCCL on NVIDIA Pods
 # =================================================================
+
+# Dummy tuner config to avoid NCCL crashing
+export NCCL_TUNER_CONFIG_PATH="/workspace/mod_gpt/dummy_tuner_config.txt"
+
 # Disable the crashing NCCL plugins that are auto-loaded by the pod's environment
 export NCCL_TUNER_PLUGIN=""
 export NCCL_NET_PLUGIN=""
