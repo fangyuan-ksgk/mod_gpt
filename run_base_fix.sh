@@ -31,7 +31,7 @@ torchrun --standalone \
   --master_addr=127.0.0.1 \
   --master_port=29500 \
   train_base.py \
-    --batch_size 16 \
+    --batch_size 32 \
     --num_iterations 1750 \
     --train_seq_len 8192 \
     --val_seq_len 8192
