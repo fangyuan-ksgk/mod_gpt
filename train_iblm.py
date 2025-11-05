@@ -293,10 +293,10 @@ def get_lr(step: int):
 # Projective Non-conflicting Gradient Composer #
 ################################################
 
-from src.gradtracker import GradTracker
+from src.gradtracker import GradientTracker
 from src.gapt import GatedPhaseTransition
 
-grad_tracker = GradTracker(model)
+grad_tracker = GradientTracker(model)
 gapt = GatedPhaseTransition(p_m = args.entropy_patience, p_a = args.mbe_patience, 
                             tau_plateau_m = args.entropy_min_delta, tau_plateau_a = args.mbe_min_delta, 
                             tau_spike = args.entropy_spike_tolerance)
