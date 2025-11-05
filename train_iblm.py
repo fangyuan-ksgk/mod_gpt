@@ -35,7 +35,7 @@ def parse_args():
     parser.add_argument("--entropy_patience", type=int, default=125)
     parser.add_argument("--entropy_min_delta", type=float, default=0.01)
     parser.add_argument("--mbe_patience", type=int, default=125)
-    parser.add_argument("--mbe_min_delta", type=float, default=0.002)
+    parser.add_argument("--mbe_min_delta", type=float, default=0.01)
     parser.add_argument("--entropy_spike_tolerance", type=float, default=0.1)
     parser.add_argument("--patch_size", type=int, default=8)
     parser.add_argument("--mbe_weight", type=float, default=1.0)
@@ -466,5 +466,14 @@ print0(f"peak memory allocated: {torch.cuda.max_memory_allocated() // 1024 // 10
        f"reserved: {torch.cuda.max_memory_reserved() // 1024 // 1024} MiB", console=True)
 
 print0(f"loss record:\n{loss_record}", console=True)
+print0(f"IBLM Configuration:\n{args}", console=True)
+print0(f"-- use_gapt: {args.use_gapt}", console=True)
+print0(f"-- entropy_patience: {args.entropy_patience}", console=True)
+print0(f"-- entropy_min_delta: {args.entropy_min_delta}", console=True)
+print0(f"-- mbe_patience: {args.mbe_patience}", console=True)
+print0(f"-- mbe_min_delta: {args.mbe_min_delta}", console=True)
+print0(f"-- patch_size: {args.patch_size}", console=True)
+print0(f"-- mbe_weight: {args.mbe_weight}", console=True)
+print0(f"-- entropy_spike_tolerance: {args.entropy_spike_tolerance}", console=True)
 
 dist.destroy_process_group()
