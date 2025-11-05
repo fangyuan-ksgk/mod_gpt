@@ -150,6 +150,7 @@ from src.model import GPT, GPTConfig # This is the out-dated non-residual connec
 # -----------------------------------------------------------------------------
 
 from src.utils import distributed_data_generator
+import datetime
 
 # -----------------------------------------------------------------------------
 # int main
@@ -160,7 +161,7 @@ world_size = int(os.environ["WORLD_SIZE"])
 assert torch.cuda.is_available()
 device = torch.device("cuda", int(os.environ["LOCAL_RANK"]))
 torch.cuda.set_device(device)
-dist.init_process_group(backend="nccl", device_id=device)
+dist.init_process_group(backend="nccl", device_id=device, timeout=datetime.timedelta(seconds=120))
 dist.barrier()
 master_process = (rank == 0) # this process will do logging, checkpointing etc.
 
