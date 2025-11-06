@@ -18,9 +18,14 @@ class DigitTokenizer:
             "<eos>": 1,
             "x": 2,
             "=": 3,
-            " ": 4
+            " ": 4,
+            "+": 5,
+            "-": 6,
+            "*": 7,
+            "/": 8,
+            ".": 9
         }
-        self.digit_tokens = {str(i): i + 5 for i in range(10)}
+        self.digit_tokens = {str(i): i + len(self.special_tokens) for i in range(10)}
         self.vocab = {**self.special_tokens, **self.digit_tokens}
         self.vocab_size = len(self.vocab)
         self.inv_vocab = {v: k for k, v in self.vocab.items()}
@@ -74,7 +79,7 @@ def write_multiplication_dataset(examples, tokenizer, file_prefix, shard_size=No
         all_tokens.extend(example_tokens)
     
     tokens_np = np.array(all_tokens, dtype=np.uint16)
-    os.makedirs('data', exist_ok=True)
+    os.makedirs('data/multiplication', exist_ok=True)
     
     # Handle sharding if enabled
     if shard_size is not None and shard_size > 0 and len(tokens_np) > shard_size:
@@ -86,7 +91,7 @@ def write_multiplication_dataset(examples, tokenizer, file_prefix, shard_size=No
             end_idx = min((shard_idx + 1) * shard_size, len(tokens_np))
             shard_tokens = tokens_np[start_idx:end_idx]
             
-            filename = f'data/{file_prefix}_{shard_idx}.bin'
+            filename = f'data/multiplication/{file_prefix}_{shard_idx}.bin'
             print(f"Writing shard {shard_idx+1}/{num_shards} with {len(shard_tokens):,} tokens to {filename}")
             
             # Create header (256 int32s)
@@ -108,7 +113,7 @@ def write_multiplication_dataset(examples, tokenizer, file_prefix, shard_size=No
         return metadata_list[0]
     else:
         # Original non-sharded behavior
-        filename = f'data/{file_prefix}.bin'
+        filename = f'data/multiplication/{file_prefix}.bin'
         print(f"Writing {len(tokens_np):,} tokens to {filename}")
         
         header = np.zeros(256, dtype=np.int32)

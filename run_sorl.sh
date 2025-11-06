@@ -255,6 +255,8 @@ for max_iterations in 1 3 4 5; do
     --use_curiosity_reward
 done 
 
+# Here onwards has yet to be run. 
+# ==============================================
 
 # Temperature sweep
 # -------------------------------------------------------------
