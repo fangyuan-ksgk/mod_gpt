@@ -49,6 +49,9 @@ def parse_args():
     parser.add_argument("--use_greedy_retention", action="store_true", default=False) # use greedy retention in sorl search (it stablize abstraction at the cost of hurting traj perplexity)
     parser.add_argument("--traj_perplexity_patience", type=int, default=5) # patience for traj perplexity
     parser.add_argument("--abs_perplexity_patience", type=int, default=5) # patience for abstract perplexity
+    parser.add_argument("--tau_plateau", type=float, default=0.01) # plateau threshold for traj perplexity
+    parser.add_argument("--tau_spike", type=float, default=0.1) # spike threshold for traj perplexity
+    parser.add_argument("--run_info", type=str, default="") # run info
 
     return parser.parse_args()
 
@@ -215,6 +218,10 @@ class Hyperparameters:
     use_greedy_retention: bool = False # use greedy retention in sorl search (it stablize abstraction at the cost of hurting traj perplexity)
     traj_perplexity_patience: int = 5 # patience for traj perplexity
     abs_perplexity_patience: int = 5 # patience for abstract perplexity
+    tau_plateau: float = 0.01 # plateau threshold for traj perplexity
+    tau_spike: float = 0.1 # spike threshold for traj perplexity
+
+    run_info: str = "" # run info
 
 cli_args = parse_args()
 args = Hyperparameters()
@@ -373,7 +380,8 @@ train_loader = distributed_data_generator(args.train_files, world_size * args.tr
 
 # --- GAPT ---
 from sorl.gapt import GatedPhaseTransition
-gapt = GatedPhaseTransition(p_m=args.traj_perplexity_patience, p_a=args.abs_perplexity_patience)
+gapt = GatedPhaseTransition(p_m=args.traj_perplexity_patience, p_a=args.abs_perplexity_patience,
+                            tau_plateau=args.tau_plateau, tau_spike=args.tau_spike)
 # -------------
 
 training_time_ms = 0
@@ -484,7 +492,7 @@ for step in range(train_steps + 1):
 print0(f"peak memory allocated: {torch.cuda.max_memory_allocated() // 1024 // 1024} MiB "
        f"reserved: {torch.cuda.max_memory_reserved() // 1024 // 1024} MiB", console=True)
 
-print0("Experiment configuration: \n", console=True)
+print0(f"Experiment configuration: {args.run_info}\n", console=True)
 print0(f"-- batch_size: {args.batch_size}", console=True)
 print0(f"-- train_seq_len: {args.train_seq_len}", console=True)
 print0(f"-- val_seq_len: {args.val_seq_len}", console=True)
@@ -494,11 +502,16 @@ print0(f"-- K: {args.K}", console=True)
 print0(f"-- max_iterations: {args.max_iterations}", console=True)
 print0(f"-- temperature: {args.temperature}", console=True)
 print0(f"-- use_static_memory_span: {args.use_static_memory_span}", console=True)
-print0(f"-- abstract_vocab_size: {args.abstract_vocab_size}", console=True)
-print0(f"-- use_gapt: {args.use_gapt}", console=True)
-print0(f"-- use_curiosity_reward: {args.use_curiosity_reward}", console=True)
 print0(f"-- min_memory_span: {args.min_memory_span}", console=True)
+print0(f"-- abstract_vocab_size: {args.abstract_vocab_size}", console=True)
+print0(f"-- use_curiosity_reward: {args.use_curiosity_reward}", console=True)
 print0(f"-- use_greedy_retention: {args.use_greedy_retention}", console=True)
+print0(f"-- use_gapt: {args.use_gapt}", console=True)
+print0(f"-- traj_perplexity_patience: {args.traj_perplexity_patience}", console=True)
+print0(f"-- abs_perplexity_patience: {args.abs_perplexity_patience}", console=True)
+print0(f"-- tau_plateau: {args.tau_plateau}", console=True)
+print0(f"-- tau_spike: {args.tau_spike}", console=True)
+
 
 print0(f"loss record:\n{loss_record}", console=True)
 
