@@ -2,7 +2,7 @@ import torch
 # from sorl.gat_act import BOS_TOKEN_ID, search, GAT, recursion, infer_level
 from sorl.gat_sim import BOS_TOKEN_ID, GAT, recursion, extract_and_sample
 import torch.nn.functional as F
-from typing import Optional
+from typing import Optional, Union
 
 @torch.compile
 def infer_rythmic_insert_mask(tokens, K, traj_vocab_size):
@@ -47,7 +47,7 @@ def insert_tokens(tokens, insert_mask, placeholder_token):
     return expanded_tokens
 
 @torch.no_grad()
-def sorl_rollout(data: torch.Tensor, model: GAT, n: int, K: int, max_iterations: int, memory_span: int, attn_blocksize: int, temperature: float,
+def sorl_rollout(data: torch.Tensor, model: GAT, n: int, K: int, max_iterations: int, memory_span: int, attn_blocksize: int, temperature: Union[float, torch.Tensor] = 0.0,
                  truncate_seq_len: bool = True):
     """
     Perform rollout with 1 greedy sample and (n-1) stochastic samples.
@@ -78,7 +78,7 @@ def sorl_rollout(data: torch.Tensor, model: GAT, n: int, K: int, max_iterations:
 
 
 @torch.no_grad()
-def sorl_rollout_v2(data: torch.Tensor, model: GAT, n: int, K: int, max_iterations: int, memory_span: int, attn_blocksize: int, temperature: float,
+def sorl_rollout_v2(data: torch.Tensor, model: GAT, n: int, K: int, max_iterations: int, memory_span: int, attn_blocksize: int, temperature: Union[float, torch.Tensor] = 0.0,
                  truncate_seq_len: bool = True):
     """
     Direct rollout without greedy sample. 
@@ -173,7 +173,7 @@ def sorl_search(tokens, model, n=3, K=3, max_iterations=1,
     return best_data, best_ppt, best_ppt_advantage, per_pos_curiosity
 
 def sorl_search_v2(tokens, model, n=3, K=3, max_iterations=1,
-                memory_span=1792, attn_blocksize=1792, temperature=1.0, truncate_seq_len: bool = True, loss_mask: Optional[torch.Tensor] = None):
+                memory_span=1792, attn_blocksize=1792, temperature: Union[float, torch.Tensor] = 1.0, truncate_seq_len: bool = True, loss_mask: Optional[torch.Tensor] = None):
     """
     Complete SoRL search pipeline:
     1. Direct rollout without greedy sample. 
@@ -195,7 +195,7 @@ def sorl_search_v2(tokens, model, n=3, K=3, max_iterations=1,
     return best_data, best_ppt, best_ppt_advantage, per_pos_curiosity
 
 
-def sorl_evaluate(tokens, model, n=2, K=4, max_iterations=1, memory_span=1792, attn_blocksize=1792, temperature=1.0,
+def sorl_evaluate(tokens, model, n=2, K=4, max_iterations=1, memory_span=1792, attn_blocksize=1792, temperature: Union[float, torch.Tensor] = 1.0,
                   loss_mask: Optional[torch.Tensor] = None, truncate_seq_len: bool = True):
     """
     Search & Check greedy rollout advantage
