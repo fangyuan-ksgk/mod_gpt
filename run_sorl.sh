@@ -53,8 +53,11 @@ N_GPUS=3
 
 
 
-touch /workspace/mod_gpt/dummy_tuner_config.txt
-export NCCL_TUNER_CONFIG_PATH="/workspace/mod_gpt/dummy_tuner_config.txt"
+DUMMY_CONFIG_PATH="/workspace/mod_gpt/dummy_tuner_config.txt"
+rm -f "$DUMMY_CONFIG_PATH"
+touch "$DUMMY_CONFIG_PATH"
+
+export NCCL_TUNER_CONFIG_PATH="$DUMMY_CONFIG_PATH"
 export NCCL_TUNER_PLUGIN=""
 export NCCL_NET_PLUGIN=""
 export NCCL_SOCKET_IFNAME=lo
