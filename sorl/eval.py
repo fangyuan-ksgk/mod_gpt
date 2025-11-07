@@ -2,6 +2,7 @@ import torch
 # from sorl.neo_utils import generate
 
 def compute_vocab_utilization_rate(data: torch.Tensor, model):
+    
     si, ei = model.vocab_sizes.cumsum(dim=0)
     n_unique_abs_tokens = data[(data >= si) & (data < ei)].unique().size(0)
     n_total_abs_tokens = (ei - si).item()

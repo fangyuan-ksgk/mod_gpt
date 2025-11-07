@@ -144,6 +144,46 @@ def get_logits_mask(level, vocab_sizes):
     
     return mask
 
+# Reflection 1. 
+# - I need to broadcast temperature properly. 
+
+# @torch.compile
+# def extract_and_sample(logits, idx, recursion_mask, vocab_sizes, temperature):
+#     """Compiled helper: extract masked logits and sample."""
+    
+#     predict_mask = torch.roll(recursion_mask, -1, dims=1)
+#     predict_mask[:, -1] = False
+#     recursion_logits = logits[predict_mask]
+    
+#     abstract_start = vocab_sizes[0]
+#     recursion_logits[:, :abstract_start + 1] = float('-inf')
+    
+#     temp = torch.clamp(temperature, min=1e-10) if isinstance(temperature, torch.Tensor) else max(temperature, 1e-10)
+#     temp = temp.view(-1, 1) if isinstance(temp, torch.Tensor) and temp.ndim > 0 else temp
+    
+#     probs = F.softmax(recursion_logits / temp, dim=-1)
+#     new_tokens = torch.multinomial(probs, num_samples=1).squeeze(-1)
+
+#     idx[recursion_mask] = new_tokens.to(idx.dtype)
+#     return idx
+    
+# def recursion(model, idx, max_iterations=5, memory_span=1792, attn_blocksize=1792, temperature: Union[float, torch.Tensor] = 0.0):
+
+#     recursion_mask = (idx >= model.vocab_sizes[0])
+#     recursion_mask[:, 0] = False
+
+#     for _ in range(max_iterations): 
+#         _, logits = model.forward(idx, memory_span, attn_blocksize)
+#         idx = extract_and_sample(
+#             logits, idx, recursion_mask, model.vocab_sizes, temperature
+#         )
+    
+#     # -- evaluation --
+#     loss, _ = model.forward(idx, memory_span, attn_blocksize)
+
+#     return idx, loss
+
+
 @torch.compile
 def extract_and_sample(logits, idx, recursion_mask, vocab_sizes, temperature):
     """Compiled helper: extract masked logits and sample."""
@@ -151,12 +191,12 @@ def extract_and_sample(logits, idx, recursion_mask, vocab_sizes, temperature):
     predict_mask = torch.roll(recursion_mask, -1, dims=1)
     predict_mask[:, -1] = False
     recursion_logits = logits[predict_mask]
+    recursion_temp = temperature[predict_mask] if temperature.ndim > 0 else temperature
     
     abstract_start = vocab_sizes[0]
     recursion_logits[:, :abstract_start + 1] = float('-inf')
     
-    temp = torch.clamp(temperature, min=1e-10) if isinstance(temperature, torch.Tensor) else max(temperature, 1e-10)
-    temp = temp.view(-1, 1) if isinstance(temp, torch.Tensor) and temp.ndim > 0 else temp
+    temp = torch.clamp(recursion_temp, min=1e-10).view(-1, 1) if isinstance(recursion_temp, torch.Tensor) else max(temperature, 1e-10)
     
     probs = F.softmax(recursion_logits / temp, dim=-1)
     new_tokens = torch.multinomial(probs, num_samples=1).squeeze(-1)
@@ -164,18 +204,21 @@ def extract_and_sample(logits, idx, recursion_mask, vocab_sizes, temperature):
     idx[recursion_mask] = new_tokens.to(idx.dtype)
     return idx
     
-def recursion(model, idx, max_iterations=5, memory_span=1792, attn_blocksize=1792, temperature: Union[float, torch.Tensor] = 0.0):
-
+def recursion(model, idx, max_iterations=5, memory_span=1792, attn_blocksize=1792, temperature=0.0):
     recursion_mask = (idx >= model.vocab_sizes[0])
     recursion_mask[:, 0] = False
+    
+    if isinstance(temperature, torch.Tensor) and temperature.ndim == 1:
+        temp_expanded = temperature.view(-1, 1).expand_as(idx)
+    else:
+        temp_expanded = temperature
 
     for _ in range(max_iterations): 
         _, logits = model.forward(idx, memory_span, attn_blocksize)
         idx = extract_and_sample(
-            logits, idx, recursion_mask, model.vocab_sizes, temperature
+            logits, idx, recursion_mask, model.vocab_sizes, temp_expanded
         )
     
     # -- evaluation --
     loss, _ = model.forward(idx, memory_span, attn_blocksize)
-
     return idx, loss

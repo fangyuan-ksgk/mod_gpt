@@ -114,16 +114,25 @@ def normalize_advantage(raw_adv: torch.Tensor):
     norm_raw_adv = raw_adv / raw_adv.max(dim=0, keepdim=True).values
     return norm_raw_adv
 
-def select_best_per_doc(search_data, ppt, levels):
-    """Select best rollout per document and stitch together."""
+def select_best_per_doc(search_data, ppt, levels, model, alpha_select: float = 0.0, select_mode: str = "abs_ppt"):
     trajectory_mask = (levels[:, 1:] == 0).float()
     trajectory_ppt = ppt * trajectory_mask
+    abs_ppt = ppt * (1 - trajectory_mask)
     
     doc_idx = (search_data == BOS_TOKEN_ID).cumsum(dim=1)
     doc_idx = doc_idx - doc_idx.min(dim=1, keepdim=True).values # idx starts from 0  
     doc_ppt = avg_ppt_per_sample(trajectory_ppt, doc_idx[:,1:])
 
-    min_doc_ppt, best_rollout_per_doc = doc_ppt.min(dim=0)
+    if select_mode == "abs_ppt":
+        doc_abs_ppt = avg_ppt_per_sample(abs_ppt, doc_idx[:,1:])
+        regularized_ppt = doc_ppt - alpha_select * doc_abs_ppt # ver. 1 
+    else: 
+        z = (search_data * levels - model.vocab_sizes[0]).clamp_min(0)
+        pres = torch.zeros(z.size(0), model.vocab_sizes[1] + 1, device=z.device, dtype=torch.bool).scatter_(1, z, True)
+        vocab_util = pres[:, 1:].sum(1).float() / model.vocab_sizes[1]
+        regularized_ppt = doc_ppt - alpha_select * vocab_util.unsqueeze(1)
+
+    min_doc_ppt, best_rollout_per_doc = regularized_ppt.min(dim=0)
     rollout_for_each_pos = best_rollout_per_doc[doc_idx[0]]
 
     best_seq = search_data[rollout_for_each_pos, torch.arange(search_data.shape[1], device=search_data.device)]
@@ -132,14 +141,7 @@ def select_best_per_doc(search_data, ppt, levels):
     max_doc_ppt = doc_ppt.max(dim=0).values
     best_ppt_advantage = (max_doc_ppt - min_doc_ppt) / max_doc_ppt.clamp(min=1e-8)
 
-    # --- per document abstraction perplexity (for best rollout) ---
-    abs_ppt = ppt * (1 - trajectory_mask)
-    doc_abs_ppt = avg_ppt_per_sample(abs_ppt, doc_idx[:, 1:])
-    best_doc_abs_ppt = doc_abs_ppt[best_rollout_per_doc, torch.arange(doc_abs_ppt.shape[1], device=doc_abs_ppt.device)] 
-    per_pos_curiosity_advantage = best_doc_abs_ppt[doc_idx[0, 1:]]
-
-    return best_seq.unsqueeze(0), best_ppt, best_ppt_advantage.mean(), normalize_advantage(per_pos_curiosity_advantage)
-
+    return best_seq.unsqueeze(0), best_ppt, best_ppt_advantage.mean()
 
 # Reflection 1. what if we have a 'information bottleneck mask' to mute future influence 
 #               applied to both ACT & selection? 
@@ -147,7 +149,9 @@ import time
 from sorl.eval import compute_vocab_utilization_rate
 
 def sorl_search(tokens, model, n=3, K=3, max_iterations=1,
-                memory_span=1792, attn_blocksize=1792, temperature=1.0, truncate_seq_len: bool = True, loss_mask: Optional[torch.Tensor] = None):
+                memory_span=1792, attn_blocksize=1792, temperature=1.0, truncate_seq_len: bool = True, 
+                alpha_select: float = 0.0, select_mode: str = "abs_ppt",
+                loss_mask: Optional[torch.Tensor] = None):
     """
     Complete SoRL search pipeline:
     1. Generate n rollouts (1 greedy + (n-1) stochastic)
@@ -168,12 +172,13 @@ def sorl_search(tokens, model, n=3, K=3, max_iterations=1,
 
     # --- select best rollouts (based on trajectory perplexity) ---
     levels = (search_data >= model.vocab_sizes[0]).long()
-    best_data, best_ppt, best_ppt_advantage, per_pos_curiosity = select_best_per_doc(search_data, search_ppt, levels)
+    best_data, best_ppt, best_ppt_advantage = select_best_per_doc(search_data, search_ppt, levels, model, alpha_select=alpha_select, select_mode=select_mode)
     
-    return best_data, best_ppt, best_ppt_advantage, per_pos_curiosity
+    return best_data, best_ppt, best_ppt_advantage
 
 def sorl_search_v2(tokens, model, n=3, K=3, max_iterations=1,
-                memory_span=1792, attn_blocksize=1792, temperature: Union[float, torch.Tensor] = 1.0, truncate_seq_len: bool = True, loss_mask: Optional[torch.Tensor] = None):
+                memory_span=1792, attn_blocksize=1792, temperature: Union[float, torch.Tensor] = 1.0, truncate_seq_len: bool = True, 
+                alpha_select: float = 0.0, select_mode: str = "abs_ppt", loss_mask: Optional[torch.Tensor] = None):
     """
     Complete SoRL search pipeline:
     1. Direct rollout without greedy sample. 
@@ -191,8 +196,8 @@ def sorl_search_v2(tokens, model, n=3, K=3, max_iterations=1,
 
     # --- select best rollouts (based on trajectory perplexity) ---
     levels = (search_data >= model.vocab_sizes[0]).long()
-    best_data, best_ppt, best_ppt_advantage, per_pos_curiosity = select_best_per_doc(search_data, search_ppt, levels)
-    return best_data, best_ppt, best_ppt_advantage, per_pos_curiosity
+    best_data, best_ppt, best_ppt_advantage = select_best_per_doc(search_data, search_ppt, levels, model, alpha_select=alpha_select, select_mode=select_mode)
+    return best_data, best_ppt, best_ppt_advantage
 
 
 def sorl_evaluate(tokens, model, n=2, K=4, max_iterations=1, memory_span=1792, attn_blocksize=1792, temperature: Union[float, torch.Tensor] = 1.0,
@@ -200,7 +205,7 @@ def sorl_evaluate(tokens, model, n=2, K=4, max_iterations=1, memory_span=1792, a
     """
     Search & Check greedy rollout advantage
     """
-    search_data, search_ppt = sorl_rollout(tokens, model, n=n, K=K, 
+    search_data, search_ppt = sorl_rollout_v2(tokens, model, n=n, K=K, 
                                max_iterations=max_iterations,
                                memory_span=memory_span,
                                attn_blocksize=attn_blocksize,
@@ -234,21 +239,13 @@ def sorl_evaluate(tokens, model, n=2, K=4, max_iterations=1, memory_span=1792, a
     return search_data[:1], search_adv, traj_loss, abs_loss
 
 
-# (TBD). optional 'loss_mask' argument for QA task
-# --------------------------------------------------
-# - It's bad idea to keep the 'None' input, it's only here for experimental purpose
-# - to optimize for GPU runs, we need to fix the input format
-# --------------------------------------------------
 
-def compute_loss(best_data, model, memory_span: int, attn_blocksize: int, 
-                 per_pos_curiosity: Optional[torch.Tensor] = None,
+def compute_loss(best_data, model, memory_span: int, attn_blocksize: int,
                  loss_mask: Optional[torch.Tensor] = None):
     """Compute trajectory and abstraction loss from sorl_search output."""
 
     best_ppt, _ = model.forward(best_data, memory_span, attn_blocksize)
     best_ppt = best_ppt.reshape(best_data.shape[0], -1)
-    if per_pos_curiosity is not None:
-        best_ppt = best_ppt * per_pos_curiosity
 
     levels = (best_data >= model.vocab_sizes[0]).long()[:, 1:]
 
