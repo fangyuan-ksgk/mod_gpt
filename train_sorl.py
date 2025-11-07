@@ -38,6 +38,7 @@ def parse_args():
     parser.add_argument("--prior_weight", type=str, default="natural")
 
     parser.add_argument("--num_rollouts", type=int, default=2)
+    parser.add_argument("--num_rollouts_val", type=int, default=4)
     parser.add_argument("--K", type=int, default=8)
     parser.add_argument("--max_iterations", type=int, default=1)
     parser.add_argument("--temperature", type=float, default=1.0)
@@ -45,12 +46,13 @@ def parse_args():
     parser.add_argument("--abstract_vocab_size", type=int, default=256)
     parser.add_argument("--use_gapt", action="store_true", default=False) # focus on traj perplexity, treat abs loss as auxiliary loss
     parser.add_argument("--min_memory_span", type=int, default=64) # control verbatim memory span
-    parser.add_argument("--use_curiosity_reward", action="store_true", default=False) # to encourage exploration in abstraction space
-    parser.add_argument("--use_greedy_retention", action="store_true", default=False) # use greedy retention in sorl search (it stablize abstraction at the cost of hurting traj perplexity)
     parser.add_argument("--traj_perplexity_patience", type=int, default=5) # patience for traj perplexity
     parser.add_argument("--abs_perplexity_patience", type=int, default=5) # patience for abstract perplexity
     parser.add_argument("--tau_plateau", type=float, default=0.01) # plateau threshold for traj perplexity
     parser.add_argument("--tau_spike", type=float, default=0.1) # spike threshold for traj perplexity
+    parser.add_argument("--alpha_select", type=float, default=0.0)  # selection regularization strength
+    parser.add_argument("--select_mode", type=str, default="abs_ppt", choices=["abs_ppt", "vocab_util"])  # selection mode
+    parser.add_argument("--alpha_loss", type=float, default=0.0)  # loss regularization strength
     parser.add_argument("--run_info", type=str, default="") # run info
 
     return parser.parse_args()
@@ -209,17 +211,19 @@ class Hyperparameters:
     prior_weight: str = "natural"
     # sorl specific
     num_rollouts: int = 2 # number of candidates to rollout
+    num_rollouts_val: int = 4 # number of candidates to rollout for validation
     K: int = 8 # abstract ratio
     max_iterations: int = 1 # max number of iterations to search
     temperature: float = 1.0 # temperature for search
     use_gapt: bool = False # use GAPT
     min_memory_span: int = 64 # minimum memory span
-    use_curiosity_reward: bool = False # use curiosity reward
-    use_greedy_retention: bool = False # use greedy retention in sorl search (it stablize abstraction at the cost of hurting traj perplexity)
     traj_perplexity_patience: int = 5 # patience for traj perplexity
     abs_perplexity_patience: int = 5 # patience for abstract perplexity
     tau_plateau: float = 0.01 # plateau threshold for traj perplexity
     tau_spike: float = 0.1 # spike threshold for traj perplexity
+    alpha_select: float = 0.0 # selection regularization strength
+    select_mode: str = "abs_ppt" # selection mode
+    alpha_loss: float = 0.0 # loss regularization strength
 
     run_info: str = "" # run info
 
@@ -277,10 +281,7 @@ print0(nvidia_smi())
 print0("="*100)
 
 # --- sorl search ---
-if args.use_greedy_retention: 
-    from sorl.neo_utils import sorl_search as sorl_search 
-else: 
-    from sorl.neo_utils import sorl_search_v2 as sorl_search 
+from sorl.neo_utils import sorl_search_v2 as sorl_search 
 
 ########################################
 #    Construct model and optimizer     #
@@ -335,6 +336,7 @@ initial_state = dict(model=copy.deepcopy(model.state_dict()),
 
 attn_blocksize = torch.tensor(64, dtype=torch.int, device="cuda")
 memory_span = torch.tensor(1792, dtype=torch.int, device="cuda")
+temperature_warmup = torch.full((args.num_rollouts,), args.temperature, device="cuda")
 
 for i in range(warmup_steps):
     tokens = torch.randint(0, args.vocab_size, size=(1, args.train_seq_len,), device="cuda")
@@ -344,11 +346,12 @@ for i in range(warmup_steps):
     # --- sorl search --- 
     search_start = time.time()
     with torch.no_grad():
-        search_tokens, search_ppt, search_adv, pt_curiosity = sorl_search(tokens, model, n=args.num_rollouts, K=args.K, max_iterations=args.max_iterations, memory_span=memory_span, attn_blocksize=attn_blocksize, temperature=args.temperature)
+        search_tokens, search_ppt, search_adv = sorl_search(tokens, model, n=args.num_rollouts, K=args.K, max_iterations=args.max_iterations, memory_span=memory_span, attn_blocksize=attn_blocksize, 
+                                                                          temperature=temperature_warmup, alpha_select=args.alpha_select, select_mode=args.select_mode)
     search_end = time.time()
     print(f" :: Sorl search takes {search_end - search_start} second")
     # --- compute loss --- 
-    traj_loss, abs_loss = compute_loss(search_tokens, model, memory_span=memory_span, attn_blocksize=attn_blocksize, per_pos_curiosity=pt_curiosity)
+    traj_loss, abs_loss = compute_loss(search_tokens, model, memory_span=memory_span, attn_blocksize=attn_blocksize)
     forward_end = time.time()
     print(f" :: Loss computation takes {forward_end - search_end} second")
     # --- backward --- 
@@ -383,6 +386,14 @@ from sorl.gapt import GatedPhaseTransition
 gapt = GatedPhaseTransition(p_m=args.traj_perplexity_patience, p_a=args.abs_perplexity_patience,
                             tau_plateau=args.tau_plateau, tau_spike=args.tau_spike)
 # -------------
+temperature_val = torch.cat([
+    torch.tensor([args.temperature], device="cuda"),  # Greedy for first rollout
+    torch.full((args.num_rollouts_val - 1,), 10.0, device="cuda")  # High temp for diversity
+])
+temperature_train = torch.cat([
+    torch.tensor([args.temperature], device="cuda"),  # Greedy for first rollout
+    torch.full((args.num_rollouts - 1,), 10.0, device="cuda")  # High temp for diversity
+])
 
 training_time_ms = 0
 # start the clock
@@ -416,8 +427,8 @@ for step in range(train_steps + 1):
         with torch.no_grad():
             for i in range(val_steps):
                 tokens = next(val_loader)
-                val_tokens, val_adv, val_traj_loss, val_abs_loss = sorl_evaluate(tokens, model, n=args.num_rollouts, K=args.K, max_iterations=args.max_iterations, 
-                                                                    memory_span=memory_span, attn_blocksize=attn_blocksize, temperature=10.0)
+                val_tokens, val_adv, val_traj_loss, val_abs_loss = sorl_evaluate(tokens, model, n=args.num_rollouts_val, K=args.K, max_iterations=args.max_iterations, 
+                                                                    memory_span=memory_span, attn_blocksize=attn_blocksize, temperature=temperature_val)
                 util_rate = compute_vocab_utilization_rate(val_tokens, model)
                 val_loss["traj_loss"] += val_traj_loss
                 val_loss["abs_loss"] += val_abs_loss
@@ -453,18 +464,16 @@ for step in range(train_steps + 1):
         tokens = next(train_loader)
         with torch.no_grad(): 
             search_tokens, search_ppt, search_adv = sorl_search(tokens, model, n=args.num_rollouts, K=args.K, max_iterations=args.max_iterations, 
-                                                                memory_span=memory_span, attn_blocksize=attn_blocksize, temperature=args.temperature)
+                                                                memory_span=memory_span, attn_blocksize=attn_blocksize, 
+                                                                temperature=temperature_train, alpha_select=args.alpha_select, select_mode=args.select_mode)
 
         # --- compute loss --- 
-        if args.use_curiosity_reward: 
-            traj_loss, abs_loss = compute_loss(search_tokens, model, memory_span=memory_span, attn_blocksize=attn_blocksize, per_pos_curiosity=pt_curiosity)
-        else:
-            traj_loss, abs_loss = compute_loss(search_tokens, model, memory_span=memory_span, attn_blocksize=attn_blocksize)
+        traj_loss, abs_loss = compute_loss(search_tokens, model, memory_span=memory_span, attn_blocksize=attn_blocksize)
         
         if args.use_gapt: 
-            loss = gapt.step(traj_loss, abs_loss, verbose=False)
+            loss = gapt.step(traj_loss, args.alpha_loss * abs_loss, verbose=False)
         else: 
-            loss = traj_loss + abs_loss
+            loss = traj_loss + args.alpha_loss * abs_loss
         
         loss.backward()
         print0(f" - step: {step} | accum step: {accum_step} | traj_loss: {traj_loss.item()} | abs_loss: {abs_loss.item()} | search_advantage: {search_adv.mean().item()}")
@@ -504,9 +513,10 @@ print0(f"-- temperature: {args.temperature}", console=True)
 print0(f"-- use_static_memory_span: {args.use_static_memory_span}", console=True)
 print0(f"-- min_memory_span: {args.min_memory_span}", console=True)
 print0(f"-- abstract_vocab_size: {args.abstract_vocab_size}", console=True)
-print0(f"-- use_curiosity_reward: {args.use_curiosity_reward}", console=True)
-print0(f"-- use_greedy_retention: {args.use_greedy_retention}", console=True)
 print0(f"-- use_gapt: {args.use_gapt}", console=True)
+print0(f"-- alpha_select: {args.alpha_select}", console=True)
+print0(f"-- select_mode: {args.select_mode}", console=True)
+print0(f"-- alpha_loss: {args.alpha_loss}", console=True)
 print0(f"-- traj_perplexity_patience: {args.traj_perplexity_patience}", console=True)
 print0(f"-- abs_perplexity_patience: {args.abs_perplexity_patience}", console=True)
 print0(f"-- tau_plateau: {args.tau_plateau}", console=True)
