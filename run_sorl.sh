@@ -1,8 +1,11 @@
 # Experiment Script for SoRL
 
 # --- nvidia pod specifics ------
-echo "DUMMY_NCCL_TUNER_CONFIG=1" > /workspace/mod_gpt/dummy_tuner_config.txt
-export NCCL_TUNER_CONFIG_PATH="/workspace/mod_gpt/dummy_tuner_config.txt"
+DUMMY_CONFIG_PATH="/workspace/mod_gpt/dummy_tuner_config.txt"
+rm -f "$DUMMY_CONFIG_PATH"
+touch "$DUMMY_CONFIG_PATH"
+
+export NCCL_TUNER_CONFIG_PATH="$DUMMY_CONFIG_PATH"
 export NCCL_TUNER_PLUGIN=""
 export NCCL_NET_PLUGIN=""
 export NCCL_SOCKET_IFNAME=lo
@@ -53,94 +56,25 @@ N_GPUS=3
 
 
 
-DUMMY_CONFIG_PATH="/workspace/mod_gpt/dummy_tuner_config.txt"
-rm -f "$DUMMY_CONFIG_PATH"
-touch "$DUMMY_CONFIG_PATH"
-
-export NCCL_TUNER_CONFIG_PATH="$DUMMY_CONFIG_PATH"
-export NCCL_TUNER_PLUGIN=""
-export NCCL_NET_PLUGIN=""
-export NCCL_SOCKET_IFNAME=lo
-export NCCL_IB_DISABLE=1
-export NCCL_DEBUG=WARN
-
-BATCH_SIZE=30  # Closer to benchmark batch_size=32
-TRAIN_SEQ_LEN=$((16 * 1024))
-VAL_SEQ_LEN=$((16 * 1024))
-NUM_ITERATIONS=1750
-N_GPUS=2
 
 echo "========================================="
-echo "Sweep 1: Min Temperature (prediction temperature)"
+echo "Control Experiments Based on Configs 3 & 4"
 echo "========================================="
-for min_temperature in 0.5 1.0 2.0; do
-  echo "Running: min_temperature=${min_temperature}"
 
+# ============================================================================
+# Experiment Set 1: Negative Alpha_Select (Theoretical Posterior Selection)
+# ============================================================================
+echo "========================================="
+echo "Set 1: Negative Alpha_Select (encourage high abs_ppt for diversity)"
+echo "========================================="
+for alpha_select in -0.05 -0.1 -0.2 -0.5; do
+  echo "Running: alpha_select=${alpha_select} (negative for posterior selection)"
   torchrun \
     --nproc_per_node=$N_GPUS \
     --master_addr=127.0.0.1 \
     --master_port=29500 \
     train_sorl.py \
-    --run_info "Min temperature sweep: min_temp=${min_temperature}, no GAPT, no regularization" \
-    --batch_size $BATCH_SIZE \
-    --train_seq_len $TRAIN_SEQ_LEN \
-    --val_seq_len $VAL_SEQ_LEN \
-    --num_iterations $NUM_ITERATIONS \
-    --num_rollouts 2 \
-    --K 8 \
-    --max_iterations 2 \
-    --temperature 10.0 \
-    --min_temperature $min_temperature \
-    --use_static_memory_span \
-    --alpha_loss 1.0 \
-    --alpha_select 0.0 \
-    --select_mode "abs_ppt"
-done
-
-echo "========================================="
-echo "Sweep 2: Alpha Loss (abstraction loss weight)"
-echo "========================================="
-for alpha_loss in 0.1 0.2 0.5; do
-  echo "Running: alpha_loss=${alpha_loss}"
-  torchrun \
-    --nproc_per_node=$N_GPUS \
-    --master_addr=127.0.0.1 \
-    --master_port=29500 \
-    train_sorl.py \
-    --run_info "Alpha loss sweep: alpha_loss=${alpha_loss}, min_temp=0.5, no GAPT" \
-    --batch_size $BATCH_SIZE \
-    --train_seq_len $TRAIN_SEQ_LEN \
-    --val_seq_len $VAL_SEQ_LEN \
-    --num_iterations $NUM_ITERATIONS \
-    --num_rollouts 2 \
-    --K 8 \
-    --max_iterations 2 \
-    --temperature 10.0 \
-    --min_temperature 0.5 \
-    --use_static_memory_span \
-    --alpha_loss $alpha_loss \
-    --alpha_select 0.0 \
-    --select_mode "abs_ppt"
-done
-
-
-BATCH_SIZE=30  # Closer to benchmark batch_size=32
-TRAIN_SEQ_LEN=$((16 * 1024))
-VAL_SEQ_LEN=$((16 * 1024))
-NUM_ITERATIONS=1750
-N_GPUS=3
-
-echo "========================================="
-echo "Sweep 3: Alpha Select (selection diversity weight)"
-echo "========================================="
-for alpha_select in 0.0 0.1 0.5 1.0; do
-  echo "Running: alpha_select=${alpha_select} with abs_ppt mode"
-  torchrun \
-    --nproc_per_node=$N_GPUS \
-    --master_addr=127.0.0.1 \
-    --master_port=29500 \
-    train_sorl.py \
-    --run_info "Alpha select sweep: alpha_select=${alpha_select}, mode=abs_ppt, alpha_loss=0.1" \
+    --run_info "Negative alpha_select: alpha_select=${alpha_select}, alpha_loss=0.1, min_temp=0.5" \
     --batch_size $BATCH_SIZE \
     --train_seq_len $TRAIN_SEQ_LEN \
     --val_seq_len $VAL_SEQ_LEN \
@@ -156,16 +90,70 @@ for alpha_select in 0.0 0.1 0.5 1.0; do
     --select_mode "abs_ppt"
 done
 
+# ============================================================================
+# Experiment Set 2: Min_Temperature → 0 (Based on Config 3 Hypothesis)
+# ============================================================================
 echo "========================================="
-echo "Sweep 4: Selection Mode Comparison"
+echo "Set 2: Very Low Min_Temperature (more deterministic prediction)"
 echo "========================================="
-echo "Running: vocab_util selection mode with alpha_select=0.2"
+for min_temperature in 0.01 0.05 0.1; do
+  echo "Running: min_temperature=${min_temperature} with alpha_loss=1.0"
   torchrun \
     --nproc_per_node=$N_GPUS \
     --master_addr=127.0.0.1 \
     --master_port=29500 \
     train_sorl.py \
-  --run_info "Selection mode: vocab_util, alpha_select=0.2, alpha_loss=0.1" \
+    --run_info "Low min_temp: min_temp=${min_temperature}, alpha_loss=1.0, alpha_select=0.0" \
+    --batch_size $BATCH_SIZE \
+    --train_seq_len $TRAIN_SEQ_LEN \
+    --val_seq_len $VAL_SEQ_LEN \
+    --num_iterations $NUM_ITERATIONS \
+    --num_rollouts 2 \
+    --K 8 \
+    --max_iterations 2 \
+    --temperature 10.0 \
+    --min_temperature $min_temperature \
+    --use_static_memory_span \
+    --alpha_loss 1.0 \
+    --alpha_select 0.0 \
+    --select_mode "abs_ppt"
+done
+
+# ============================================================================
+# Experiment Set 3: Replicate Configs 3 & 4 (for verification)
+# ============================================================================
+echo "========================================="
+echo "Set 3: Replicate Configs 3 & 4"
+echo "========================================="
+
+echo "Running: REPLICATION of Config 3 (alpha_loss=1.0, collapsed vocab)"
+torchrun \
+  --nproc_per_node=$N_GPUS \
+  --master_addr=127.0.0.1 \
+  --master_port=29500 \
+  train_sorl.py \
+  --run_info "REPLICATION Config 3: alpha_loss=1.0, alpha_select=0.0, min_temp=0.5" \
+  --batch_size $BATCH_SIZE \
+  --train_seq_len $TRAIN_SEQ_LEN \
+  --val_seq_len $VAL_SEQ_LEN \
+  --num_iterations $NUM_ITERATIONS \
+  --num_rollouts 2 \
+  --K 8 \
+  --max_iterations 2 \
+  --temperature 10.0 \
+  --min_temperature 0.5 \
+  --use_static_memory_span \
+  --alpha_loss 1.0 \
+  --alpha_select 0.0 \
+  --select_mode "abs_ppt"
+
+echo "Running: REPLICATION of Config 4 (alpha_loss=0.1, positive search_adv)"
+torchrun \
+  --nproc_per_node=$N_GPUS \
+  --master_addr=127.0.0.1 \
+  --master_port=29500 \
+  train_sorl.py \
+  --run_info "REPLICATION Config 4: alpha_loss=0.1, alpha_select=0.0, min_temp=0.5" \
   --batch_size $BATCH_SIZE \
   --train_seq_len $TRAIN_SEQ_LEN \
   --val_seq_len $VAL_SEQ_LEN \
@@ -177,9 +165,116 @@ echo "Running: vocab_util selection mode with alpha_select=0.2"
   --min_temperature 0.5 \
   --use_static_memory_span \
   --alpha_loss 0.1 \
-  --alpha_select 0.2 \
+  --alpha_select 0.0 \
+  --select_mode "abs_ppt"
+
+# ============================================================================
+# Experiment Set 4: Alpha_Loss Sweep Between Configs 3 & 4
+# ============================================================================
+echo "========================================="
+echo "Set 4: Alpha_Loss Fine-Grained Sweep (0.1 to 1.0)"
+echo "========================================="
+for alpha_loss in 0.2 0.3 0.5 0.7; do
+  echo "Running: alpha_loss=${alpha_loss} (between Config 3 and 4)"
+  torchrun \
+    --nproc_per_node=$N_GPUS \
+    --master_addr=127.0.0.1 \
+    --master_port=29500 \
+    train_sorl.py \
+    --run_info "Alpha_loss sweep: alpha_loss=${alpha_loss}, min_temp=0.5, alpha_select=0.0" \
+    --batch_size $BATCH_SIZE \
+    --train_seq_len $TRAIN_SEQ_LEN \
+    --val_seq_len $VAL_SEQ_LEN \
+    --num_iterations $NUM_ITERATIONS \
+    --num_rollouts 2 \
+    --K 8 \
+    --max_iterations 2 \
+    --temperature 10.0 \
+    --min_temperature 0.5 \
+    --use_static_memory_span \
+    --alpha_loss $alpha_loss \
+    --alpha_select 0.0 \
+    --select_mode "abs_ppt"
+done
+
+# ============================================================================
+# Experiment Set 5: Temperature Sweep from Configs 3 & 4 Baseline
+# ============================================================================
+echo "========================================="
+echo "Set 5: Search Temperature Sweep (with alpha_loss=0.1)"
+echo "========================================="
+for temperature in 5.0 7.5 12.5 15.0; do
+  echo "Running: temperature=${temperature} with alpha_loss=0.1"
+  torchrun \
+    --nproc_per_node=$N_GPUS \
+    --master_addr=127.0.0.1 \
+    --master_port=29500 \
+    train_sorl.py \
+    --run_info "Search temp sweep: temp=${temperature}, alpha_loss=0.1, min_temp=0.5" \
+    --batch_size $BATCH_SIZE \
+    --train_seq_len $TRAIN_SEQ_LEN \
+    --val_seq_len $VAL_SEQ_LEN \
+    --num_iterations $NUM_ITERATIONS \
+    --num_rollouts 2 \
+    --K 8 \
+    --max_iterations 2 \
+    --temperature $temperature \
+    --min_temperature 0.5 \
+    --use_static_memory_span \
+    --alpha_loss 0.1 \
+    --alpha_select 0.0 \
+    --select_mode "abs_ppt"
+done
+
+# ============================================================================
+# Experiment Set 6: Combined Interventions (addressing vocab collapse)
+# ============================================================================
+echo "========================================="
+echo "Set 6: Combined Interventions for Vocab Collapse"
+echo "========================================="
+
+echo "Running: Low min_temp + negative alpha_select"
+torchrun \
+  --nproc_per_node=$N_GPUS \
+  --master_addr=127.0.0.1 \
+  --master_port=29500 \
+  train_sorl.py \
+  --run_info "Combined: min_temp=0.05, alpha_loss=1.0, alpha_select=-0.1" \
+  --batch_size $BATCH_SIZE \
+  --train_seq_len $TRAIN_SEQ_LEN \
+  --val_seq_len $VAL_SEQ_LEN \
+  --num_iterations $NUM_ITERATIONS \
+  --num_rollouts 2 \
+  --K 8 \
+  --max_iterations 2 \
+  --temperature 10.0 \
+  --min_temperature 0.05 \
+  --use_static_memory_span \
+  --alpha_loss 1.0 \
+  --alpha_select -0.1 \
+  --select_mode "abs_ppt"
+
+echo "Running: vocab_util mode with negative alpha_select"
+torchrun \
+  --nproc_per_node=$N_GPUS \
+  --master_addr=127.0.0.1 \
+  --master_port=29500 \
+  train_sorl.py \
+  --run_info "Combined: vocab_util mode, alpha_select=-0.2, alpha_loss=0.1" \
+  --batch_size $BATCH_SIZE \
+  --train_seq_len $TRAIN_SEQ_LEN \
+  --val_seq_len $VAL_SEQ_LEN \
+  --num_iterations $NUM_ITERATIONS \
+  --num_rollouts 2 \
+  --K 8 \
+  --max_iterations 2 \
+  --temperature 10.0 \
+  --min_temperature 0.5 \
+  --use_static_memory_span \
+  --alpha_loss 0.1 \
+  --alpha_select -0.2 \
   --select_mode "vocab_util"
 
 echo "========================================="
-echo "All experiments complete!"
+echo "All control experiments complete!"
 echo "========================================="
