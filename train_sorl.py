@@ -38,7 +38,7 @@ def parse_args():
     parser.add_argument("--prior_weight", type=str, default="natural")
 
     parser.add_argument("--num_rollouts", type=int, default=2)
-    parser.add_argument("--num_rollouts_val", type=int, default=4)
+    parser.add_argument("--num_rollouts_val", type=int, default=2)
     parser.add_argument("--K", type=int, default=8)
     parser.add_argument("--max_iterations", type=int, default=1)
     parser.add_argument("--temperature", type=float, default=1.0) # search temperature
