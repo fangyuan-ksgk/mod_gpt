@@ -41,7 +41,8 @@ def parse_args():
     parser.add_argument("--num_rollouts_val", type=int, default=4)
     parser.add_argument("--K", type=int, default=8)
     parser.add_argument("--max_iterations", type=int, default=1)
-    parser.add_argument("--temperature", type=float, default=1.0)
+    parser.add_argument("--temperature", type=float, default=1.0) # search temperature
+    parser.add_argument("--min_temperature", type=float, default=0.5) # prediction temperature
     parser.add_argument("--use_static_memory_span", action="store_true", default=False)
     parser.add_argument("--abstract_vocab_size", type=int, default=256)
     parser.add_argument("--use_gapt", action="store_true", default=False) # focus on traj perplexity, treat abs loss as auxiliary loss
@@ -336,7 +337,10 @@ initial_state = dict(model=copy.deepcopy(model.state_dict()),
 
 attn_blocksize = torch.tensor(64, dtype=torch.int, device="cuda")
 memory_span = torch.tensor(1792, dtype=torch.int, device="cuda")
-temperature_warmup = torch.full((args.num_rollouts,), args.temperature, device="cuda")
+temperature_warmup = torch.cat([
+    torch.tensor([args.min_temperature], device="cuda"),  # Low temp for first rollout
+    torch.full((args.num_rollouts - 1,), args.temperature, device="cuda")  # Low temp for diversity
+])
 
 for i in range(warmup_steps):
     tokens = torch.randint(0, args.vocab_size, size=(1, args.train_seq_len,), device="cuda")
@@ -387,12 +391,12 @@ gapt = GatedPhaseTransition(p_m=args.traj_perplexity_patience, p_a=args.abs_perp
                             tau_plateau=args.tau_plateau, tau_spike=args.tau_spike)
 # -------------
 temperature_val = torch.cat([
-    torch.tensor([args.temperature], device="cuda"),  # Greedy for first rollout
-    torch.full((args.num_rollouts_val - 1,), 10.0, device="cuda")  # High temp for diversity
+    torch.tensor([args.min_temperature], device="cuda"),  # Greedy for first rollout
+    torch.full((args.num_rollouts_val - 1,), args.temperature, device="cuda")  # High temp for diversity
 ])
 temperature_train = torch.cat([
-    torch.tensor([args.temperature], device="cuda"),  # Greedy for first rollout
-    torch.full((args.num_rollouts - 1,), 10.0, device="cuda")  # High temp for diversity
+    torch.tensor([args.min_temperature], device="cuda"),  # Greedy for first rollout
+    torch.full((args.num_rollouts - 1,), args.temperature, device="cuda")  # High temp for diversity
 ])
 
 training_time_ms = 0
@@ -510,6 +514,7 @@ print0(f"-- num_rollouts: {args.num_rollouts}", console=True)
 print0(f"-- K: {args.K}", console=True)
 print0(f"-- max_iterations: {args.max_iterations}", console=True)
 print0(f"-- temperature: {args.temperature}", console=True)
+print0(f"-- min_temperature: {args.min_temperature}", console=True)
 print0(f"-- use_static_memory_span: {args.use_static_memory_span}", console=True)
 print0(f"-- min_memory_span: {args.min_memory_span}", console=True)
 print0(f"-- abstract_vocab_size: {args.abstract_vocab_size}", console=True)

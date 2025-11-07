@@ -43,84 +43,21 @@ N_GPUS=3
 #   (8). num_rollouts = 3 > num_rollouts = 2 in terms of traj perplexity (last time we tried 4 which exceeds memory budget)
 #   (9). a bigger K (say 16, 32) might be better than K=8, a smaller K (say 2, 4) is also better than K=8, this is ambiguous for now. 
 
+# - previous discoveries: 
+#   (1). GAPT might be redundant. A properly weighted can potentially replace GAPT. 
+#   (2). When using GAPT, patience = 100 is a good choice. 
+#   (3). max_iterations = 2 is a good choice, bigger no avail, smaller is worse. 
+
 
 # (TBD). included 'run_info' argument so that it's easy to see what's going on with the runs 
 
-# ============================================================================
-# HYPOTHESIS 1: GAPT improves traj perplexity
-# ============================================================================
 echo "========================================="
-echo "H1: GAPT + SoRL vs Baseline SoRL"
+echo "Sweep 1: Min Temperature (prediction temperature)"
 echo "========================================="
-
-# H1a: Baseline SoRL (no GAPT, no memory compression)
-echo "Running: SoRL baseline (no GAPT | no Memory compression | no greedy retention)..."
-torchrun --standalone --nproc_per_node=$N_GPUS train_sorl.py \
-  --run_info "SoRL baseline (no GAPT | no Memory compression | no greedy retention)" \
-  --batch_size $BATCH_SIZE \
-  --train_seq_len $TRAIN_SEQ_LEN \
-  --val_seq_len $VAL_SEQ_LEN \
-  --num_iterations $NUM_ITERATIONS \
-  --num_rollouts 2 \
-  --K 8 \
-  --max_iterations 2 \
-  --temperature 10.0 \
-  --use_static_memory_span
-
-echo "Running: SoRL baseline (no GAPT | no Memory compression | greedy retention)..."
-torchrun --standalone --nproc_per_node=$N_GPUS train_sorl.py \
-  --run_info "SoRL baseline (no GAPT | no Memory compression | greedy retention)" \
-  --batch_size $BATCH_SIZE \
-  --train_seq_len $TRAIN_SEQ_LEN \
-  --val_seq_len $VAL_SEQ_LEN \
-  --num_iterations $NUM_ITERATIONS \
-  --num_rollouts 2 \
-  --K 8 \
-  --max_iterations 2 \
-  --temperature 10.0 \
-  --use_static_memory_span \
-  --use_greedy_retention
-
-
-# H1b: SoRL + GAPT
-# -------------------------------------------------------------
-
-echo "Running: SoRL + GAPT (no Memory compression | no greedy retention)..."
-torchrun --standalone --nproc_per_node=$N_GPUS train_sorl.py \
-  --run_info "SoRL + GAPT (no Memory compression | no greedy retention)" \
-  --batch_size $BATCH_SIZE \
-  --train_seq_len $TRAIN_SEQ_LEN \
-  --val_seq_len $VAL_SEQ_LEN \
-  --num_iterations $NUM_ITERATIONS \
-  --num_rollouts 2 \
-  --K 8 \
-  --max_iterations 2 \
-  --temperature 10.0 \
-  --use_static_memory_span \
-  --use_gapt
-
-echo "Running: SoRL + GAPT (no Memory compression | greedy retention)..."
-torchrun --standalone --nproc_per_node=$N_GPUS train_sorl.py \
-  --run_info "SoRL + GAPT (no Memory compression | greedy retention)" \
-  --batch_size $BATCH_SIZE \
-  --train_seq_len $TRAIN_SEQ_LEN \
-  --val_seq_len $VAL_SEQ_LEN \
-  --num_iterations $NUM_ITERATIONS \
-  --num_rollouts 2 \
-  --K 8 \
-  --max_iterations 2 \
-  --temperature 10.0 \
-  --use_static_memory_span \
-  --use_greedy_retention \
-  --use_gapt
-
-
-# Patience in GAPT sweep
-# -------------------------------------------------------------
-for patience in 50 100 150 200; do
-  echo "Running: GAPT patience sweep | patience=${patience} | no greedy retention"
+for min_temperature in 0.5 1.0 2.0; do
+  echo "Running: min_temperature=${min_temperature}"
   torchrun --standalone --nproc_per_node=$N_GPUS train_sorl.py \
-    --run_info "GAPT patience sweep | patience=${patience} | no greedy retention" \
+    --run_info "Min temperature sweep: min_temp=${min_temperature}, no GAPT, no regularization" \
     --batch_size $BATCH_SIZE \
     --train_seq_len $TRAIN_SEQ_LEN \
     --val_seq_len $VAL_SEQ_LEN \
@@ -129,32 +66,63 @@ for patience in 50 100 150 200; do
     --K 8 \
     --max_iterations 2 \
     --temperature 10.0 \
+    --min_temperature $min_temperature \
     --use_static_memory_span \
-    --use_gapt \
-    --traj_perplexity_patience $patience
-
-  echo "Running: GAPT patience sweep | patience=${patience} | greedy retention"
-  torchrun --standalone --nproc_per_node=$N_GPUS train_sorl.py \
-    --run_info "GAPT patience sweep | patience=${patience} | greedy retention" \
-    --batch_size $BATCH_SIZE \
-    --train_seq_len $TRAIN_SEQ_LEN \
-    --val_seq_len $VAL_SEQ_LEN \
-    --num_iterations $NUM_ITERATIONS \
-    --num_rollouts 2 \
-    --K 8 \
-    --max_iterations 2 \
-    --temperature 10.0 \
-    --use_static_memory_span \
-    --use_greedy_retention \
-    --use_gapt \
-    --traj_perplexity_patience $patience
+    --alpha_loss 0.0 \
+    --alpha_select 0.0 \
+    --select_mode "abs_ppt"
 done
 
-# Curiosity reward ablation
-# -------------------------------------------------------------
-echo "Running: Curiosity reward | GAPT | no greedy retention"
+echo "========================================="
+echo "Sweep 2: Alpha Loss (abstraction loss weight)"
+echo "========================================="
+for alpha_loss in 0.0 0.1 0.5 1.0; do
+  echo "Running: alpha_loss=${alpha_loss}"
+  torchrun --standalone --nproc_per_node=$N_GPUS train_sorl.py \
+    --run_info "Alpha loss sweep: alpha_loss=${alpha_loss}, min_temp=0.5, no GAPT" \
+    --batch_size $BATCH_SIZE \
+    --train_seq_len $TRAIN_SEQ_LEN \
+    --val_seq_len $VAL_SEQ_LEN \
+    --num_iterations $NUM_ITERATIONS \
+    --num_rollouts 2 \
+    --K 8 \
+    --max_iterations 2 \
+    --temperature 10.0 \
+    --min_temperature 0.5 \
+    --use_static_memory_span \
+    --alpha_loss $alpha_loss \
+    --alpha_select 0.0 \
+    --select_mode "abs_ppt"
+done
+
+echo "========================================="
+echo "Sweep 3: Alpha Select (selection diversity weight)"
+echo "========================================="
+for alpha_select in 0.0 0.1 0.5 1.0; do
+  echo "Running: alpha_select=${alpha_select} with abs_ppt mode"
+  torchrun --standalone --nproc_per_node=$N_GPUS train_sorl.py \
+    --run_info "Alpha select sweep: alpha_select=${alpha_select}, mode=abs_ppt, alpha_loss=0.1" \
+    --batch_size $BATCH_SIZE \
+    --train_seq_len $TRAIN_SEQ_LEN \
+    --val_seq_len $VAL_SEQ_LEN \
+    --num_iterations $NUM_ITERATIONS \
+    --num_rollouts 2 \
+    --K 8 \
+    --max_iterations 2 \
+    --temperature 10.0 \
+    --min_temperature 0.5 \
+    --use_static_memory_span \
+    --alpha_loss 0.1 \
+    --alpha_select $alpha_select \
+    --select_mode "abs_ppt"
+done
+
+echo "========================================="
+echo "Sweep 4: Selection Mode Comparison"
+echo "========================================="
+echo "Running: vocab_util selection mode with alpha_select=0.2"
 torchrun --standalone --nproc_per_node=$N_GPUS train_sorl.py \
-  --run_info "Curiosity reward | GAPT | no greedy retention" \
+  --run_info "Selection mode: vocab_util, alpha_select=0.2, alpha_loss=0.1" \
   --batch_size $BATCH_SIZE \
   --train_seq_len $TRAIN_SEQ_LEN \
   --val_seq_len $VAL_SEQ_LEN \
@@ -163,170 +131,11 @@ torchrun --standalone --nproc_per_node=$N_GPUS train_sorl.py \
   --K 8 \
   --max_iterations 2 \
   --temperature 10.0 \
+  --min_temperature 0.5 \
   --use_static_memory_span \
-  --use_gapt \
-  --use_curiosity_reward
-
-echo "Running: Curiosity reward | GAPT | greedy retention"
-torchrun --standalone --nproc_per_node=$N_GPUS train_sorl.py \
-  --run_info "Curiosity reward | GAPT | greedy retention" \
-  --batch_size $BATCH_SIZE \
-  --train_seq_len $TRAIN_SEQ_LEN \
-  --val_seq_len $VAL_SEQ_LEN \
-  --num_iterations $NUM_ITERATIONS \
-  --num_rollouts 2 \
-  --K 8 \
-  --max_iterations 2 \
-  --temperature 10.0 \
-  --use_static_memory_span \
-  --use_greedy_retention \
-  --use_gapt \
-  --use_curiosity_reward
-
-
-# Num rollouts sweep 
-# -------------------------------------------------------------
-for num_rollouts in 3 4 5; do
-  echo "Running: Num rollouts sweep | num_rollouts=${num_rollouts} | no greedy retention"
-  torchrun --standalone --nproc_per_node=$N_GPUS train_sorl.py \
-    --run_info "Num rollouts sweep | num_rollouts=${num_rollouts} | no greedy retention" \
-    --batch_size $BATCH_SIZE \
-    --train_seq_len $TRAIN_SEQ_LEN \
-    --val_seq_len $VAL_SEQ_LEN \
-    --num_iterations $NUM_ITERATIONS \
-    --num_rollouts $num_rollouts \
-    --K 8 \
-    --max_iterations 2 \
-    --temperature 10.0 \
-    --use_static_memory_span \
-    --use_gapt \
-    --use_curiosity_reward
-
-  echo "Running: Num rollouts sweep | num_rollouts=${num_rollouts} | greedy retention"
-  torchrun --standalone --nproc_per_node=$N_GPUS train_sorl.py \
-    --run_info "Num rollouts sweep | num_rollouts=${num_rollouts} | greedy retention" \
-    --batch_size $BATCH_SIZE \
-    --train_seq_len $TRAIN_SEQ_LEN \
-    --val_seq_len $VAL_SEQ_LEN \
-    --num_iterations $NUM_ITERATIONS \
-    --num_rollouts $num_rollouts \
-    --K 8 \
-    --max_iterations 2 \
-    --temperature 10.0 \
-    --use_static_memory_span \
-    --use_gapt \
-    --use_greedy_retention \
-    --use_curiosity_reward
-done 
-
-
-# Max iterations sweep
-# -------------------------------------------------------------
-for max_iterations in 1 3 4 5; do
-  echo "Running: Max iterations sweep | max_iterations=${max_iterations} | no greedy retention"
-  torchrun --standalone --nproc_per_node=$N_GPUS train_sorl.py \
-    --run_info "Max iterations sweep | max_iterations=${max_iterations} | no greedy retention" \
-    --batch_size $BATCH_SIZE \
-    --train_seq_len $TRAIN_SEQ_LEN \
-    --val_seq_len $VAL_SEQ_LEN \
-    --num_iterations $NUM_ITERATIONS \
-    --num_rollouts 2 \
-    --K 8 \
-    --max_iterations $max_iterations \
-    --temperature 10.0 \
-    --use_static_memory_span \
-    --use_gapt \
-    --use_curiosity_reward
-
-  echo "Running: Max iterations sweep | max_iterations=${max_iterations} | greedy retention"
-  torchrun --standalone --nproc_per_node=$N_GPUS train_sorl.py \
-    --run_info "Max iterations sweep | max_iterations=${max_iterations} | greedy retention" \
-    --batch_size $BATCH_SIZE \
-    --train_seq_len $TRAIN_SEQ_LEN \
-    --val_seq_len $VAL_SEQ_LEN \
-    --num_iterations $NUM_ITERATIONS \
-    --num_rollouts 2 \
-    --K 8 \
-    --max_iterations $max_iterations \
-    --temperature 10.0 \
-    --use_static_memory_span \
-    --use_gapt \
-    --use_greedy_retention \
-    --use_curiosity_reward
-done 
-
-# Here onwards has yet to be run. 
-# ==============================================
-
-# Temperature sweep
-# -------------------------------------------------------------
-for temperature in 1.0 5.0 15.0 20.0; do
-  echo "Running: Temperature sweep | temperature=${temperature} | no greedy retention"
-  torchrun --standalone --nproc_per_node=$N_GPUS train_sorl.py \
-    --run_info "Temperature sweep | temperature=${temperature} | no greedy retention" \
-    --batch_size $BATCH_SIZE \
-    --train_seq_len $TRAIN_SEQ_LEN \
-    --val_seq_len $VAL_SEQ_LEN \
-    --num_iterations $NUM_ITERATIONS \
-    --num_rollouts 2 \
-    --K 8 \
-    --max_iterations 2 \
-    --temperature $temperature \
-    --use_static_memory_span \
-    --use_gapt \
-    --use_curiosity_reward
-
-  echo "Running: Temperature sweep | temperature=${temperature} | greedy retention"
-  torchrun --standalone --nproc_per_node=$N_GPUS train_sorl.py \
-    --run_info "Temperature sweep | temperature=${temperature} | greedy retention" \
-    --batch_size $BATCH_SIZE \
-    --train_seq_len $TRAIN_SEQ_LEN \
-    --val_seq_len $VAL_SEQ_LEN \
-    --num_iterations $NUM_ITERATIONS \
-    --num_rollouts 2 \
-    --K 8 \
-    --max_iterations 2 \
-    --temperature $temperature \
-    --use_static_memory_span \
-    --use_gapt \
-    --use_greedy_retention \
-    --use_curiosity_reward
-done 
-
-# Memory compression sweep (enables memory compression by NOT using --use_static_memory_span)
-# -------------------------------------------------------------
-for min_memory_span in 1280 1024 512 256; do
-  echo "Running: Memory compression sweep | min_memory_span=${min_memory_span} | no greedy retention"
-  torchrun --standalone --nproc_per_node=$N_GPUS train_sorl.py \
-    --run_info "Memory compression sweep | min_memory_span=${min_memory_span} | no greedy retention" \
-    --batch_size $BATCH_SIZE \
-    --train_seq_len $TRAIN_SEQ_LEN \
-    --val_seq_len $VAL_SEQ_LEN \
-    --num_iterations $NUM_ITERATIONS \
-    --num_rollouts 2 \
-    --K 8 \
-    --max_iterations 2 \
-    --temperature 10.0 \
-    --use_gapt \
-    --use_curiosity_reward \
-    --min_memory_span $min_memory_span
-
-  echo "Running: Memory compression sweep | min_memory_span=${min_memory_span} | greedy retention"
-  torchrun --standalone --nproc_per_node=$N_GPUS train_sorl.py \
-    --run_info "Memory compression sweep | min_memory_span=${min_memory_span} | greedy retention" \
-    --batch_size $BATCH_SIZE \
-    --train_seq_len $TRAIN_SEQ_LEN \
-    --val_seq_len $VAL_SEQ_LEN \
-    --num_iterations $NUM_ITERATIONS \
-    --num_rollouts 2 \
-    --K 8 \
-    --max_iterations 2 \
-    --temperature 10.0 \
-    --use_gapt \
-    --use_greedy_retention \
-    --use_curiosity_reward \
-    --min_memory_span $min_memory_span
-done 
+  --alpha_loss 0.1 \
+  --alpha_select 0.2 \
+  --select_mode "vocab_util"
 
 echo "========================================="
 echo "All experiments complete!"
