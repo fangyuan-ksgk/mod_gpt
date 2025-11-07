@@ -1,10 +1,13 @@
 # Experiment Script for SoRL
 
 # --- nvidia pod specifics ------
-# export NCCL_NET_PLUGIN=""
-# export NCCL_SOCKET_IFNAME=lo
-# export NCCL_IB_DISABLE=1
-# export NCCL_DEBUG=WARN
+echo "DUMMY_NCCL_TUNER_CONFIG=1" > /workspace/mod_gpt/dummy_tuner_config.txt
+export NCCL_TUNER_CONFIG_PATH="/workspace/mod_gpt/dummy_tuner_config.txt"
+export NCCL_TUNER_PLUGIN=""
+export NCCL_NET_PLUGIN=""
+export NCCL_SOCKET_IFNAME=lo
+export NCCL_IB_DISABLE=1
+export NCCL_DEBUG=WARN
 
 # ============================================================================
 # Configuration
@@ -49,14 +52,32 @@ N_GPUS=3
 #   (3). max_iterations = 2 is a good choice, bigger no avail, smaller is worse. 
 
 
-# (TBD). included 'run_info' argument so that it's easy to see what's going on with the runs 
+
+touch /workspace/mod_gpt/dummy_tuner_config.txt
+export NCCL_TUNER_CONFIG_PATH="/workspace/mod_gpt/dummy_tuner_config.txt"
+export NCCL_TUNER_PLUGIN=""
+export NCCL_NET_PLUGIN=""
+export NCCL_SOCKET_IFNAME=lo
+export NCCL_IB_DISABLE=1
+export NCCL_DEBUG=WARN
+
+BATCH_SIZE=30  # Closer to benchmark batch_size=32
+TRAIN_SEQ_LEN=$((16 * 1024))
+VAL_SEQ_LEN=$((16 * 1024))
+NUM_ITERATIONS=1750
+N_GPUS=2
 
 echo "========================================="
 echo "Sweep 1: Min Temperature (prediction temperature)"
 echo "========================================="
 for min_temperature in 0.5 1.0 2.0; do
   echo "Running: min_temperature=${min_temperature}"
-  torchrun --standalone --nproc_per_node=$N_GPUS train_sorl.py \
+
+  torchrun \
+    --nproc_per_node=$N_GPUS \
+    --master_addr=127.0.0.1 \
+    --master_port=29500 \
+    train_sorl.py \
     --run_info "Min temperature sweep: min_temp=${min_temperature}, no GAPT, no regularization" \
     --batch_size $BATCH_SIZE \
     --train_seq_len $TRAIN_SEQ_LEN \
@@ -68,7 +89,7 @@ for min_temperature in 0.5 1.0 2.0; do
     --temperature 10.0 \
     --min_temperature $min_temperature \
     --use_static_memory_span \
-    --alpha_loss 0.0 \
+    --alpha_loss 1.0 \
     --alpha_select 0.0 \
     --select_mode "abs_ppt"
 done
@@ -76,9 +97,13 @@ done
 echo "========================================="
 echo "Sweep 2: Alpha Loss (abstraction loss weight)"
 echo "========================================="
-for alpha_loss in 0.0 0.1 0.5 1.0; do
+for alpha_loss in 0.1 0.2 0.5; do
   echo "Running: alpha_loss=${alpha_loss}"
-  torchrun --standalone --nproc_per_node=$N_GPUS train_sorl.py \
+  torchrun \
+    --nproc_per_node=$N_GPUS \
+    --master_addr=127.0.0.1 \
+    --master_port=29500 \
+    train_sorl.py \
     --run_info "Alpha loss sweep: alpha_loss=${alpha_loss}, min_temp=0.5, no GAPT" \
     --batch_size $BATCH_SIZE \
     --train_seq_len $TRAIN_SEQ_LEN \
@@ -95,12 +120,23 @@ for alpha_loss in 0.0 0.1 0.5 1.0; do
     --select_mode "abs_ppt"
 done
 
+
+BATCH_SIZE=30  # Closer to benchmark batch_size=32
+TRAIN_SEQ_LEN=$((16 * 1024))
+VAL_SEQ_LEN=$((16 * 1024))
+NUM_ITERATIONS=1750
+N_GPUS=3
+
 echo "========================================="
 echo "Sweep 3: Alpha Select (selection diversity weight)"
 echo "========================================="
 for alpha_select in 0.0 0.1 0.5 1.0; do
   echo "Running: alpha_select=${alpha_select} with abs_ppt mode"
-  torchrun --standalone --nproc_per_node=$N_GPUS train_sorl.py \
+  torchrun \
+    --nproc_per_node=$N_GPUS \
+    --master_addr=127.0.0.1 \
+    --master_port=29500 \
+    train_sorl.py \
     --run_info "Alpha select sweep: alpha_select=${alpha_select}, mode=abs_ppt, alpha_loss=0.1" \
     --batch_size $BATCH_SIZE \
     --train_seq_len $TRAIN_SEQ_LEN \
@@ -121,7 +157,11 @@ echo "========================================="
 echo "Sweep 4: Selection Mode Comparison"
 echo "========================================="
 echo "Running: vocab_util selection mode with alpha_select=0.2"
-torchrun --standalone --nproc_per_node=$N_GPUS train_sorl.py \
+  torchrun \
+    --nproc_per_node=$N_GPUS \
+    --master_addr=127.0.0.1 \
+    --master_port=29500 \
+    train_sorl.py \
   --run_info "Selection mode: vocab_util, alpha_select=0.2, alpha_loss=0.1" \
   --batch_size $BATCH_SIZE \
   --train_seq_len $TRAIN_SEQ_LEN \

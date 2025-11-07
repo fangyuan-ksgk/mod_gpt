@@ -6,19 +6,13 @@
 # =================================================================
 
 # Dummy tuner config to avoid NCCL crashing
-export NCCL_TUNER_CONFIG_PATH="/workspace/mod_gpt/dummy_tuner_config.txt"
+touch /workspace/mod_gpt/dummy_tuner_config.txt
 
-# Disable the crashing NCCL plugins that are auto-loaded by the pod's environment
+export NCCL_TUNER_CONFIG_PATH="/workspace/mod_gpt/dummy_tuner_config.txt"
 export NCCL_TUNER_PLUGIN=""
 export NCCL_NET_PLUGIN=""
-
-# Force use of the reliable loopback network interface for single-node communication
 export NCCL_SOCKET_IFNAME=lo
-
-# Disable InfiniBand to prevent auto-detection conflicts
 export NCCL_IB_DISABLE=1
-
-# Use WARN for cleaner logs. Change to INFO to see verbose NCCL output.
 export NCCL_DEBUG=WARN
 
 # =================================================================
