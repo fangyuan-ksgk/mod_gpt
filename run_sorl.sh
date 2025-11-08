@@ -20,6 +20,20 @@ TRAIN_SEQ_LEN=$((16 * 1024))
 VAL_SEQ_LEN=$((16 * 1024))
 NUM_ITERATIONS=1750
 N_GPUS=2
+MASTER_ADDR=127.0.0.1
+MASTER_PORT=29500
+
+# ============================================================================
+# Helper function to get next available port
+# ============================================================================
+get_next_port() {
+  local base_port=$1
+  local port=$base_port
+  while lsof -Pi :$port -sTCP:LISTEN -t >/dev/null 2>&1 ; do
+    port=$((port + 1))
+  done
+  echo $port
+}
 
 # ============================================================================
 # BASELINE EXPERIMENTS
@@ -71,8 +85,8 @@ echo "========================================="
 echo "Running: BASELINE (no diversity intervention)"
 torchrun \
   --nproc_per_node=$N_GPUS \
-  --master_addr=127.0.0.1 \
-  --master_port=29500 \
+  --master_addr=$MASTER_ADDR \
+  --master_port=$MASTER_PORT \
   train_sorl.py \
   --run_info "Baseline: alpha_select=0.0, alpha_loss=1.0, min_temp=2.0" \
   --batch_size $BATCH_SIZE \
@@ -100,8 +114,8 @@ for alpha_select in -0.1 -0.2 -0.5; do
   echo "Running: alpha_select=${alpha_select}, alpha_loss=1.0, min_temp=2.0"
   torchrun \
     --nproc_per_node=$N_GPUS \
-    --master_addr=127.0.0.1 \
-    --master_port=29500 \
+    --master_addr=$MASTER_ADDR \
+    --master_port=$MASTER_PORT \
     train_sorl.py \
     --run_info "Conflict test: alpha_select=${alpha_select} vs alpha_loss=1.0, min_temp=2.0" \
     --batch_size $BATCH_SIZE \
@@ -130,8 +144,8 @@ for min_temperature in 0.5 5.0; do
   echo "Running: alpha_select=-0.5, alpha_loss=1.0, min_temp=${min_temperature}"
   torchrun \
     --nproc_per_node=$N_GPUS \
-    --master_addr=127.0.0.1 \
-    --master_port=29500 \
+    --master_addr=$MASTER_ADDR \
+    --master_port=$MASTER_PORT \
     train_sorl.py \
     --run_info "3-way conflict: alpha_select=-0.5, alpha_loss=1.0, min_temp=${min_temperature}" \
     --batch_size $BATCH_SIZE \
@@ -160,8 +174,8 @@ for alpha_loss in 0.5 0.7 1.0; do
   echo "Running: alpha_select=-0.5, alpha_loss=${alpha_loss}, min_temp=2.0"
   torchrun \
     --nproc_per_node=$N_GPUS \
-    --master_addr=127.0.0.1 \
-    --master_port=29500 \
+    --master_addr=$MASTER_ADDR \
+    --master_port=$MASTER_PORT \
     train_sorl.py \
     --run_info "Selection vs training: alpha_select=-0.5 vs alpha_loss=${alpha_loss}, min_temp=2.0" \
     --batch_size $BATCH_SIZE \
@@ -191,8 +205,8 @@ echo "========================================="
 echo "Running: SYNERGY (all pro-diversity)"
 torchrun \
   --nproc_per_node=$N_GPUS \
-  --master_addr=127.0.0.1 \
-  --master_port=29500 \
+  --master_addr=$MASTER_ADDR \
+  --master_port=$MASTER_PORT \
   train_sorl.py \
   --run_info "Synergy: alpha_select=-0.5, alpha_loss=0.1, min_temp=5.0 (all pro-diversity)" \
   --batch_size $BATCH_SIZE \
@@ -213,8 +227,8 @@ torchrun \
 echo "Running: MAX CONFLICT (selection pro-, training anti-, prediction anti-)"
 torchrun \
   --nproc_per_node=$N_GPUS \
-  --master_addr=127.0.0.1 \
-  --master_port=29500 \
+  --master_addr=$MASTER_ADDR \
+  --master_port=$MASTER_PORT \
   train_sorl.py \
   --run_info "Max conflict: alpha_select=-0.5, alpha_loss=1.0, min_temp=0.5 (mixed forces)" \
   --batch_size $BATCH_SIZE \
