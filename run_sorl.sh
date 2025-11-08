@@ -19,7 +19,7 @@ BATCH_SIZE=30  # Closer to benchmark batch_size=32
 TRAIN_SEQ_LEN=$((16 * 1024))
 VAL_SEQ_LEN=$((16 * 1024))
 NUM_ITERATIONS=1750
-N_GPUS=3
+N_GPUS=2
 
 # ============================================================================
 # BASELINE EXPERIMENTS
@@ -56,25 +56,54 @@ N_GPUS=3
 
 
 
+# ============================================================================
+# Round 3: Conflicting Forces Experiment
+# Testing: alpha_select (selection diversity) vs alpha_loss (training collapse) vs min_temp (prediction diversity)
+# ============================================================================
 
 echo "========================================="
-echo "Control Experiments Based on Configs 3 & 4"
+echo "Round 3: Conflicting Forces - Who Wins?"
 echo "========================================="
 
 # ============================================================================
-# Experiment Set 1: Negative Alpha_Select (Theoretical Posterior Selection)
+# Baseline: No Intervention
+# ============================================================================
+echo "Running: BASELINE (no diversity intervention)"
+torchrun \
+  --nproc_per_node=$N_GPUS \
+  --master_addr=127.0.0.1 \
+  --master_port=29500 \
+  train_sorl.py \
+  --run_info "Baseline: alpha_select=0.0, alpha_loss=1.0, min_temp=2.0" \
+  --batch_size $BATCH_SIZE \
+  --train_seq_len $TRAIN_SEQ_LEN \
+  --val_seq_len $VAL_SEQ_LEN \
+  --num_iterations $NUM_ITERATIONS \
+  --num_rollouts 2 \
+  --K 8 \
+  --max_iterations 2 \
+  --temperature 10.0 \
+  --min_temperature 2.0 \
+  --use_static_memory_span \
+  --alpha_loss 1.0 \
+  --alpha_select 0.0 \
+  --select_mode "abs_ppt"
+
+# ============================================================================
+# Sweep 1: Negative Alpha_Select vs High Alpha_Loss
+# Question: Can selection diversity overcome training collapse?
 # ============================================================================
 echo "========================================="
-echo "Set 1: Negative Alpha_Select (encourage high abs_ppt for diversity)"
+echo "Sweep 1: Selection Diversity (alpha_select < 0) vs Training Collapse (alpha_loss=1.0)"
 echo "========================================="
-for alpha_select in -0.05 -0.1 -0.2 -0.5; do
-  echo "Running: alpha_select=${alpha_select} (negative for posterior selection)"
+for alpha_select in -0.1 -0.2 -0.5; do
+  echo "Running: alpha_select=${alpha_select}, alpha_loss=1.0, min_temp=2.0"
   torchrun \
     --nproc_per_node=$N_GPUS \
     --master_addr=127.0.0.1 \
     --master_port=29500 \
     train_sorl.py \
-    --run_info "Negative alpha_select: alpha_select=${alpha_select}, alpha_loss=0.1, min_temp=0.5" \
+    --run_info "Conflict test: alpha_select=${alpha_select} vs alpha_loss=1.0, min_temp=2.0" \
     --batch_size $BATCH_SIZE \
     --train_seq_len $TRAIN_SEQ_LEN \
     --val_seq_len $VAL_SEQ_LEN \
@@ -83,27 +112,28 @@ for alpha_select in -0.05 -0.1 -0.2 -0.5; do
     --K 8 \
     --max_iterations 2 \
     --temperature 10.0 \
-    --min_temperature 0.5 \
+    --min_temperature 2.0 \
     --use_static_memory_span \
-    --alpha_loss 0.1 \
+    --alpha_loss 1.0 \
     --alpha_select $alpha_select \
     --select_mode "abs_ppt"
 done
 
 # ============================================================================
-# Experiment Set 2: Min_Temperature → 0 (Based on Config 3 Hypothesis)
+# Sweep 2: Min_Temp Modulation (at max conflict)
+# Question: Does prediction diversity help when selection & training conflict?
 # ============================================================================
 echo "========================================="
-echo "Set 2: Very Low Min_Temperature (more deterministic prediction)"
+echo "Sweep 2: Prediction Diversity (min_temp) at Max Selection vs Training Conflict"
 echo "========================================="
-for min_temperature in 0.01 0.05 0.1; do
-  echo "Running: min_temperature=${min_temperature} with alpha_loss=1.0"
+for min_temperature in 0.5 5.0; do
+  echo "Running: alpha_select=-0.5, alpha_loss=1.0, min_temp=${min_temperature}"
   torchrun \
     --nproc_per_node=$N_GPUS \
     --master_addr=127.0.0.1 \
     --master_port=29500 \
     train_sorl.py \
-    --run_info "Low min_temp: min_temp=${min_temperature}, alpha_loss=1.0, alpha_select=0.0" \
+    --run_info "3-way conflict: alpha_select=-0.5, alpha_loss=1.0, min_temp=${min_temperature}" \
     --batch_size $BATCH_SIZE \
     --train_seq_len $TRAIN_SEQ_LEN \
     --val_seq_len $VAL_SEQ_LEN \
@@ -115,73 +145,25 @@ for min_temperature in 0.01 0.05 0.1; do
     --min_temperature $min_temperature \
     --use_static_memory_span \
     --alpha_loss 1.0 \
-    --alpha_select 0.0 \
+    --alpha_select -0.5 \
     --select_mode "abs_ppt"
 done
 
 # ============================================================================
-# Experiment Set 3: Replicate Configs 3 & 4 (for verification)
+# Sweep 3: Alpha_Loss Modulation (at max selection diversity)
+# Question: At what alpha_loss does selection diversity stop mattering?
 # ============================================================================
 echo "========================================="
-echo "Set 3: Replicate Configs 3 & 4"
+echo "Sweep 3: Training Collapse Strength (alpha_loss) vs Max Selection Diversity"
 echo "========================================="
-
-echo "Running: REPLICATION of Config 3 (alpha_loss=1.0, collapsed vocab)"
-torchrun \
-  --nproc_per_node=$N_GPUS \
-  --master_addr=127.0.0.1 \
-  --master_port=29500 \
-  train_sorl.py \
-  --run_info "REPLICATION Config 3: alpha_loss=1.0, alpha_select=0.0, min_temp=0.5" \
-  --batch_size $BATCH_SIZE \
-  --train_seq_len $TRAIN_SEQ_LEN \
-  --val_seq_len $VAL_SEQ_LEN \
-  --num_iterations $NUM_ITERATIONS \
-  --num_rollouts 2 \
-  --K 8 \
-  --max_iterations 2 \
-  --temperature 10.0 \
-  --min_temperature 0.5 \
-  --use_static_memory_span \
-  --alpha_loss 1.0 \
-  --alpha_select 0.0 \
-  --select_mode "abs_ppt"
-
-echo "Running: REPLICATION of Config 4 (alpha_loss=0.1, positive search_adv)"
-torchrun \
-  --nproc_per_node=$N_GPUS \
-  --master_addr=127.0.0.1 \
-  --master_port=29500 \
-  train_sorl.py \
-  --run_info "REPLICATION Config 4: alpha_loss=0.1, alpha_select=0.0, min_temp=0.5" \
-  --batch_size $BATCH_SIZE \
-  --train_seq_len $TRAIN_SEQ_LEN \
-  --val_seq_len $VAL_SEQ_LEN \
-  --num_iterations $NUM_ITERATIONS \
-  --num_rollouts 2 \
-  --K 8 \
-  --max_iterations 2 \
-  --temperature 10.0 \
-  --min_temperature 0.5 \
-  --use_static_memory_span \
-  --alpha_loss 0.1 \
-  --alpha_select 0.0 \
-  --select_mode "abs_ppt"
-
-# ============================================================================
-# Experiment Set 4: Alpha_Loss Sweep Between Configs 3 & 4
-# ============================================================================
-echo "========================================="
-echo "Set 4: Alpha_Loss Fine-Grained Sweep (0.1 to 1.0)"
-echo "========================================="
-for alpha_loss in 0.2 0.3 0.5 0.7; do
-  echo "Running: alpha_loss=${alpha_loss} (between Config 3 and 4)"
+for alpha_loss in 0.5 0.7 1.0; do
+  echo "Running: alpha_select=-0.5, alpha_loss=${alpha_loss}, min_temp=2.0"
   torchrun \
     --nproc_per_node=$N_GPUS \
     --master_addr=127.0.0.1 \
     --master_port=29500 \
     train_sorl.py \
-    --run_info "Alpha_loss sweep: alpha_loss=${alpha_loss}, min_temp=0.5, alpha_select=0.0" \
+    --run_info "Selection vs training: alpha_select=-0.5 vs alpha_loss=${alpha_loss}, min_temp=2.0" \
     --batch_size $BATCH_SIZE \
     --train_seq_len $TRAIN_SEQ_LEN \
     --val_seq_len $VAL_SEQ_LEN \
@@ -190,56 +172,29 @@ for alpha_loss in 0.2 0.3 0.5 0.7; do
     --K 8 \
     --max_iterations 2 \
     --temperature 10.0 \
-    --min_temperature 0.5 \
+    --min_temperature 2.0 \
     --use_static_memory_span \
     --alpha_loss $alpha_loss \
-    --alpha_select 0.0 \
+    --alpha_select -0.5 \
     --select_mode "abs_ppt"
 done
 
 # ============================================================================
-# Experiment Set 5: Temperature Sweep from Configs 3 & 4 Baseline
+# Sweep 4: Full Grid (max conflict points)
+# Question: Combined effect of all three forces
 # ============================================================================
 echo "========================================="
-echo "Set 5: Search Temperature Sweep (with alpha_loss=0.1)"
-echo "========================================="
-for temperature in 5.0 7.5 12.5 15.0; do
-  echo "Running: temperature=${temperature} with alpha_loss=0.1"
-  torchrun \
-    --nproc_per_node=$N_GPUS \
-    --master_addr=127.0.0.1 \
-    --master_port=29500 \
-    train_sorl.py \
-    --run_info "Search temp sweep: temp=${temperature}, alpha_loss=0.1, min_temp=0.5" \
-    --batch_size $BATCH_SIZE \
-    --train_seq_len $TRAIN_SEQ_LEN \
-    --val_seq_len $VAL_SEQ_LEN \
-    --num_iterations $NUM_ITERATIONS \
-    --num_rollouts 2 \
-    --K 8 \
-    --max_iterations 2 \
-    --temperature $temperature \
-    --min_temperature 0.5 \
-    --use_static_memory_span \
-    --alpha_loss 0.1 \
-    --alpha_select 0.0 \
-    --select_mode "abs_ppt"
-done
-
-# ============================================================================
-# Experiment Set 6: Combined Interventions (addressing vocab collapse)
-# ============================================================================
-echo "========================================="
-echo "Set 6: Combined Interventions for Vocab Collapse"
+echo "Sweep 4: Full 3-Way Conflict Grid"
 echo "========================================="
 
-echo "Running: Low min_temp + negative alpha_select"
+# Max selection diversity + low training collapse + high prediction diversity
+echo "Running: SYNERGY (all pro-diversity)"
 torchrun \
   --nproc_per_node=$N_GPUS \
   --master_addr=127.0.0.1 \
   --master_port=29500 \
   train_sorl.py \
-  --run_info "Combined: min_temp=0.05, alpha_loss=1.0, alpha_select=-0.1" \
+  --run_info "Synergy: alpha_select=-0.5, alpha_loss=0.1, min_temp=5.0 (all pro-diversity)" \
   --batch_size $BATCH_SIZE \
   --train_seq_len $TRAIN_SEQ_LEN \
   --val_seq_len $VAL_SEQ_LEN \
@@ -248,19 +203,20 @@ torchrun \
   --K 8 \
   --max_iterations 2 \
   --temperature 10.0 \
-  --min_temperature 0.05 \
+  --min_temperature 5.0 \
   --use_static_memory_span \
-  --alpha_loss 1.0 \
-  --alpha_select -0.1 \
+  --alpha_loss 0.1 \
+  --alpha_select -0.5 \
   --select_mode "abs_ppt"
 
-echo "Running: vocab_util mode with negative alpha_select"
+# Max conflict: selection diversity vs training collapse vs low prediction diversity
+echo "Running: MAX CONFLICT (selection pro-, training anti-, prediction anti-)"
 torchrun \
   --nproc_per_node=$N_GPUS \
   --master_addr=127.0.0.1 \
   --master_port=29500 \
   train_sorl.py \
-  --run_info "Combined: vocab_util mode, alpha_select=-0.2, alpha_loss=0.1" \
+  --run_info "Max conflict: alpha_select=-0.5, alpha_loss=1.0, min_temp=0.5 (mixed forces)" \
   --batch_size $BATCH_SIZE \
   --train_seq_len $TRAIN_SEQ_LEN \
   --val_seq_len $VAL_SEQ_LEN \
@@ -271,10 +227,10 @@ torchrun \
   --temperature 10.0 \
   --min_temperature 0.5 \
   --use_static_memory_span \
-  --alpha_loss 0.1 \
-  --alpha_select -0.2 \
-  --select_mode "vocab_util"
+  --alpha_loss 1.0 \
+  --alpha_select -0.5 \
+  --select_mode "abs_ppt"
 
 echo "========================================="
-echo "All control experiments complete!"
+echo "Round 3: Conflicting Forces - Complete!"
 echo "========================================="
