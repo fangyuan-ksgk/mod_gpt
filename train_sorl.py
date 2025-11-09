@@ -54,6 +54,9 @@ def parse_args():
     parser.add_argument("--alpha_select", type=float, default=0.0)  # selection regularization strength
     parser.add_argument("--select_mode", type=str, default="abs_ppt", choices=["abs_ppt", "vocab_util"])  # selection mode
     parser.add_argument("--alpha_loss", type=float, default=0.0)  # loss regularization strength
+    parser.add_argument("--vocab_util_threshold", type=float, default=0.5) # vocabulary utilization threshold
+    parser.add_argument("--min_alpha_loss", type=float, default=-0.1) # minimum alpha loss
+    parser.add_argument("--use_adaptive_alpha", action="store_true", default=False) # use adaptive alpha loss
     parser.add_argument("--run_info", type=str, default="") # run info
 
     return parser.parse_args()
@@ -225,7 +228,9 @@ class Hyperparameters:
     alpha_select: float = 0.0 # selection regularization strength
     select_mode: str = "abs_ppt" # selection mode
     alpha_loss: float = 0.0 # loss regularization strength
-
+    vocab_util_threshold: float = 0.5 # vocabulary utilization threshold
+    min_alpha_loss: float = -0.1 # minimum alpha loss
+    use_adaptive_alpha: bool = False # use adaptive alpha loss
     run_info: str = "" # run info
 
 cli_args = parse_args()
@@ -408,6 +413,7 @@ train_steps = args.num_iterations
 loss_record = defaultdict(list)
 test_loss_record = defaultdict(list)
 early_stop = False
+alpha_loss = args.alpha_loss
 
 for step in range(train_steps + 1):
     last_step = (step == train_steps) or early_stop
@@ -438,6 +444,17 @@ for step in range(train_steps + 1):
                 val_loss["abs_loss"] += val_abs_loss
                 val_loss["search_advantage"] += val_adv.mean()
                 val_loss["util_rate"] += torch.tensor(util_rate, device=val_traj_loss.device)
+            
+            # ==== adaptive alpha loss ==== 
+            if args.use_adaptive_alpha:
+                prev_alpha = alpha_loss
+                avg_util_rate = val_loss["util_rate"].item() / val_steps  
+                if avg_util_rate < args.vocab_util_threshold: 
+                    alpha_loss = args.min_alpha_loss 
+                else: 
+                    alpha_loss = args.alpha_loss
+                if abs(prev_alpha - alpha_loss) > 0.05:
+                    print0(f"step:{step} Phase switch: util={avg_util_rate:.3f}, α={prev_alpha:.2f}→{alpha_loss:.2f}", console=True)
 
         for name in val_loss: 
             val_loss[name] /= val_steps
@@ -475,12 +492,12 @@ for step in range(train_steps + 1):
         traj_loss, abs_loss = compute_loss(search_tokens, model, memory_span=memory_span, attn_blocksize=attn_blocksize)
         
         if args.use_gapt: 
-            loss = gapt.step(traj_loss, args.alpha_loss * abs_loss, verbose=False)
+            loss = gapt.step(traj_loss, alpha_loss * abs_loss, verbose=False)
         else: 
-            loss = traj_loss + args.alpha_loss * abs_loss
+            loss = traj_loss + alpha_loss * abs_loss
         
         loss.backward()
-        print0(f" - step: {step} | accum step: {accum_step} | traj_loss: {traj_loss.item()} | abs_loss: {abs_loss.item()} | search_advantage: {search_adv.mean().item()}")
+        print0(f" - step: {step} | accum step: {accum_step} | traj_loss: {traj_loss.item()} | abs_loss: {abs_loss.item()} | search_advantage: {search_adv.mean().item()} | alpha_loss: {alpha_loss:.2f}")
         
     for param in model.parameters():
         param.grad /= train_accumulation_steps
@@ -522,12 +539,13 @@ print0(f"-- use_gapt: {args.use_gapt}", console=True)
 print0(f"-- alpha_select: {args.alpha_select}", console=True)
 print0(f"-- select_mode: {args.select_mode}", console=True)
 print0(f"-- alpha_loss: {args.alpha_loss}", console=True)
+print0(f"-- min_alpha_loss: {args.min_alpha_loss}", console=True)
+print0(f"-- use_adaptive_alpha: {args.use_adaptive_alpha}", console=True)
+print0(f"-- vocab_util_threshold: {args.vocab_util_threshold}", console=True)
 print0(f"-- traj_perplexity_patience: {args.traj_perplexity_patience}", console=True)
 print0(f"-- abs_perplexity_patience: {args.abs_perplexity_patience}", console=True)
 print0(f"-- tau_plateau: {args.tau_plateau}", console=True)
 print0(f"-- tau_spike: {args.tau_spike}", console=True)
-
-
 print0(f"loss record:\n{loss_record}", console=True)
 
 dist.destroy_process_group()

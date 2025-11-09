@@ -20,20 +20,8 @@ TRAIN_SEQ_LEN=$((16 * 1024))
 VAL_SEQ_LEN=$((16 * 1024))
 NUM_ITERATIONS=1750
 N_GPUS=2
-MASTER_ADDR=127.0.0.1
-MASTER_PORT=29500
-
-# ============================================================================
-# Helper function to get next available port
-# ============================================================================
-get_next_port() {
-  local base_port=$1
-  local port=$base_port
-  while lsof -Pi :$port -sTCP:LISTEN -t >/dev/null 2>&1 ; do
-    port=$((port + 1))
-  done
-  echo $port
-}
+MASTER_ADDR=127.0.0.3
+MASTER_PORT=29502
 
 # ============================================================================
 # BASELINE EXPERIMENTS
@@ -68,183 +56,85 @@ get_next_port() {
 #   (2). When using GAPT, patience = 100 is a good choice. 
 #   (3). max_iterations = 2 is a good choice, bigger no avail, smaller is worse. 
 
+# ===== adaptive alpha loss experiment ===== 
 
 
 # ============================================================================
-# Round 3: Conflicting Forces Experiment
-# Testing: alpha_select (selection diversity) vs alpha_loss (training collapse) vs min_temp (prediction diversity)
-# ============================================================================
-
-echo "========================================="
-echo "Round 3: Conflicting Forces - Who Wins?"
-echo "========================================="
-
-# ============================================================================
-# Baseline: No Intervention
-# ============================================================================
-echo "Running: BASELINE (no diversity intervention)"
-torchrun \
-  --nproc_per_node=$N_GPUS \
-  --master_addr=$MASTER_ADDR \
-  --master_port=$MASTER_PORT \
-  train_sorl.py \
-  --run_info "Baseline: alpha_select=0.0, alpha_loss=1.0, min_temp=2.0" \
-  --batch_size $BATCH_SIZE \
-  --train_seq_len $TRAIN_SEQ_LEN \
-  --val_seq_len $VAL_SEQ_LEN \
-  --num_iterations $NUM_ITERATIONS \
-  --num_rollouts 2 \
-  --K 8 \
-  --max_iterations 2 \
-  --temperature 10.0 \
-  --min_temperature 2.0 \
-  --use_static_memory_span \
-  --alpha_loss 1.0 \
-  --alpha_select 0.0 \
-  --select_mode "abs_ppt"
-
-# ============================================================================
-# Sweep 1: Negative Alpha_Select vs High Alpha_Loss
-# Question: Can selection diversity overcome training collapse?
+# Sweep 2: Asymmetric - Exploration Biased
+# Question: Does stronger exploration help when exploitation is weak?
 # ============================================================================
 echo "========================================="
-echo "Sweep 1: Selection Diversity (alpha_select < 0) vs Training Collapse (alpha_loss=1.0)"
+echo "Sweep 2: Asymmetric (Exploration-Biased)"
 echo "========================================="
-for alpha_select in -0.1 -0.2 -0.5; do
-  echo "Running: alpha_select=${alpha_select}, alpha_loss=1.0, min_temp=2.0"
+for explore in 0.1 0.15 0.2; do
+  exploit=0.05
+  echo "Running: min_alpha_loss=-${explore}, alpha_loss=${exploit}"
   torchrun \
     --nproc_per_node=$N_GPUS \
     --master_addr=$MASTER_ADDR \
-    --master_port=$MASTER_PORT \
+    --master_port=$((MASTER_PORT++)) \
     train_sorl.py \
-    --run_info "Conflict test: alpha_select=${alpha_select} vs alpha_loss=1.0, min_temp=2.0" \
+    --run_info "Asymmetric explore-bias: -${explore} ↔ +${exploit}" \
     --batch_size $BATCH_SIZE \
     --train_seq_len $TRAIN_SEQ_LEN \
     --val_seq_len $VAL_SEQ_LEN \
     --num_iterations $NUM_ITERATIONS \
-    --num_rollouts 2 \
-    --K 8 \
-    --max_iterations 2 \
-    --temperature 10.0 \
-    --min_temperature 2.0 \
-    --use_static_memory_span \
-    --alpha_loss 1.0 \
-    --alpha_select $alpha_select \
-    --select_mode "abs_ppt"
+    --num_rollouts $NUM_ROLLOUTS \
+    --use_adaptive_alpha \
+    --min_alpha_loss -${explore} \
+    --alpha_loss ${exploit} \
+    --vocab_util_threshold 0.5
 done
 
 # ============================================================================
-# Sweep 2: Min_Temp Modulation (at max conflict)
-# Question: Does prediction diversity help when selection & training conflict?
+# Sweep 3: Asymmetric - Exploitation Biased
+# Question: Does stronger exploitation help when exploration is weak?
 # ============================================================================
 echo "========================================="
-echo "Sweep 2: Prediction Diversity (min_temp) at Max Selection vs Training Conflict"
+echo "Sweep 3: Asymmetric (Exploitation-Biased)"
 echo "========================================="
-for min_temperature in 0.5 5.0; do
-  echo "Running: alpha_select=-0.5, alpha_loss=1.0, min_temp=${min_temperature}"
+for exploit in 0.1 0.15 0.2; do
+  explore=0.05
+  echo "Running: min_alpha_loss=-${explore}, alpha_loss=${exploit}"
   torchrun \
     --nproc_per_node=$N_GPUS \
     --master_addr=$MASTER_ADDR \
-    --master_port=$MASTER_PORT \
+    --master_port=$((MASTER_PORT++)) \
     train_sorl.py \
-    --run_info "3-way conflict: alpha_select=-0.5, alpha_loss=1.0, min_temp=${min_temperature}" \
+    --run_info "Asymmetric exploit-bias: -${explore} ↔ +${exploit}" \
     --batch_size $BATCH_SIZE \
     --train_seq_len $TRAIN_SEQ_LEN \
     --val_seq_len $VAL_SEQ_LEN \
     --num_iterations $NUM_ITERATIONS \
-    --num_rollouts 2 \
-    --K 8 \
-    --max_iterations 2 \
-    --temperature 10.0 \
-    --min_temperature $min_temperature \
-    --use_static_memory_span \
-    --alpha_loss 1.0 \
-    --alpha_select -0.5 \
-    --select_mode "abs_ppt"
+    --num_rollouts $NUM_ROLLOUTS \
+    --use_adaptive_alpha \
+    --min_alpha_loss -${explore} \
+    --alpha_loss ${exploit} \
+    --vocab_util_threshold 0.5
 done
 
 # ============================================================================
-# Sweep 3: Alpha_Loss Modulation (at max selection diversity)
-# Question: At what alpha_loss does selection diversity stop mattering?
+# Sweep 4: Threshold Variation (Fixed Amplitude)
+# Question: What's the optimal switching point?
 # ============================================================================
 echo "========================================="
-echo "Sweep 3: Training Collapse Strength (alpha_loss) vs Max Selection Diversity"
+echo "Sweep 4: Vocabulary Utilization Threshold"
 echo "========================================="
-for alpha_loss in 0.5 0.7 1.0; do
-  echo "Running: alpha_select=-0.5, alpha_loss=${alpha_loss}, min_temp=2.0"
+for threshold in 0.3 0.4 0.5 0.6 0.7; do
+  echo "Running: threshold=${threshold}, alpha=±0.1"
   torchrun \
     --nproc_per_node=$N_GPUS \
     --master_addr=$MASTER_ADDR \
-    --master_port=$MASTER_PORT \
+    --master_port=$((MASTER_PORT++)) \
     train_sorl.py \
-    --run_info "Selection vs training: alpha_select=-0.5 vs alpha_loss=${alpha_loss}, min_temp=2.0" \
+    --run_info "Threshold sweep: vocab_util=${threshold}" \
     --batch_size $BATCH_SIZE \
     --train_seq_len $TRAIN_SEQ_LEN \
     --val_seq_len $VAL_SEQ_LEN \
     --num_iterations $NUM_ITERATIONS \
-    --num_rollouts 2 \
-    --K 8 \
-    --max_iterations 2 \
-    --temperature 10.0 \
-    --min_temperature 2.0 \
-    --use_static_memory_span \
-    --alpha_loss $alpha_loss \
-    --alpha_select -0.5 \
-    --select_mode "abs_ppt"
+    --num_rollouts $NUM_ROLLOUTS \
+    --use_adaptive_alpha \
+    --min_alpha_loss -0.1 \
+    --alpha_loss 0.1 \
+    --vocab_util_threshold ${threshold}
 done
-
-# ============================================================================
-# Sweep 4: Full Grid (max conflict points)
-# Question: Combined effect of all three forces
-# ============================================================================
-echo "========================================="
-echo "Sweep 4: Full 3-Way Conflict Grid"
-echo "========================================="
-
-# Max selection diversity + low training collapse + high prediction diversity
-echo "Running: SYNERGY (all pro-diversity)"
-torchrun \
-  --nproc_per_node=$N_GPUS \
-  --master_addr=$MASTER_ADDR \
-  --master_port=$MASTER_PORT \
-  train_sorl.py \
-  --run_info "Synergy: alpha_select=-0.5, alpha_loss=0.1, min_temp=5.0 (all pro-diversity)" \
-  --batch_size $BATCH_SIZE \
-  --train_seq_len $TRAIN_SEQ_LEN \
-  --val_seq_len $VAL_SEQ_LEN \
-  --num_iterations $NUM_ITERATIONS \
-  --num_rollouts 2 \
-  --K 8 \
-  --max_iterations 2 \
-  --temperature 10.0 \
-  --min_temperature 5.0 \
-  --use_static_memory_span \
-  --alpha_loss 0.1 \
-  --alpha_select -0.5 \
-  --select_mode "abs_ppt"
-
-# Max conflict: selection diversity vs training collapse vs low prediction diversity
-echo "Running: MAX CONFLICT (selection pro-, training anti-, prediction anti-)"
-torchrun \
-  --nproc_per_node=$N_GPUS \
-  --master_addr=$MASTER_ADDR \
-  --master_port=$MASTER_PORT \
-  train_sorl.py \
-  --run_info "Max conflict: alpha_select=-0.5, alpha_loss=1.0, min_temp=0.5 (mixed forces)" \
-  --batch_size $BATCH_SIZE \
-  --train_seq_len $TRAIN_SEQ_LEN \
-  --val_seq_len $VAL_SEQ_LEN \
-  --num_iterations $NUM_ITERATIONS \
-  --num_rollouts 2 \
-  --K 8 \
-  --max_iterations 2 \
-  --temperature 10.0 \
-  --min_temperature 0.5 \
-  --use_static_memory_span \
-  --alpha_loss 1.0 \
-  --alpha_select -0.5 \
-  --select_mode "abs_ppt"
-
-echo "========================================="
-echo "Round 3: Conflicting Forces - Complete!"
-echo "========================================="
