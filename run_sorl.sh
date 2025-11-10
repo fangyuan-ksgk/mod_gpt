@@ -19,9 +19,10 @@ BATCH_SIZE=30  # Closer to benchmark batch_size=32
 TRAIN_SEQ_LEN=$((16 * 1024))
 VAL_SEQ_LEN=$((16 * 1024))
 NUM_ITERATIONS=1750
+NUM_ROLLOUTS=2
 N_GPUS=2
-MASTER_ADDR=127.0.0.3
-MASTER_PORT=29502
+MASTER_ADDR=127.0.0.1
+MASTER_PORT=29500
 
 # ============================================================================
 # BASELINE EXPERIMENTS
@@ -112,6 +113,31 @@ for exploit in 0.1 0.15 0.2; do
     --alpha_loss ${exploit} \
     --vocab_util_threshold 0.5
 done
+
+
+# --- nvidia pod specifics ------
+DUMMY_CONFIG_PATH="/workspace/mod_gpt/dummy_tuner_config.txt"
+rm -f "$DUMMY_CONFIG_PATH"
+touch "$DUMMY_CONFIG_PATH"
+
+export NCCL_TUNER_CONFIG_PATH="$DUMMY_CONFIG_PATH"
+export NCCL_TUNER_PLUGIN=""
+export NCCL_NET_PLUGIN=""
+export NCCL_SOCKET_IFNAME=lo
+export NCCL_IB_DISABLE=1
+export NCCL_DEBUG=WARN
+
+# ============================================================================
+# Configuration
+# ============================================================================
+BATCH_SIZE=30  # Closer to benchmark batch_size=32
+TRAIN_SEQ_LEN=$((16 * 1024))
+VAL_SEQ_LEN=$((16 * 1024))
+NUM_ITERATIONS=1750
+NUM_ROLLOUTS=2
+N_GPUS=2
+MASTER_ADDR=127.0.0.2
+MASTER_PORT=29501
 
 # ============================================================================
 # Sweep 4: Threshold Variation (Fixed Amplitude)
