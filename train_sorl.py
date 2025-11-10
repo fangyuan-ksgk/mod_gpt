@@ -445,17 +445,6 @@ for step in range(train_steps + 1):
                 val_loss["search_advantage"] += val_adv.mean()
                 val_loss["util_rate"] += torch.tensor(util_rate, device=val_traj_loss.device)
             
-            # ==== adaptive alpha loss ==== 
-            if args.use_adaptive_alpha:
-                prev_alpha = alpha_loss
-                avg_util_rate = val_loss["util_rate"].item() / val_steps  
-                if avg_util_rate < args.vocab_util_threshold: 
-                    alpha_loss = args.min_alpha_loss 
-                else: 
-                    alpha_loss = args.alpha_loss
-                if abs(prev_alpha - alpha_loss) > 0.05:
-                    print0(f"step:{step} Phase switch: util={avg_util_rate:.3f}, α={prev_alpha:.2f}→{alpha_loss:.2f}", console=True)
-
         for name in val_loss: 
             val_loss[name] /= val_steps
             dist.all_reduce(val_loss[name], op=dist.ReduceOp.AVG)            
@@ -491,6 +480,17 @@ for step in range(train_steps + 1):
         # --- compute loss --- 
         traj_loss, abs_loss = compute_loss(search_tokens, model, memory_span=memory_span, attn_blocksize=attn_blocksize)
         
+        # ==== adaptive alpha loss ==== 
+        if args.use_adaptive_alpha:
+            avg_util_rate = compute_vocab_utilization_rate(search_tokens, model)
+            prev_alpha = alpha_loss
+            if avg_util_rate < args.vocab_util_threshold: 
+                alpha_loss = args.min_alpha_loss 
+            else: 
+                alpha_loss = args.alpha_loss
+            if abs(prev_alpha - alpha_loss) > 0.05:
+                print0(f"step:{step} Phase switch: util={avg_util_rate:.3f}, α={prev_alpha:.2f}→{alpha_loss:.2f}", console=True)
+
         if args.use_gapt: 
             loss = gapt.step(traj_loss, alpha_loss * abs_loss, verbose=False)
         else: 

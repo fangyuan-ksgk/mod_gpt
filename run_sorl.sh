@@ -67,8 +67,8 @@ MASTER_PORT=29500
 echo "========================================="
 echo "Sweep 2: Asymmetric (Exploration-Biased)"
 echo "========================================="
-for explore in 0.1 0.15 0.2; do
-  exploit=0.05
+for explore in 0.1 0.2 0.3; do
+  exploit=1.0
   echo "Running: min_alpha_loss=-${explore}, alpha_loss=${exploit}"
   torchrun \
     --nproc_per_node=$N_GPUS \
@@ -84,35 +84,9 @@ for explore in 0.1 0.15 0.2; do
     --use_adaptive_alpha \
     --min_alpha_loss -${explore} \
     --alpha_loss ${exploit} \
-    --vocab_util_threshold 0.5
+    --vocab_util_threshold 0.3
 done
 
-# ============================================================================
-# Sweep 3: Asymmetric - Exploitation Biased
-# Question: Does stronger exploitation help when exploration is weak?
-# ============================================================================
-echo "========================================="
-echo "Sweep 3: Asymmetric (Exploitation-Biased)"
-echo "========================================="
-for exploit in 0.1 0.15 0.2; do
-  explore=0.05
-  echo "Running: min_alpha_loss=-${explore}, alpha_loss=${exploit}"
-  torchrun \
-    --nproc_per_node=$N_GPUS \
-    --master_addr=$MASTER_ADDR \
-    --master_port=$((MASTER_PORT++)) \
-    train_sorl.py \
-    --run_info "Asymmetric exploit-bias: -${explore} ↔ +${exploit}" \
-    --batch_size $BATCH_SIZE \
-    --train_seq_len $TRAIN_SEQ_LEN \
-    --val_seq_len $VAL_SEQ_LEN \
-    --num_iterations $NUM_ITERATIONS \
-    --num_rollouts $NUM_ROLLOUTS \
-    --use_adaptive_alpha \
-    --min_alpha_loss -${explore} \
-    --alpha_loss ${exploit} \
-    --vocab_util_threshold 0.5
-done
 
 
 # --- nvidia pod specifics ------
