@@ -1,6 +1,6 @@
 import torch
 # from sorl.gat_act import BOS_TOKEN_ID, search, GAT, recursion, infer_level
-from sorl.gat_sim import BOS_TOKEN_ID, GAT, recursion, extract_and_sample
+from sorl.gat_sim import BOS_TOKEN_ID, GAT, recursion, extract_and_sample, recursion_v2
 import torch.nn.functional as F
 from typing import Optional, Union
 
@@ -47,10 +47,10 @@ def insert_tokens(tokens, insert_mask, placeholder_token):
     return expanded_tokens
 
 @torch.no_grad()
-def sorl_rollout(data: torch.Tensor, model: GAT, n: int, K: int, max_iterations: int, memory_span: int, attn_blocksize: int, temperature: Union[float, torch.Tensor] = 0.0,
+def sorl_rollout(data: torch.Tensor, model: GAT, ema_model: GAT, n: int, K: int, max_iterations: int, memory_span: int, attn_blocksize: int, temperature: Union[float, torch.Tensor] = 0.0,
                  truncate_seq_len: bool = True):
     """
-    Perform rollout with 1 greedy sample and (n-1) stochastic samples.
+    Rollout with online model, evaluate with EMA model.
     """
     assert data.shape[0] == 1, "only single sample supported"
     data_len = data.shape[1]
@@ -62,20 +62,11 @@ def sorl_rollout(data: torch.Tensor, model: GAT, n: int, K: int, max_iterations:
         data = data[:, :data_len] # avoids recompilation
     repeat_data = data.repeat_interleave(n, dim=0)
 
-    # --- search --- 
-    greedy_data, greedy_ppt = recursion(model, repeat_data[:1], max_iterations=max_iterations, 
-                            memory_span=memory_span, attn_blocksize=attn_blocksize, temperature=0.0)
+    # --- search with online model, evaluate with EMA model --- 
+    search_data, search_ppt = recursion_v2(model, ema_model, repeat_data, max_iterations=max_iterations, 
+                                memory_span=memory_span, attn_blocksize=attn_blocksize, temperature=temperature)
 
-    if n == 1: 
-        return greedy_data, greedy_ppt
-    else: 
-        stochastic_data, stochastic_ppt = recursion(model, repeat_data[1:], max_iterations=max_iterations, 
-                                    memory_span=memory_span, attn_blocksize=attn_blocksize, temperature=temperature)
-
-        combined_data = torch.cat([greedy_data, stochastic_data], dim=0)
-        combined_ppt = torch.cat([greedy_ppt, stochastic_ppt], dim=0)
-        return combined_data, combined_ppt
-
+    return search_data, search_ppt
 
 @torch.no_grad()
 def sorl_rollout_v2(data: torch.Tensor, model: GAT, n: int, K: int, max_iterations: int, memory_span: int, attn_blocksize: int, temperature: Union[float, torch.Tensor] = 0.0,
@@ -98,7 +89,6 @@ def sorl_rollout_v2(data: torch.Tensor, model: GAT, n: int, K: int, max_iteratio
                                 memory_span=memory_span, attn_blocksize=attn_blocksize, temperature=temperature)
 
     return search_data, search_ppt
-
 
 def avg_ppt_per_sample(ppt, ppt_idx):
     """Average perplexity per document, per rollout."""
@@ -143,26 +133,50 @@ def select_best_per_doc(search_data, ppt, levels, model, alpha_select: float = 0
 
     return best_seq.unsqueeze(0), best_ppt, best_ppt_advantage.mean()
 
+# --------- "Variants" to hard selection + train on single rollout --------
+# 1. Soft selection with 'resampling'
+# 2. Return all rollout, but with ppt & advantage for each rollout || here we no longer need "stitching"
+#    -> we'd need to reduce the seq_len to use more rollouts, then we'd increase the batch_size accordingly, it's fine
+# -------------------------------------------------------------------------
+def compute_rollout_reward(search_data, ppt, levels): 
+    trajectory_mask = (levels[:, 1:] == 0).float()
+    trajectory_ppt = ppt * trajectory_mask
+
+    doc_idx = (search_data == BOS_TOKEN_ID).cumsum(dim=1)
+    doc_idx = doc_idx - doc_idx.min(dim=1, keepdim=True).values # idx starts from 0  
+    doc_ppt = avg_ppt_per_sample(trajectory_ppt, doc_idx[:,1:])
+
+    # group advantage by documnet | same way GRPO's advantage is computed | like GSPO since adv is sequence level
+    doc_ppt_mean = doc_ppt.mean(dim=0, keepdim=True)  # Keep dim for broadcasting
+    doc_ppt_std = doc_ppt.std(dim=0, keepdim=True).clamp(min=1e-8)  # Avoid division by zero
+    doc_adv = (doc_ppt - doc_ppt_mean) / doc_ppt_std
+
+    # broadcast back to per-token advantage
+    token_adv = doc_adv.gather(1, doc_idx[:,1:])
+    token_adv *= (1 - trajectory_mask) # mask out trajectory tokens
+    return token_adv
+
+
 # Reflection 1. what if we have a 'information bottleneck mask' to mute future influence 
 #               applied to both ACT & selection? 
 import time
 from sorl.eval import compute_vocab_utilization_rate
 
-def sorl_search(tokens, model, n=3, K=3, max_iterations=1,
+def sorl_search(tokens, model, ema_model, n=3, K=3, max_iterations=1,
                 memory_span=1792, attn_blocksize=1792, temperature=1.0, truncate_seq_len: bool = True, 
                 alpha_select: float = 0.0, select_mode: str = "abs_ppt",
                 loss_mask: Optional[torch.Tensor] = None):
     """
     Complete SoRL search pipeline:
-    1. Generate n rollouts (1 greedy + (n-1) stochastic)
-    2. Evaluate rollouts via recursion
+    1. Generate n rollouts (online model)
+    2. Evaluate rollouts via recursion (EMA model)
     3. Select best rollout per document
     Returns: 
     - best_data: Best rollout per document [1, seq_len]
     - best_ppt: Perplexity of best rollout [seq_len - 1]
     """
     # --- generate & evaluate rollouts ---
-    search_data, search_ppt = sorl_rollout(tokens, model, n=n, K=K, 
+    search_data, search_ppt = sorl_rollout(tokens, model, ema_model, n=n, K=K, 
                                max_iterations=max_iterations,
                                memory_span=memory_span,
                                attn_blocksize=attn_blocksize,
@@ -173,7 +187,6 @@ def sorl_search(tokens, model, n=3, K=3, max_iterations=1,
     # --- select best rollouts (based on trajectory perplexity) ---
     levels = (search_data >= model.vocab_sizes[0]).long()
     best_data, best_ppt, best_ppt_advantage = select_best_per_doc(search_data, search_ppt, levels, model, alpha_select=alpha_select, select_mode=select_mode)
-    
     return best_data, best_ppt, best_ppt_advantage
 
 def sorl_search_v2(tokens, model, n=3, K=3, max_iterations=1,
@@ -198,6 +211,29 @@ def sorl_search_v2(tokens, model, n=3, K=3, max_iterations=1,
     levels = (search_data >= model.vocab_sizes[0]).long()
     best_data, best_ppt, best_ppt_advantage = select_best_per_doc(search_data, search_ppt, levels, model, alpha_select=alpha_select, select_mode=select_mode)
     return best_data, best_ppt, best_ppt_advantage
+
+
+def sorl_search_v3(tokens, model, n=3, K=3, max_iterations=1,
+                memory_span=1792, attn_blocksize=1792, temperature: Union[float, torch.Tensor] = 1.0, truncate_seq_len: bool = True, 
+                loss_mask: Optional[torch.Tensor] = None):
+    """
+    Complete SoRL search pipeline:
+    1. Direct rollout without greedy sample. 
+    2. Compute reward for each rollout
+    """
+    # --- generate & evaluate rollouts ---
+    search_data, search_ppt = sorl_rollout_v2(tokens, model, n=n, K=K, 
+                               max_iterations=max_iterations,
+                               memory_span=memory_span,
+                               attn_blocksize=attn_blocksize,
+                               temperature=temperature,
+                               truncate_seq_len=truncate_seq_len)
+    search_ppt = search_ppt.reshape(search_data.shape[0], -1)
+
+    # --- compute reward for each rollout ---
+    levels = (search_data >= model.vocab_sizes[0]).long()
+    token_adv = compute_rollout_reward(search_data, search_ppt, levels)
+    return search_data, search_ppt, token_adv
 
 
 def sorl_evaluate(tokens, model, n=2, K=4, max_iterations=1, memory_span=1792, attn_blocksize=1792, temperature: Union[float, torch.Tensor] = 1.0,
@@ -238,8 +274,6 @@ def sorl_evaluate(tokens, model, n=2, K=4, max_iterations=1, memory_span=1792, a
     
     return search_data[:1], search_adv, traj_loss, abs_loss
 
-
-
 def compute_loss(best_data, model, memory_span: int, attn_blocksize: int,
                  loss_mask: Optional[torch.Tensor] = None):
     """Compute trajectory and abstraction loss from sorl_search output."""
@@ -263,6 +297,18 @@ def compute_loss(best_data, model, memory_span: int, attn_blocksize: int,
     abs_loss = (best_ppt[0] * valid_abs_mask).sum() / valid_abs_mask.sum().clamp(min=1)
     return traj_loss, abs_loss
 
+# Should GRPO loss mask out trajectory tokens? GAPT requires this separation. 
+def compute_grpo_loss(rollout_data, rollout_ppt, reference_ppt, token_adv, epsilon: float = 0.1):
+    """Standard GRPO loss :: with gradient clipping (PPO style)"""
+    ratio = torch.exp(reference_ppt - rollout_ppt) # log(p) - log(p_ref)
+    surr1 = ratio * token_adv
+    surr2 = torch.clamp(ratio, 1 - epsilon, 1 + epsilon) * token_adv
+    surrogate_loss = torch.min(surr1, surr2)
+    
+    # mask out trajectory tokens
+    valid_mask = (token_adv != 0).float()
+    grpo_loss = -(surrogate_loss * valid_mask).sum() / valid_mask.sum().clamp(min=1)
+    return grpo_loss
 
 def generate(model, idx, K, max_iterations=0, memory_span=1792, attn_blocksize=1792, temperature=0.0):
     

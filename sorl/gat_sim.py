@@ -222,3 +222,23 @@ def recursion(model, idx, max_iterations=5, memory_span=1792, attn_blocksize=179
     # -- evaluation --
     loss, _ = model.forward(idx, memory_span, attn_blocksize)
     return idx, loss
+
+
+def recursion_v2(model, ema_model, idx, max_iterations=5, memory_span=1792, attn_blocksize=1792, temperature=0.0):
+    recursion_mask = (idx >= model.vocab_sizes[0])
+    recursion_mask[:, 0] = False
+    
+    if isinstance(temperature, torch.Tensor) and temperature.ndim == 1:
+        temp_expanded = temperature.view(-1, 1).expand_as(idx)
+    else:
+        temp_expanded = temperature
+
+    for _ in range(max_iterations): 
+        _, logits = model.forward(idx, memory_span, attn_blocksize)
+        idx = extract_and_sample(
+            logits, idx, recursion_mask, model.vocab_sizes, temp_expanded
+        )
+    
+    # -- evaluation --
+    loss, _ = ema_model.forward(idx, memory_span, attn_blocksize)
+    return idx, loss

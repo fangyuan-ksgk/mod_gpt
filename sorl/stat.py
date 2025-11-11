@@ -267,3 +267,85 @@ def save_gif(frames, path, fps=6):
         disposal=2,
     )
 
+
+# --------- Adaptive Phase Change Dynamic Visualization -------
+
+import matplotlib.pyplot as plt
+import numpy as np
+from collections import defaultdict
+
+def plot_training_dynamics(data):
+    """
+    Visualizes training dynamics for search_adv and vocab_util with phase annotations.
+
+    Args:
+        data (defaultdict): A defaultdict containing lists for 'vocab_util', 
+                            'search_adv', and 'alpha_loss'.
+    """
+    # Extract data
+    vocab_util = data['vocab_util']
+    search_adv = data['search_adv']
+    alpha_loss = data['alpha_loss']
+    steps = range(len(vocab_util))
+
+    # --- Plotting Setup ---
+    fig, ax1 = plt.subplots(figsize=(14, 7))
+    
+    # Create a second y-axis that shares the same x-axis
+    ax2 = ax1.twinx()
+
+    # --- Phase Annotation ---
+    current_phase = 'Exploitation' if alpha_loss[0] > 0 else 'Exploration'
+    phase_start = 0
+    
+    # Use a dictionary to avoid duplicate labels in the legend
+    phase_labels = {}
+
+    for i in range(1, len(alpha_loss)):
+        next_phase_positive = alpha_loss[i] > 0
+        current_phase_positive = alpha_loss[phase_start] > 0
+        
+        if next_phase_positive != current_phase_positive:
+            phase_name = f'Exploitation (alpha={alpha_loss[phase_start]:.2f})' if current_phase_positive else f'Exploration (alpha={alpha_loss[phase_start]:.2f})'
+            color = 'lightcoral' if current_phase_positive else 'lightblue'
+            
+            if phase_name not in phase_labels:
+                phase_labels[phase_name] = ax1.axvspan(phase_start, i, color=color, alpha=0.3, label=phase_name)
+            else:
+                ax1.axvspan(phase_start, i, color=color, alpha=0.3)
+            
+            phase_start = i
+
+    # Add the last phase block
+    phase_name = f'Exploitation (alpha={alpha_loss[phase_start]:.2f})' if alpha_loss[phase_start] > 0 else f'Exploration (alpha={alpha_loss[phase_start]:.2f})'
+    color = 'lightcoral' if alpha_loss[phase_start] > 0 else 'lightblue'
+    if phase_name not in phase_labels:
+        phase_labels[phase_name] = ax1.axvspan(phase_start, len(steps)-1, color=color, alpha=0.3, label=phase_name)
+    else:
+        ax1.axvspan(phase_start, len(steps)-1, color=color, alpha=0.3)
+
+    # --- Plot Data ---
+    # Plot vocab_util on the primary y-axis (ax1)
+    p1, = ax1.plot(steps, vocab_util, 'b-', marker='o', label='Vocab Utilization')
+    ax1.set_xlabel('Epochs', fontsize=16)
+    ax1.set_ylabel('Vocab Utilization (%)', color='b', fontsize=16)
+    ax1.tick_params(axis='y', labelcolor='b', labelsize=14)
+    ax1.set_ylim(0, 100)
+    ax1.tick_params(axis='x', labelsize=14)
+
+    # Plot search_adv on the secondary y-axis (ax2)
+    p2, = ax2.plot(steps, np.array(search_adv) * 100, 'g-', marker='x', label='Search Advantage')
+    ax2.set_ylabel('Search Advantage (%)', color='g', fontsize=16)
+    ax2.tick_params(axis='y', labelcolor='g', labelsize=14)
+
+    # --- Final Touches ---
+    plt.title('Vocabulary Utilization vs. Search Advantage Dynamics', fontsize=18)
+    fig.tight_layout()
+    
+    # Create a combined legend for lines and phases
+    lines = [p1, p2] + list(phase_labels.values())
+    labels = [l.get_label() for l in lines]
+    ax1.legend(lines, labels, loc='upper right', fontsize=13)
+    
+    plt.grid(True, linestyle='--', alpha=0.6)
+    plt.show()
