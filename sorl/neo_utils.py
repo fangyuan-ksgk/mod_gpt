@@ -151,9 +151,16 @@ def compute_rollout_reward(search_data, ppt, levels):
     doc_ppt_std = doc_ppt.std(dim=0, keepdim=True).clamp(min=1e-8)  # Avoid division by zero
     doc_adv = (doc_ppt - doc_ppt_mean) / doc_ppt_std
 
+    # # clamp on advantage | avoid advantage collapse
+    # doc_adv = torch.where(
+    #     doc_adv >= 0,
+    #     torch.clamp(doc_adv, min=1e-1),
+    #     torch.clamp(doc_adv, max=-1e-1)
+    # )
+
     # broadcast back to per-token advantage
     token_adv = doc_adv.gather(1, doc_idx[:,1:])
-    token_adv *= (1 - trajectory_mask) # mask out trajectory tokens
+    token_adv = token_adv * (1 - trajectory_mask) # redundantly line to play it safe
     return token_adv
 
 
@@ -304,11 +311,44 @@ def compute_grpo_loss(rollout_data, rollout_ppt, reference_ppt, token_adv, epsil
     surr1 = ratio * token_adv
     surr2 = torch.clamp(ratio, 1 - epsilon, 1 + epsilon) * token_adv
     surrogate_loss = torch.min(surr1, surr2)
-    
+
     # mask out trajectory tokens
     valid_mask = (token_adv != 0).float()
     grpo_loss = -(surrogate_loss * valid_mask).sum() / valid_mask.sum().clamp(min=1)
     return grpo_loss
+
+def compute_sorl_loss(rollout_data, model, memory_span: int, attn_blocksize: int):
+    raise NotImplementedError("Not implemented") 
+    # to inherit from below grpo loss after experiment completes --- keep the below loss for ablation study 
+
+
+def compute_grpo_loss_v2(rollout_data, reference_ppt, token_adv, model, memory_span: int, attn_blocksize: int): 
+    """Simplified GRPO loss :: no gradient clipping, no reference model"""
+    """This is wronly implemented, advantage scaling is not done on the traj loss"""
+    
+    rollout_ppt, _ = model.forward(rollout_data, memory_span, attn_blocksize)
+    rollout_ppt = rollout_ppt.reshape(rollout_data.shape[0], -1)
+
+    levels = (rollout_data >= model.vocab_sizes[0]).long()[:, 1:]  # [n_rollouts, seq_len-1]
+    bos_pos_mask = torch.logical_and(
+        rollout_data[:, :-1] != BOS_TOKEN_ID, 
+        rollout_data[:, 1:] != BOS_TOKEN_ID
+    ).float()
+    
+    traj_mask = (levels == 0).float()  
+    abs_mask = (levels > 0).float() 
+    valid_traj_mask = bos_pos_mask * traj_mask 
+    valid_abs_mask = bos_pos_mask * abs_mask
+
+    # We make all abstraction useful
+    traj_loss = (rollout_ppt * valid_traj_mask).sum() / valid_traj_mask.sum().clamp(min=1)    
+
+    # Pick discriminatively
+    surrogate_loss = rollout_ppt * token_adv 
+    # surrogate_loss = rollout_ppt
+    grpo_loss = (surrogate_loss * valid_abs_mask).sum() / valid_abs_mask.sum().clamp(min=1)
+
+    return traj_loss, grpo_loss
 
 def generate(model, idx, K, max_iterations=0, memory_span=1792, attn_blocksize=1792, temperature=0.0):
     
