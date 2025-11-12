@@ -317,14 +317,35 @@ def compute_grpo_loss(rollout_data, rollout_ppt, reference_ppt, token_adv, epsil
     grpo_loss = -(surrogate_loss * valid_mask).sum() / valid_mask.sum().clamp(min=1)
     return grpo_loss
 
-def compute_sorl_loss(rollout_data, model, memory_span: int, attn_blocksize: int):
-    raise NotImplementedError("Not implemented") 
-    # to inherit from below grpo loss after experiment completes --- keep the below loss for ablation study 
+def compute_sgpo_loss(rollout_data, token_adv, model, memory_span: int, attn_blocksize: int):
+    """
+    SGPO + exploitation (alpha_loss > 0) leads to emergence of abstraction structure (non-collapsed greedy vocab utilization) 
+    """
+    rollout_ppt, _ = model.forward(rollout_data, memory_span, attn_blocksize)
+    rollout_ppt = rollout_ppt.reshape(rollout_data.shape[0], -1)
+
+    levels = (rollout_data >= model.vocab_sizes[0]).long()[:, 1:]  # [n_rollouts, seq_len-1]
+    bos_pos_mask = torch.logical_and(
+        rollout_data[:, :-1] != BOS_TOKEN_ID, 
+        rollout_data[:, 1:] != BOS_TOKEN_ID
+    ).float()
+    
+    traj_mask = (levels == 0).float()  
+    abs_mask = (levels > 0).float() 
+    valid_traj_mask = bos_pos_mask * traj_mask 
+    valid_abs_mask = bos_pos_mask * abs_mask
+
+    traj_loss = (rollout_ppt * valid_traj_mask).sum() / valid_traj_mask.sum().clamp(min=1)    
+
+    # Pick discriminatively
+    surrogate_loss = rollout_ppt * token_adv 
+    grpo_loss = (surrogate_loss * valid_abs_mask).sum() / valid_abs_mask.sum().clamp(min=1)
+
+    return traj_loss, grpo_loss
 
 
-def compute_grpo_loss_v2(rollout_data, reference_ppt, token_adv, model, memory_span: int, attn_blocksize: int): 
-    """Simplified GRPO loss :: no gradient clipping, no reference model"""
-    """This is wronly implemented, advantage scaling is not done on the traj loss"""
+def compute_clip_sgpo_loss(rollout_data, reference_ppt, token_adv, model, memory_span: int, attn_blocksize: int, epsilon: float = 0.1): 
+    """Simplified SGPO loss :: gradient clipping, reference model"""
     
     rollout_ppt, _ = model.forward(rollout_data, memory_span, attn_blocksize)
     rollout_ppt = rollout_ppt.reshape(rollout_data.shape[0], -1)
@@ -344,11 +365,13 @@ def compute_grpo_loss_v2(rollout_data, reference_ppt, token_adv, model, memory_s
     traj_loss = (rollout_ppt * valid_traj_mask).sum() / valid_traj_mask.sum().clamp(min=1)    
 
     # Pick discriminatively
-    surrogate_loss = rollout_ppt * token_adv 
-    # surrogate_loss = rollout_ppt
-    grpo_loss = (surrogate_loss * valid_abs_mask).sum() / valid_abs_mask.sum().clamp(min=1)
+    ratio = torch.exp(reference_ppt - rollout_ppt) # log(p) - log(p_ref)
+    surr1 = ratio * token_adv
+    surr2 = torch.clamp(ratio, 1 - epsilon, 1 + epsilon) * token_adv
+    surrogate_loss = torch.min(surr1, surr2)
 
-    return traj_loss, grpo_loss
+    sgpo_loss = -(surrogate_loss * valid_abs_mask).sum() / valid_abs_mask.sum().clamp(min=1)
+    return traj_loss, sgpo_loss
 
 def generate(model, idx, K, max_iterations=0, memory_span=1792, attn_blocksize=1792, temperature=0.0):
     

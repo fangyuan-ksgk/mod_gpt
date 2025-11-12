@@ -334,7 +334,7 @@ def plot_training_dynamics(data):
     ax1.tick_params(axis='x', labelsize=14)
 
     # Plot search_adv on the secondary y-axis (ax2)
-    p2, = ax2.plot(steps, np.array(search_adv) * 100, 'g-', marker='x', label='Search Advantage')
+    p2, = ax2.plot(steps, np.array(search_adv), 'g-', marker='x', label='Search Advantage')
     ax2.set_ylabel('Search Advantage (%)', color='g', fontsize=16)
     ax2.tick_params(axis='y', labelcolor='g', labelsize=14)
 
@@ -348,4 +348,146 @@ def plot_training_dynamics(data):
     ax1.legend(lines, labels, loc='upper right', fontsize=13)
     
     plt.grid(True, linestyle='--', alpha=0.6)
+    plt.show()
+
+
+
+def plot_vocab_abs_dynamics(data):
+    """
+    Visualizes training dynamics for vocab_util and abs_loss with phase annotations.
+
+    Args:
+        data (defaultdict): A defaultdict containing lists for 'vocab_util', 
+                            'abs_loss', and 'alpha_loss'.
+    """
+    # Extract data
+    vocab_util = data['vocab_util']
+    abs_loss = data['abs_loss']
+    alpha_loss = data['alpha_loss']
+    steps = range(len(vocab_util))
+
+    # --- Plotting Setup ---
+    fig, ax1 = plt.subplots(figsize=(14, 7))
+    
+    # Create a second y-axis that shares the same x-axis
+    ax2 = ax1.twinx()
+
+    # --- Phase Annotation ---
+    phase_start = 0
+    
+    # Use a dictionary to avoid duplicate labels in the legend
+    phase_labels = {}
+
+    for i in range(1, len(alpha_loss)):
+        next_phase_positive = alpha_loss[i] > 0
+        current_phase_positive = alpha_loss[phase_start] > 0
+        
+        if next_phase_positive != current_phase_positive:
+            phase_name = f'Exploitation (alpha={alpha_loss[phase_start]:.2f})' if current_phase_positive else f'Exploration (alpha={alpha_loss[phase_start]:.2f})'
+            color = 'lightcoral' if current_phase_positive else 'lightblue'
+            
+            if phase_name not in phase_labels:
+                phase_labels[phase_name] = ax1.axvspan(phase_start, i, color=color, alpha=0.3, label=phase_name)
+            else:
+                ax1.axvspan(phase_start, i, color=color, alpha=0.3)
+            
+            phase_start = i
+
+    # Add the last phase block
+    phase_name = f'Exploitation (alpha={alpha_loss[phase_start]:.2f})' if alpha_loss[phase_start] > 0 else f'Exploration (alpha={alpha_loss[phase_start]:.2f})'
+    color = 'lightcoral' if alpha_loss[phase_start] > 0 else 'lightblue'
+    if phase_name not in phase_labels:
+        phase_labels[phase_name] = ax1.axvspan(phase_start, len(steps)-1, color=color, alpha=0.3, label=phase_name)
+    else:
+        ax1.axvspan(phase_start, len(steps)-1, color=color, alpha=0.3)
+
+    # --- Plot Data ---
+    # Plot vocab_util on the primary y-axis (ax1)
+    p1, = ax1.plot(steps, vocab_util, 'b-', marker='o', markersize=4, label='Vocab Utilization')
+    ax1.set_xlabel('Epochs', fontsize=16)
+    ax1.set_ylabel('Vocab Utilization (%)', color='b', fontsize=16)
+    ax1.tick_params(axis='y', labelcolor='b', labelsize=14)
+    ax1.set_ylim(0, 100)
+    ax1.tick_params(axis='x', labelsize=14)
+
+    # Plot abs_loss on the secondary y-axis (ax2)
+    p2, = ax2.plot(steps, abs_loss, 'r-', marker='x', markersize=4, label='Abstraction Loss')
+    ax2.set_ylabel('Abstraction Loss', color='r', fontsize=16)
+    ax2.tick_params(axis='y', labelcolor='r', labelsize=14)
+    # Add horizontal line at y=0 for reference
+    ax2.axhline(0, color='grey', linestyle='--', linewidth=0.8, alpha=0.5)
+
+    # --- Final Touches ---
+    plt.title('Vocabulary Utilization vs. Abstraction Loss Dynamics', fontsize=18)
+    fig.tight_layout()
+    
+    # Create a combined legend for lines and phases
+    lines = [p1, p2] + list(phase_labels.values())
+    labels = [l.get_label() for l in lines]
+    ax1.legend(lines, labels, loc='upper right', fontsize=13)
+    
+    plt.grid(True, linestyle='--', alpha=0.6)
+    plt.show()
+
+
+def plot_training_metrics_combined(data):
+    """
+    Visualizes training dynamics for vocab_util, search_adv, and abs_loss on one plot.
+
+    Args:
+        data (defaultdict): A defaultdict containing lists for 'vocab_util', 
+                            'search_adv', and 'abs_loss'.
+    """
+    # Extract data
+    vocab_util = data['vocab_util']
+    search_adv = data['search_adv']
+    abs_loss = data['abs_loss']
+    steps = range(len(vocab_util))
+
+    # --- Plotting Setup ---
+    fig, ax1 = plt.subplots(figsize=(14, 7))
+    
+    # Create second and third y-axes
+    ax2 = ax1.twinx()
+    ax3 = ax1.twinx()
+    
+    # Offset the third axis to the right
+    ax3.spines['right'].set_position(('outward', 60))
+
+    # --- Plot Data ---
+    # Plot vocab_util on the primary y-axis (ax1)
+    p1, = ax1.plot(steps, vocab_util, 'b-', marker='o', markersize=3, 
+                   linewidth=2, label='Vocab Utilization', alpha=0.8)
+    ax1.set_xlabel('Epochs', fontsize=16)
+    ax1.set_ylabel('Vocab Utilization (%)', color='b', fontsize=14)
+    ax1.tick_params(axis='y', labelcolor='b', labelsize=12)
+    ax1.set_ylim(0, 100)
+    ax1.tick_params(axis='x', labelsize=12)
+
+    # Plot search_adv on the secondary y-axis (ax2)
+    p2, = ax2.plot(steps, search_adv, 'g-', marker='x', markersize=3, 
+                   linewidth=2, label='Search Advantage', alpha=0.8)
+    ax2.set_ylabel('Search Advantage (%)', color='g', fontsize=14)
+    ax2.tick_params(axis='y', labelcolor='g', labelsize=12)
+    ax2.axhline(0, color='grey', linestyle='--', linewidth=0.8, alpha=0.3)
+
+    # Plot abs_loss on the third y-axis (ax3)
+    p3, = ax3.plot(steps, abs_loss, 'r-', marker='s', markersize=3, 
+                   linewidth=2, label='Abstraction Loss', alpha=0.8)
+    ax3.set_ylabel('Abstraction Loss', color='r', fontsize=14)
+    ax3.tick_params(axis='y', labelcolor='r', labelsize=12)
+
+    # --- Title and Legend ---
+    plt.title('Offline-Distillation Dynamics: Vocab, Search Advantage, and Abs Loss', 
+              fontsize=16, fontweight='bold', pad=20)
+    
+    # Create a combined legend
+    lines = [p1, p2, p3]
+    labels = [l.get_label() for l in lines]
+    ax1.legend(lines, labels, loc='upper left', fontsize=12, framealpha=0.9)
+    
+    # Grid on primary axis
+    ax1.grid(True, linestyle='--', alpha=0.3)
+    
+    fig.tight_layout()
     plt.show()
