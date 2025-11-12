@@ -51,34 +51,47 @@ echo "Testing: ema_decay × gapt"
 echo "========================================="
 
 EXP_NUM=1
-for EMA_DECAY in 0.90 0.95 0.99; do
-  for GAPT_FLAG in "" "--use_gapt"; do
-    GAPT_LABEL=$([ -z "$GAPT_FLAG" ] && echo "OFF" || echo "ON")
-    
-    echo "[Exp $EXP_NUM/6] ema_decay=$EMA_DECAY, gapt=$GAPT_LABEL"
-    
-    torchrun \
-      --nproc_per_node=$N_GPUS \
-      --master_addr=$MASTER_ADDR \
-      --master_port=$((MASTER_PORT++)) \
-      train_sorl_v2.py \
-      --batch_size $BATCH_SIZE \
-      --train_seq_len $TRAIN_SEQ_LEN \
-      --val_seq_len $VAL_SEQ_LEN \
-      --num_iterations $NUM_ITERATIONS \
-      --num_rollouts $NUM_ROLLOUTS \
-      --ema_decay $EMA_DECAY \
-      --alpha_loss $ALPHA_LOSS \
-      $GAPT_FLAG \
-      $([ -n "$GAPT_FLAG" ] && echo "--traj_perplexity_patience 100 --abs_perplexity_patience 100") \
-      --run_info "SGPO+EMA: decay=$EMA_DECAY, gapt=$GAPT_LABEL" &
-    
-    EXP_NUM=$((EXP_NUM + 1))
-  done
-done
+for EMA_DECAY in 0.90 0.95 0.99; do    
+  echo "[Exp $EXP_NUM/6] ema_decay=$EMA_DECAY, use gapt"
+  torchrun \
+    --nproc_per_node=$N_GPUS \
+    --master_addr=$MASTER_ADDR \
+    --master_port=$MASTER_PORT \
+    train_sorl_v2.py \
+    --batch_size $BATCH_SIZE \
+    --train_seq_len $TRAIN_SEQ_LEN \
+    --val_seq_len $VAL_SEQ_LEN \
+    --num_iterations $NUM_ITERATIONS \
+    --num_rollouts $NUM_ROLLOUTS \
+    --ema_decay $EMA_DECAY \
+    --alpha_loss $ALPHA_LOSS \
+    --use_gapt \
+    --traj_perplexity_patience 100 \
+    --abs_perplexity_patience 100 \
+    --run_info "SGPO+EMA: decay=$EMA_DECAY, use gapt"
 
-# Wait for all experiments to complete
-wait
+  EXP_NUM=$((EXP_NUM + 1))
+ done
+
+
+for EMA_DECAY in 0.90 0.95 0.99; do    
+  echo "[Exp $EXP_NUM/6] ema_decay=$EMA_DECAY, no gapt"
+  torchrun \
+    --nproc_per_node=$N_GPUS \
+    --master_addr=$MASTER_ADDR \
+    --master_port=$MASTER_PORT \
+    train_sorl_v2.py \
+    --batch_size $BATCH_SIZE \
+    --train_seq_len $TRAIN_SEQ_LEN \
+    --val_seq_len $VAL_SEQ_LEN \
+    --num_iterations $NUM_ITERATIONS \
+    --num_rollouts $NUM_ROLLOUTS \
+    --ema_decay $EMA_DECAY \
+    --alpha_loss $ALPHA_LOSS \
+    --run_info "SGPO+EMA: decay=$EMA_DECAY, no gapt"
+
+  EXP_NUM=$((EXP_NUM + 1))
+ done
 
 echo "========================================="
 echo "All SGPO+EMA experiments completed!"
