@@ -432,16 +432,18 @@ def plot_vocab_abs_dynamics(data):
 
 def plot_training_metrics_combined(data):
     """
-    Visualizes training dynamics for vocab_util, search_adv, and abs_loss on one plot.
+    Visualizes training dynamics for vocab_util, search_adv, and abs_loss on one plot
+    with phase annotations.
 
     Args:
         data (defaultdict): A defaultdict containing lists for 'vocab_util', 
-                            'search_adv', and 'abs_loss'.
+                            'search_adv', 'abs_loss', and 'phase'.
     """
     # Extract data
     vocab_util = data['vocab_util']
     search_adv = data['search_adv']
     abs_loss = data['abs_loss']
+    phase = data['phase']
     steps = range(len(vocab_util))
 
     # --- Plotting Setup ---
@@ -453,6 +455,31 @@ def plot_training_metrics_combined(data):
     
     # Offset the third axis to the right
     ax3.spines['right'].set_position(('outward', 60))
+
+    # --- Phase Annotation ---
+    phase_start = 0
+    phase_labels = {}
+    
+    for i in range(1, len(phase)):
+        if phase[i] != phase[phase_start]:
+            # Phase transition detected
+            phase_name = phase[phase_start].capitalize()
+            color = 'lightcoral' if phase[phase_start] == 'exploitation' else 'lightblue'
+            
+            if phase_name not in phase_labels:
+                phase_labels[phase_name] = ax1.axvspan(phase_start, i, color=color, alpha=0.3, label=phase_name)
+            else:
+                ax1.axvspan(phase_start, i, color=color, alpha=0.3)
+            
+            phase_start = i
+    
+    # Add the last phase block
+    phase_name = phase[phase_start].capitalize()
+    color = 'lightcoral' if phase[phase_start] == 'exploitation' else 'lightblue'
+    if phase_name not in phase_labels:
+        phase_labels[phase_name] = ax1.axvspan(phase_start, len(steps)-1, color=color, alpha=0.3, label=phase_name)
+    else:
+        ax1.axvspan(phase_start, len(steps)-1, color=color, alpha=0.3)
 
     # --- Plot Data ---
     # Plot vocab_util on the primary y-axis (ax1)
@@ -478,11 +505,11 @@ def plot_training_metrics_combined(data):
     ax3.tick_params(axis='y', labelcolor='r', labelsize=12)
 
     # --- Title and Legend ---
-    plt.title('Offline-Distillation Dynamics: Vocab, Search Advantage, and Abs Loss', 
+    plt.title('Training Dynamics: Vocab, Search Advantage, and Abs Loss', 
               fontsize=16, fontweight='bold', pad=20)
     
-    # Create a combined legend
-    lines = [p1, p2, p3]
+    # Create a combined legend with metrics and phases
+    lines = [p1, p2, p3] + list(phase_labels.values())
     labels = [l.get_label() for l in lines]
     ax1.legend(lines, labels, loc='upper left', fontsize=12, framealpha=0.9)
     

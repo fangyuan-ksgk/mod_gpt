@@ -148,15 +148,13 @@ def compute_rollout_reward(search_data, ppt, levels):
 
     # group advantage by documnet | same way GRPO's advantage is computed | like GSPO since adv is sequence level
     doc_ppt_mean = doc_ppt.mean(dim=0, keepdim=True)  # Keep dim for broadcasting
-    doc_ppt_std = doc_ppt.std(dim=0, keepdim=True).clamp(min=1e-8)  # Avoid division by zero
-    doc_adv = (doc_ppt - doc_ppt_mean) / doc_ppt_std
-
-    # # clamp on advantage | avoid advantage collapse
-    # doc_adv = torch.where(
-    #     doc_adv >= 0,
-    #     torch.clamp(doc_adv, min=1e-1),
-    #     torch.clamp(doc_adv, max=-1e-1)
-    # )
+    doc_ppt_std = doc_ppt.std(dim=0, keepdim=True, unbiased=False).clamp(min=1e-8)  # Avoid division by zero
+    
+    doc_adv = torch.where(
+            doc_ppt_std > 1e-8,
+            (doc_ppt - doc_ppt_mean) / doc_ppt_std,
+            torch.zeros_like(doc_ppt)
+    )
 
     # broadcast back to per-token advantage
     token_adv = doc_adv.gather(1, doc_idx[:,1:])
@@ -222,6 +220,7 @@ def sorl_search_v2(tokens, model, n=3, K=3, max_iterations=1,
 
 def sorl_search_v3(tokens, model, n=3, K=3, max_iterations=1,
                 memory_span=1792, attn_blocksize=1792, temperature: Union[float, torch.Tensor] = 1.0, truncate_seq_len: bool = True, 
+                alpha_select: float = 0.0, select_mode: str = "abs_ppt", # placeholder
                 loss_mask: Optional[torch.Tensor] = None):
     """
     Complete SoRL search pipeline:
