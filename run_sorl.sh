@@ -24,6 +24,7 @@ N_GPUS=2
 MASTER_ADDR=127.0.0.1
 MASTER_PORT=29500
 ALPHA_LOSS=0.1
+MODE=1
 
 
 # ============================================================================
@@ -86,9 +87,8 @@ for CYCLE_STEPS in "${CYCLE_STEPS_LIST[@]}"; do
       --num_rollouts $NUM_ROLLOUTS \
       --alpha_loss $ALPHA_LOSS \
       --mode $MODE \
-      --exploration_steps $CYCLE_STEPS \
-      --exploitation_ratio $EXPLOIT_RATIO \
-      --use_gapt \
+      --steps_per_cycle $CYCLE_STEPS \
+      --exploration_fraction $EXPLOIT_RATIO \
       --traj_perplexity_patience 100 \
       --abs_perplexity_patience 100 \
       --run_info "cycle=${CYCLE_STEPS}, explore=${EXPLORE_FRAC}, mode=$MODE"

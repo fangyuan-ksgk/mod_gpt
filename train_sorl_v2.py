@@ -571,6 +571,9 @@ print0(f"-- abs_perplexity_patience: {args.abs_perplexity_patience}", console=Tr
 print0(f"-- tau_plateau: {args.tau_plateau}", console=True)
 print0(f"-- tau_spike: {args.tau_spike}", console=True)
 print0(f"-- mode: {args.mode}", console=True)
+print0(f"-- steps_per_cycle: {args.steps_per_cycle}", console=True)
+print0(f"-- exploration_fraction: {args.exploration_fraction}", console=True)
+print0(f"-- exploration_till_vocab_util: {args.exploration_till_vocab_util}", console=True)
 print0(f"loss record:\n{loss_record}", console=True)
 
 
