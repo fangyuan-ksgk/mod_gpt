@@ -138,7 +138,7 @@ def select_best_per_doc(search_data, ppt, levels, model, alpha_select: float = 0
 # 2. Return all rollout, but with ppt & advantage for each rollout || here we no longer need "stitching"
 #    -> we'd need to reduce the seq_len to use more rollouts, then we'd increase the batch_size accordingly, it's fine
 # -------------------------------------------------------------------------
-def compute_rollout_reward(search_data, ppt, levels): 
+def compute_rollout_reward(search_data, ppt, levels, mode: int = 0): 
     trajectory_mask = (levels[:, 1:] == 0).float()
     trajectory_ppt = ppt * trajectory_mask
 
@@ -150,16 +150,76 @@ def compute_rollout_reward(search_data, ppt, levels):
     doc_ppt_mean = doc_ppt.mean(dim=0, keepdim=True)  # Keep dim for broadcasting
     doc_ppt_std = doc_ppt.std(dim=0, keepdim=True, unbiased=False).clamp(min=1e-8)  # Avoid division by zero
     
+    if mode == 0:
+        # SGPO ver.
+        advantage = (doc_ppt - doc_ppt_mean) / doc_ppt_std
+    elif mode == 1:
+        # Standardized (inverted - correct sign)
+        advantage = -(doc_ppt - doc_ppt_mean) / doc_ppt_std
+    elif mode == 2:
+        # No advantage (baseline MLE)
+        advantage = torch.zeros_like(doc_ppt)
+    elif mode == 3:
+        # Sigmoid of standardized
+        advantage = torch.sigmoid((doc_ppt - doc_ppt_mean) / doc_ppt_std)
+    elif mode == 4:
+        # Mean-centered (no normalization)
+        advantage = doc_ppt - doc_ppt_mean
+    elif mode == 5:
+        # Inverted mean-centered
+        advantage = - doc_ppt + doc_ppt_mean
+    elif mode == 6:
+        # Sigmoid of mean-centered
+        advantage = torch.sigmoid(doc_ppt - doc_ppt_mean)
+    elif mode == 7:
+        # Sigmoid with temperature = 2.0 (current default)
+        advantage = torch.sigmoid((doc_ppt - doc_ppt_mean) / 2.0)
+    elif mode == 8:
+        # Sigmoid with temperature = 4.0
+        advantage = torch.sigmoid((doc_ppt - doc_ppt_mean) / 4.0)
+
     doc_adv = torch.where(
-            doc_ppt_std > 1e-8,
-            (doc_ppt - doc_ppt_mean) / doc_ppt_std,
-            torch.zeros_like(doc_ppt)
+        doc_ppt_std > 1e-8,
+        advantage,
+        torch.zeros_like(doc_ppt)
     )
 
     # broadcast back to per-token advantage
     token_adv = doc_adv.gather(1, doc_idx[:,1:])
     token_adv = token_adv * (1 - trajectory_mask) # redundantly line to play it safe
     return token_adv
+
+# def compute_rollout_reward_v2(search_data, ppt, levels): 
+#     """Abstraction curiosity reward"""
+#     abs_mask = (levels[:, 1:] > 0).float()
+#     abs_ppt = ppt * abs_mask
+
+#     doc_idx = (search_data == BOS_TOKEN_ID).cumsum(dim=1)
+#     doc_idx = doc_idx - doc_idx.min(dim=1, keepdim=True).values # idx starts from 0  
+#     doc_abs_ppt = avg_ppt_per_sample(abs_ppt, doc_idx[:,1:])
+
+#     doc_abs_ppt_mean = doc_abs_ppt.mean(dim=0, keepdim=True)  # Keep dim for broadcasting
+#     doc_abs_ppt_std = doc_abs_ppt.std(dim=0, keepdim=True, unbiased=False).clamp(min=1e-8)  # Avoid division by zero
+    
+#     doc_adv = torch.where(
+#             doc_abs_ppt_std > 1e-8,
+#             # (doc_abs_ppt - doc_abs_ppt_mean) / doc_abs_ppt_std, # buggy ver. leads to emergent abstraction structure
+#             # - (doc_abs_ppt - doc_abs_ppt_mean) / doc_abs_ppt_std, # 
+#             torch.sigmoid(- (doc_abs_ppt - doc_abs_ppt_mean) / doc_abs_ppt_std),
+#             # torch.sigmoid((doc_abs_ppt - doc_abs_ppt_mean) / doc_abs_ppt_std),
+#             # doc_abs_ppt - doc_abs_ppt_mean, 
+#             # - doc_abs_ppt + doc_abs_ppt_mean,
+#             # torch.sigmoid(doc_abs_ppt - doc_abs_ppt_mean),
+#             # torch.sigmoid((doc_abs_ppt - doc_abs_ppt_mean) / 2.0),
+#             # doc_abs_ppt,
+#             torch.zeros_like(doc_abs_ppt)
+#     )
+
+#     # broadcast back to per-token advantage
+#     token_adv = doc_adv.gather(1, doc_idx[:,1:])
+#     token_adv = token_adv * (1 - abs_mask)
+#     return token_adv
+  
 
 
 # Reflection 1. what if we have a 'information bottleneck mask' to mute future influence 
@@ -221,7 +281,7 @@ def sorl_search_v2(tokens, model, n=3, K=3, max_iterations=1,
 def sorl_search_v3(tokens, model, n=3, K=3, max_iterations=1,
                 memory_span=1792, attn_blocksize=1792, temperature: Union[float, torch.Tensor] = 1.0, truncate_seq_len: bool = True, 
                 alpha_select: float = 0.0, select_mode: str = "abs_ppt", # placeholder
-                loss_mask: Optional[torch.Tensor] = None):
+                loss_mask: Optional[torch.Tensor] = None, mode: int = 0):
     """
     Complete SoRL search pipeline:
     1. Direct rollout without greedy sample. 
@@ -238,7 +298,8 @@ def sorl_search_v3(tokens, model, n=3, K=3, max_iterations=1,
 
     # --- compute reward for each rollout ---
     levels = (search_data >= model.vocab_sizes[0]).long()
-    token_adv = compute_rollout_reward(search_data, search_ppt, levels)
+
+    token_adv = compute_rollout_reward(search_data, search_ppt, levels, mode=mode) # un-utility reward 
     return search_data, search_ppt, token_adv
 
 
@@ -341,6 +402,32 @@ def compute_sgpo_loss(rollout_data, token_adv, model, memory_span: int, attn_blo
     grpo_loss = (surrogate_loss * valid_abs_mask).sum() / valid_abs_mask.sum().clamp(min=1)
 
     return traj_loss, grpo_loss
+
+# def compute_inverse_sgpo_loss(rollout_data, token_adv, model, memory_span: int, attn_blocksize: int):
+#     """
+#     Inverse SGPO + exploitation (alpha_loss > 0) leads to emergence of abstraction structure (non-collapsed greedy vocab utilization) 
+#     """
+#     rollout_ppt, _ = model.forward(rollout_data, memory_span, attn_blocksize)
+#     rollout_ppt = rollout_ppt.reshape(rollout_data.shape[0], -1)
+
+#     levels = (rollout_data >= model.vocab_sizes[0]).long()[:, 1:]  # [n_rollouts, seq_len-1]
+#     bos_pos_mask = torch.logical_and(
+#         rollout_data[:, :-1] != BOS_TOKEN_ID, 
+#         rollout_data[:, 1:] != BOS_TOKEN_ID
+#     ).float()
+    
+#     traj_mask = (levels == 0).float()  
+#     abs_mask = (levels > 0).float() 
+#     valid_traj_mask = bos_pos_mask * traj_mask 
+#     valid_abs_mask = bos_pos_mask * abs_mask
+
+#     abs_loss = (rollout_ppt * valid_abs_mask).sum() / valid_abs_mask.sum().clamp(min=1)
+
+#     # Improve utility discriminately 
+#     surrogate_loss = rollout_ppt * token_adv 
+#     traj_loss = (surrogate_loss * valid_traj_mask).sum() / valid_traj_mask.sum().clamp(min=1)    
+
+#     return traj_loss, abs_loss
 
 
 def compute_clip_sgpo_loss(rollout_data, reference_ppt, token_adv, model, memory_span: int, attn_blocksize: int, epsilon: float = 0.1): 
