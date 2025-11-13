@@ -443,6 +443,8 @@ def plot_training_metrics_combined(data):
     vocab_util = data['vocab_util']
     search_adv = data['search_adv']
     abs_loss = data['abs_loss']
+    if 'phase' not in data: 
+        data['phase'] = ['exploration'] * len(vocab_util)
     phase = data['phase']
     steps = range(len(vocab_util))
 

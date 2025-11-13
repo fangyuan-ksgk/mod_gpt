@@ -40,19 +40,38 @@ ALPHA_LOSS=0.1
 #   --val_seq_len $VAL_SEQ_LEN \
 #   --num_iterations $NUM_ITERATIONS
 
-
 # ============================================================================
-# SGPO + EMA: Sweep EMA Decay × GAPT
+# MODE ABLATION: Testing Advantage Formulations
 # ============================================================================
 
 echo "========================================="
-echo "SGPO + EMA EXPERIMENTS"
-echo "Testing: ema_decay × gapt"
+echo "SGPO MODE ABLATION"
+echo "Testing different advantage formulations"
 echo "========================================="
 
 EXP_NUM=1
-for EMA_DECAY in 0.90 0.95 0.99; do    
-  echo "[Exp $EXP_NUM/6] ema_decay=$EMA_DECAY, use gapt"
+TOTAL_EXPS=9
+
+# Test all modes with GAPT enabled
+for MODE in 0 1 2 3 4 5 6 7 8; do    
+  echo "========================================="
+  echo "[Exp $EXP_NUM/$TOTAL_EXPS] mode=$MODE"
+  echo "========================================="
+  
+  case $MODE in
+    0) DESC="No advantage (MLE baseline)" ;;
+    1) DESC="Standardized (correct)" ;;
+    2) DESC="Standardized (buggy - emergent)" ;;
+    3) DESC="Sigmoid(standardized)" ;;
+    4) DESC="Mean-centered" ;;
+    5) DESC="Inverted mean-centered" ;;
+    6) DESC="Sigmoid(mean-centered)" ;;
+    7) DESC="Sigmoid temp=2.0" ;;
+    8) DESC="Sigmoid temp=4.0" ;;
+  esac
+  
+  echo "Mode $MODE: $DESC"
+  
   torchrun \
     --nproc_per_node=$N_GPUS \
     --master_addr=$MASTER_ADDR \
@@ -63,36 +82,20 @@ for EMA_DECAY in 0.90 0.95 0.99; do
     --val_seq_len $VAL_SEQ_LEN \
     --num_iterations $NUM_ITERATIONS \
     --num_rollouts $NUM_ROLLOUTS \
-    --ema_decay $EMA_DECAY \
     --alpha_loss $ALPHA_LOSS \
-    --use_gapt \
-    --traj_perplexity_patience 100 \
-    --abs_perplexity_patience 100 \
-    --run_info "SGPO+EMA: decay=$EMA_DECAY, use gapt"
-
+    --mode $MODE \
+    --run_info "SGPO mode=$MODE ($DESC)"
+  
   EXP_NUM=$((EXP_NUM + 1))
- done
-
-
-for EMA_DECAY in 0.90 0.95 0.99; do    
-  echo "[Exp $EXP_NUM/6] ema_decay=$EMA_DECAY, no gapt"
-  torchrun \
-    --nproc_per_node=$N_GPUS \
-    --master_addr=$MASTER_ADDR \
-    --master_port=$MASTER_PORT \
-    train_sorl_v2.py \
-    --batch_size $BATCH_SIZE \
-    --train_seq_len $TRAIN_SEQ_LEN \
-    --val_seq_len $VAL_SEQ_LEN \
-    --num_iterations $NUM_ITERATIONS \
-    --num_rollouts $NUM_ROLLOUTS \
-    --ema_decay $EMA_DECAY \
-    --alpha_loss $ALPHA_LOSS \
-    --run_info "SGPO+EMA: decay=$EMA_DECAY, no gapt"
-
-  EXP_NUM=$((EXP_NUM + 1))
- done
+  echo ""
+done
 
 echo "========================================="
-echo "All SGPO+EMA experiments completed!"
+echo "All mode ablation experiments completed!"
 echo "========================================="
+echo ""
+echo "Key modes to compare:"
+echo "  Mode 0: Baseline (no advantage)"
+echo "  Mode 2: Buggy (emergent structure)"
+echo "  Mode 1: Correct (should improve utility)"
+echo "  Mode 7: Sigmoid temp=2.0 (previous default)"
