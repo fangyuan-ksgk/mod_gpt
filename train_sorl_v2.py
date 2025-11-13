@@ -52,7 +52,6 @@ def parse_args():
     parser.add_argument("--tau_plateau", type=float, default=0.01) # plateau threshold for traj perplexity
     parser.add_argument("--tau_spike", type=float, default=0.1) # spike threshold for traj perplexity
     parser.add_argument("--alpha_loss", type=float, default=0.0)  # loss regularization strength
-    parser.add_argument("--ema_decay", type=float, default=0.99) # EMA decay rate
     parser.add_argument("--mode", type=int, default=0) # mode for reward computation (SGPO ver. / standardized ver. / etc.)
     parser.add_argument("--steps_per_cycle", type=int, default=725) # number of steps in exploration phase
     parser.add_argument("--exploration_fraction", type=float, default=0.5) # fraction of steps in exploration phase
@@ -567,7 +566,6 @@ print0(f"-- min_memory_span: {args.min_memory_span}", console=True)
 print0(f"-- abstract_vocab_size: {args.abstract_vocab_size}", console=True)
 print0(f"-- use_gapt: {args.use_gapt}", console=True)
 print0(f"-- alpha_loss: {args.alpha_loss}", console=True)
-# print0(f"-- ema_decay: {args.ema_decay}", console=True)
 print0(f"-- traj_perplexity_patience: {args.traj_perplexity_patience}", console=True)
 print0(f"-- abs_perplexity_patience: {args.abs_perplexity_patience}", console=True)
 print0(f"-- tau_plateau: {args.tau_plateau}", console=True)

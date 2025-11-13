@@ -41,61 +41,69 @@ ALPHA_LOSS=0.1
 #   --num_iterations $NUM_ITERATIONS
 
 # ============================================================================
-# MODE ABLATION: Testing Advantage Formulations
+# CYCLE DYNAMICS ABLATION
 # ============================================================================
 
 echo "========================================="
-echo "SGPO MODE ABLATION"
-echo "Testing different advantage formulations"
+echo "SGPO CYCLE DYNAMICS ABLATION"
+echo "Testing: cycle_steps × exploration_fraction"
 echo "========================================="
 
 EXP_NUM=1
-TOTAL_EXPS=9
+TOTAL_EXPS=12  # 4 cycle_steps × 3 exploration_fractions
 
-# Test all modes with GAPT enabled
-for MODE in 0 1 2 3 4 5 6 7 8; do    
-  echo "========================================="
-  echo "[Exp $EXP_NUM/$TOTAL_EXPS] mode=$MODE"
-  echo "========================================="
-  
-  case $MODE in
-    0) DESC="No advantage (MLE baseline)" ;;
-    1) DESC="Standardized (correct)" ;;
-    2) DESC="Standardized (buggy - emergent)" ;;
-    3) DESC="Sigmoid(standardized)" ;;
-    4) DESC="Mean-centered" ;;
-    5) DESC="Inverted mean-centered" ;;
-    6) DESC="Sigmoid(mean-centered)" ;;
-    7) DESC="Sigmoid temp=2.0" ;;
-    8) DESC="Sigmoid temp=4.0" ;;
-  esac
-  
-  echo "Mode $MODE: $DESC"
-  
-  torchrun \
-    --nproc_per_node=$N_GPUS \
-    --master_addr=$MASTER_ADDR \
-    --master_port=$MASTER_PORT \
-    train_sorl_v2.py \
-    --batch_size $BATCH_SIZE \
-    --train_seq_len $TRAIN_SEQ_LEN \
-    --val_seq_len $VAL_SEQ_LEN \
-    --num_iterations $NUM_ITERATIONS \
-    --num_rollouts $NUM_ROLLOUTS \
-    --alpha_loss $ALPHA_LOSS \
-    --mode $MODE \
-    --run_info "SGPO mode=$MODE ($DESC)"
-  
-  EXP_NUM=$((EXP_NUM + 1))
-  echo ""
+# Cycle lengths to test (smaller = more frequent switching)
+CYCLE_STEPS_LIST=(1750 700 350 175)
+
+# Exploration fractions to test
+EXPLOIT_RATIOS=(0.20 0.33 0.50)  # Corresponds to 80%, 67%, 50% exploration
+
+for CYCLE_STEPS in "${CYCLE_STEPS_LIST[@]}"; do
+  for EXPLOIT_RATIO in "${EXPLOIT_RATIOS[@]}"; do
+    
+    # Calculate exploration fraction for display
+    EXPLORE_FRAC=$(echo "scale=2; 1 - $EXPLOIT_RATIO" | bc)
+    NUM_CYCLES=$(echo "scale=1; $NUM_ITERATIONS / $CYCLE_STEPS" | bc)
+    EXPLORE_STEPS=$(echo "scale=0; $CYCLE_STEPS * (1 - $EXPLOIT_RATIO) / 1" | bc)
+    EXPLOIT_STEPS=$(echo "scale=0; $CYCLE_STEPS * $EXPLOIT_RATIO / 1" | bc)
+    
+    echo "========================================="
+    echo "[Exp $EXP_NUM/$TOTAL_EXPS]"
+    echo "  Cycle length: $CYCLE_STEPS steps (~$NUM_CYCLES cycles)"
+    echo "  Exploration: ${EXPLORE_FRAC} ($EXPLORE_STEPS steps/cycle)"
+    echo "  Exploitation: ${EXPLOIT_RATIO} ($EXPLOIT_STEPS steps/cycle)"
+    echo "========================================="
+    
+    torchrun \
+      --nproc_per_node=$N_GPUS \
+      --master_addr=$MASTER_ADDR \
+      --master_port=$MASTER_PORT \
+      train_sorl_v2.py \
+      --batch_size $BATCH_SIZE \
+      --train_seq_len $TRAIN_SEQ_LEN \
+      --val_seq_len $VAL_SEQ_LEN \
+      --num_iterations $NUM_ITERATIONS \
+      --num_rollouts $NUM_ROLLOUTS \
+      --alpha_loss $ALPHA_LOSS \
+      --mode $MODE \
+      --exploration_steps $CYCLE_STEPS \
+      --exploitation_ratio $EXPLOIT_RATIO \
+      --use_gapt \
+      --traj_perplexity_patience 100 \
+      --abs_perplexity_patience 100 \
+      --run_info "cycle=${CYCLE_STEPS}, explore=${EXPLORE_FRAC}, mode=$MODE"
+    
+    EXP_NUM=$((EXP_NUM + 1))
+    echo ""
+  done
 done
 
+
 echo "========================================="
-echo "All mode ablation experiments completed!"
+echo "All cycle dynamics experiments completed!"
 echo "========================================="
 echo ""
-echo "Key modes to compare:"
-echo "  Mode 0: Baseline (no advantage)"
-echo "  Mode 2: Buggy (emergent structure)"
-echo "  Mode 1: Correct (should improve utility)"
-echo "  Mode 7: Sigmoid temp=2.0 (previous default)"
+echo "Summary:"
+echo "  Tested cycle lengths: ${CYCLE_STEPS_LIST[@]}"
+echo "  Tested exploration fractions: 0.80, 0.67, 0.50"
+echo "  Total experiments: $TOTAL_EXPS"
