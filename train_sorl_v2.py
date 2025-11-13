@@ -41,7 +41,7 @@ def parse_args():
     parser.add_argument("--num_rollouts_val", type=int, default=2)
     parser.add_argument("--K", type=int, default=8)
     parser.add_argument("--max_iterations", type=int, default=1)
-    parser.add_argument("--temperature", type=float, default=1.0) # search temperature
+    parser.add_argument("--temperature", type=float, default=5.0) # search temperature
     parser.add_argument("--min_temperature", type=float, default=0.0) # prediction temperature
     parser.add_argument("--use_static_memory_span", action="store_true", default=False)
     parser.add_argument("--abstract_vocab_size", type=int, default=256)
@@ -54,6 +54,8 @@ def parse_args():
     parser.add_argument("--alpha_loss", type=float, default=0.0)  # loss regularization strength
     parser.add_argument("--ema_decay", type=float, default=0.99) # EMA decay rate
     parser.add_argument("--mode", type=int, default=0) # mode for reward computation (SGPO ver. / standardized ver. / etc.)
+    parser.add_argument("--exploration_steps", type=int, default=725) # number of steps in exploration phase
+    parser.add_argument("--exploration_till_vocab_util", type=float, default=0.5) # exploration till vocabulary utilization reaches this threshold
     parser.add_argument("--run_info", type=str, default="") # run info
 
     return parser.parse_args()
@@ -297,9 +299,9 @@ for m in model.modules():
 for param in model.parameters():
     dist.broadcast(param.detach(), 0)
 
-# ref_model = copy.deepcopy(model)
-# ref_model.eval()
-# ref_model.requires_grad_(False)
+ref_model = copy.deepcopy(model)
+ref_model.eval()
+ref_model.requires_grad_(False)
 
 
 # collect the parameters to optimize
@@ -330,7 +332,7 @@ def get_lr(step: int):
 
 # compile model
 model: nn.Module = torch.compile(model, dynamic=True)
-# ref_model: nn.Module = torch.compile(ref_model, dynamic=True)
+ref_model: nn.Module = torch.compile(ref_model, dynamic=True)
 
 ########################################
 #            Warmup kernels            #
@@ -443,7 +445,7 @@ for step in range(train_steps + 1):
             for i in range(val_steps):
                 tokens = next(val_loader)
                 val_tokens, val_adv, val_traj_loss, val_abs_loss = sorl_evaluate(tokens, model, n=args.num_rollouts_val, K=args.K, max_iterations=args.max_iterations, 
-                                                                    memory_span=memory_span, attn_blocksize=attn_blocksize, temperature=temperature_val, mode=args.mode)
+                                                                    memory_span=memory_span, attn_blocksize=attn_blocksize, temperature=temperature_val)
                 util_rate = compute_vocab_utilization_rate(val_tokens, model)
                 val_loss["traj_loss"] += val_traj_loss
                 val_loss["abs_loss"] += val_abs_loss
@@ -509,10 +511,10 @@ for step in range(train_steps + 1):
     # null the gradients
     model.zero_grad(set_to_none=True)
 
-    # # --- update EMA model --- 
-    # with torch.no_grad():
-    #     for p_ema, p_online in zip(ref_model.parameters(), model.parameters()):
-    #         p_ema.data.mul_(args.ema_decay).add_(p_online.data, alpha=1 - args.ema_decay)
+    # --- update EMA model --- 
+    with torch.no_grad():
+        for p_ema, p_online in zip(ref_model.parameters(), model.parameters()):
+            p_ema.data.mul_(args.ema_decay).add_(p_online.data, alpha=1 - args.ema_decay)
 
     # ----------------------------------------------------
     # logging
