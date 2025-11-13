@@ -41,6 +41,65 @@ MODE=1
 #   --val_seq_len $VAL_SEQ_LEN \
 #   --num_iterations $NUM_ITERATIONS
 
+
+# ============================================================================
+# Emergence Structure (SGPO Mode) Experiments
+# ============================================================================
+
+echo "========================================="
+echo "SGPO MODE ABLATION"
+echo "Testing different advantage formulations"
+echo "Pure exploration - no exploitation phase"
+echo "========================================="
+
+EXP_NUM=1
+TOTAL_EXPS=9
+
+# Test all modes with pure exploration (no cycling)
+for MODE in 0 1 2 3 4 5 6 7 8; do    
+  echo "========================================="
+  echo "[Exp $EXP_NUM/$TOTAL_EXPS] mode=$MODE"
+  echo "========================================="
+  
+  case $MODE in
+    0) DESC="SGPO (utility disadvantage)" ;;
+    1) DESC="Reverse SGPO (utility advantage)" ;;
+    2) DESC="No advantage" ;;
+    3) DESC="Sigmoid (utility disadvantage)" ;;
+    4) DESC="Mean-centered (utility disadvantage)" ;;
+    5) DESC="Mean-centered (utility advantage)" ;;
+    6) DESC="Sigmoid(mean-centered (utility disadvantage))" ;;
+    7) DESC="Sigmoid(mean-centered (utility disadvantage)) temp=2.0" ;;
+    8) DESC="Sigmoid(mean-centered (utility disadvantage)) temp=4.0" ;;
+  esac
+  
+  echo "Mode $MODE: $DESC"
+  
+  torchrun \
+    --nproc_per_node=$N_GPUS \
+    --master_addr=$MASTER_ADDR \
+    --master_port=$MASTER_PORT \
+    train_sorl_v2.py \
+    --batch_size $BATCH_SIZE \
+    --train_seq_len $TRAIN_SEQ_LEN \
+    --val_seq_len $VAL_SEQ_LEN \
+    --num_iterations $NUM_ITERATIONS \
+    --num_rollouts $NUM_ROLLOUTS \
+    --alpha_loss $ALPHA_LOSS \
+    --mode $MODE \
+    --steps_per_cycle $NUM_ITERATIONS \
+    --exploration_fraction 1.0 \
+    --use_gapt \
+    --traj_perplexity_patience 100 \
+    --abs_perplexity_patience 100 \
+    --run_info "SGPO mode=$MODE ($DESC), pure exploration"
+  
+  EXP_NUM=$((EXP_NUM + 1))
+  echo ""
+done
+
+
+
 # ============================================================================
 # CYCLE DYNAMICS ABLATION
 # ============================================================================
@@ -89,8 +148,6 @@ for CYCLE_STEPS in "${CYCLE_STEPS_LIST[@]}"; do
       --mode $MODE \
       --steps_per_cycle $CYCLE_STEPS \
       --exploration_fraction $EXPLOIT_RATIO \
-      --traj_perplexity_patience 100 \
-      --abs_perplexity_patience 100 \
       --run_info "cycle=${CYCLE_STEPS}, explore=${EXPLORE_FRAC}, mode=$MODE"
     
     EXP_NUM=$((EXP_NUM + 1))

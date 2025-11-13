@@ -158,7 +158,7 @@ def compute_rollout_reward(search_data, ppt, levels, mode: int = 0):
         advantage = -(doc_ppt - doc_ppt_mean) / doc_ppt_std
     elif mode == 2:
         # No advantage (baseline MLE)
-        advantage = torch.zeros_like(doc_ppt)
+        advantage = torch.ones_like(doc_ppt)
     elif mode == 3:
         # Sigmoid of standardized
         advantage = torch.sigmoid((doc_ppt - doc_ppt_mean) / doc_ppt_std)
