@@ -520,3 +520,123 @@ def plot_training_metrics_combined(data):
     
     fig.tight_layout()
     plt.show()
+
+
+def save_training_dynamics(loss_record, save_path, run_info=""):
+    """
+    Visualizes training dynamics for vocab_util, search_adv, abs_loss, and traj_loss
+    with phase annotations and saves to file.
+    
+    Args:
+        loss_record (defaultdict): Contains 'traj_loss', 'abs_loss', 'search_advantage', 
+                                   'util_rate', and 'phase' (optional)
+        save_path (str): Path to save the figure (e.g., 'logs/run_id/training_dynamics.png')
+        run_info (str): Optional info to add to title
+    """
+    import matplotlib.pyplot as plt
+    import numpy as np
+    
+    # Convert tensors to numpy
+    traj_loss = [t.cpu().item() if torch.is_tensor(t) else t for t in loss_record['traj_loss']]
+    abs_loss = [t.cpu().item() if torch.is_tensor(t) else t for t in loss_record['abs_loss']]
+    search_adv = [t.cpu().item() * 100 if torch.is_tensor(t) else t * 100 
+                  for t in loss_record['search_advantage']]  # Convert to percentage
+    vocab_util = [t.cpu().item() * 100 if torch.is_tensor(t) else t * 100 
+                  for t in loss_record['util_rate']]  # Convert to percentage
+    
+    # Handle phase data
+    if 'phase' in loss_record and loss_record['phase']:
+        phase = loss_record['phase']
+    else:
+        phase = ['exploration'] * len(vocab_util)
+    
+    steps = range(len(vocab_util))
+    
+    # --- Plotting Setup ---
+    fig, ax1 = plt.subplots(figsize=(16, 8))
+    
+    # Create second, third, and fourth y-axes
+    ax2 = ax1.twinx()
+    ax3 = ax1.twinx()
+    ax4 = ax1.twinx()
+    
+    # Offset the axes
+    ax3.spines['right'].set_position(('outward', 70))
+    ax4.spines['right'].set_position(('outward', 140))
+    
+    # --- Phase Annotation ---
+    phase_start = 0
+    phase_labels = {}
+    
+    for i in range(1, len(phase)):
+        if phase[i] != phase[phase_start]:
+            phase_name = phase[phase_start].capitalize()
+            color = 'lightcoral' if phase[phase_start] == 'exploitation' else 'lightblue'
+            
+            if phase_name not in phase_labels:
+                phase_labels[phase_name] = ax1.axvspan(phase_start, i, color=color, 
+                                                       alpha=0.2, label=phase_name)
+            else:
+                ax1.axvspan(phase_start, i, color=color, alpha=0.2)
+            
+            phase_start = i
+    
+    # Add the last phase block
+    phase_name = phase[phase_start].capitalize()
+    color = 'lightcoral' if phase[phase_start] == 'exploitation' else 'lightblue'
+    if phase_name not in phase_labels:
+        phase_labels[phase_name] = ax1.axvspan(phase_start, len(steps)-1, color=color, 
+                                               alpha=0.2, label=phase_name)
+    else:
+        ax1.axvspan(phase_start, len(steps)-1, color=color, alpha=0.2)
+    
+    # --- Plot Data ---
+    # ax1: Vocab Utilization (blue)
+    p1, = ax1.plot(steps, vocab_util, 'b-', marker='o', markersize=4, 
+                   linewidth=2.5, label='Vocab Util', alpha=0.9)
+    ax1.set_xlabel('Validation Step', fontsize=16, fontweight='bold')
+    ax1.set_ylabel('Vocab Utilization (%)', color='b', fontsize=14, fontweight='bold')
+    ax1.tick_params(axis='y', labelcolor='b', labelsize=12)
+    ax1.set_ylim(-5, 105)
+    ax1.tick_params(axis='x', labelsize=12)
+    
+    # ax2: Search Advantage (green)
+    p2, = ax2.plot(steps, search_adv, 'g-', marker='x', markersize=5, 
+                   linewidth=2.5, label='Search Adv', alpha=0.9)
+    ax2.set_ylabel('Search Advantage (%)', color='g', fontsize=14, fontweight='bold')
+    ax2.tick_params(axis='y', labelcolor='g', labelsize=12)
+    ax2.axhline(0, color='grey', linestyle='--', linewidth=1, alpha=0.5)
+    
+    # ax3: Trajectory Loss (purple)
+    p3, = ax3.plot(steps, traj_loss, 'purple', marker='s', markersize=4, 
+                   linewidth=2.5, label='Traj Loss', alpha=0.9)
+    ax3.set_ylabel('Trajectory Loss', color='purple', fontsize=14, fontweight='bold')
+    ax3.tick_params(axis='y', labelcolor='purple', labelsize=12)
+    
+    # ax4: Abstraction Loss (red)
+    p4, = ax4.plot(steps, abs_loss, 'r-', marker='d', markersize=4, 
+                   linewidth=2.5, label='Abs Loss', alpha=0.9)
+    ax4.set_ylabel('Abstraction Loss', color='r', fontsize=14, fontweight='bold')
+    ax4.tick_params(axis='y', labelcolor='r', labelsize=12)
+    
+    # --- Title and Legend ---
+    title = 'Training Dynamics: Vocab, Search Adv, Traj Loss, Abs Loss'
+    if run_info:
+        title += f'\n{run_info}'
+    plt.title(title, fontsize=16, fontweight='bold', pad=20)
+    
+    # Combined legend
+    lines = [p1, p2, p3, p4] + list(phase_labels.values())
+    labels = [l.get_label() for l in lines]
+    ax1.legend(lines, labels, loc='upper left', fontsize=11, framealpha=0.95, 
+               ncol=2 if len(lines) > 4 else 1)
+    
+    # Grid on primary axis
+    ax1.grid(True, linestyle='--', alpha=0.3)
+    
+    fig.tight_layout()
+    
+    # Save the figure
+    plt.savefig(save_path, dpi=300, bbox_inches='tight')
+    print(f"Training dynamics saved to: {save_path}")
+    plt.close(fig)  # Close to free memory

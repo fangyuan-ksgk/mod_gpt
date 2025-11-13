@@ -54,7 +54,8 @@ def parse_args():
     parser.add_argument("--alpha_loss", type=float, default=0.0)  # loss regularization strength
     parser.add_argument("--ema_decay", type=float, default=0.99) # EMA decay rate
     parser.add_argument("--mode", type=int, default=0) # mode for reward computation (SGPO ver. / standardized ver. / etc.)
-    parser.add_argument("--exploration_steps", type=int, default=725) # number of steps in exploration phase
+    parser.add_argument("--steps_per_cycle", type=int, default=725) # number of steps in exploration phase
+    parser.add_argument("--exploration_fraction", type=float, default=0.5) # fraction of steps in exploration phase
     parser.add_argument("--exploration_till_vocab_util", type=float, default=0.5) # exploration till vocabulary utilization reaches this threshold
     parser.add_argument("--run_info", type=str, default="") # run info
 
@@ -227,7 +228,9 @@ class Hyperparameters:
     tau_plateau: float = 0.01 # plateau threshold for traj perplexity
     tau_spike: float = 0.1 # spike threshold for traj perplexity
     alpha_loss: float = 0.0 # loss regularization strength
-    ema_decay: float = 0.99 # EMA decay rate
+    steps_per_cycle: int = 725 # number of steps in exploration phase
+    exploration_fraction: float = 0.5 # fraction of steps in exploration phase
+    exploration_till_vocab_util: float = 0.5 # exploration till vocabulary utilization reaches this threshold
     run_info: str = "" # run info
 
 cli_args = parse_args()
@@ -286,6 +289,7 @@ print0("="*100)
 # --- sorl search ---
 from sorl.neo_utils import sorl_search_v3 as sorl_search
 from sorl.neo_utils import compute_sgpo_loss
+from sorl.stat import save_training_dynamics
 
 ########################################
 #    Construct model and optimizer     #
@@ -421,6 +425,7 @@ loss_record = defaultdict(list)
 test_loss_record = defaultdict(list)
 early_stop = False
 alpha_loss = args.alpha_loss
+phase = "exploration"
 
 for step in range(train_steps + 1):
     last_step = (step == train_steps) or early_stop
@@ -456,6 +461,7 @@ for step in range(train_steps + 1):
             val_loss[name] /= val_steps
             dist.all_reduce(val_loss[name], op=dist.ReduceOp.AVG)            
             loss_record[name].append(val_loss[name])
+        loss_record["phase"].append(phase)
 
         del val_loader           
         val_info = " ".join([f"{item} loss: {value:.4f}" for (item, value) in val_loss.items()])
@@ -468,6 +474,7 @@ for step in range(train_steps + 1):
     if last_step:
         if master_process: 
             os.makedirs(f"logs/{run_id}", exist_ok=True)
+            save_training_dynamics(loss_record, f"logs/{run_id}/training_dynamics.png", args.run_info)
 
             if args.save_checkpoint:
                 log = dict(step=step, code=code, model=model.state_dict(), optimizers=[opt.state_dict() for opt in optimizers])
@@ -477,15 +484,22 @@ for step in range(train_steps + 1):
         break            
             
     # --------------- TRAINING SECTION -----------------
+    avg_util_rate = 0.0
     for accum_step in range(train_accumulation_steps): 
         tokens = next(train_loader)
         with torch.no_grad(): 
-            search_tokens, search_ppt, search_adv = sorl_search(tokens, model, n=args.num_rollouts, K=args.K, max_iterations=args.max_iterations, 
+            search_tokens, search_ppt, search_adv = sorl_search(tokens, 
+                                                                model if phase == "exploration" else ref_model, 
+                                                                n=n, K=args.K, max_iterations=args.max_iterations, 
                                                                 memory_span=memory_span, attn_blocksize=attn_blocksize, 
                                                                 temperature=temperature_train, mode=args.mode)
+        avg_util_rate += compute_vocab_utilization_rate(search_tokens, model)
 
         # --- compute loss --- 
-        traj_loss, abs_loss = compute_sgpo_loss(search_tokens, search_adv, model, memory_span, attn_blocksize)    
+        if phase == "exploration": # reward-shaping on predictability loss (SGPO)
+            traj_loss, abs_loss = compute_sgpo_loss(search_tokens, search_adv, model, memory_span, attn_blocksize)    
+        else:
+            traj_loss, abs_loss = compute_loss(search_tokens, model, memory_span=memory_span, attn_blocksize=attn_blocksize)
         
         if args.use_gapt: 
             loss = gapt.step(traj_loss, alpha_loss * abs_loss, verbose=False)
@@ -493,8 +507,27 @@ for step in range(train_steps + 1):
             loss = traj_loss + alpha_loss * abs_loss
         
         loss.backward()
-        print0(f" - step: {step} | accum step: {accum_step} | traj_loss: {traj_loss.item()} | sgpo_abs_loss: {abs_loss.item()} | search_advantage: {search_adv.mean().item()} | alpha_loss: {alpha_loss:.2f}")
-        
+        print0(f" - step: {step} | accum step: {accum_step} | traj_loss: {traj_loss.item()} | sgpo_abs_loss: {abs_loss.item()} | search_advantage: {search_adv.mean().item()} | phase: {phase}")
+
+    # --- phase switch --- 
+    avg_util_rate /= train_accumulation_steps
+    cycle_step = step % args.steps_per_cycle
+    if cycle_step >= (args.steps_per_cycle * args.exploration_fraction) and avg_util_rate >= args.exploration_till_vocab_util:
+        if phase == "exploration": # EMA model pinned at the start of exploitation phase (off-policy distillation)
+            with torch.no_grad():
+                for p_ema, p_online in zip(ref_model.parameters(), model.parameters()):
+                    p_ema.data.copy_(p_online.data)
+        phase = "exploitation"
+        n = 1
+        temperature_train = torch.tensor([args.min_temperature], device="cuda")
+    else:
+        phase = "exploration"
+        n = args.num_rollouts
+        temperature_train = torch.cat([
+            torch.tensor([args.min_temperature], device="cuda"),  # Greedy for first rollout
+            torch.full((args.num_rollouts - 1,), args.temperature, device="cuda")  # High temp for diversity
+        ])
+
     for param in model.parameters():
         param.grad /= train_accumulation_steps
         dist.all_reduce(param.grad, op=dist.ReduceOp.AVG)
@@ -511,18 +544,13 @@ for step in range(train_steps + 1):
     # null the gradients
     model.zero_grad(set_to_none=True)
 
-    # --- update EMA model --- 
-    with torch.no_grad():
-        for p_ema, p_online in zip(ref_model.parameters(), model.parameters()):
-            p_ema.data.mul_(args.ema_decay).add_(p_online.data, alpha=1 - args.ema_decay)
-
     # ----------------------------------------------------
     # logging
     approx_training_time_ms = training_time_ms + 1000 * (time.perf_counter() - t0)
     print0(f"step:{step+1}/{train_steps} train_time:{approx_training_time_ms:.0f}ms step_avg:{approx_training_time_ms/(step + 1):.2f}ms", console=True)
 
 print0(f"peak memory allocated: {torch.cuda.max_memory_allocated() // 1024 // 1024} MiB "
-       f"reserved: {torch.cuda.max_memory_reserved() // 1024 // 1024} MiB", console=True)
+       f"reserved: {torch.cuda.max_memory_reserved() // 1024 // 1024} MiB", console=True)    
 
 print0(f"Experiment configuration: {args.run_info}\n", console=True)
 print0(f"-- batch_size: {args.batch_size}", console=True)
@@ -546,5 +574,6 @@ print0(f"-- tau_plateau: {args.tau_plateau}", console=True)
 print0(f"-- tau_spike: {args.tau_spike}", console=True)
 print0(f"-- mode: {args.mode}", console=True)
 print0(f"loss record:\n{loss_record}", console=True)
+
 
 dist.destroy_process_group()
