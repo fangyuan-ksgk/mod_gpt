@@ -425,6 +425,7 @@ test_loss_record = defaultdict(list)
 early_stop = False
 alpha_loss = args.alpha_loss
 phase = "exploration"
+n = args.num_rollouts
 
 for step in range(train_steps + 1):
     last_step = (step == train_steps) or early_stop
