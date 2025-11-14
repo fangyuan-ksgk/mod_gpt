@@ -154,30 +154,9 @@ def compute_rollout_reward(search_data, ppt, levels, mode: int = 0):
         # SGPO ver.
         advantage = (doc_ppt - doc_ppt_mean) / doc_ppt_std
     elif mode == 1:
-        # Standardized (inverted - correct sign)
-        advantage = -(doc_ppt - doc_ppt_mean) / doc_ppt_std
-    elif mode == 2:
-        # No advantage (baseline MLE)
+        # No advantage (baseline MLE) | more stable abstraction
         advantage = torch.ones_like(doc_ppt)
-    elif mode == 3:
-        # Sigmoid of standardized
-        advantage = torch.sigmoid((doc_ppt - doc_ppt_mean) / doc_ppt_std)
-    elif mode == 4:
-        # Mean-centered (no normalization)
-        advantage = doc_ppt - doc_ppt_mean
-    elif mode == 5:
-        # Inverted mean-centered
-        advantage = - doc_ppt + doc_ppt_mean
-    elif mode == 6:
-        # Sigmoid of mean-centered
-        advantage = torch.sigmoid(doc_ppt - doc_ppt_mean)
-    elif mode == 7:
-        # Sigmoid with temperature = 2.0 (current default)
-        advantage = torch.sigmoid((doc_ppt - doc_ppt_mean) / 2.0)
-    elif mode == 8:
-        # Sigmoid with temperature = 4.0
-        advantage = torch.sigmoid((doc_ppt - doc_ppt_mean) / 4.0)
-
+        
     doc_adv = torch.where(
         doc_ppt_std > 1e-8,
         advantage,
