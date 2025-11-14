@@ -520,7 +520,7 @@ for step in range(train_steps + 1):
         phase = "exploitation"
         n = 1
         temperature_train = torch.tensor([args.min_temperature], device="cuda")
-    else:
+    elif cycle_step == 0:
         phase = "exploration"
         n = args.num_rollouts
         temperature_train = torch.cat([
