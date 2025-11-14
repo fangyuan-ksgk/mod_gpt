@@ -66,9 +66,9 @@ torchrun \
 # ==========================
 # QUESTIONS 2. Does offline distillation works to improve search advantage and abstraction predictability in language modeling experiment at all?
 # ==========================
-CYCLE_STEPS = NUM_ITERATIONS
-EXPLORE_FRAC = 0.5 
-MODE = 0 # SGPO (utility disadvantage)
+CYCLE_STEPS=$NUM_ITERATIONS
+EXPLORE_FRAC=0.5
+MODE=0
 
 torchrun \
     --nproc_per_node=$N_GPUS \
