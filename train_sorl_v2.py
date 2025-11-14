@@ -56,6 +56,8 @@ def parse_args():
     parser.add_argument("--steps_per_cycle", type=int, default=725) # number of steps in exploration phase
     parser.add_argument("--exploration_fraction", type=float, default=0.5) # fraction of steps in exploration phase
     parser.add_argument("--exploration_till_vocab_util", type=float, default=0.5) # exploration till vocabulary utilization reaches this threshold
+    parser.add_argument("--use_off_policy_distillation", action="store_true", default=False) # use off-policy distillation
+    parser.add_argument("--use_on_policy_distillation", action="store_true", default=False) # use on-policy distillation
     parser.add_argument("--run_info", type=str, default="") # run info
 
     return parser.parse_args()
@@ -218,7 +220,7 @@ class Hyperparameters:
     num_rollouts_val: int = 4 # number of candidates to rollout for validation
     K: int = 8 # abstract ratio
     max_iterations: int = 1 # max number of iterations to search
-    temperature: float = 1.0 # temperature for search
+    temperature: float = 5.0 # temperature for search
     min_temperature: float = 0.0 # minimum temperature for search
     use_gapt: bool = False # use GAPT
     min_memory_span: int = 64 # minimum memory span
@@ -230,6 +232,8 @@ class Hyperparameters:
     steps_per_cycle: int = 725 # number of steps in exploration phase
     exploration_fraction: float = 0.5 # fraction of steps in exploration phase
     exploration_till_vocab_util: float = 0.5 # exploration till vocabulary utilization reaches this threshold
+    use_off_policy_distillation: bool = False # use off-policy distillation
+    use_on_policy_distillation: bool = False # use on-policy distillation
     run_info: str = "" # run info
 
 cli_args = parse_args()
@@ -287,6 +291,7 @@ print0("="*100)
 
 # --- sorl search ---
 from sorl.neo_utils import sorl_search_v3 as sorl_search
+from sorl.neo_utils import sorl_search_v2 as select_best_sorl_search
 from sorl.neo_utils import compute_sgpo_loss
 from sorl.stat import save_training_dynamics
 
@@ -488,11 +493,28 @@ for step in range(train_steps + 1):
     for accum_step in range(train_accumulation_steps): 
         tokens = next(train_loader)
         with torch.no_grad(): 
-            search_tokens, search_ppt, search_adv = sorl_search(tokens, 
-                                                                model if phase == "exploration" else ref_model, 
-                                                                n=n, K=args.K, max_iterations=args.max_iterations, 
-                                                                memory_span=memory_span, attn_blocksize=attn_blocksize, 
-                                                                temperature=temperature_train, mode=args.mode)
+            if phase == "exploration": # SGPO / All-rollout SoRL
+                search_tokens, search_ppt, search_adv = sorl_search(tokens, model, 
+                                                                    n=n, K=args.K, max_iterations=args.max_iterations, 
+                                                                    memory_span=memory_span, attn_blocksize=attn_blocksize, 
+                                                                    temperature=temperature_train, mode=args.mode)
+            else: 
+                if args.use_off_policy_distillation: 
+                    search_tokens, search_ppt, search_adv = sorl_search(tokens, ref_model, 
+                                                                    n=n, K=args.K, max_iterations=args.max_iterations, 
+                                                                    memory_span=memory_span, attn_blocksize=attn_blocksize, 
+                                                                    temperature=temperature_train, mode=args.mode)
+                elif args.use_on_policy_distillation: 
+                    search_tokens, search_ppt, search_adv = sorl_search(tokens, model, 
+                                                                    n=n, K=args.K, max_iterations=args.max_iterations, 
+                                                                    memory_span=memory_span, attn_blocksize=attn_blocksize, 
+                                                                    temperature=temperature_train, mode=args.mode)
+                else: 
+                    search_tokens, search_ppt, search_adv = select_best_sorl_search(tokens, model, 
+                                                                    n=n, K=args.K, max_iterations=args.max_iterations, 
+                                                                    memory_span=memory_span, attn_blocksize=attn_blocksize, 
+                                                                    temperature=temperature_train)
+
         avg_util_rate += compute_vocab_utilization_rate(search_tokens, model)
 
         # --- compute loss --- 
@@ -518,8 +540,10 @@ for step in range(train_steps + 1):
                 for p_ema, p_online in zip(ref_model.parameters(), model.parameters()):
                     p_ema.data.copy_(p_online.data)
         phase = "exploitation"
-        n = 1
-        temperature_train = torch.tensor([args.min_temperature], device="cuda")
+        if args.use_off_policy_distillation or args.use_on_policy_distillation:
+            n = 1
+            temperature_train = torch.tensor([args.min_temperature], device="cuda")
+            
     elif cycle_step == 0:
         phase = "exploration"
         n = args.num_rollouts
@@ -575,6 +599,8 @@ print0(f"-- mode: {args.mode}", console=True)
 print0(f"-- steps_per_cycle: {args.steps_per_cycle}", console=True)
 print0(f"-- exploration_fraction: {args.exploration_fraction}", console=True)
 print0(f"-- exploration_till_vocab_util: {args.exploration_till_vocab_util}", console=True)
+print0(f"-- use_off_policy_distillation: {args.use_off_policy_distillation}", console=True)
+print0(f"-- use_on_policy_distillation: {args.use_on_policy_distillation}", console=True)
 print0(f"loss record:\n{loss_record}", console=True)
 
 
