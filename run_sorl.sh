@@ -44,8 +44,9 @@ ALPHA_LOSS=0.1
 # ==========================
 # SoRL with resampling
 # ==========================
-MODE_DESC=("high utility preference" "high predictability preference" "low utility preference" "low predictability preference")
-for MODE in {0..3}; do
+MODE_DESC=("high utility preference" "high predictability preference" "low utility preference" "low predictability preference",
+           "relative utility preference : curiosity preference = 1:0", "relative utility preference : curiosity preference = 1:0.1", "relative utility preference : curiosity preference = 1:0.5", "relative utility preference : curiosity preference = 1:1", "relative utility preference : curiosity preference = 0.5:1")
+for MODE in {3..8}; do
   torchrun \
     --nproc_per_node=$N_GPUS \
     --master_addr=$MASTER_ADDR \

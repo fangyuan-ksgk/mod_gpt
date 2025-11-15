@@ -126,14 +126,29 @@ def resample_rollout(search_data, ppt, levels, model, tau: float = 2e-4, resampl
     doc_abs_ppt = avg_ppt_per_sample(abs_ppt, doc_idx[:,1:])
 
     # --- resampling ---
-    if resample_mode == 0: # doc-level high utility preference
+    if resample_mode == 0: # doc-level high utility preference --> collapsed
         signal = doc_ppt
-    elif resample_mode == 1: # doc-level high predictability preference
+    elif resample_mode == 1: # doc-level low predictability preference --> volatile
         signal = -doc_abs_ppt
     elif resample_mode == 2: # doc-level low utility preference
         signal = -doc_ppt
-    elif resample_mode == 3: # doc-level low predictability preference
+    elif resample_mode == 3: # doc-level high predictability preference
         signal = doc_abs_ppt
+    elif resample_mode == 4: # relative utility preference
+        signal = 1.0 * (doc_ppt - doc_ppt.mean()) + \
+         0.0 * (-doc_abs_ppt - (-doc_abs_ppt).mean())
+    elif resample_mode == 5: # relative utility preference + abstraction curiosity (weak)
+        signal = 1.0 * (doc_ppt - doc_ppt.mean()) + \
+         0.1 * (-doc_abs_ppt - (-doc_abs_ppt).mean())
+    elif resample_mode == 6: # relative utility preference + abstraction curiosity (strong)
+        signal = 1.0 * (doc_ppt - doc_ppt.mean()) + \
+         0.5 * (-doc_abs_ppt - (-doc_abs_ppt).mean())
+    elif resample_mode == 7: # relative utility preference + abstraction curiosity (extreme)
+        signal = 1.0 * (doc_ppt - doc_ppt.mean()) + \
+         1.0 * (-doc_abs_ppt - (-doc_abs_ppt).mean())
+    elif resample_mode == 8: # relative utility preference + abstraction curiosity (reverse)
+        signal = 0.5 * (doc_ppt - doc_ppt.mean()) + \
+         1.0 * (-doc_abs_ppt - (-doc_abs_ppt).mean())
 
     logits = -(signal / tau)
     probs = torch.softmax(logits, dim=0).transpose(0, 1)
