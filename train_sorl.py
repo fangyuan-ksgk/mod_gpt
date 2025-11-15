@@ -55,7 +55,7 @@ def parse_args():
     parser.add_argument("--select_mode", type=str, default="abs_ppt", choices=["abs_ppt", "vocab_util"])  # selection mode
     parser.add_argument("--use_resampling", action="store_true", default=False) # use resampling instead of selection
     parser.add_argument("--tau", type=float, default=2e-4) # temperature for resampling
-    parser.add_argument("--resample_mode", type=int, default=0, choices=[0, 1, 2, 3]) # resample mode
+    parser.add_argument("--resample_mode", type=int, default=0, choices=[0, 1, 2, 3, 4, 5, 6, 7, 8]) # resample mode
     parser.add_argument("--alpha_loss", type=float, default=0.0)  # loss regularization strength
     parser.add_argument("--vocab_util_threshold", type=float, default=0.5) # vocabulary utilization threshold
     parser.add_argument("--min_alpha_loss", type=float, default=-0.1) # minimum alpha loss
