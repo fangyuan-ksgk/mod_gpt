@@ -53,6 +53,9 @@ def parse_args():
     parser.add_argument("--tau_spike", type=float, default=0.1) # spike threshold for traj perplexity
     parser.add_argument("--alpha_select", type=float, default=0.0)  # selection regularization strength
     parser.add_argument("--select_mode", type=str, default="abs_ppt", choices=["abs_ppt", "vocab_util"])  # selection mode
+    parser.add_argument("--use_resampling", action="store_true", default=False) # use resampling instead of selection
+    parser.add_argument("--tau", type=float, default=2e-4) # temperature for resampling
+    parser.add_argument("--resample_mode", type=int, default=0, choices=[0, 1, 2, 3]) # resample mode
     parser.add_argument("--alpha_loss", type=float, default=0.0)  # loss regularization strength
     parser.add_argument("--vocab_util_threshold", type=float, default=0.5) # vocabulary utilization threshold
     parser.add_argument("--min_alpha_loss", type=float, default=-0.1) # minimum alpha loss
@@ -227,6 +230,9 @@ class Hyperparameters:
     tau_spike: float = 0.1 # spike threshold for traj perplexity
     alpha_select: float = 0.0 # selection regularization strength
     select_mode: str = "abs_ppt" # selection mode
+    use_resampling: bool = False # use resampling instead of selection
+    tau: float = 2e-4 # temperature for resampling
+    resample_mode: int = 0 # resample mode
     alpha_loss: float = 0.0 # loss regularization strength
     vocab_util_threshold: float = 0.5 # vocabulary utilization threshold
     min_alpha_loss: float = -0.1 # minimum alpha loss
@@ -287,7 +293,10 @@ print0(nvidia_smi())
 print0("="*100)
 
 # --- sorl search ---
-from sorl.neo_utils import sorl_search_v2 as sorl_search 
+if args.use_resampling: 
+    from sorl.neo_utils import sorl_search as sorl_search 
+else:
+    from sorl.neo_utils import sorl_search_v2 as sorl_search 
 
 ########################################
 #    Construct model and optimizer     #
@@ -397,7 +406,7 @@ gapt = GatedPhaseTransition(p_m=args.traj_perplexity_patience, p_a=args.abs_perp
 # -------------
 temperature_val = torch.cat([
     torch.tensor([args.min_temperature], device="cuda"),  # Greedy for first rollout
-    torch.full((args.num_rollouts_val - 1,), args.temperature, device="cuda")  # High temp for diversity
+    torch.full((args.num_rollouts_val - 1,), 10.0, device="cuda")  # High temp for diversity
 ])
 temperature_train = torch.cat([
     torch.tensor([args.min_temperature], device="cuda"),  # Greedy for first rollout
@@ -473,9 +482,15 @@ for step in range(train_steps + 1):
     for accum_step in range(train_accumulation_steps): 
         tokens = next(train_loader)
         with torch.no_grad(): 
-            search_tokens, search_ppt, search_adv = sorl_search(tokens, model, n=args.num_rollouts, K=args.K, max_iterations=args.max_iterations, 
-                                                                memory_span=memory_span, attn_blocksize=attn_blocksize, 
-                                                                temperature=temperature_train, alpha_select=args.alpha_select, select_mode=args.select_mode)
+            if args.use_resampling:
+                search_tokens, search_ppt, search_adv = sorl_search(tokens, model, n=args.num_rollouts, K=args.K, max_iterations=args.max_iterations, 
+                                                                    memory_span=memory_span, attn_blocksize=attn_blocksize, 
+                                                                    temperature=temperature_train,
+                                                                    tau=args.tau, resample_mode=args.resample_mode)
+            else:
+                search_tokens, search_ppt, search_adv = sorl_search(tokens, model, n=args.num_rollouts, K=args.K, max_iterations=args.max_iterations, 
+                                                                        memory_span=memory_span, attn_blocksize=attn_blocksize, 
+                                                                        temperature=temperature_train, alpha_select=args.alpha_select, select_mode=args.select_mode)
 
         # --- compute loss --- 
         traj_loss, abs_loss = compute_loss(search_tokens, model, memory_span=memory_span, attn_blocksize=attn_blocksize)
@@ -536,6 +551,9 @@ print0(f"-- use_static_memory_span: {args.use_static_memory_span}", console=True
 print0(f"-- min_memory_span: {args.min_memory_span}", console=True)
 print0(f"-- abstract_vocab_size: {args.abstract_vocab_size}", console=True)
 print0(f"-- use_gapt: {args.use_gapt}", console=True)
+print0(f"-- use_resampling: {args.use_resampling}", console=True)
+print0(f"-- tau: {args.tau}", console=True)
+print0(f"-- resample_mode: {args.resample_mode}", console=True)
 print0(f"-- alpha_select: {args.alpha_select}", console=True)
 print0(f"-- select_mode: {args.select_mode}", console=True)
 print0(f"-- alpha_loss: {args.alpha_loss}", console=True)

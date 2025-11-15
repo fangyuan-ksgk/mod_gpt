@@ -412,7 +412,7 @@ gapt = GatedPhaseTransition(p_m=args.traj_perplexity_patience, p_a=args.abs_perp
 # -------------
 temperature_val = torch.cat([
     torch.tensor([args.min_temperature], device="cuda"),  # Greedy for first rollout
-    torch.full((args.num_rollouts_val - 1,), args.temperature, device="cuda")  # High temp for diversity
+    torch.full((args.num_rollouts_val - 1,), 10.0, device="cuda")  # High temp for diversity
 ])
 temperature_train = torch.cat([
     torch.tensor([args.min_temperature], device="cuda"),  # Greedy for first rollout

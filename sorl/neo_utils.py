@@ -47,28 +47,6 @@ def insert_tokens(tokens, insert_mask, placeholder_token):
     return expanded_tokens
 
 @torch.no_grad()
-def sorl_rollout(data: torch.Tensor, model: GAT, ema_model: GAT, n: int, K: int, max_iterations: int, memory_span: int, attn_blocksize: int, temperature: Union[float, torch.Tensor] = 0.0,
-                 truncate_seq_len: bool = True):
-    """
-    Rollout with online model, evaluate with EMA model.
-    """
-    assert data.shape[0] == 1, "only single sample supported"
-    data_len = data.shape[1]
-
-    # --- repeat data & add placeholder tokens ---
-    insert_mask = infer_rythmic_insert_mask(data, K, model.vocab_sizes[0])
-    data = insert_tokens(data, insert_mask, model.vocab_sizes[0].item())
-    if truncate_seq_len:
-        data = data[:, :data_len] # avoids recompilation
-    repeat_data = data.repeat_interleave(n, dim=0)
-
-    # --- search with online model, evaluate with EMA model --- 
-    search_data, search_ppt = recursion_v2(model, ema_model, repeat_data, max_iterations=max_iterations, 
-                                memory_span=memory_span, attn_blocksize=attn_blocksize, temperature=temperature)
-
-    return search_data, search_ppt
-
-@torch.no_grad()
 def sorl_rollout_v2(data: torch.Tensor, model: GAT, n: int, K: int, max_iterations: int, memory_span: int, attn_blocksize: int, temperature: Union[float, torch.Tensor] = 0.0,
                  truncate_seq_len: bool = True):
     """
@@ -122,7 +100,7 @@ def select_best_per_doc(search_data, ppt, levels, model, alpha_select: float = 0
         vocab_util = pres[:, 1:].sum(1).float() / model.vocab_sizes[1]
         regularized_ppt = doc_ppt - alpha_select * vocab_util.unsqueeze(1)
 
-    min_doc_ppt, best_rollout_per_doc = regularized_ppt.min(dim=0)
+    min_doc_ppt, best_rollout_per_doc = regularized_ppt.min(dim=0) # argmin
     rollout_for_each_pos = best_rollout_per_doc[doc_idx[0]]
 
     best_seq = search_data[rollout_for_each_pos, torch.arange(search_data.shape[1], device=search_data.device)]
@@ -132,6 +110,45 @@ def select_best_per_doc(search_data, ppt, levels, model, alpha_select: float = 0
     best_ppt_advantage = (max_doc_ppt - min_doc_ppt) / max_doc_ppt.clamp(min=1e-8)
 
     return best_seq.unsqueeze(0), best_ppt, best_ppt_advantage.mean()
+
+# Question #1. This is still 'document-level', I wonder what'd happen if we do 'per-abs-token' level resampling? 
+#              for instance, each abs token is in-charge of the next K tokens? But that'd lose the context
+
+def resample_rollout(search_data, ppt, levels, model, tau: float = 2e-4, resample_mode: int = 0): 
+
+    trajectory_mask = (levels[:, 1:] == 0).float()
+    trajectory_ppt = ppt * trajectory_mask
+    abs_ppt = ppt * (1 - trajectory_mask)
+    
+    doc_idx = (search_data == BOS_TOKEN_ID).cumsum(dim=1)
+    doc_idx = doc_idx - doc_idx.min(dim=1, keepdim=True).values # idx starts from 0  
+    doc_ppt = avg_ppt_per_sample(trajectory_ppt, doc_idx[:,1:])
+    doc_abs_ppt = avg_ppt_per_sample(abs_ppt, doc_idx[:,1:])
+
+    # --- resampling ---
+    if resample_mode == 0: # doc-level high utility preference
+        signal = doc_ppt
+    elif resample_mode == 1: # doc-level high predictability preference
+        signal = -doc_abs_ppt
+    elif resample_mode == 2: # doc-level low utility preference
+        signal = -doc_ppt
+    elif resample_mode == 3: # doc-level low predictability preference
+        signal = doc_abs_ppt
+
+    logits = -(signal / tau)
+    probs = torch.softmax(logits, dim=0).transpose(0, 1)
+    doc_choices = torch.multinomial(probs, num_samples=1, replacement=True).squeeze(1)
+    rollout_for_each_pos = doc_choices[doc_idx[0]]
+
+    select_seq = search_data[rollout_for_each_pos, torch.arange(search_data.shape[1], device=search_data.device)]
+    select_ppt = ppt[rollout_for_each_pos[1:], torch.arange(ppt.shape[1], device=ppt.device)]
+
+    min_doc_ppt = doc_ppt.min(dim=0).values
+    max_doc_ppt = doc_ppt.max(dim=0).values
+    best_ppt_advantage = (max_doc_ppt - min_doc_ppt) / max_doc_ppt.clamp(min=1e-8)
+
+    return select_seq.unsqueeze(0), select_ppt, best_ppt_advantage.mean()
+
 
 # --------- "Variants" to hard selection + train on single rollout --------
 # 1. Soft selection with 'resampling'
@@ -206,21 +223,16 @@ def compute_rollout_reward(search_data, ppt, levels, mode: int = 0):
 import time
 from sorl.eval import compute_vocab_utilization_rate
 
-def sorl_search(tokens, model, ema_model, n=3, K=3, max_iterations=1,
+def sorl_search(tokens, model, n=3, K=3, max_iterations=1,
                 memory_span=1792, attn_blocksize=1792, temperature=1.0, truncate_seq_len: bool = True, 
                 alpha_select: float = 0.0, select_mode: str = "abs_ppt",
-                loss_mask: Optional[torch.Tensor] = None):
+                loss_mask: Optional[torch.Tensor] = None,
+                tau: float = 2e-4, resample_mode: int = 0):
     """
-    Complete SoRL search pipeline:
-    1. Generate n rollouts (online model)
-    2. Evaluate rollouts via recursion (EMA model)
-    3. Select best rollout per document
-    Returns: 
-    - best_data: Best rollout per document [1, seq_len]
-    - best_ppt: Perplexity of best rollout [seq_len - 1]
+    SoRL with resampling (instead of selection)
     """
     # --- generate & evaluate rollouts ---
-    search_data, search_ppt = sorl_rollout(tokens, model, ema_model, n=n, K=K, 
+    search_data, search_ppt = sorl_rollout_v2(tokens, model, n=n, K=K, 
                                max_iterations=max_iterations,
                                memory_span=memory_span,
                                attn_blocksize=attn_blocksize,
@@ -230,8 +242,8 @@ def sorl_search(tokens, model, ema_model, n=3, K=3, max_iterations=1,
 
     # --- select best rollouts (based on trajectory perplexity) ---
     levels = (search_data >= model.vocab_sizes[0]).long()
-    best_data, best_ppt, best_ppt_advantage = select_best_per_doc(search_data, search_ppt, levels, model, alpha_select=alpha_select, select_mode=select_mode)
-    return best_data, best_ppt, best_ppt_advantage
+    select_data, select_ppt, select_ppt_advantage = resample_rollout(search_data, search_ppt, levels, model, tau=tau, resample_mode=resample_mode)
+    return select_data, select_ppt, select_ppt_advantage
 
 def sorl_search_v2(tokens, model, n=3, K=3, max_iterations=1,
                 memory_span=1792, attn_blocksize=1792, temperature: Union[float, torch.Tensor] = 1.0, truncate_seq_len: bool = True, 
