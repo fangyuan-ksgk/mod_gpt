@@ -15,12 +15,13 @@ export NCCL_DEBUG=WARN
 # ============================================================================
 # Configuration
 # ============================================================================
-BATCH_SIZE=32  # Closer to benchmark batch_size=32
+BATCH_SIZE=30  # Closer to benchmark batch_size=32
 TRAIN_SEQ_LEN=$((16 * 1024))
 VAL_SEQ_LEN=$((16 * 1024))
 NUM_ITERATIONS=1750
 NUM_ROLLOUTS=2
-N_GPUS=4
+MAX_ITERATIONS=2
+N_GPUS=3
 MASTER_ADDR=127.0.0.1
 MASTER_PORT=29500
 ALPHA_LOSS=0.1
@@ -55,6 +56,7 @@ for MODE in {0..3}; do
     --val_seq_len $VAL_SEQ_LEN \
     --num_iterations $NUM_ITERATIONS \
     --num_rollouts $NUM_ROLLOUTS \
+    --max_iterations $MAX_ITERATIONS \
     --min_temperature 0.0 \
     --temperature 5.0 \
     --alpha_loss 0.1 \
@@ -85,6 +87,7 @@ torchrun \
   --val_seq_len $VAL_SEQ_LEN \
   --num_iterations $NUM_ITERATIONS \
   --num_rollouts $NUM_ROLLOUTS \
+  --max_iterations $MAX_ITERATIONS \
   --alpha_loss $ALPHA_LOSS \
   --mode $MODE \
   --steps_per_cycle $NUM_ITERATIONS \
@@ -108,6 +111,7 @@ for TEMP in 2.0 4.0 8.0; do
     --val_seq_len $VAL_SEQ_LEN \
     --num_iterations $NUM_ITERATIONS \
     --num_rollouts $NUM_ROLLOUTS \
+    --max_iterations $MAX_ITERATIONS \
     --min_temperature $TEMP \
     --max_temperature $TEMP \
     --alpha_loss $ALPHA_LOSS \
@@ -133,6 +137,7 @@ for ALPHA in 0.05 0.5 1.0; do
     --val_seq_len $VAL_SEQ_LEN \
     --num_iterations $NUM_ITERATIONS \
     --num_rollouts $NUM_ROLLOUTS \
+    --max_iterations $MAX_ITERATIONS \
     --min_temperature $TEMP \
     --max_temperature $TEMP \
     --alpha_loss $ALPHA \
