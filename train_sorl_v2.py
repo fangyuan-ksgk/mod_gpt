@@ -40,7 +40,7 @@ def parse_args():
     parser.add_argument("--num_rollouts", type=int, default=2)
     parser.add_argument("--num_rollouts_val", type=int, default=2)
     parser.add_argument("--K", type=int, default=8)
-    parser.add_argument("--max_iterations", type=int, default=1)
+    parser.add_argument("--max_iterations", type=int, default=2)
     parser.add_argument("--temperature", type=float, default=5.0) # search temperature
     parser.add_argument("--min_temperature", type=float, default=0.0) # prediction temperature
     parser.add_argument("--use_static_memory_span", action="store_true", default=False)

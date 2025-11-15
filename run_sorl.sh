@@ -56,6 +56,7 @@ for MODE in {0..3}; do
     --num_iterations $NUM_ITERATIONS \
     --num_rollouts $NUM_ROLLOUTS \
     --min_temperature 0.0 \
+    --temperature 5.0 \
     --alpha_loss 0.1 \
     --use_static_memory_span \
     --use_resampling \
