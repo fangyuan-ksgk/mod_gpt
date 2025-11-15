@@ -148,50 +148,94 @@ for ALPHA in 0.05 0.5 1.0; do
     --run_info "All-rollout SoRL: temp=${TEMP}, alpha=${ALPHA}, mode=$MODE"
 done
 
-# # ===========================
-# # I wonder what happen if I had multiple cycles (on-policy or off-policy)
-# # ===========================
-# NUM_CYCLES = 1, 2, 5
-# # compute the cycle_steps & run 'on-policy' & 'off-policy' exploitation experiments for each
-# CYCLE_STEPS=$NUM_ITERATIONS
-# MODE=0
-# EXPLORE_FRAC=0.5 
 
-# torchrun \
-#   --nproc_per_node=$N_GPUS \
-#   --master_addr=$MASTER_ADDR \
-#   --master_port=$MASTER_PORT \
-#   train_sorl_v2.py \
-#   --batch_size $BATCH_SIZE \
-#   --train_seq_len $TRAIN_SEQ_LEN \
-#   --val_seq_len $VAL_SEQ_LEN \
-#   --num_iterations $NUM_ITERATIONS \
-#   --num_rollouts $NUM_ROLLOUTS \
-#   --alpha_loss $ALPHA_LOSS \
-#   --mode $MODE \
-#   --steps_per_cycle $CYCLE_STEPS \
-#   --exploration_fraction $EXPLORE_FRAC \
-#   --use_off_policy_distillation \
-#   --use_static_memory_span \
-#   --run_info "cycle=${CYCLE_STEPS}, explore=${EXPLORE_FRAC}, mode=$MODE, exploit with off-policy distillation"
+for NUM_CYCLES in 1 2 5; do
+  CYCLE_STEPS=$((NUM_ITERATIONS / NUM_CYCLES))
+  MODE=0
+  EXPLORE_FRAC=0.5
+  
+  echo "========================================="
+  echo "Running ${NUM_CYCLES} cycles (${CYCLE_STEPS} steps/cycle)"
+  echo "========================================="
+  
+  # On-policy distillation (samples from current model during exploitation)
+  torchrun \
+    --nproc_per_node=$N_GPUS \
+    --master_addr=$MASTER_ADDR \
+    --master_port=$MASTER_PORT \
+    train_sorl_v2.py \
+    --batch_size $BATCH_SIZE \
+    --train_seq_len $TRAIN_SEQ_LEN \
+    --val_seq_len $VAL_SEQ_LEN \
+    --num_iterations $NUM_ITERATIONS \
+    --num_rollouts $NUM_ROLLOUTS \
+    --K 8 \
+    --max_iterations 1 \
+    --min_temperature 0.0 \
+    --temperature 1.0 \
+    --alpha_loss $ALPHA_LOSS \
+    --mode $MODE \
+    --steps_per_cycle $CYCLE_STEPS \
+    --exploration_fraction $EXPLORE_FRAC \
+    --use_on_policy_distillation \
+    --use_static_memory_span \
+    --run_info "cycles=${NUM_CYCLES}, explore=${EXPLORE_FRAC}, mode=$MODE, on-policy distillation"
+  
+  # Off-policy distillation (samples from frozen ref model during exploitation)
+  torchrun \
+    --nproc_per_node=$N_GPUS \
+    --master_addr=$MASTER_ADDR \
+    --master_port=$MASTER_PORT \
+    train_sorl_v2.py \
+    --batch_size $BATCH_SIZE \
+    --train_seq_len $TRAIN_SEQ_LEN \
+    --val_seq_len $VAL_SEQ_LEN \
+    --num_iterations $NUM_ITERATIONS \
+    --num_rollouts $NUM_ROLLOUTS \
+    --K 8 \
+    --max_iterations 1 \
+    --min_temperature 0.0 \
+    --temperature 1.0 \
+    --alpha_loss $ALPHA_LOSS \
+    --mode $MODE \
+    --steps_per_cycle $CYCLE_STEPS \
+    --exploration_fraction $EXPLORE_FRAC \
+    --use_off_policy_distillation \
+    --use_static_memory_span \
+    --run_info "cycles=${NUM_CYCLES}, explore=${EXPLORE_FRAC}, mode=$MODE, off-policy distillation"
+done
 
-# # Include GAPT
-# torchrun \
-#   --nproc_per_node=$N_GPUS \
-#   --master_addr=$MASTER_ADDR \
-#   --master_port=$MASTER_PORT \
-#   train_sorl_v2.py \
-#   --batch_size $BATCH_SIZE \
-#   --train_seq_len $TRAIN_SEQ_LEN \
-#   --val_seq_len $VAL_SEQ_LEN \
-#   --num_iterations $NUM_ITERATIONS \
-#   --num_rollouts $NUM_ROLLOUTS \
-#   --alpha_loss $ALPHA_LOSS \
-#   --mode $MODE \
-#   --steps_per_cycle $CYCLE_STEPS \
-#   --exploration_fraction $EXPLORE_FRAC \
-#   --use_off_policy_distillation \
-#   --use_static_memory_span \
-#   --use_gapt \
-#   --traj_perplexity_patience 100 \
-#   --run_info "cycle=${CYCLE_STEPS}, explore=${EXPLORE_FRAC}, mode=$MODE, exploit with off-policy distillation"
+# ===========================
+# GAPT integration with multi-cycle training
+# ===========================
+# Test if GAPT improves abstraction with off-policy distillation
+
+for NUM_CYCLES in 2 5; do
+  CYCLE_STEPS=$((NUM_ITERATIONS / NUM_CYCLES))
+  MODE=0
+  EXPLORE_FRAC=0.5
+  
+  torchrun \
+    --nproc_per_node=$N_GPUS \
+    --master_addr=$MASTER_ADDR \
+    --master_port=$MASTER_PORT \
+    train_sorl_v2.py \
+    --batch_size $BATCH_SIZE \
+    --train_seq_len $TRAIN_SEQ_LEN \
+    --val_seq_len $VAL_SEQ_LEN \
+    --num_iterations $NUM_ITERATIONS \
+    --num_rollouts $NUM_ROLLOUTS \
+    --K 8 \
+    --max_iterations 1 \
+    --min_temperature 0.0 \
+    --temperature 1.0 \
+    --alpha_loss $ALPHA_LOSS \
+    --mode $MODE \
+    --steps_per_cycle $CYCLE_STEPS \
+    --exploration_fraction $EXPLORE_FRAC \
+    --use_off_policy_distillation \
+    --use_static_memory_span \
+    --use_gapt \
+    --traj_perplexity_patience 100 \
+    --run_info "cycles=${NUM_CYCLES}, explore=${EXPLORE_FRAC}, mode=$MODE, GAPT+off-policy"
+done
