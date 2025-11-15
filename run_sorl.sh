@@ -40,9 +40,9 @@ ALPHA_LOSS=0.1
 #   --num_iterations $NUM_ITERATIONS
 
 
-# # ==========================
-# # QUESTIONS 1. Can SoRL with exploration reward improves greedy vocab utilization?
-# # ==========================
+# ==========================
+# Adaptive Phase Exploration
+# ==========================
 
 # torchrun \
 #   --nproc_per_node=$N_GPUS \
@@ -55,21 +55,21 @@ ALPHA_LOSS=0.1
 #   --num_iterations $NUM_ITERATIONS \
 #   --num_rollouts $NUM_ROLLOUTS \
 #   --min_temperature 0.0 \
-#   --alpha_loss -0.1 \
-#   --use_gapt \
-#   --traj_perplexity_patience 100 \
+#   --alpha_loss 0.1 \
 #   --use_static_memory_span \
+#   --use_adaptive_alpha \
+#   --vocab_util_threshold 0.5 \
+#   --min_alpha_loss -0.1 \
 #   --run_info "Question 1: SoRL with curiosity reward can improve greedy vocab utilization?"
 
+# =================================================================================
+# All-rollout SoRL | verify its performance (high vocab_util, stable abstraction)
+# =================================================================================
+# - not sure how to improve its advantage
 
-# ===========================
-# Which exploitation strategy works best with SGPO exploration?
-# ===========================
 CYCLE_STEPS=$NUM_ITERATIONS
-MODE=0
-EXPLORE_FRAC=0.5 
-
-
+EXPLORE_FRAC=1.0
+MODE=1
 torchrun \
   --nproc_per_node=$N_GPUS \
   --master_addr=$MASTER_ADDR \
@@ -84,104 +84,127 @@ torchrun \
   --mode $MODE \
   --steps_per_cycle $CYCLE_STEPS \
   --exploration_fraction $EXPLORE_FRAC \
-  --use_off_policy_distillation \
   --use_static_memory_span \
   --run_info "cycle=${CYCLE_STEPS}, explore=${EXPLORE_FRAC}, mode=$MODE, exploit with off-policy distillation"
 
+# # ===========================
+# # Which exploitation strategy works best with SGPO exploration?
+# # ===========================
+# CYCLE_STEPS=$NUM_ITERATIONS
+# MODE=0
+# EXPLORE_FRAC=0.5 
 
-torchrun \
-  --nproc_per_node=$N_GPUS \
-  --master_addr=$MASTER_ADDR \
-  --master_port=$MASTER_PORT \
-  train_sorl_v2.py \
-  --batch_size $BATCH_SIZE \
-  --train_seq_len $TRAIN_SEQ_LEN \
-  --val_seq_len $VAL_SEQ_LEN \
-  --num_iterations $NUM_ITERATIONS \
-  --num_rollouts $NUM_ROLLOUTS \
-  --alpha_loss $ALPHA_LOSS \
-  --mode $MODE \
-  --steps_per_cycle $CYCLE_STEPS \
-  --exploration_fraction $EXPLORE_FRAC \
-  --use_on_policy_distillation \
-  --use_static_memory_span \
-  --run_info "cycle=${CYCLE_STEPS}, explore=${EXPLORE_FRAC}, mode=$MODE, exploit with on-policy distillation"
+# torchrun \
+#   --nproc_per_node=$N_GPUS \
+#   --master_addr=$MASTER_ADDR \
+#   --master_port=$MASTER_PORT \
+#   train_sorl_v2.py \
+#   --batch_size $BATCH_SIZE \
+#   --train_seq_len $TRAIN_SEQ_LEN \
+#   --val_seq_len $VAL_SEQ_LEN \
+#   --num_iterations $NUM_ITERATIONS \
+#   --num_rollouts $NUM_ROLLOUTS \
+#   --alpha_loss $ALPHA_LOSS \
+#   --mode $MODE \
+#   --steps_per_cycle $CYCLE_STEPS \
+#   --exploration_fraction $EXPLORE_FRAC \
+#   --use_off_policy_distillation \
+#   --use_static_memory_span \
+#   --run_info "cycle=${CYCLE_STEPS}, explore=${EXPLORE_FRAC}, mode=$MODE, exploit with off-policy distillation"
 
-torchrun \
-  --nproc_per_node=$N_GPUS \
-  --master_addr=$MASTER_ADDR \
-  --master_port=$MASTER_PORT \
-  train_sorl_v2.py \
-  --batch_size $BATCH_SIZE \
-  --train_seq_len $TRAIN_SEQ_LEN \
-  --val_seq_len $VAL_SEQ_LEN \
-  --num_iterations $NUM_ITERATIONS \
-  --num_rollouts $NUM_ROLLOUTS \
-  --alpha_loss $ALPHA_LOSS \
-  --mode $MODE \
-  --steps_per_cycle $CYCLE_STEPS \
-  --exploration_fraction $EXPLORE_FRAC \
-  --use_static_memory_span \
-  --run_info "cycle=${CYCLE_STEPS}, explore=${EXPLORE_FRAC}, mode=$MODE, exploit with select-one-SoRL + alpha=0.1"
+# torchrun \
+#   --nproc_per_node=$N_GPUS \
+#   --master_addr=$MASTER_ADDR \
+#   --master_port=$MASTER_PORT \
+#   train_sorl_v2.py \
+#   --batch_size $BATCH_SIZE \
+#   --train_seq_len $TRAIN_SEQ_LEN \
+#   --val_seq_len $VAL_SEQ_LEN \
+#   --num_iterations $NUM_ITERATIONS \
+#   --num_rollouts $NUM_ROLLOUTS \
+#   --alpha_loss $ALPHA_LOSS \
+#   --mode $MODE \
+#   --steps_per_cycle $CYCLE_STEPS \
+#   --exploration_fraction $EXPLORE_FRAC \
+#   --use_on_policy_distillation \
+#   --use_static_memory_span \
+#   --run_info "cycle=${CYCLE_STEPS}, explore=${EXPLORE_FRAC}, mode=$MODE, exploit with on-policy distillation"
 
-
-# Include GAPT
-torchrun \
-  --nproc_per_node=$N_GPUS \
-  --master_addr=$MASTER_ADDR \
-  --master_port=$MASTER_PORT \
-  train_sorl_v2.py \
-  --batch_size $BATCH_SIZE \
-  --train_seq_len $TRAIN_SEQ_LEN \
-  --val_seq_len $VAL_SEQ_LEN \
-  --num_iterations $NUM_ITERATIONS \
-  --num_rollouts $NUM_ROLLOUTS \
-  --alpha_loss $ALPHA_LOSS \
-  --mode $MODE \
-  --steps_per_cycle $CYCLE_STEPS \
-  --exploration_fraction $EXPLORE_FRAC \
-  --use_off_policy_distillation \
-  --use_static_memory_span \
-  --use_gapt \
-  --traj_perplexity_patience 100 \
-  --run_info "cycle=${CYCLE_STEPS}, explore=${EXPLORE_FRAC}, mode=$MODE, exploit with off-policy distillation"
+# torchrun \
+#   --nproc_per_node=$N_GPUS \
+#   --master_addr=$MASTER_ADDR \
+#   --master_port=$MASTER_PORT \
+#   train_sorl_v2.py \
+#   --batch_size $BATCH_SIZE \
+#   --train_seq_len $TRAIN_SEQ_LEN \
+#   --val_seq_len $VAL_SEQ_LEN \
+#   --num_iterations $NUM_ITERATIONS \
+#   --num_rollouts $NUM_ROLLOUTS \
+#   --alpha_loss $ALPHA_LOSS \
+#   --mode $MODE \
+#   --steps_per_cycle $CYCLE_STEPS \
+#   --exploration_fraction $EXPLORE_FRAC \
+#   --use_static_memory_span \
+#   --run_info "cycle=${CYCLE_STEPS}, explore=${EXPLORE_FRAC}, mode=$MODE, exploit with select-one-SoRL + alpha=0.1"
 
 
-torchrun \
-  --nproc_per_node=$N_GPUS \
-  --master_addr=$MASTER_ADDR \
-  --master_port=$MASTER_PORT \
-  train_sorl_v2.py \
-  --batch_size $BATCH_SIZE \
-  --train_seq_len $TRAIN_SEQ_LEN \
-  --val_seq_len $VAL_SEQ_LEN \
-  --num_iterations $NUM_ITERATIONS \
-  --num_rollouts $NUM_ROLLOUTS \
-  --alpha_loss $ALPHA_LOSS \
-  --mode $MODE \
-  --steps_per_cycle $CYCLE_STEPS \
-  --exploration_fraction $EXPLORE_FRAC \
-  --use_on_policy_distillation \
-  --use_static_memory_span \
-  --use_gapt \
-  --traj_perplexity_patience 100 \
-  --run_info "cycle=${CYCLE_STEPS}, explore=${EXPLORE_FRAC}, mode=$MODE, exploit with on-policy distillation"
+# # Include GAPT
+# torchrun \
+#   --nproc_per_node=$N_GPUS \
+#   --master_addr=$MASTER_ADDR \
+#   --master_port=$MASTER_PORT \
+#   train_sorl_v2.py \
+#   --batch_size $BATCH_SIZE \
+#   --train_seq_len $TRAIN_SEQ_LEN \
+#   --val_seq_len $VAL_SEQ_LEN \
+#   --num_iterations $NUM_ITERATIONS \
+#   --num_rollouts $NUM_ROLLOUTS \
+#   --alpha_loss $ALPHA_LOSS \
+#   --mode $MODE \
+#   --steps_per_cycle $CYCLE_STEPS \
+#   --exploration_fraction $EXPLORE_FRAC \
+#   --use_off_policy_distillation \
+#   --use_static_memory_span \
+#   --use_gapt \
+#   --traj_perplexity_patience 100 \
+#   --run_info "cycle=${CYCLE_STEPS}, explore=${EXPLORE_FRAC}, mode=$MODE, exploit with off-policy distillation"
 
-torchrun \
-  --nproc_per_node=$N_GPUS \
-  --master_addr=$MASTER_ADDR \
-  --master_port=$MASTER_PORT \
-  train_sorl_v2.py \
-  --batch_size $BATCH_SIZE \
-  --train_seq_len $TRAIN_SEQ_LEN \
-  --val_seq_len $VAL_SEQ_LEN \
-  --num_iterations $NUM_ITERATIONS \
-  --num_rollouts $NUM_ROLLOUTS \
-  --alpha_loss $ALPHA_LOSS \
-  --mode $MODE \
-  --steps_per_cycle $CYCLE_STEPS \
-  --exploration_fraction $EXPLORE_FRAC \
-  --use_static_memory_span \
-  --use_gapt \
-  --traj_perplexity_patience 100 \
-  --run_info "cycle=${CYCLE_STEPS}, explore=${EXPLORE_FRAC}, mode=$MODE, exploit with select-one-SoRL + alpha=0.1"
+
+# torchrun \
+#   --nproc_per_node=$N_GPUS \
+#   --master_addr=$MASTER_ADDR \
+#   --master_port=$MASTER_PORT \
+#   train_sorl_v2.py \
+#   --batch_size $BATCH_SIZE \
+#   --train_seq_len $TRAIN_SEQ_LEN \
+#   --val_seq_len $VAL_SEQ_LEN \
+#   --num_iterations $NUM_ITERATIONS \
+#   --num_rollouts $NUM_ROLLOUTS \
+#   --alpha_loss $ALPHA_LOSS \
+#   --mode $MODE \
+#   --steps_per_cycle $CYCLE_STEPS \
+#   --exploration_fraction $EXPLORE_FRAC \
+#   --use_on_policy_distillation \
+#   --use_static_memory_span \
+#   --use_gapt \
+#   --traj_perplexity_patience 100 \
+#   --run_info "cycle=${CYCLE_STEPS}, explore=${EXPLORE_FRAC}, mode=$MODE, exploit with on-policy distillation"
+
+# torchrun \
+#   --nproc_per_node=$N_GPUS \
+#   --master_addr=$MASTER_ADDR \
+#   --master_port=$MASTER_PORT \
+#   train_sorl_v2.py \
+#   --batch_size $BATCH_SIZE \
+#   --train_seq_len $TRAIN_SEQ_LEN \
+#   --val_seq_len $VAL_SEQ_LEN \
+#   --num_iterations $NUM_ITERATIONS \
+#   --num_rollouts $NUM_ROLLOUTS \
+#   --alpha_loss $ALPHA_LOSS \
+#   --mode $MODE \
+#   --steps_per_cycle $CYCLE_STEPS \
+#   --exploration_fraction $EXPLORE_FRAC \
+#   --use_static_memory_span \
+#   --use_gapt \
+#   --traj_perplexity_patience 100 \
+#   --run_info "cycle=${CYCLE_STEPS}, explore=${EXPLORE_FRAC}, mode=$MODE, exploit with select-one-SoRL + alpha=0.1"

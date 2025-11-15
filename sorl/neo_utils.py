@@ -154,9 +154,9 @@ def compute_rollout_reward(search_data, ppt, levels, mode: int = 0):
         # SGPO ver.
         advantage = (doc_ppt - doc_ppt_mean) / doc_ppt_std
     elif mode == 1:
-        # No advantage (baseline MLE) | more stable abstraction
+        # No advantage (baseline MLE) | more stable abstraction | all-rollout SoRL
         advantage = torch.ones_like(doc_ppt)
-        
+
     doc_adv = torch.where(
         doc_ppt_std > 1e-8,
         advantage,
