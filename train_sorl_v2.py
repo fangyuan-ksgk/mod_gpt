@@ -60,6 +60,7 @@ def parse_args():
     parser.add_argument("--use_on_policy_distillation", action="store_true", default=False) # use on-policy distillation
     parser.add_argument("--use_off_policy_exploitation", action="store_true", default=False) # use off-policy exploitation
     parser.add_argument("--use_on_policy_exploitation", action="store_true", default=False) # use on-policy exploitation
+    parser.add_argument("--exploitation_mode", type=int, default=2) # mode for exploitation (favor familiar abstraction / favor useful abstraction)
     parser.add_argument("--run_info", type=str, default="") # run info
 
     return parser.parse_args()
@@ -238,6 +239,7 @@ class Hyperparameters:
     use_on_policy_distillation: bool = False # use on-policy distillation
     use_off_policy_exploitation: bool = False # use off-policy exploitation
     use_on_policy_exploitation: bool = False # use on-policy exploitation
+    exploitation_mode: int = 2 # mode for exploitation (favor familiar abstraction / favor useful abstraction)
     run_info: str = "" # run info
 
 cli_args = parse_args()
@@ -517,12 +519,12 @@ for step in range(train_steps + 1):
                     search_tokens, search_ppt, search_adv = sorl_search(tokens, ref_model, 
                                                                     n=n, K=args.K, max_iterations=args.max_iterations, 
                                                                     memory_span=memory_span, attn_blocksize=attn_blocksize, 
-                                                                    temperature=temperature_train, mode=2)
+                                                                    temperature=temperature_train, mode=args.exploitation_mode)
                 elif args.use_on_policy_exploitation: 
                     search_tokens, search_ppt, search_adv = sorl_search(tokens, model, 
                                                                     n=n, K=args.K, max_iterations=args.max_iterations, 
                                                                     memory_span=memory_span, attn_blocksize=attn_blocksize, 
-                                                                    temperature=temperature_train, mode=2)
+                                                                    temperature=temperature_train, mode=args.exploitation_mode)
                 else:
                     search_tokens, search_ppt, search_adv = select_best_sorl_search(tokens, model, 
                                                                     n=n, K=args.K, max_iterations=args.max_iterations, 
@@ -622,6 +624,7 @@ print0(f"-- use_off_policy_distillation: {args.use_off_policy_distillation}", co
 print0(f"-- use_on_policy_distillation: {args.use_on_policy_distillation}", console=True)
 print0(f"-- use_off_policy_exploitation: {args.use_off_policy_exploitation}", console=True)
 print0(f"-- use_on_policy_exploitation: {args.use_on_policy_exploitation}", console=True)
+print0(f"-- exploitation_mode: {args.exploitation_mode}", console=True)
 # print0(f"loss record:\n{loss_record}", console=True)
 
 

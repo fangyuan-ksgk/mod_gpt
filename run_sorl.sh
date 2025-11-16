@@ -70,7 +70,8 @@ for MODE in 0 1; do
     --exploration_fraction 0.5 \
     --use_static_memory_span \
     --use_off_policy_exploitation \
-    --run_info "${MODE_DESC[$MODE]} exploration --> off-policy exploitation"
+    --exploitation_mode 3 \
+    --run_info "${MODE_DESC[$MODE]} exploration --> off-policy exploitation (favor useful abstraction)"
 
   # On-policy exploitation (samples from current model)
   torchrun \
@@ -93,7 +94,8 @@ for MODE in 0 1; do
     --exploration_fraction 0.5 \
     --use_static_memory_span \
     --use_on_policy_exploitation \
-    --run_info "${MODE_DESC[$MODE]} exploration --> on-policy exploitation"
+    --exploitation_mode 3 \
+    --run_info "${MODE_DESC[$MODE]} exploration --> on-policy exploitation (favor useful abstraction)"
 done
 
 

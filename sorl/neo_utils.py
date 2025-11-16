@@ -195,6 +195,9 @@ def compute_rollout_reward(search_data, ppt, levels, mode: int = 0):
         doc_abs_ppt_mean = doc_abs_ppt.mean(dim=0, keepdim=True)
         doc_abs_ppt_std = doc_abs_ppt.std(dim=0, keepdim=True, unbiased=False).clamp(min=1e-8)
         advantage = - (doc_abs_ppt - doc_abs_ppt_mean) / doc_abs_ppt_std
+    elif mode == 3: 
+        # for distillation, encourage more useful abstractions
+        advantage = (doc_ppt_mean - doc_ppt) / doc_ppt_std
 
     doc_adv = torch.where(
         doc_ppt_std > 1e-8,
