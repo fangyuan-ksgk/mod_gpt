@@ -175,7 +175,7 @@ class Muon(torch.optim.Optimizer):
 
 # GAT model
 from sorl.gat_sim import GAT, GATConfig
-from sorl.neo_utils import compute_loss, sorl_evaluate
+from sorl.neo_utils import compute_loss, compute_weighted_loss, sorl_evaluate
 from sorl.eval import compute_vocab_utilization_rate
 
 # -----------------------------------------------------------------------------
@@ -535,7 +535,10 @@ for step in range(train_steps + 1):
         if phase == "exploration": # reward-shaping on predictability loss (SGPO)
             traj_loss, abs_loss = compute_sgpo_loss(search_tokens, search_adv, model, memory_span, attn_blocksize)    
         else:
-            traj_loss, abs_loss = compute_loss(search_tokens, model, memory_span=memory_span, attn_blocksize=attn_blocksize)
+            if args.use_off_policy_exploitation or args.use_on_policy_exploitation:
+                traj_loss, abs_loss = compute_weighted_loss(search_tokens, search_adv, model, memory_span, attn_blocksize)
+            else: 
+                traj_loss, abs_loss = compute_loss(search_tokens, model, memory_span=memory_span, attn_blocksize=attn_blocksize)
         
         if args.use_gapt: 
             loss = gapt.step(traj_loss, alpha_loss * abs_loss, verbose=False)
@@ -619,7 +622,7 @@ print0(f"-- use_off_policy_distillation: {args.use_off_policy_distillation}", co
 print0(f"-- use_on_policy_distillation: {args.use_on_policy_distillation}", console=True)
 print0(f"-- use_off_policy_exploitation: {args.use_off_policy_exploitation}", console=True)
 print0(f"-- use_on_policy_exploitation: {args.use_on_policy_exploitation}", console=True)
-print0(f"loss record:\n{loss_record}", console=True)
+# print0(f"loss record:\n{loss_record}", console=True)
 
 
 dist.destroy_process_group()

@@ -377,6 +377,28 @@ def compute_loss(best_data, model, memory_span: int, attn_blocksize: int,
     abs_loss = (best_ppt[0] * valid_abs_mask).sum() / valid_abs_mask.sum().clamp(min=1)
     return traj_loss, abs_loss
 
+def compute_weighted_loss(best_data, token_adv, model, memory_span: int, attn_blocksize: int,
+                 loss_mask: Optional[torch.Tensor] = None):
+    best_ppt, _ = model.forward(best_data, memory_span, attn_blocksize)
+    best_ppt = best_ppt.reshape(best_data.shape[0], -1)
+    best_ppt = best_ppt * token_adv
+
+    levels = (best_data >= model.vocab_sizes[0]).long()[:, 1:]
+
+    bos_pos_mask = torch.logical_and(
+        best_data[:, :-1] != BOS_TOKEN_ID, 
+        best_data[:, 1:] != BOS_TOKEN_ID
+    ).float()
+    traj_mask = (levels == 0).float()[0]
+    abs_mask = 1 - traj_mask
+
+    valid_traj_mask = bos_pos_mask[0] * traj_mask
+    valid_abs_mask = bos_pos_mask[0] * abs_mask
+
+    traj_loss = (best_ppt[0] * valid_traj_mask).sum() / valid_traj_mask.sum().clamp(min=1)
+    abs_loss = (best_ppt[0] * valid_abs_mask).sum() / valid_abs_mask.sum().clamp(min=1)
+    return traj_loss, abs_loss        
+
 # Should GRPO loss mask out trajectory tokens? GAPT requires this separation. 
 def compute_grpo_loss(rollout_data, rollout_ppt, reference_ppt, token_adv, epsilon: float = 0.1):
     """Standard GRPO loss :: with gradient clipping (PPO style)"""
