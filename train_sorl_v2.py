@@ -58,6 +58,8 @@ def parse_args():
     parser.add_argument("--exploration_till_vocab_util", type=float, default=0.5) # exploration till vocabulary utilization reaches this threshold
     parser.add_argument("--use_off_policy_distillation", action="store_true", default=False) # use off-policy distillation
     parser.add_argument("--use_on_policy_distillation", action="store_true", default=False) # use on-policy distillation
+    parser.add_argument("--use_off_policy_exploitation", action="store_true", default=False) # use off-policy exploitation
+    parser.add_argument("--use_on_policy_exploitation", action="store_true", default=False) # use on-policy exploitation
     parser.add_argument("--run_info", type=str, default="") # run info
 
     return parser.parse_args()
@@ -234,6 +236,8 @@ class Hyperparameters:
     exploration_till_vocab_util: float = 0.5 # exploration till vocabulary utilization reaches this threshold
     use_off_policy_distillation: bool = False # use off-policy distillation
     use_on_policy_distillation: bool = False # use on-policy distillation
+    use_off_policy_exploitation: bool = False # use off-policy exploitation
+    use_on_policy_exploitation: bool = False # use on-policy exploitation
     run_info: str = "" # run info
 
 cli_args = parse_args()
@@ -498,7 +502,7 @@ for step in range(train_steps + 1):
                                                                     n=n, K=args.K, max_iterations=args.max_iterations, 
                                                                     memory_span=memory_span, attn_blocksize=attn_blocksize, 
                                                                     temperature=temperature_train, mode=args.mode)
-            else: 
+            else: # exploitation
                 if args.use_off_policy_distillation: 
                     search_tokens, search_ppt, search_adv = sorl_search(tokens, ref_model, 
                                                                     n=n, K=args.K, max_iterations=args.max_iterations, 
@@ -509,7 +513,17 @@ for step in range(train_steps + 1):
                                                                     n=n, K=args.K, max_iterations=args.max_iterations, 
                                                                     memory_span=memory_span, attn_blocksize=attn_blocksize, 
                                                                     temperature=temperature_train, mode=args.mode)
-                else: 
+                elif args.use_off_policy_exploitation: 
+                    search_tokens, search_ppt, search_adv = sorl_search(tokens, ref_model, 
+                                                                    n=n, K=args.K, max_iterations=args.max_iterations, 
+                                                                    memory_span=memory_span, attn_blocksize=attn_blocksize, 
+                                                                    temperature=temperature_train, mode=2)
+                elif args.use_on_policy_exploitation: 
+                    search_tokens, search_ppt, search_adv = sorl_search(tokens, model, 
+                                                                    n=n, K=args.K, max_iterations=args.max_iterations, 
+                                                                    memory_span=memory_span, attn_blocksize=attn_blocksize, 
+                                                                    temperature=temperature_train, mode=2)
+                else:
                     search_tokens, search_ppt, search_adv = select_best_sorl_search(tokens, model, 
                                                                     n=n, K=args.K, max_iterations=args.max_iterations, 
                                                                     memory_span=memory_span, attn_blocksize=attn_blocksize, 
@@ -551,6 +565,8 @@ for step in range(train_steps + 1):
             torch.tensor([args.min_temperature], device="cuda"),  # Greedy for first rollout
             torch.full((args.num_rollouts - 1,), args.temperature, device="cuda")  # High temp for diversity
         ])
+    loss_record["train_phase"].append(phase)
+    loss_record["train_avg_util_rate"].append(avg_util_rate)
 
     for param in model.parameters():
         param.grad /= train_accumulation_steps
@@ -601,6 +617,8 @@ print0(f"-- exploration_fraction: {args.exploration_fraction}", console=True)
 print0(f"-- exploration_till_vocab_util: {args.exploration_till_vocab_util}", console=True)
 print0(f"-- use_off_policy_distillation: {args.use_off_policy_distillation}", console=True)
 print0(f"-- use_on_policy_distillation: {args.use_on_policy_distillation}", console=True)
+print0(f"-- use_off_policy_exploitation: {args.use_off_policy_exploitation}", console=True)
+print0(f"-- use_on_policy_exploitation: {args.use_on_policy_exploitation}", console=True)
 print0(f"loss record:\n{loss_record}", console=True)
 
 

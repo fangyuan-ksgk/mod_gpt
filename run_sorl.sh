@@ -41,32 +41,60 @@ ALPHA_LOSS=0.1
 #   --num_iterations $NUM_ITERATIONS
 
 
-# # ==========================
-# # SoRL with resampling
-# # ==========================
-# MODE_DESC=("high utility preference" "high predictability preference" "low utility preference" "low predictability preference",
-#            "relative utility preference : curiosity preference = 1:0", "relative utility preference : curiosity preference = 1:0.1", "relative utility preference : curiosity preference = 1:0.5", "relative utility preference : curiosity preference = 1:1", "relative utility preference : curiosity preference = 0.5:1")
-# for MODE in {3..8}; do
-#   torchrun \
-#     --nproc_per_node=$N_GPUS \
-#     --master_addr=$MASTER_ADDR \
-#     --master_port=$MASTER_PORT \
-#     train_sorl.py \
-#     --batch_size $BATCH_SIZE \
-#     --train_seq_len $TRAIN_SEQ_LEN \
-#     --val_seq_len $VAL_SEQ_LEN \
-#     --num_iterations $NUM_ITERATIONS \
-#     --num_rollouts $NUM_ROLLOUTS \
-#     --max_iterations $MAX_ITERATIONS \
-#     --min_temperature 0.0 \
-#     --temperature 5.0 \
-#     --alpha_loss 0.1 \
-#     --use_static_memory_span \
-#     --use_resampling \
-#     --tau 2e-4 \
-#     --resample_mode $MODE \
-#     --run_info "SoRL with resampling (mode $MODE: ${MODE_DESC[$MODE]})"
-# done
+# =================================================================================
+# All-rollout SoRL with exploration→exploitation cycles
+# =================================================================================
+# Compare SGPO (mode=0) vs All-rollout (mode=1)
+# Compare off-policy vs on-policy exploitation
+
+MODE_DESC=("SGPO" "All-rollout SoRL")
+for MODE in 0 1; do
+  # Off-policy exploitation (samples from frozen ref_model)
+  torchrun \
+    --nproc_per_node=$N_GPUS \
+    --master_addr=$MASTER_ADDR \
+    --master_port=$MASTER_PORT \
+    train_sorl_v2.py \
+    --batch_size $BATCH_SIZE \
+    --train_seq_len $TRAIN_SEQ_LEN \
+    --val_seq_len $VAL_SEQ_LEN \
+    --num_iterations $NUM_ITERATIONS \
+    --num_rollouts $NUM_ROLLOUTS \
+    --K 8 \
+    --max_iterations $MAX_ITERATIONS \
+    --min_temperature 0.0 \
+    --temperature 5.0 \
+    --alpha_loss $ALPHA_LOSS \
+    --mode $MODE \
+    --steps_per_cycle $NUM_ITERATIONS \
+    --exploration_fraction 0.5 \
+    --use_static_memory_span \
+    --use_off_policy_exploitation \
+    --run_info "${MODE_DESC[$MODE]} exploration --> off-policy exploitation"
+
+  # On-policy exploitation (samples from current model)
+  torchrun \
+    --nproc_per_node=$N_GPUS \
+    --master_addr=$MASTER_ADDR \
+    --master_port=$MASTER_PORT \
+    train_sorl_v2.py \
+    --batch_size $BATCH_SIZE \
+    --train_seq_len $TRAIN_SEQ_LEN \
+    --val_seq_len $VAL_SEQ_LEN \
+    --num_iterations $NUM_ITERATIONS \
+    --num_rollouts $NUM_ROLLOUTS \
+    --K 8 \
+    --max_iterations $MAX_ITERATIONS \
+    --min_temperature 0.0 \
+    --temperature 5.0 \
+    --alpha_loss $ALPHA_LOSS \
+    --mode $MODE \
+    --steps_per_cycle $NUM_ITERATIONS \
+    --exploration_fraction 0.5 \
+    --use_static_memory_span \
+    --use_on_policy_exploitation \
+    --run_info "${MODE_DESC[$MODE]} exploration --> on-policy exploitation"
+done
 
 
 # =================================================================================

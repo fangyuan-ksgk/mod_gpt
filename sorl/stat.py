@@ -529,28 +529,50 @@ def save_training_dynamics(loss_record, save_path, run_info=""):
     
     Args:
         loss_record (defaultdict): Contains 'traj_loss', 'abs_loss', 'search_advantage', 
-                                   'util_rate', and 'phase' (optional)
+                                   'util_rate', 'phase' (validation-level, optional),
+                                   'train_phase', 'train_avg_util_rate' (training-level, optional)
         save_path (str): Path to save the figure (e.g., 'logs/run_id/training_dynamics.png')
         run_info (str): Optional info to add to title
     """
     import matplotlib.pyplot as plt
     import numpy as np
     
-    # Convert tensors to numpy
+    # Convert validation metrics (tensors to numpy)
     traj_loss = [t.cpu().item() if torch.is_tensor(t) else t for t in loss_record['traj_loss']]
     abs_loss = [t.cpu().item() if torch.is_tensor(t) else t for t in loss_record['abs_loss']]
     search_adv = [t.cpu().item() * 100 if torch.is_tensor(t) else t * 100 
                   for t in loss_record['search_advantage']]  # Convert to percentage
-    vocab_util = [t.cpu().item() * 100 if torch.is_tensor(t) else t * 100 
-                  for t in loss_record['util_rate']]  # Convert to percentage
     
-    # Handle phase data
-    if 'phase' in loss_record and loss_record['phase']:
+    # Use granular train data if available, otherwise fall back to validation data
+    if 'train_avg_util_rate' in loss_record and loss_record['train_avg_util_rate']:
+        vocab_util = [t * 100 if isinstance(t, (int, float)) else t for t in loss_record['train_avg_util_rate']]
+        use_train_granularity = True
+    else:
+        vocab_util = [t.cpu().item() * 100 if torch.is_tensor(t) else t * 100 
+                      for t in loss_record['util_rate']]
+        use_train_granularity = False
+    
+    if 'train_phase' in loss_record and loss_record['train_phase']:
+        phase = loss_record['train_phase']
+    elif 'phase' in loss_record and loss_record['phase']:
         phase = loss_record['phase']
     else:
         phase = ['exploration'] * len(vocab_util)
     
-    steps = range(len(vocab_util))
+    # Create step arrays for plotting
+    # vocab_util and phase have training-level granularity (all steps)
+    vocab_util_steps = list(range(len(vocab_util)))
+    
+    # Validation metrics are at validation checkpoint intervals
+    num_val_checkpoints = len(traj_loss)
+    if use_train_granularity and len(vocab_util) > num_val_checkpoints:
+        # Map validation checkpoints to training step indices
+        val_interval = len(vocab_util) / num_val_checkpoints
+        val_steps = [int(i * val_interval) for i in range(num_val_checkpoints)]
+    else:
+        # No granular data, use simple indices
+        val_steps = list(range(num_val_checkpoints))
+        vocab_util_steps = val_steps
     
     # --- Plotting Setup ---
     fig, ax1 = plt.subplots(figsize=(16, 8))
@@ -564,58 +586,60 @@ def save_training_dynamics(loss_record, save_path, run_info=""):
     ax3.spines['right'].set_position(('outward', 70))
     ax4.spines['right'].set_position(('outward', 140))
     
-    # --- Phase Annotation ---
+    # --- Phase Annotation (use all training steps) ---
     phase_start = 0
     phase_labels = {}
     
-    for i in range(1, len(phase)):
-        if phase[i] != phase[phase_start]:
+    if len(phase) > 0:
+        for i in range(1, len(phase)):
+            if phase[i] != phase[phase_start]:
+                phase_name = phase[phase_start].capitalize()
+                color = 'lightcoral' if phase[phase_start] == 'exploitation' else 'lightblue'
+                
+                if phase_name not in phase_labels:
+                    phase_labels[phase_name] = ax1.axvspan(phase_start, i, color=color, 
+                                                           alpha=0.2, label=phase_name)
+                else:
+                    ax1.axvspan(phase_start, i, color=color, alpha=0.2)
+                
+                phase_start = i
+        
+        # Add the last phase block
+        if phase_start < len(phase):
             phase_name = phase[phase_start].capitalize()
             color = 'lightcoral' if phase[phase_start] == 'exploitation' else 'lightblue'
-            
             if phase_name not in phase_labels:
-                phase_labels[phase_name] = ax1.axvspan(phase_start, i, color=color, 
+                phase_labels[phase_name] = ax1.axvspan(phase_start, len(vocab_util_steps)-1, color=color, 
                                                        alpha=0.2, label=phase_name)
             else:
-                ax1.axvspan(phase_start, i, color=color, alpha=0.2)
-            
-            phase_start = i
-    
-    # Add the last phase block
-    phase_name = phase[phase_start].capitalize()
-    color = 'lightcoral' if phase[phase_start] == 'exploitation' else 'lightblue'
-    if phase_name not in phase_labels:
-        phase_labels[phase_name] = ax1.axvspan(phase_start, len(steps)-1, color=color, 
-                                               alpha=0.2, label=phase_name)
-    else:
-        ax1.axvspan(phase_start, len(steps)-1, color=color, alpha=0.2)
+                ax1.axvspan(phase_start, len(vocab_util_steps)-1, color=color, alpha=0.2)
     
     # --- Plot Data ---
-    # ax1: Vocab Utilization (blue)
-    p1, = ax1.plot(steps, vocab_util, 'b-', marker='o', markersize=4, 
-                   linewidth=2.5, label='Vocab Util', alpha=0.9)
-    ax1.set_xlabel('Validation Step', fontsize=16, fontweight='bold')
+    # ax1: Vocab Utilization (blue) - ALL training steps (granular)
+    p1, = ax1.plot(vocab_util_steps, vocab_util, 'b-', marker='o', markersize=3, 
+                   linewidth=2.0, label='Vocab Util (train)', alpha=0.9, markevery=max(1, len(vocab_util_steps)//50))
+    ax1.set_xlabel('Training Step', fontsize=16, fontweight='bold')
     ax1.set_ylabel('Vocab Utilization (%)', color='b', fontsize=14, fontweight='bold')
     ax1.tick_params(axis='y', labelcolor='b', labelsize=12)
     ax1.set_ylim(-5, 105)
     ax1.tick_params(axis='x', labelsize=12)
     
-    # ax2: Search Advantage (green)
-    p2, = ax2.plot(steps, search_adv, 'g-', marker='x', markersize=5, 
-                   linewidth=2.5, label='Search Adv', alpha=0.9)
+    # ax2: Search Advantage (green) - validation checkpoints only
+    p2, = ax2.plot(val_steps, search_adv, 'g-', marker='x', markersize=6, 
+                   linewidth=2.5, label='Search Adv (val)', alpha=0.9)
     ax2.set_ylabel('Search Advantage (%)', color='g', fontsize=14, fontweight='bold')
     ax2.tick_params(axis='y', labelcolor='g', labelsize=12)
     ax2.axhline(0, color='grey', linestyle='--', linewidth=1, alpha=0.5)
     
-    # ax3: Trajectory Loss (purple)
-    p3, = ax3.plot(steps, traj_loss, 'purple', marker='s', markersize=4, 
-                   linewidth=2.5, label='Traj Loss', alpha=0.9)
+    # ax3: Trajectory Loss (purple) - validation checkpoints only
+    p3, = ax3.plot(val_steps, traj_loss, 'purple', marker='s', markersize=5, 
+                   linewidth=2.5, label='Traj Loss (val)', alpha=0.9)
     ax3.set_ylabel('Trajectory Loss', color='purple', fontsize=14, fontweight='bold')
     ax3.tick_params(axis='y', labelcolor='purple', labelsize=12)
     
-    # ax4: Abstraction Loss (red)
-    p4, = ax4.plot(steps, abs_loss, 'r-', marker='d', markersize=4, 
-                   linewidth=2.5, label='Abs Loss', alpha=0.9)
+    # ax4: Abstraction Loss (red) - validation checkpoints only
+    p4, = ax4.plot(val_steps, abs_loss, 'r-', marker='d', markersize=5, 
+                   linewidth=2.5, label='Abs Loss (val)', alpha=0.9)
     ax4.set_ylabel('Abstraction Loss', color='r', fontsize=14, fontweight='bold')
     ax4.tick_params(axis='y', labelcolor='r', labelsize=12)
     

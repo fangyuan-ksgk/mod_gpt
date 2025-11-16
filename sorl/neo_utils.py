@@ -173,10 +173,12 @@ def resample_rollout(search_data, ppt, levels, model, tau: float = 2e-4, resampl
 def compute_rollout_reward(search_data, ppt, levels, mode: int = 0): 
     trajectory_mask = (levels[:, 1:] == 0).float()
     trajectory_ppt = ppt * trajectory_mask
+    abs_ppt = ppt * (1 - trajectory_mask)
 
     doc_idx = (search_data == BOS_TOKEN_ID).cumsum(dim=1)
     doc_idx = doc_idx - doc_idx.min(dim=1, keepdim=True).values # idx starts from 0  
     doc_ppt = avg_ppt_per_sample(trajectory_ppt, doc_idx[:,1:])
+    doc_abs_ppt = avg_ppt_per_sample(abs_ppt, doc_idx[:,1:])
 
     # group advantage by documnet | same way GRPO's advantage is computed | like GSPO since adv is sequence level
     doc_ppt_mean = doc_ppt.mean(dim=0, keepdim=True)  # Keep dim for broadcasting
@@ -188,6 +190,11 @@ def compute_rollout_reward(search_data, ppt, levels, mode: int = 0):
     elif mode == 1:
         # No advantage (baseline MLE) | more stable abstraction | all-rollout SoRL
         advantage = torch.ones_like(doc_ppt)
+    elif mode == 2: 
+        # for distillation, encourage more familiar abstractions
+        doc_abs_ppt_mean = doc_abs_ppt.mean(dim=0, keepdim=True)
+        doc_abs_ppt_std = doc_abs_ppt.std(dim=0, keepdim=True, unbiased=False).clamp(min=1e-8)
+        advantage = - (doc_abs_ppt - doc_abs_ppt_mean) / doc_abs_ppt_std
 
     doc_adv = torch.where(
         doc_ppt_std > 1e-8,
