@@ -204,7 +204,7 @@ def compute_rollout_reward(search_data, ppt, levels, mode: int = 0):
 
     # broadcast back to per-token advantage
     token_adv = doc_adv.gather(1, doc_idx[:,1:])
-    token_adv = token_adv * (1 - trajectory_mask) # redundantly line to play it safe
+    # token_adv = token_adv * (1 - trajectory_mask) # redundantly line to play it safe
     return token_adv
 
 # def compute_rollout_reward_v2(search_data, ppt, levels): 
