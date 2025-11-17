@@ -51,6 +51,30 @@ EXPLORATION_MODE=0 # SGPO - exploration
 REINIT_MODE_DESC=("abstract embedding + head only" "all token embedding + head" "abstract head only" "abstract embedding only")
 for REINIT_MODE in 0 2 3; do
   # Off-policy exploitation (samples from frozen ref_model)
+  # torchrun \
+  #   --nproc_per_node=$N_GPUS \
+  #   --master_addr=$MASTER_ADDR \
+  #   --master_port=$MASTER_PORT \
+  #   train_sorl_v2.py \
+  #   --batch_size $BATCH_SIZE \
+  #   --train_seq_len $TRAIN_SEQ_LEN \
+  #   --val_seq_len $VAL_SEQ_LEN \
+  #   --num_iterations $NUM_ITERATIONS \
+  #   --num_rollouts $NUM_ROLLOUTS \
+  #   --K 8 \
+  #   --max_iterations $MAX_ITERATIONS \
+  #   --min_temperature 0.0 \
+  #   --temperature 5.0 \
+  #   --alpha_loss $ALPHA_LOSS \
+  #   --mode $EXPLORATION_MODE \
+  #   --do_reinit \
+  #   --reinit_mode $REINIT_MODE \
+  #   --steps_per_cycle $NUM_ITERATIONS \
+  #   --exploration_fraction 0.4 \
+  #   --use_static_memory_span \
+  #   --use_off_policy_distillation \
+  #   --run_info "SGPO exploration --> off-policy distillation with ${REINIT_MODE_DESC[$REINIT_MODE]}"
+
   torchrun \
     --nproc_per_node=$N_GPUS \
     --master_addr=$MASTER_ADDR \
@@ -72,8 +96,9 @@ for REINIT_MODE in 0 2 3; do
     --steps_per_cycle $NUM_ITERATIONS \
     --exploration_fraction 0.4 \
     --use_static_memory_span \
-    --use_off_policy_distillation \
-    --run_info "SGPO exploration --> off-policy distillation with ${REINIT_MODE_DESC[$REINIT_MODE]}"
+    --use_off_policy_exploitation \
+    --exploitation_mode 2 \
+    --run_info "SGPO exploration --> off-policy exploitation (favor familiar abstraction) with ${REINIT_MODE_DESC[$REINIT_MODE]}"
 done
 
 # ================================================
@@ -105,8 +130,9 @@ for NUM_CYCLES in 2 3; do
       --steps_per_cycle $CYCLE_STEPS \
       --exploration_fraction 0.4 \
       --use_static_memory_span \
-      --use_off_policy_distillation \
-      --run_info "SGPO exploration --> off-policy distillation with ${REINIT_MODE_DESC[$REINIT_MODE]} with $NUM_CYCLES cycles"
+      --use_off_policy_exploitation \
+      --exploitation_mode 2 \
+      --run_info "SGPO exploration --> off-policy exploitation (favor familiar abstraction) with ${REINIT_MODE_DESC[$REINIT_MODE]} with $NUM_CYCLES cycles"
 done
 
 # ================================================
@@ -135,8 +161,9 @@ for MEMORY_SPAN in 128 512 1024; do
     --reinit_mode $REINIT_MODE \
     --steps_per_cycle $NUM_ITERATIONS \
     --exploration_fraction 0.4 \
-    --use_off_policy_distillation \
-    --run_info "SGPO exploration --> off-policy distillation with ${REINIT_MODE_DESC[$REINIT_MODE]} with $NUM_CYCLES cycles"
+    --use_off_policy_exploitation \
+    --exploitation_mode 2 \
+    --run_info "SGPO exploration --> off-policy exploitation (favor familiar abstraction) with ${REINIT_MODE_DESC[$REINIT_MODE]} with memory compression $MEMORY_SPAN"
 done
 
 
