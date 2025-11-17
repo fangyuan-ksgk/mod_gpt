@@ -547,12 +547,11 @@ def reinit_model(model, mode: int = 0):
             _normal_slice(model.transformer.wte.weight)
             _zero_slice(model.lm_head.weight)
 
-        elif mode == 2:  # full model reset = call each module’s default init
-            model.apply(
-                lambda m: m.reset_parameters()
-                if hasattr(m, "reset_parameters") else None
-            )
-            # ensure GAT-specific tweaks still hold
-            _zero_slice(model.lm_head.weight)
+        elif mode == 2: # abstract head only 
+            _normal_slice(model.lm_head.weight, abstract_slice)
+        
+        elif mode == 3: # abstract embedding only
+            _normal_slice(model.transformer.wte.weight, abstract_slice)
+            
         else:
             raise ValueError(f"Unknown reinit mode {mode}")
