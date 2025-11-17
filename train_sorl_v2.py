@@ -61,6 +61,8 @@ def parse_args():
     parser.add_argument("--use_off_policy_exploitation", action="store_true", default=False) # use off-policy exploitation
     parser.add_argument("--use_on_policy_exploitation", action="store_true", default=False) # use on-policy exploitation
     parser.add_argument("--exploitation_mode", type=int, default=2) # mode for exploitation (favor familiar abstraction / favor useful abstraction)
+    parser.add_argument("--do_reinit", action="store_true", default=False) # do reinitialization
+    parser.add_argument("--reinit_mode", type=int, default=0) # mode for reinitialization (a). abstract only / b). embedding + head / c). all parameters
     parser.add_argument("--run_info", type=str, default="") # run info
 
     return parser.parse_args()
@@ -176,7 +178,7 @@ class Muon(torch.optim.Optimizer):
 
 # GAT model
 from sorl.gat_sim import GAT, GATConfig
-from sorl.neo_utils import compute_loss, compute_weighted_loss, sorl_evaluate
+from sorl.neo_utils import compute_loss, compute_weighted_loss, sorl_evaluate, reinit_model
 from sorl.eval import compute_vocab_utilization_rate
 
 # -----------------------------------------------------------------------------
@@ -240,6 +242,8 @@ class Hyperparameters:
     use_off_policy_exploitation: bool = False # use off-policy exploitation
     use_on_policy_exploitation: bool = False # use on-policy exploitation
     exploitation_mode: int = 2 # mode for exploitation (favor familiar abstraction / favor useful abstraction)
+    do_reinit: bool = False # do reinitialization
+    reinit_mode: int = 0 # mode for reinitialization (a). abstract only / b). embedding + head / c). all parameters
     run_info: str = "" # run info
 
 cli_args = parse_args()
@@ -531,7 +535,10 @@ for step in range(train_steps + 1):
                                                                     memory_span=memory_span, attn_blocksize=attn_blocksize, 
                                                                     temperature=temperature_train)
 
-        avg_util_rate += compute_vocab_utilization_rate(search_tokens, model)
+        if search_tokens.shape[0] > 1: 
+            avg_util_rate += compute_vocab_utilization_rate(search_tokens[:1, :], model) # greedy rollout vocab utilization check only
+        else:
+            avg_util_rate += compute_vocab_utilization_rate(search_tokens, model)
 
         # --- compute loss --- 
         if phase == "exploration": # reward-shaping on predictability loss (SGPO)
@@ -558,6 +565,9 @@ for step in range(train_steps + 1):
             with torch.no_grad():
                 for p_ema, p_online in zip(ref_model.parameters(), model.parameters()):
                     p_ema.data.copy_(p_online.data)
+            if args.do_reinit: 
+                reinit_model(model, mode=args.reinit_mode)
+
         phase = "exploitation"
         if args.use_off_policy_distillation or args.use_on_policy_distillation:
             n = 1
@@ -625,6 +635,8 @@ print0(f"-- use_on_policy_distillation: {args.use_on_policy_distillation}", cons
 print0(f"-- use_off_policy_exploitation: {args.use_off_policy_exploitation}", console=True)
 print0(f"-- use_on_policy_exploitation: {args.use_on_policy_exploitation}", console=True)
 print0(f"-- exploitation_mode: {args.exploitation_mode}", console=True)
+print0(f"-- do_reinit: {args.do_reinit}", console=True)
+print0(f"-- reinit_mode: {args.reinit_mode}", console=True)
 # print0(f"loss record:\n{loss_record}", console=True)
 
 

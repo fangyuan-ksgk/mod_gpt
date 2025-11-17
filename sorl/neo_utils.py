@@ -524,3 +524,35 @@ def generate(model, idx, K, max_iterations=0, memory_span=1792, attn_blocksize=1
 
     idx = torch.cat((idx, new_tokens.unsqueeze(1)), dim=1)
     return idx
+
+
+def reinit_model(model, mode: int = 0):
+    def _normal_slice(tensor, slc=None):
+        tgt = tensor.detach() if slc is None else tensor.detach()[slc]
+        torch.nn.init.normal_(tgt, mean=0.0, std=1.0)
+
+    def _zero_slice(tensor, slc=None):
+        tgt = tensor.detach() if slc is None else tensor.detach()[slc]
+        tgt.zero_()
+
+    with torch.no_grad():
+        vocab_split = model.vocab_sizes[0].item()
+        abstract_slice = slice(vocab_split, None)
+
+        if mode == 0:  # abstract tokens only
+            _normal_slice(model.transformer.wte.weight, abstract_slice)
+            _zero_slice(model.lm_head.weight, abstract_slice)
+
+        elif mode == 1:  # entire embedding + head
+            _normal_slice(model.transformer.wte.weight)
+            _zero_slice(model.lm_head.weight)
+
+        elif mode == 2:  # full model reset = call each module’s default init
+            model.apply(
+                lambda m: m.reset_parameters()
+                if hasattr(m, "reset_parameters") else None
+            )
+            # ensure GAT-specific tweaks still hold
+            _zero_slice(model.lm_head.weight)
+        else:
+            raise ValueError(f"Unknown reinit mode {mode}")
