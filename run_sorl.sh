@@ -79,10 +79,10 @@ done
 # ================================================
 # Multiple Cycles make any difference? 
 # ================================================
-REINIT_MODE = 0 
+REINIT_MODE=0
 for NUM_CYCLES in 2 3; do
-  NUM_ITERATIONS_TEMP = $((1750 * NUM_CYCLES)) 
-  CYCLE_STEPS = $((NUM_ITERATIONS_TEMP / NUM_CYCLES))
+  NUM_ITERATIONS_TEMP=$((1750 * NUM_CYCLES))
+  CYCLE_STEPS=$((NUM_ITERATIONS_TEMP / NUM_CYCLES))
   echo "Running $NUM_CYCLES cycles (${CYCLE_STEPS} steps/cycle)"
   torchrun \
       --nproc_per_node=$N_GPUS \
