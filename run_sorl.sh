@@ -97,6 +97,53 @@ for REINIT_MODE in 0; do
     --use_off_policy_exploitation \
     --exploitation_mode 2 \
     --run_info "SGPO exploration --> off-policy exploitation (favor familiar abstraction) with ${REINIT_MODE_DESC[$REINIT_MODE]}"
+
+  torchrun \
+    --nproc_per_node=$N_GPUS \
+    --master_addr=$MASTER_ADDR \
+    --master_port=$MASTER_PORT \
+    train_sorl_v2.py \
+    --batch_size $BATCH_SIZE \
+    --train_seq_len $TRAIN_SEQ_LEN \
+    --val_seq_len $VAL_SEQ_LEN \
+    --num_iterations $NUM_ITERATIONS \
+    --num_rollouts $NUM_ROLLOUTS \
+    --K 8 \
+    --max_iterations $MAX_ITERATIONS \
+    --min_temperature 0.0 \
+    --temperature 5.0 \
+    --alpha_loss $ALPHA_LOSS \
+    --mode $EXPLORATION_MODE \
+    --do_reinit \
+    --reinit_mode $REINIT_MODE \
+    --steps_per_cycle $NUM_ITERATIONS \
+    --exploration_fraction 0.4 \
+    --use_on_policy_distillation \
+    --run_info "SGPO exploration --> on-policy distillation with ${REINIT_MODE_DESC[$REINIT_MODE]}"
+
+  torchrun \
+    --nproc_per_node=$N_GPUS \
+    --master_addr=$MASTER_ADDR \
+    --master_port=$MASTER_PORT \
+    train_sorl_v2.py \
+    --batch_size $BATCH_SIZE \
+    --train_seq_len $TRAIN_SEQ_LEN \
+    --val_seq_len $VAL_SEQ_LEN \
+    --num_iterations $NUM_ITERATIONS \
+    --num_rollouts $NUM_ROLLOUTS \
+    --K 8 \
+    --max_iterations $MAX_ITERATIONS \
+    --min_temperature 0.0 \
+    --temperature 5.0 \
+    --alpha_loss $ALPHA_LOSS \
+    --mode $EXPLORATION_MODE \
+    --do_reinit \
+    --reinit_mode $REINIT_MODE \
+    --steps_per_cycle $NUM_ITERATIONS \
+    --exploration_fraction 0.4 \
+    --use_on_policy_exploitation \
+    --exploitation_mode 2 \
+    --run_info "SGPO exploration --> on-policy exploitation (favor familiar abstraction) with ${REINIT_MODE_DESC[$REINIT_MODE]}"
 done
 
 # # ================================================
