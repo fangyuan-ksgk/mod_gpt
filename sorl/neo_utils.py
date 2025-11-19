@@ -3,6 +3,8 @@ import torch
 from sorl.gat_sim import BOS_TOKEN_ID, GAT, recursion, extract_and_sample, recursion_v2
 import torch.nn.functional as F
 from typing import Optional, Union
+from sorl.topo import doc_levenshtein_dist_pairwise, compute_correlation, compute_topo_loss, doc_util_dist, doc_levenshtein_dist
+
 
 @torch.compile
 def infer_rythmic_insert_mask(tokens, K, traj_vocab_size):
@@ -210,37 +212,55 @@ def compute_rollout_reward(search_data, ppt, levels, mode: int = 0):
     # token_adv = token_adv * (1 - trajectory_mask) # redundantly line to play it safe
     return token_adv
 
-# def compute_rollout_reward_v2(search_data, ppt, levels): 
-#     """Abstraction curiosity reward"""
-#     abs_mask = (levels[:, 1:] > 0).float()
-#     abs_ppt = ppt * abs_mask
 
-#     doc_idx = (search_data == BOS_TOKEN_ID).cumsum(dim=1)
-#     doc_idx = doc_idx - doc_idx.min(dim=1, keepdim=True).values # idx starts from 0  
-#     doc_abs_ppt = avg_ppt_per_sample(abs_ppt, doc_idx[:,1:])
-
-#     doc_abs_ppt_mean = doc_abs_ppt.mean(dim=0, keepdim=True)  # Keep dim for broadcasting
-#     doc_abs_ppt_std = doc_abs_ppt.std(dim=0, keepdim=True, unbiased=False).clamp(min=1e-8)  # Avoid division by zero
+def compute_rollout_reward_v2(search_data, ppt, levels, mode: int = 0, topo_abs_dist_mode: int = 0): 
     
-#     doc_adv = torch.where(
-#             doc_abs_ppt_std > 1e-8,
-#             # (doc_abs_ppt - doc_abs_ppt_mean) / doc_abs_ppt_std, # buggy ver. leads to emergent abstraction structure
-#             # - (doc_abs_ppt - doc_abs_ppt_mean) / doc_abs_ppt_std, # 
-#             torch.sigmoid(- (doc_abs_ppt - doc_abs_ppt_mean) / doc_abs_ppt_std),
-#             # torch.sigmoid((doc_abs_ppt - doc_abs_ppt_mean) / doc_abs_ppt_std),
-#             # doc_abs_ppt - doc_abs_ppt_mean, 
-#             # - doc_abs_ppt + doc_abs_ppt_mean,
-#             # torch.sigmoid(doc_abs_ppt - doc_abs_ppt_mean),
-#             # torch.sigmoid((doc_abs_ppt - doc_abs_ppt_mean) / 2.0),
-#             # doc_abs_ppt,
-#             torch.zeros_like(doc_abs_ppt)
-#     )
+    trajectory_mask = (levels[:, 1:] == 0).float()
+    trajectory_ppt = ppt * trajectory_mask
+    abs_ppt = ppt * (1 - trajectory_mask)
 
-#     # broadcast back to per-token advantage
-#     token_adv = doc_adv.gather(1, doc_idx[:,1:])
-#     token_adv = token_adv * (1 - abs_mask)
-#     return token_adv
-  
+    doc_idx = (search_data == BOS_TOKEN_ID).cumsum(dim=1)
+    doc_idx = doc_idx - doc_idx.min(dim=1, keepdim=True).values # idx starts from 0  
+    doc_ppt = avg_ppt_per_sample(trajectory_ppt, doc_idx[:,1:])
+    doc_abs_ppt = avg_ppt_per_sample(abs_ppt, doc_idx[:,1:])
+
+    # group advantage by documnet | same way GRPO's advantage is computed | like GSPO since adv is sequence level
+    doc_ppt_mean = doc_ppt.mean(dim=0, keepdim=True)  # Keep dim for broadcasting
+    doc_ppt_std = doc_ppt.std(dim=0, keepdim=True, unbiased=False).clamp(min=1e-8)  # Avoid division by zero
+    
+    if mode == 0:
+        # SGPO, encourage picking a with low p(s | a)
+        advantage = (doc_ppt - doc_ppt_mean) / doc_ppt_std
+    elif mode == 1:
+        # No advantage (baseline MLE) | more stable abstraction | all-rollout SoRL
+        advantage = torch.ones_like(doc_ppt)
+    elif mode == 2: 
+        # distillation, encourage picking a with high p(a | s)
+        doc_abs_ppt_mean = doc_abs_ppt.mean(dim=0, keepdim=True)
+        doc_abs_ppt_std = doc_abs_ppt.std(dim=0, keepdim=True, unbiased=False).clamp(min=1e-8)
+        advantage = - (doc_abs_ppt - doc_abs_ppt_mean) / doc_abs_ppt_std
+    elif mode == 3: 
+        # exploitation, encourage picking a with high p(s | a)
+        advantage = (doc_ppt_mean - doc_ppt) / doc_ppt_std
+    elif mode == 4:
+        # exploration, encourage picking a with low p(a | s)
+        doc_abs_ppt_mean = doc_abs_ppt.mean(dim=0, keepdim=True)
+        doc_abs_ppt_std = doc_abs_ppt.std(dim=0, keepdim=True, unbiased=False).clamp(min=1e-8)
+        advantage = (doc_ppt - doc_ppt_mean) / doc_ppt_std
+
+    doc_adv = torch.where(
+        doc_ppt_std > 1e-8,
+        advantage,
+        torch.zeros_like(doc_ppt)
+    )
+
+    token_adv = doc_adv.gather(1, doc_idx[:,1:])
+
+    # --- abs distance matrix --- 
+    abs_mask = levels.bool()
+    abs_dist = doc_levenshtein_dist_pairwise(search_data, doc_idx, abs_mask, normalize=True)
+
+    return token_adv, abs_dist
 
 
 # Reflection 1. what if we have a 'information bottleneck mask' to mute future influence 
@@ -319,6 +339,59 @@ def sorl_search_v3(tokens, model, n=3, K=3, max_iterations=1,
     return search_data, search_ppt, token_adv
 
 
+def sorl_search_v4(tokens, model, n=3, K=3, max_iterations=1,
+                memory_span=1792, attn_blocksize=1792, temperature: Union[float, torch.Tensor] = 1.0, truncate_seq_len: bool = True, 
+                alpha_select: float = 0.0, select_mode: str = "abs_ppt", # placeholder
+                loss_mask: Optional[torch.Tensor] = None, mode: int = 0, topo_abs_dist_mode: int = 0):
+    """
+    Complete SoRL search pipeline:
+    1. Direct rollout without greedy sample. 
+    2. Compute reward for each rollout
+    """
+    # --- generate & evaluate rollouts ---
+    search_data, search_ppt = sorl_rollout_v2(tokens, model, n=n, K=K, 
+                               max_iterations=max_iterations,
+                               memory_span=memory_span,
+                               attn_blocksize=attn_blocksize,
+                               temperature=temperature,
+                               truncate_seq_len=truncate_seq_len)
+    search_ppt = search_ppt.reshape(search_data.shape[0], -1)
+
+    # --- compute reward for each rollout & abs distance matrix ---
+    levels = (search_data >= model.vocab_sizes[0]).long()
+
+    token_adv, abs_dist = compute_rollout_reward_v2(search_data, search_ppt, levels, mode=mode, topo_abs_dist_mode=topo_abs_dist_mode) # un-utility reward
+ 
+    return search_data, search_ppt, token_adv, abs_dist
+
+
+def evaluate_topo_similarity(search_data, ppt, model): 
+
+    levels = (search_data >= model.vocab_sizes[0]).long()
+    # (a). document idx
+    doc_idx = (search_data == BOS_TOKEN_ID).cumsum(dim=1)
+    doc_idx = doc_idx - doc_idx.min(dim=1, keepdim=True).values # idx starts from 0 
+
+    # (b). per-document trajectory ppt
+    trajectory_mask = (levels[:, 1:] == 0).float()
+    trajectory_ppt = ppt * trajectory_mask
+    abs_ppt = ppt * (1 - trajectory_mask)
+
+    doc_ppt = avg_ppt_per_sample(trajectory_ppt, doc_idx[:,1:])  # Shape: (n_rollouts, n_docs)
+
+    # (c). d(a1, a2) :: pairwise levenshtein distance matrix || simplest case, n=2
+    abs_mask = search_data >= model.vocab_sizes[0]  # True for abstraction tokens
+    abs_dist_matrix = doc_levenshtein_dist(search_data, doc_idx, abs_mask, normalize=True)
+
+    # (d). d(p(s|a1), p(s|a2)) :: utility distance matrix
+    util_dist_matrix = doc_util_dist(doc_ppt)
+
+
+    # (e). Compute correlation
+    correlation = compute_correlation(abs_dist_matrix, util_dist_matrix)
+
+    return correlation
+
 def sorl_evaluate(tokens, model, n=2, K=4, max_iterations=1, memory_span=1792, attn_blocksize=1792, temperature: Union[float, torch.Tensor] = 1.0,
                   loss_mask: Optional[torch.Tensor] = None, truncate_seq_len: bool = True):
     """
@@ -355,7 +428,49 @@ def sorl_evaluate(tokens, model, n=2, K=4, max_iterations=1, memory_span=1792, a
     traj_loss = (greedy_ppt * valid_traj).sum() / valid_traj.sum().clamp(min=1)
     abs_loss = (greedy_ppt * valid_abs).sum() / valid_abs.sum().clamp(min=1)
     
+    
     return search_data[:1], search_adv, traj_loss, abs_loss
+
+def sorl_evaluate_v2(tokens, model, n=2, K=4, max_iterations=1, memory_span=1792, attn_blocksize=1792, temperature: Union[float, torch.Tensor] = 1.0,
+                  loss_mask: Optional[torch.Tensor] = None, truncate_seq_len: bool = True):
+    """
+    Search & Check greedy rollout advantage & topological similarity
+    """
+    search_data, search_ppt = sorl_rollout_v2(tokens, model, n=n, K=K, 
+                               max_iterations=max_iterations,
+                               memory_span=memory_span,
+                               attn_blocksize=attn_blocksize,
+                               temperature=temperature,
+                               truncate_seq_len=truncate_seq_len)
+    search_ppt = search_ppt.reshape(search_data.shape[0], -1)
+
+    # Get valid positions
+    bos_pos_mask = torch.logical_and(
+        search_data[:, :-1] != BOS_TOKEN_ID, 
+        search_data[:, 1:] != BOS_TOKEN_ID
+    ).float()
+    
+    traj_mask = (search_data[:, 1:] < model.vocab_sizes[0]).float()
+    
+    # --- greedy rollout's advantage ---
+    valid_traj_mask = bos_pos_mask * traj_mask
+    raw_ppt_adv = (search_ppt[1:].mean(dim=0) - search_ppt[0]) / (search_ppt[1:].mean(dim=0) + 1e-8)
+    search_adv = (raw_ppt_adv * valid_traj_mask[0]).sum() / valid_traj_mask[0].sum().clamp(min=1)
+
+    # --- losses ---
+    greedy_ppt = search_ppt[0]
+    abs_mask = 1 - traj_mask[0]
+    
+    valid_traj = valid_traj_mask[0]
+    valid_abs = bos_pos_mask[0] * abs_mask
+    
+    traj_loss = (greedy_ppt * valid_traj).sum() / valid_traj.sum().clamp(min=1)
+    abs_loss = (greedy_ppt * valid_abs).sum() / valid_abs.sum().clamp(min=1)
+
+    # --- topological similarity ---
+    correlation = evaluate_topo_similarity(search_data, search_ppt, model)
+    
+    return search_data[:1], search_adv, traj_loss, abs_loss, correlation
 
 def compute_loss(best_data, model, memory_span: int, attn_blocksize: int,
                  loss_mask: Optional[torch.Tensor] = None):
@@ -380,6 +495,7 @@ def compute_loss(best_data, model, memory_span: int, attn_blocksize: int,
     abs_loss = (best_ppt[0] * valid_abs_mask).sum() / valid_abs_mask.sum().clamp(min=1)
     return traj_loss, abs_loss
 
+
 def compute_weighted_loss(best_data, token_adv, model, memory_span: int, attn_blocksize: int,
                  loss_mask: Optional[torch.Tensor] = None):
     best_ppt, _ = model.forward(best_data, memory_span, attn_blocksize)
@@ -400,7 +516,7 @@ def compute_weighted_loss(best_data, token_adv, model, memory_span: int, attn_bl
 
     traj_loss = (best_ppt[0] * valid_traj_mask).sum() / valid_traj_mask.sum().clamp(min=1)
     abs_loss = (best_ppt[0] * valid_abs_mask).sum() / valid_abs_mask.sum().clamp(min=1)
-    return traj_loss, abs_loss        
+    return traj_loss, abs_loss     
 
 # Should GRPO loss mask out trajectory tokens? GAPT requires this separation. 
 def compute_grpo_loss(rollout_data, rollout_ppt, reference_ppt, token_adv, epsilon: float = 0.1):
@@ -440,6 +556,34 @@ def compute_sgpo_loss(rollout_data, token_adv, model, memory_span: int, attn_blo
     grpo_loss = (surrogate_loss * valid_abs_mask).sum() / valid_abs_mask.sum().clamp(min=1)
 
     return traj_loss, grpo_loss
+
+def compute_sgpo_loss_v2(rollout_data, token_adv, abs_dist, model, memory_span: int, attn_blocksize: int, topo_mode: int = 0):
+    rollout_ppt, _ = model.forward(rollout_data, memory_span, attn_blocksize)
+    rollout_ppt = rollout_ppt.reshape(rollout_data.shape[0], -1)
+
+    levels = (rollout_data >= model.vocab_sizes[0]).long()[:, 1:]  # [n_rollouts, seq_len-1]
+    bos_pos_mask = torch.logical_and(
+        rollout_data[:, :-1] != BOS_TOKEN_ID, 
+        rollout_data[:, 1:] != BOS_TOKEN_ID
+    ).float()
+    
+    traj_mask = (levels == 0).float()  
+    abs_mask = (levels > 0).float() 
+    valid_traj_mask = bos_pos_mask * traj_mask 
+    valid_abs_mask = bos_pos_mask * abs_mask
+
+    traj_loss = (rollout_ppt * valid_traj_mask).sum() / valid_traj_mask.sum().clamp(min=1)    
+
+    # Pick discriminatively
+    surrogate_loss = rollout_ppt * token_adv 
+    grpo_loss = (surrogate_loss * valid_abs_mask).sum() / valid_abs_mask.sum().clamp(min=1)
+
+    # Compute topological similarity regularization loss
+    util_dist = torch.abs(rollout_ppt[0] - rollout_ppt[1])
+    topo_loss = compute_topo_loss(abs_dist, util_dist, mode=topo_mode)
+
+    return traj_loss, grpo_loss, topo_loss
+
 
 # def compute_inverse_sgpo_loss(rollout_data, token_adv, model, memory_span: int, attn_blocksize: int):
 #     """
@@ -552,6 +696,6 @@ def reinit_model(model, mode: int = 0):
         
         elif mode == 3: # abstract embedding only
             _normal_slice(model.transformer.wte.weight, abstract_slice)
-            
+
         else:
             raise ValueError(f"Unknown reinit mode {mode}")

@@ -43,267 +43,50 @@ EXPLORATION_MODE=0 # SGPO - exploration
 
 
 # =================================================================================
-# All-rollout SoRL with exploration→exploitation cycles
+# All-rollout SoRL with Topological Similarity Regularization
 # =================================================================================
-# Compare SGPO (mode=0) vs All-rollout (mode=1)
-# Compare off-policy vs on-policy exploitation
+# SGPO + topo regularization (topo mode: 3 | covariance)
+# - sweep on weight (alpha topo)
+# - sweep on rollout adv mode: (arg.mode 0: SGPO, 1: all rollout, 2: distillation (favor familiar abstraction), 3: exploitation (favor useful abstraction), 4: exploration (favor un-familiar abstraction))
 
-REINIT_MODE_DESC=("abstract embedding + head only" "all token embedding + head" "abstract head only" "abstract embedding only")
-for REINIT_MODE in 0; do
-  # Off-policy exploitation (samples from frozen ref_model)
-  torchrun \
-    --nproc_per_node=$N_GPUS \
-    --master_addr=$MASTER_ADDR \
-    --master_port=$MASTER_PORT \
-    train_sorl_v2.py \
-    --batch_size $BATCH_SIZE \
-    --train_seq_len $TRAIN_SEQ_LEN \
-    --val_seq_len $VAL_SEQ_LEN \
-    --num_iterations $NUM_ITERATIONS \
-    --num_rollouts $NUM_ROLLOUTS \
-    --K 8 \
-    --max_iterations $MAX_ITERATIONS \
-    --min_temperature 0.0 \
-    --temperature 5.0 \
-    --alpha_loss $ALPHA_LOSS \
-    --mode $EXPLORATION_MODE \
-    --do_reinit \
-    --reinit_mode $REINIT_MODE \
-    --steps_per_cycle $NUM_ITERATIONS \
-    --exploration_fraction 0.4 \
-    --use_off_policy_distillation \
-    --run_info "SGPO exploration --> off-policy distillation with ${REINIT_MODE_DESC[$REINIT_MODE]}"
+EXPLORATION_MODE_DESC=("SGPO (favor useless abstraction)" "all rollout" "distillation (favor familiar abstraction)" "exploitation (favor useful abstraction)" "exploration (favor un-familiar abstraction)")
+for EXPLORATION_MODE in 0 1 2 3 4; do
+  for ALPHA_TOPO in 0.0 0.1 0.5 1.0 2.0 5.0; do
+    torchrun \
+      --nproc_per_node=$N_GPUS \
+      --master_addr=$MASTER_ADDR \
+      --master_port=$MASTER_PORT \
+      train_sorl_v3.py \
+      --batch_size $BATCH_SIZE \
+      --train_seq_len $TRAIN_SEQ_LEN \
+      --val_seq_len $VAL_SEQ_LEN \
+      --num_iterations $NUM_ITERATIONS \
+      --num_rollouts $NUM_ROLLOUTS \
+      --K 8 \
+      --max_iterations $MAX_ITERATIONS \
+      --use_static_memory_span \
+      --min_temperature 0.0 \
+      --temperature 5.0 \
+      --alpha_loss $ALPHA_LOSS \
+      --mode $EXPLORATION_MODE \
+      --topo_mode 3 \
+      --alpha_topo $ALPHA_TOPO \
+      --steps_per_cycle $NUM_ITERATIONS \
+      --exploration_fraction 1.0 \
+      --run_info "${EXPLORATION_MODE_DESC[$EXPLORATION_MODE]} + topo regularization (mode: 3 | covariance) with weight: ${ALPHA_TOPO}"
 
-  torchrun \
-    --nproc_per_node=$N_GPUS \
-    --master_addr=$MASTER_ADDR \
-    --master_port=$MASTER_PORT \
-    train_sorl_v2.py \
-    --batch_size $BATCH_SIZE \
-    --train_seq_len $TRAIN_SEQ_LEN \
-    --val_seq_len $VAL_SEQ_LEN \
-    --num_iterations $NUM_ITERATIONS \
-    --num_rollouts $NUM_ROLLOUTS \
-    --K 8 \
-    --max_iterations $MAX_ITERATIONS \
-    --min_temperature 0.0 \
-    --temperature 5.0 \
-    --alpha_loss $ALPHA_LOSS \
-    --mode $EXPLORATION_MODE \
-    --do_reinit \
-    --reinit_mode $REINIT_MODE \
-    --steps_per_cycle $NUM_ITERATIONS \
-    --exploration_fraction 0.4 \
-    --use_off_policy_exploitation \
-    --exploitation_mode 2 \
-    --run_info "SGPO exploration --> off-policy exploitation (favor familiar abstraction) with ${REINIT_MODE_DESC[$REINIT_MODE]}"
-
-  torchrun \
-    --nproc_per_node=$N_GPUS \
-    --master_addr=$MASTER_ADDR \
-    --master_port=$MASTER_PORT \
-    train_sorl_v2.py \
-    --batch_size $BATCH_SIZE \
-    --train_seq_len $TRAIN_SEQ_LEN \
-    --val_seq_len $VAL_SEQ_LEN \
-    --num_iterations $NUM_ITERATIONS \
-    --num_rollouts $NUM_ROLLOUTS \
-    --K 8 \
-    --max_iterations $MAX_ITERATIONS \
-    --min_temperature 0.0 \
-    --temperature 5.0 \
-    --alpha_loss $ALPHA_LOSS \
-    --mode $EXPLORATION_MODE \
-    --do_reinit \
-    --reinit_mode $REINIT_MODE \
-    --steps_per_cycle $NUM_ITERATIONS \
-    --exploration_fraction 0.4 \
-    --use_on_policy_distillation \
-    --run_info "SGPO exploration --> on-policy distillation with ${REINIT_MODE_DESC[$REINIT_MODE]}"
-
-  torchrun \
-    --nproc_per_node=$N_GPUS \
-    --master_addr=$MASTER_ADDR \
-    --master_port=$MASTER_PORT \
-    train_sorl_v2.py \
-    --batch_size $BATCH_SIZE \
-    --train_seq_len $TRAIN_SEQ_LEN \
-    --val_seq_len $VAL_SEQ_LEN \
-    --num_iterations $NUM_ITERATIONS \
-    --num_rollouts $NUM_ROLLOUTS \
-    --K 8 \
-    --max_iterations $MAX_ITERATIONS \
-    --min_temperature 0.0 \
-    --temperature 5.0 \
-    --alpha_loss $ALPHA_LOSS \
-    --mode $EXPLORATION_MODE \
-    --do_reinit \
-    --reinit_mode $REINIT_MODE \
-    --steps_per_cycle $NUM_ITERATIONS \
-    --exploration_fraction 0.4 \
-    --use_on_policy_exploitation \
-    --exploitation_mode 2 \
-    --run_info "SGPO exploration --> on-policy exploitation (favor familiar abstraction) with ${REINIT_MODE_DESC[$REINIT_MODE]}"
-done
-
-# # ================================================
-# # Multiple Cycles make any difference? 
-# # ================================================
-# REINIT_MODE=0
-# for NUM_CYCLES in 2 3; do
-#   NUM_ITERATIONS_TEMP=$((1750 * NUM_CYCLES))
-#   CYCLE_STEPS=$((NUM_ITERATIONS_TEMP / NUM_CYCLES))
-#   echo "Running $NUM_CYCLES cycles (${CYCLE_STEPS} steps/cycle)"
-#   torchrun \
-#       --nproc_per_node=$N_GPUS \
-#       --master_addr=$MASTER_ADDR \
-#       --master_port=$MASTER_PORT \
-#       train_sorl_v2.py \
-#       --batch_size $BATCH_SIZE \
-#       --train_seq_len $TRAIN_SEQ_LEN \
-#       --val_seq_len $VAL_SEQ_LEN \
-#       --num_iterations $NUM_ITERATIONS_TEMP \
-#       --num_rollouts $NUM_ROLLOUTS \
-#       --K 8 \
-#       --max_iterations $MAX_ITERATIONS \
-#       --min_temperature 0.0 \
-#       --temperature 5.0 \
-#       --alpha_loss $ALPHA_LOSS \
-#       --mode $EXPLORATION_MODE \
-#       --do_reinit \
-#       --reinit_mode $REINIT_MODE \
-#       --steps_per_cycle $CYCLE_STEPS \
-#       --exploration_fraction 0.4 \
-#       --use_static_memory_span \
-#       --use_off_policy_exploitation \
-#       --exploitation_mode 2 \
-#       --run_info "SGPO exploration --> off-policy exploitation (favor familiar abstraction) with ${REINIT_MODE_DESC[$REINIT_MODE]} with $NUM_CYCLES cycles"
-# done
-
-# ================================================
-# Memory compression improves abstraction? 
-# ================================================
-
-for MEMORY_SPAN in 128 512 1024; do
-  torchrun \
-    --nproc_per_node=$N_GPUS \
-    --master_addr=$MASTER_ADDR \
-    --master_port=$MASTER_PORT \
-    train_sorl_v2.py \
-    --batch_size $BATCH_SIZE \
-    --train_seq_len $TRAIN_SEQ_LEN \
-    --val_seq_len $VAL_SEQ_LEN \
-    --num_iterations $NUM_ITERATIONS \
-    --num_rollouts $NUM_ROLLOUTS \
-    --K 8 \
-    --max_iterations $MAX_ITERATIONS \
-    --min_temperature 0.0 \
-    --temperature 5.0 \
-    --min_memory_span $MEMORY_SPAN \
-    --alpha_loss $ALPHA_LOSS \
-    --mode $EXPLORATION_MODE \
-    --do_reinit \
-    --reinit_mode $REINIT_MODE \
-    --steps_per_cycle $NUM_ITERATIONS \
-    --exploration_fraction 0.4 \
-    --use_off_policy_exploitation \
-    --exploitation_mode 2 \
-    --run_info "SGPO exploration --> off-policy exploitation (favor familiar abstraction) with ${REINIT_MODE_DESC[$REINIT_MODE]} with memory compression $MEMORY_SPAN"
-done
 
 
 
 # # =================================================================================
-# # All-rollout SoRL | verify its performance (high vocab_util, stable abstraction)
+# # All-rollout SoRL with exploration→exploitation cycles + GAPT (to further improve traj perplexity)
 # # =================================================================================
-# # - not sure how to improve its advantage
-# # (1). Sweep on temperature (high temperature)
-# # (2). Sweep on alpha_loss (high alpha_loss)
-# # (3). Include 'memory compression' (to verify higher vocab utilization)
+# # Compare SGPO (mode=0) vs All-rollout (mode=1)
+# # Compare off-policy vs on-policy exploitation
 
-# MODE=1
-# torchrun \
-#   --nproc_per_node=$N_GPUS \
-#   --master_addr=$MASTER_ADDR \
-#   --master_port=$MASTER_PORT \
-#   train_sorl_v2.py \
-#   --batch_size $BATCH_SIZE \
-#   --train_seq_len $TRAIN_SEQ_LEN \
-#   --val_seq_len $VAL_SEQ_LEN \
-#   --num_iterations $NUM_ITERATIONS \
-#   --num_rollouts $NUM_ROLLOUTS \
-#   --max_iterations $MAX_ITERATIONS \
-#   --alpha_loss $ALPHA_LOSS \
-#   --mode $MODE \
-#   --steps_per_cycle $NUM_ITERATIONS \
-#   --exploration_fraction 1.0 \
-#   --use_static_memory_span \
-#   --run_info "All-rollout SoRL baseline (mode=$MODE, 100% exploration)"
-
-
-# # Temperature sweep: test if higher temperature improves exploration diversity
-# echo "========================================="
-# echo "Temperature sweep for All-rollout SoRL"
-# echo "========================================="
-# for TEMP in 2.0 4.0 8.0; do
-#   torchrun \
-#     --nproc_per_node=$N_GPUS \
-#     --master_addr=$MASTER_ADDR \
-#     --master_port=$MASTER_PORT \
-#     train_sorl_v2.py \
-#     --batch_size $BATCH_SIZE \
-#     --train_seq_len $TRAIN_SEQ_LEN \
-#     --val_seq_len $VAL_SEQ_LEN \
-#     --num_iterations $NUM_ITERATIONS \
-#     --num_rollouts $NUM_ROLLOUTS \
-#     --max_iterations $MAX_ITERATIONS \
-#     --min_temperature $TEMP \
-#     --temperature $TEMP \
-#     --alpha_loss $ALPHA_LOSS \
-#     --mode $MODE \
-#     --steps_per_cycle $NUM_ITERATIONS \
-#     --exploration_fraction 1.0 \
-#     --use_static_memory_span \
-#     --run_info "All-rollout SoRL: temp=${TEMP}, alpha=${ALPHA_LOSS}, mode=$MODE"
-# done
-
-# echo "========================================="
-# echo "Alpha_loss sweep for All-rollout SoRL"
-# echo "========================================="
-# TEMP=1.0  # Use baseline temperature
-# for ALPHA in 0.05 0.5 1.0; do
-#   torchrun \
-#     --nproc_per_node=$N_GPUS \
-#     --master_addr=$MASTER_ADDR \
-#     --master_port=$MASTER_PORT \
-#     train_sorl_v2.py \
-#     --batch_size $BATCH_SIZE \
-#     --train_seq_len $TRAIN_SEQ_LEN \
-#     --val_seq_len $VAL_SEQ_LEN \
-#     --num_iterations $NUM_ITERATIONS \
-#     --num_rollouts $NUM_ROLLOUTS \
-#     --max_iterations $MAX_ITERATIONS \
-#     --min_temperature $TEMP \
-#     --temperature $TEMP \
-#     --alpha_loss $ALPHA \
-#     --mode $MODE \
-#     --steps_per_cycle $NUM_ITERATIONS \
-#     --exploration_fraction 1.0 \
-#     --use_static_memory_span \
-#     --run_info "All-rollout SoRL: temp=${TEMP}, alpha=${ALPHA}, mode=$MODE"
-# done
-
-
-# for NUM_CYCLES in 1 2 5; do
-#   CYCLE_STEPS=$((NUM_ITERATIONS / NUM_CYCLES))
-#   MODE=0
-#   EXPLORE_FRAC=0.5
-  
-#   echo "========================================="
-#   echo "Running ${NUM_CYCLES} cycles (${CYCLE_STEPS} steps/cycle)"
-#   echo "========================================="
-  
-#   # On-policy distillation (samples from current model during exploitation)
+# REINIT_MODE_DESC=("abstract embedding + head only" "all token embedding + head" "abstract head only" "abstract embedding only")
+# for REINIT_MODE in 0; do
+#   # Off-policy exploitation (samples from frozen ref_model)
 #   torchrun \
 #     --nproc_per_node=$N_GPUS \
 #     --master_addr=$MASTER_ADDR \
@@ -315,18 +98,68 @@ done
 #     --num_iterations $NUM_ITERATIONS \
 #     --num_rollouts $NUM_ROLLOUTS \
 #     --K 8 \
-#     --max_iterations 1 \
+#     --max_iterations $MAX_ITERATIONS \
 #     --min_temperature 0.0 \
-#     --temperature 1.0 \
+#     --temperature 5.0 \
+#     --use_static_memory_span \
 #     --alpha_loss $ALPHA_LOSS \
-#     --mode $MODE \
-#     --steps_per_cycle $CYCLE_STEPS \
-#     --exploration_fraction $EXPLORE_FRAC \
+#     --mode $EXPLORATION_MODE \
+#     --do_reinit \
+#     --reinit_mode $REINIT_MODE \
+#     --steps_per_cycle $NUM_ITERATIONS \
+#     --exploration_fraction 0.4 \
+#     --use_off_policy_distillation \
+#     --run_info "SGPO exploration --> off-policy distillation with ${REINIT_MODE_DESC[$REINIT_MODE]}"
+
+#   torchrun \
+#     --nproc_per_node=$N_GPUS \
+#     --master_addr=$MASTER_ADDR \
+#     --master_port=$MASTER_PORT \
+#     train_sorl_v2.py \
+#     --batch_size $BATCH_SIZE \
+#     --train_seq_len $TRAIN_SEQ_LEN \
+#     --val_seq_len $VAL_SEQ_LEN \
+#     --num_iterations $NUM_ITERATIONS \
+#     --num_rollouts $NUM_ROLLOUTS \
+#     --K 8 \
+#     --max_iterations $MAX_ITERATIONS \
+#     --min_temperature 0.0 \
+#     --temperature 5.0 \
+#     --use_static_memory_span \
+#     --alpha_loss $ALPHA_LOSS \
+#     --mode $EXPLORATION_MODE \
+#     --do_reinit \
+#     --reinit_mode $REINIT_MODE \
+#     --steps_per_cycle $NUM_ITERATIONS \
+#     --exploration_fraction 0.4 \
+#     --use_off_policy_exploitation \
+#     --exploitation_mode 2 \
+#     --run_info "SGPO exploration --> off-policy exploitation (favor familiar abstraction) with ${REINIT_MODE_DESC[$REINIT_MODE]}"
+
+#   torchrun \
+#     --nproc_per_node=$N_GPUS \
+#     --master_addr=$MASTER_ADDR \
+#     --master_port=$MASTER_PORT \
+#     train_sorl_v2.py \
+#     --batch_size $BATCH_SIZE \
+#     --train_seq_len $TRAIN_SEQ_LEN \
+#     --val_seq_len $VAL_SEQ_LEN \
+#     --num_iterations $NUM_ITERATIONS \
+#     --num_rollouts $NUM_ROLLOUTS \
+#     --K 8 \
+#     --max_iterations $MAX_ITERATIONS \
+#     --min_temperature 0.0 \
+#     --temperature 5.0 \
+#     --use_static_memory_span \
+#     --alpha_loss $ALPHA_LOSS \
+#     --mode $EXPLORATION_MODE \
+#     --do_reinit \
+#     --reinit_mode $REINIT_MODE \
+#     --steps_per_cycle $NUM_ITERATIONS \
+#     --exploration_fraction 0.4 \
 #     --use_on_policy_distillation \
-#     --use_static_memory_span \
-#     --run_info "cycles=${NUM_CYCLES}, explore=${EXPLORE_FRAC}, mode=$MODE, on-policy distillation"
-  
-#   # Off-policy distillation (samples from frozen ref model during exploitation)
+#     --run_info "SGPO exploration --> on-policy distillation with ${REINIT_MODE_DESC[$REINIT_MODE]}"
+
 #   torchrun \
 #     --nproc_per_node=$N_GPUS \
 #     --master_addr=$MASTER_ADDR \
@@ -338,28 +171,28 @@ done
 #     --num_iterations $NUM_ITERATIONS \
 #     --num_rollouts $NUM_ROLLOUTS \
 #     --K 8 \
-#     --max_iterations 1 \
+#     --max_iterations $MAX_ITERATIONS \
 #     --min_temperature 0.0 \
-#     --temperature 1.0 \
-#     --alpha_loss $ALPHA_LOSS \
-#     --mode $MODE \
-#     --steps_per_cycle $CYCLE_STEPS \
-#     --exploration_fraction $EXPLORE_FRAC \
-#     --use_off_policy_distillation \
+#     --temperature 5.0 \
 #     --use_static_memory_span \
-#     --run_info "cycles=${NUM_CYCLES}, explore=${EXPLORE_FRAC}, mode=$MODE, off-policy distillation"
+#     --alpha_loss $ALPHA_LOSS \
+#     --mode $EXPLORATION_MODE \
+#     --do_reinit \
+#     --reinit_mode $REINIT_MODE \
+#     --steps_per_cycle $NUM_ITERATIONS \
+#     --exploration_fraction 0.4 \
+#     --use_on_policy_exploitation \
+#     --exploitation_mode 2 \
+#     --run_info "SGPO exploration --> on-policy exploitation (favor familiar abstraction) with ${REINIT_MODE_DESC[$REINIT_MODE]}"
 # done
 
-# # ===========================
-# # GAPT integration with multi-cycle training
-# # ===========================
-# # Test if GAPT improves abstraction with off-policy distillation
 
-# for NUM_CYCLES in 2 5; do
-#   CYCLE_STEPS=$((NUM_ITERATIONS / NUM_CYCLES))
-#   MODE=0
-#   EXPLORE_FRAC=0.5
-  
+
+# # ================================================
+# # Memory compression improves abstraction? 
+# # ================================================
+
+# for MEMORY_SPAN in 128 512 1024; do
 #   torchrun \
 #     --nproc_per_node=$N_GPUS \
 #     --master_addr=$MASTER_ADDR \
@@ -371,16 +204,20 @@ done
 #     --num_iterations $NUM_ITERATIONS \
 #     --num_rollouts $NUM_ROLLOUTS \
 #     --K 8 \
-#     --max_iterations 1 \
+#     --max_iterations $MAX_ITERATIONS \
 #     --min_temperature 0.0 \
-#     --temperature 1.0 \
-#     --alpha_loss $ALPHA_LOSS \
-#     --mode $MODE \
-#     --steps_per_cycle $CYCLE_STEPS \
-#     --exploration_fraction $EXPLORE_FRAC \
-#     --use_off_policy_distillation \
+#     --temperature 5.0 \
 #     --use_static_memory_span \
-#     --use_gapt \
-#     --traj_perplexity_patience 100 \
-#     --run_info "cycles=${NUM_CYCLES}, explore=${EXPLORE_FRAC}, mode=$MODE, GAPT+off-policy"
+#     --min_memory_span $MEMORY_SPAN \
+#     --alpha_loss $ALPHA_LOSS \
+#     --mode $EXPLORATION_MODE \
+#     --do_reinit \
+#     --reinit_mode $REINIT_MODE \
+#     --steps_per_cycle $NUM_ITERATIONS \
+#     --exploration_fraction 0.4 \
+#     --use_off_policy_exploitation \
+#     --exploitation_mode 2 \
+#     --run_info "SGPO exploration --> off-policy exploitation (favor familiar abstraction) with ${REINIT_MODE_DESC[$REINIT_MODE]} with memory compression $MEMORY_SPAN"
 # done
+
+
