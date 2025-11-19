@@ -50,30 +50,33 @@ EXPLORATION_MODE=0 # SGPO - exploration
 # - sweep on rollout adv mode: (arg.mode 0: SGPO, 1: all rollout, 2: distillation (favor familiar abstraction), 3: exploitation (favor useful abstraction), 4: exploration (favor un-familiar abstraction))
 
 EXPLORATION_MODE_DESC=("SGPO (favor useless abstraction)" "all rollout" "distillation (favor familiar abstraction)" "exploitation (favor useful abstraction)" "exploration (favor un-familiar abstraction)")
+TOPO_MODE_DESC=("dot product" "cosine similarity" "correlation" "covariance" "normalized squared diff of diff" "symmetric KL divergence" "cross entropy distance")
 for EXPLORATION_MODE in 0 1 2 3 4; do
   for ALPHA_TOPO in 0.0 0.1 0.5 1.0 2.0 5.0; do
-    torchrun \
-      --nproc_per_node=$N_GPUS \
-      --master_addr=$MASTER_ADDR \
-      --master_port=$MASTER_PORT \
-      train_sorl_v3.py \
-      --batch_size $BATCH_SIZE \
-      --train_seq_len $TRAIN_SEQ_LEN \
-      --val_seq_len $VAL_SEQ_LEN \
-      --num_iterations $NUM_ITERATIONS \
-      --num_rollouts $NUM_ROLLOUTS \
-      --K 8 \
-      --max_iterations $MAX_ITERATIONS \
-      --use_static_memory_span \
-      --min_temperature 0.0 \
-      --temperature 5.0 \
-      --alpha_loss $ALPHA_LOSS \
-      --mode $EXPLORATION_MODE \
-      --topo_mode 3 \
-      --alpha_topo $ALPHA_TOPO \
-      --steps_per_cycle $NUM_ITERATIONS \
-      --exploration_fraction 1.0 \
-      --run_info "${EXPLORATION_MODE_DESC[$EXPLORATION_MODE]} + topo regularization (mode: 3 | covariance) with weight: ${ALPHA_TOPO}"
+    for TOPO_MODE in 0 1 2 3 4 5 6; do
+      torchrun \
+        --nproc_per_node=$N_GPUS \
+        --master_addr=$MASTER_ADDR \
+        --master_port=$MASTER_PORT \
+        train_sorl_v3.py \
+        --batch_size $BATCH_SIZE \
+        --train_seq_len $TRAIN_SEQ_LEN \
+        --val_seq_len $VAL_SEQ_LEN \
+        --num_iterations $NUM_ITERATIONS \
+        --num_rollouts $NUM_ROLLOUTS \
+        --K 8 \
+        --max_iterations $MAX_ITERATIONS \
+        --use_static_memory_span \
+        --min_temperature 0.0 \
+        --temperature 5.0 \
+        --alpha_loss $ALPHA_LOSS \
+        --mode $EXPLORATION_MODE \
+        --topo_mode $TOPO_MODE \
+        --alpha_topo $ALPHA_TOPO \
+        --steps_per_cycle $NUM_ITERATIONS \
+        --exploration_fraction 1.0 \
+        --run_info "${EXPLORATION_MODE_DESC[$EXPLORATION_MODE]} + topo regularization (mode: ${TOPO_MODE} | ${TOPO_MODE_DESC[$TOPO_MODE]}) with weight: ${ALPHA_TOPO}"
+    done
   done 
 done
 

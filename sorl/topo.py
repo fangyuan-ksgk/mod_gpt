@@ -332,8 +332,11 @@ def compute_topo_loss(abs_dist, util_dist, mode: int = 0, kappa: float = 0.1):
     """
     if mode == 0: 
         return - (abs_dist * util_dist).mean()
-    elif mode == 1: 
-        return torch.clamp(kappa * abs_dist - util_dist, min=0).pow(2).mean()
+    elif mode == 1: # cosine similarity 
+        cos_sim = (abs_dist * util_dist).sum() / (
+            abs_dist.norm() * util_dist.norm() + 1e-8
+        )
+        return 1 - cos_sim
     elif mode == 2:
         abs_centered = abs_dist - abs_dist.mean()
         util_centered = util_dist - util_dist.mean()
@@ -347,6 +350,17 @@ def compute_topo_loss(abs_dist, util_dist, mode: int = 0, kappa: float = 0.1):
         util_centered = util_dist - util_dist.mean()
         cov = (abs_centered * util_centered).mean()
         return -cov
+    elif mode == 4: # normalized squared diff of diff
+        abs_dist_norm = (abs_dist - abs_dist.mean()) / (abs_dist.std() + 1e-8)
+        util_dist_norm = (util_dist - util_dist.mean()) / (util_dist.std() + 1e-8)
+        squared_diff_of_diff = (abs_dist_norm - util_dist_norm).pow(2).mean() 
+        return - squared_diff_of_diff
+    elif mode == 5: # symmetric KL divergence
+        p, q = torch.softmax(abs_dist, dim=0), torch.softmax(util_dist, dim=0)
+        return 0.5 * ((p * (p / (q + 1e-8)).log()).sum() + (q * (q / (p + 1e-8)).log()).sum())
+    elif mode == 6: # cross entropy distance
+        p, q = torch.softmax(abs_dist, dim=0), torch.softmax(util_dist, dim=0)
+        return -((p * q.log()).sum() + (q * p.log()).sum()) / 2
     else: 
         raise ValueError(f"Unknown mode: {mode}")
 

@@ -476,7 +476,7 @@ def sorl_evaluate_v2(tokens, model, n=2, K=4, max_iterations=1, memory_span=1792
     abs_loss = (greedy_ppt * valid_abs).sum() / valid_abs.sum().clamp(min=1)
 
     # --- topological similarity ---
-    correlation = evaluate_topo_similarity(search_data, search_ppt, model)
+    correlation = evaluate_topo_similarity(search_data, search_ppt, model, topo_mode = 3)
     
     return search_data[:1], search_adv, traj_loss, abs_loss, correlation
 

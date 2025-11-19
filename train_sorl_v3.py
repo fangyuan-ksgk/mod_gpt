@@ -65,7 +65,7 @@ def parse_args():
     parser.add_argument("--do_reinit", action="store_true", default=False) # do reinitialization
     parser.add_argument("--reinit_mode", type=int, default=0) # mode for reinitialization (a). abstract only / b). embedding + head / c). all parameters
     parser.add_argument("--alpha_topo", type=float, default=1.0) # alpha for topo loss
-    parser.add_argument("--topo_mode", type=int, default=3) # mode for topo loss (0: cosine similarity, 1: euclidean distance, 2: correlation, 3: covariance)
+    parser.add_argument("--topo_mode", type=int, default=3) # mode for topo loss (0: dot product, 1: cosine similarity, 2: correlation, 3: covariance, 4: normalized squared diff of diff, 5: symmetric KL divergence, 6: cross entropy distance)
     parser.add_argument("--run_info", type=str, default="") # run info
 
     return parser.parse_args()
@@ -249,7 +249,7 @@ class Hyperparameters:
     do_reinit: bool = False # do reinitialization
     reinit_mode: int = 0 # mode for reinitialization (a). abstract only / b). embedding + head / c). all parameters
     alpha_topo: float = 1.0 # alpha for topo loss
-    topo_mode: int = 3 # mode for topo loss (0: cosine similarity, 1: euclidean distance, 2: correlation, 3: covariance)
+    topo_mode: int = 3 # mode for topo loss (0: dot product, 1: cosine similarity, 2: correlation, 3: covariance, 4: normalized squared diff of diff, 5: symmetric KL divergence, 6: cross entropy distance)
     run_info: str = "" # run info
 
 cli_args = parse_args()
