@@ -74,7 +74,8 @@ for EXPLORATION_MODE in 0 1 2 3 4; do
       --steps_per_cycle $NUM_ITERATIONS \
       --exploration_fraction 1.0 \
       --run_info "${EXPLORATION_MODE_DESC[$EXPLORATION_MODE]} + topo regularization (mode: 3 | covariance) with weight: ${ALPHA_TOPO}"
-
+  done 
+done
 
 
 
