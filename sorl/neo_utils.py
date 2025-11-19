@@ -3,7 +3,7 @@ import torch
 from sorl.gat_sim import BOS_TOKEN_ID, GAT, recursion, extract_and_sample, recursion_v2
 import torch.nn.functional as F
 from typing import Optional, Union
-from sorl.topo import doc_levenshtein_dist_pairwise, compute_correlation, compute_topo_loss, doc_util_dist, doc_levenshtein_dist
+from sorl.topo import doc_hamming_dist_pairwise, compute_correlation, compute_topo_loss, doc_util_dist, doc_levenshtein_dist
 
 
 @torch.compile
@@ -258,7 +258,8 @@ def compute_rollout_reward_v2(search_data, ppt, levels, mode: int = 0, topo_abs_
 
     # --- abs distance matrix --- 
     abs_mask = levels.bool()
-    abs_dist = doc_levenshtein_dist_pairwise(search_data, doc_idx, abs_mask, normalize=True)
+    # This is likely the culprit, we need to benchmark the speed of this one ...
+    abs_dist = doc_hamming_dist_pairwise(search_data, doc_idx, abs_mask, normalize=True)
 
     return token_adv, abs_dist
 

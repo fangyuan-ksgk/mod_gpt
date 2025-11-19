@@ -173,6 +173,38 @@ def doc_levenshtein_dist_pairwise(tokens: torch.Tensor,
     dist = dist[doc_idx[:, 1:]] # broadcast back
     return dist
 
+def doc_hamming_dist_pairwise(tokens: torch.Tensor,
+                         doc_idx: torch.Tensor,
+                         abs_mask: torch.Tensor,
+                         normalize: bool = True) -> torch.Tensor:
+    """
+    Hamming distance per document for exactly two rollouts (aligned positions).
+    Much faster than Levenshtein since abstract tokens are at same positions.
+    """
+    n_r, _ = tokens.shape
+    assert n_r == 2, "doc_hamming_dist_pairwise currently supports exactly two rollouts"
+
+    device = tokens.device
+    
+    abs_mask_0 = abs_mask[0]
+    
+    mismatches = (tokens[0] != tokens[1]) & abs_mask_0  # [seq_len]
+    
+    n_d = doc_idx.max().item() + 1
+    doc_idx_flat = doc_idx[0, :]  # [seq_len-1]
+    
+    dist = torch.zeros(n_d, device=device)
+    dist.scatter_add_(0, doc_idx_flat[abs_mask_0], mismatches[abs_mask_0].float())
+    
+    if normalize:
+        counts = torch.zeros(n_d, device=device)
+        counts.scatter_add_(0, doc_idx_flat[abs_mask_0], 
+                           torch.ones_like(mismatches[abs_mask_0], dtype=torch.float))
+        dist = dist / counts.clamp(min=1)
+    
+    dist = dist[doc_idx[:, 1:]]
+    return dist
+
 def doc_util_dist(doc_ppt: torch.Tensor, metric: str = "abs_diff") -> torch.Tensor:
     """
     Compute pairwise utility distance matrix between rollouts for each document.
