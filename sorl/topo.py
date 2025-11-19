@@ -205,6 +205,62 @@ def doc_hamming_dist_pairwise(tokens: torch.Tensor,
     dist = dist[doc_idx[:, 1:]]
     return dist
 
+def doc_transposition_dist_pairwise(tokens: torch.Tensor,
+                         doc_idx: torch.Tensor,
+                         abs_mask: torch.Tensor,
+                         normalize: bool = True) -> torch.Tensor:
+    """
+    Count transpositions (adjacent swaps) + substitutions.
+    Faster than full Damerau-Levenshtein, only for aligned positions.
+    """
+    n_r, _ = tokens.shape
+    assert n_r == 2, "supports exactly two rollouts"
+    
+    device = tokens.device
+    abs_mask_0 = abs_mask[0]
+    
+    seq0 = tokens[0]
+    seq1 = tokens[1]
+    
+    # Count substitutions
+    substitutions = (seq0 != seq1) & abs_mask_0
+    
+    # Count transpositions (adjacent swaps)
+    # A transposition: seq0[i] == seq1[i+1] AND seq0[i+1] == seq1[i]
+    transpositions = (
+        (seq0[:-1] == seq1[1:]) & 
+        (seq0[1:] == seq1[:-1]) & 
+        (seq0[:-1] != seq0[1:]) &  # Not the same token
+        abs_mask_0[:-1] & abs_mask_0[1:]
+    )
+    
+    # Combine: transposition removes 2 substitutions but adds 1 transposition
+    # So we subtract transpositions from substitutions
+    substitutions[:-1] = substitutions[:-1] & ~transpositions
+    substitutions[1:] = substitutions[1:] & ~transpositions
+    
+    n_d = doc_idx.max().item() + 1
+    doc_idx_flat = doc_idx[0]
+    
+    dist = torch.zeros(n_d, device=device)
+    
+    # Add substitutions
+    dist.scatter_add_(0, doc_idx_flat[abs_mask_0], substitutions[abs_mask_0].float())
+    
+    # Add transpositions (weighted - you can adjust this)
+    if transpositions.any():
+        trans_mask = transpositions & abs_mask_0[:-1]
+        dist.scatter_add_(0, doc_idx_flat[:-1][trans_mask], trans_mask.float())
+    
+    if normalize:
+        counts = torch.zeros(n_d, device=device)
+        counts.scatter_add_(0, doc_idx_flat[abs_mask_0], 
+                           torch.ones_like(substitutions[abs_mask_0], dtype=torch.float))
+        dist = dist / counts.clamp(min=1)
+    
+    dist = dist[doc_idx[:, 1:]]
+    return dist
+
 def doc_util_dist(doc_ppt: torch.Tensor, metric: str = "abs_diff") -> torch.Tensor:
     """
     Compute pairwise utility distance matrix between rollouts for each document.

@@ -366,7 +366,8 @@ def sorl_search_v4(tokens, model, n=3, K=3, max_iterations=1,
     return search_data, search_ppt, token_adv, abs_dist
 
 
-def evaluate_topo_similarity(search_data, ppt, model): 
+def evaluate_topo_similarity(search_data, ppt, model, topo_mode: int = 3):
+    """Again, Levenshtein distance is too slow for GPU, we keep the 'True levenshtein' commented out and use the battle-proof ver. """ 
 
     levels = (search_data >= model.vocab_sizes[0]).long()
     # (a). document idx
@@ -380,18 +381,24 @@ def evaluate_topo_similarity(search_data, ppt, model):
 
     doc_ppt = avg_ppt_per_sample(trajectory_ppt, doc_idx[:,1:])  # Shape: (n_rollouts, n_docs)
 
-    # (c). d(a1, a2) :: pairwise levenshtein distance matrix || simplest case, n=2
-    abs_mask = search_data >= model.vocab_sizes[0]  # True for abstraction tokens
-    abs_dist_matrix = doc_levenshtein_dist(search_data, doc_idx, abs_mask, normalize=True)
+    # (Alternative: aligned with training setting, use hamming distance)
+    abs_mask = levels.bool()
+    abs_dist = doc_hamming_dist_pairwise(search_data, doc_idx, abs_mask, normalize=True)
+    
+    util_dist = torch.abs(ppt[0] - ppt[1])
+    topo_loss = compute_topo_loss(abs_dist, util_dist, mode=topo_mode)
 
-    # (d). d(p(s|a1), p(s|a2)) :: utility distance matrix
-    util_dist_matrix = doc_util_dist(doc_ppt)
+    # # (c). d(a1, a2) :: pairwise levenshtein distance matrix || simplest case, n=2
+    # abs_mask = search_data >= model.vocab_sizes[0]  # True for abstraction tokens
+    # abs_dist_matrix = doc_levenshtein_dist(search_data, doc_idx, abs_mask, normalize=True)
 
+    # # (d). d(p(s|a1), p(s|a2)) :: utility distance matrix
+    # util_dist_matrix = doc_util_dist(doc_ppt)
 
-    # (e). Compute correlation
-    correlation = compute_correlation(abs_dist_matrix, util_dist_matrix)
+    # # (e). Compute correlation
+    # correlation = compute_correlation(abs_dist_matrix, util_dist_matrix)
 
-    return correlation
+    return -topo_loss
 
 def sorl_evaluate(tokens, model, n=2, K=4, max_iterations=1, memory_span=1792, attn_blocksize=1792, temperature: Union[float, torch.Tensor] = 1.0,
                   loss_mask: Optional[torch.Tensor] = None, truncate_seq_len: bool = True):
