@@ -198,8 +198,14 @@ def compute_correlation(levenshtein_dist_matrix, util_dist_matrix):
     lev_pairs = levenshtein_dist_matrix[mask, :].flatten()  
     util_pairs = util_dist_matrix[mask, :].flatten()
 
-    correlation_matrix = torch.corrcoef(torch.stack([lev_pairs, util_pairs]))
-    correlation = correlation_matrix[0, 1]
+    lev_centered = lev_pairs - lev_pairs.mean()
+    util_centered = util_pairs - util_pairs.mean()
+    
+    cov = (lev_centered * util_centered).mean()
+    std_lev = lev_centered.square().mean().sqrt()
+    std_util = util_centered.square().mean().sqrt()
+    
+    correlation = cov / (std_lev * std_util + 1e-8)
     return correlation
 
 def compute_covariance(dist_matrix: torch.Tensor,
