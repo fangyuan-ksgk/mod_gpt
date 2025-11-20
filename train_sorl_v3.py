@@ -65,7 +65,8 @@ def parse_args():
     parser.add_argument("--do_reinit", action="store_true", default=False) # do reinitialization
     parser.add_argument("--reinit_mode", type=int, default=0) # mode for reinitialization (a). abstract only / b). embedding + head / c). all parameters
     parser.add_argument("--alpha_topo", type=float, default=1.0) # alpha for topo loss
-    parser.add_argument("--topo_mode", type=int, default=3) # mode for topo loss (0: dot product, 1: cosine similarity, 2: correlation, 3: covariance, 4: normalized squared diff of diff, 5: symmetric KL divergence, 6: cross entropy distance)
+    parser.add_argument("--topo_mode", type=int, default=3) # mode for topo loss (0: dot product, 1: correlation, 2: covariance)
+    parser.add_argument("--util_dist_mode", type=int, default=0) # mode for utility distance (0: naive, 1: stop gradient on worse rollout)
     parser.add_argument("--run_info", type=str, default="") # run info
 
     return parser.parse_args()
@@ -249,7 +250,8 @@ class Hyperparameters:
     do_reinit: bool = False # do reinitialization
     reinit_mode: int = 0 # mode for reinitialization (a). abstract only / b). embedding + head / c). all parameters
     alpha_topo: float = 1.0 # alpha for topo loss
-    topo_mode: int = 3 # mode for topo loss (0: dot product, 1: cosine similarity, 2: correlation, 3: covariance, 4: normalized squared diff of diff, 5: symmetric KL divergence, 6: cross entropy distance)
+    topo_mode: int = 3 # mode for topo loss (0: dot product, 1: correlation, 3: covariance)
+    util_dist_mode: int = 0 # mode for utility distance (0: naive, 1: stop gradient on worse rollout)
     run_info: str = "" # run info
 
 cli_args = parse_args()
@@ -389,7 +391,7 @@ for i in range(warmup_steps):
     print(f" :: Sorl search takes {search_end - search_start} second")
     # --- compute loss --- 
     if i % 2 == 0:
-        traj_loss, abs_loss, topo_loss = compute_sgpo_loss(search_tokens, search_adv, abs_dist, model, memory_span, attn_blocksize)    
+        traj_loss, abs_loss, topo_loss = compute_sgpo_loss(search_tokens, search_adv, abs_dist, model, memory_span, attn_blocksize, util_dist_mode=args.util_dist_mode)    
     else:
         traj_loss, abs_loss = compute_loss(search_tokens, model, memory_span=memory_span, attn_blocksize=attn_blocksize)
     forward_end = time.time()
@@ -551,7 +553,7 @@ for step in range(train_steps + 1):
 
         # --- compute loss --- 
         if phase == "exploration": # reward-shaping on predictability loss (SGPO)
-            traj_loss, abs_loss, topo_loss = compute_sgpo_loss(search_tokens, search_adv, abs_dist, model, memory_span, attn_blocksize, topo_mode=args.topo_mode)    
+            traj_loss, abs_loss, topo_loss = compute_sgpo_loss(search_tokens, search_adv, abs_dist, model, memory_span, attn_blocksize, topo_mode=args.topo_mode, util_dist_mode=args.util_dist_mode)    
         else:
             if args.use_off_policy_exploitation or args.use_on_policy_exploitation:
                 traj_loss, abs_loss = compute_weighted_loss(search_tokens, search_adv, model, memory_span, attn_blocksize)
@@ -653,6 +655,7 @@ print0(f"-- do_reinit: {args.do_reinit}", console=True)
 print0(f"-- reinit_mode: {args.reinit_mode}", console=True)
 print0(f"-- alpha_topo: {args.alpha_topo}", console=True)
 print0(f"-- topo_mode: {args.topo_mode}", console=True)
+print0(f"-- util_dist_mode: {args.util_dist_mode}", console=True)
 # print0(f"loss record:\n{loss_record}", console=True)
 
 

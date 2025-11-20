@@ -3,7 +3,7 @@ import torch
 from sorl.gat_sim import BOS_TOKEN_ID, GAT, recursion, extract_and_sample, recursion_v2
 import torch.nn.functional as F
 from typing import Optional, Union
-from sorl.topo import doc_hamming_dist_pairwise, compute_correlation, compute_topo_loss, doc_util_dist, doc_levenshtein_dist
+from sorl.topo import doc_hamming_dist_pairwise, compute_correlation, compute_topo_loss, doc_util_dist, doc_levenshtein_dist, compute_util_dist
 
 
 @torch.compile
@@ -366,7 +366,7 @@ def sorl_search_v4(tokens, model, n=3, K=3, max_iterations=1,
     return search_data, search_ppt, token_adv, abs_dist
 
 
-def evaluate_topo_similarity(search_data, ppt, model, topo_mode: int = 3):
+def evaluate_topo_similarity(search_data, ppt, model, topo_mode: int = 1, util_dist_mode: int = 0):
     """Again, Levenshtein distance is too slow for GPU, we keep the 'True levenshtein' commented out and use the battle-proof ver. """ 
 
     levels = (search_data >= model.vocab_sizes[0]).long()
@@ -385,7 +385,8 @@ def evaluate_topo_similarity(search_data, ppt, model, topo_mode: int = 3):
     abs_mask = levels.bool()
     abs_dist = doc_hamming_dist_pairwise(search_data, doc_idx, abs_mask, normalize=True)
     
-    util_dist = torch.abs(ppt[0] - ppt[1])
+    util_dist = compute_util_dist(ppt, mode=util_dist_mode)
+
     topo_loss = compute_topo_loss(abs_dist, util_dist, mode=topo_mode)
 
     # # (c). d(a1, a2) :: pairwise levenshtein distance matrix || simplest case, n=2
@@ -476,7 +477,7 @@ def sorl_evaluate_v2(tokens, model, n=2, K=4, max_iterations=1, memory_span=1792
     abs_loss = (greedy_ppt * valid_abs).sum() / valid_abs.sum().clamp(min=1)
 
     # --- topological similarity ---
-    correlation = evaluate_topo_similarity(search_data, search_ppt, model, topo_mode = 3)
+    correlation = evaluate_topo_similarity(search_data, search_ppt, model, topo_mode = 1)
     
     return search_data[:1], search_adv, traj_loss, abs_loss, correlation
 
@@ -565,7 +566,8 @@ def compute_sgpo_loss(rollout_data, token_adv, model, memory_span: int, attn_blo
 
     return traj_loss, grpo_loss
 
-def compute_sgpo_loss_v2(rollout_data, token_adv, abs_dist, model, memory_span: int, attn_blocksize: int, topo_mode: int = 0):
+def compute_sgpo_loss_v2(rollout_data, token_adv, abs_dist, model, memory_span: int, attn_blocksize: int, topo_mode: int = 1, util_dist_mode: int = 1):
+    """Default: correlation based topo regularization + stop grad on worse rollout"""
     rollout_ppt, _ = model.forward(rollout_data, memory_span, attn_blocksize)
     rollout_ppt = rollout_ppt.reshape(rollout_data.shape[0], -1)
 
@@ -587,7 +589,7 @@ def compute_sgpo_loss_v2(rollout_data, token_adv, abs_dist, model, memory_span: 
     grpo_loss = (surrogate_loss * valid_abs_mask).sum() / valid_abs_mask.sum().clamp(min=1)
 
     # Compute topological similarity regularization loss
-    util_dist = torch.abs(rollout_ppt[0] - rollout_ppt[1])
+    util_dist = compute_util_dist(rollout_ppt, mode=util_dist_mode)
     topo_loss = compute_topo_loss(abs_dist, util_dist, mode=topo_mode)
 
     return traj_loss, grpo_loss, topo_loss

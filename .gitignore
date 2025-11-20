@@ -6,3 +6,4 @@ data/openweb10B/
 logs/* 
 *.png
 *.bin
+results_*

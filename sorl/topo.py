@@ -326,18 +326,13 @@ def compute_covariance(dist_matrix: torch.Tensor,
 # Any other suggestions? 
 # --------- Hope to improve correlation(d(a1, a2), d(p(s|a1), p(s|a2))) ---------
 
-def compute_topo_loss(abs_dist, util_dist, mode: int = 0, kappa: float = 0.1):
+def compute_topo_loss(abs_dist, util_dist, mode: int = 0):
     """
     Compute topological similarity regularization loss. (Using vector)
     """
-    if mode == 0: 
+    if mode == 0: # dot product
         return - (abs_dist * util_dist).mean()
-    elif mode == 1: # cosine similarity 
-        cos_sim = (abs_dist * util_dist).sum() / (
-            abs_dist.norm() * util_dist.norm() + 1e-8
-        )
-        return 1 - cos_sim
-    elif mode == 2:
+    elif mode == 1: # correlation
         abs_centered = abs_dist - abs_dist.mean()
         util_centered = util_dist - util_dist.mean()
         cov = (abs_centered * util_centered).mean()
@@ -345,41 +340,26 @@ def compute_topo_loss(abs_dist, util_dist, mode: int = 0, kappa: float = 0.1):
         std_util = util_centered.square().mean().sqrt()
         corr = cov / (std_abs * std_util + 1e-8).detach()       # avoid
         return -corr
-    elif mode == 3: # golden | covariance
+    elif mode == 2: # covariance
         abs_centered = abs_dist - abs_dist.mean()
         util_centered = util_dist - util_dist.mean()
         cov = (abs_centered * util_centered).mean()
         return -cov
-    elif mode == 4: # normalized squared diff of diff
-        abs_dist_norm = (abs_dist - abs_dist.mean()) / (abs_dist.std() + 1e-8)
-        util_dist_norm = (util_dist - util_dist.mean()) / (util_dist.std() + 1e-8)
-        squared_diff_of_diff = (abs_dist_norm - util_dist_norm).pow(2).mean() 
-        return - squared_diff_of_diff
-    elif mode == 5: # symmetric KL divergence
-        p, q = torch.softmax(abs_dist, dim=0), torch.softmax(util_dist, dim=0)
-        return 0.5 * ((p * (p / (q + 1e-8)).log()).sum() + (q * (q / (p + 1e-8)).log()).sum())
-    elif mode == 6: # cross entropy distance
-        p, q = torch.softmax(abs_dist, dim=0), torch.softmax(util_dist, dim=0)
-        return -((p * q.log()).sum() + (q * p.log()).sum()) / 2
     else: 
         raise ValueError(f"Unknown mode: {mode}")
 
-# Correct but not efficient
-# def compute_topo_loss(levenshtein_dist_matrix, util_dist_matrix, mode: int = 0, kappa: float = 0.1):
-	
-#     n_rollouts = levenshtein_dist_matrix.shape[0]
-#     mask = torch.triu(torch.ones(n_rollouts, n_rollouts), diagonal=1).bool()
-#     lev_pairs = levenshtein_dist_matrix[mask, :].flatten()  
-#     util_pairs = util_dist_matrix[mask, :].flatten()
 
-#     if mode == 0:
-#         topo_loss = - (lev_pairs * util_pairs).mean()
-#     elif mode == 1:
-#         topo_loss = torch.clamp(kappa * lev_pairs - util_pairs, min=0).pow(2).mean()
-#     elif mode == 2:
-#         topo_loss = - compute_correlation(levenshtein_dist_matrix, util_dist_matrix)
-#     elif mode == 3:
-#         topo_loss = - compute_covariance(levenshtein_dist_matrix, util_dist_matrix)
-#     else:
-#         raise ValueError(f"Unknown mode: {mode}")
-#     return topo_loss
+def compute_util_dist(ppt: torch.Tensor, mode: int = 0) -> torch.Tensor:
+    """
+    Compute utility distance between two rollouts.
+    """
+    if mode == 0: # naive ver. 
+        util_dist = torch.abs(ppt[0] - ppt[1])
+    elif mode == 1: # stop gradient for less useful rollouts
+        mask_0_higher = ppt[0] > ppt[1]
+        ppt_0_masked = torch.where(mask_0_higher, ppt[0].detach(), ppt[0])
+        ppt_1_masked = torch.where(mask_0_higher, ppt[1], ppt[1].detach())
+        util_dist = torch.abs(ppt_0_masked - ppt_1_masked)
+    else:
+        raise ValueError(f"Unknown mode: {mode}")
+    return util_dist

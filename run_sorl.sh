@@ -42,18 +42,21 @@ EXPLORATION_MODE=0 # SGPO - exploration
 #   --num_iterations $NUM_ITERATIONS
 
 
+# ==== reduce topo mode to 'dot product', 'correlation', 'covariance', include 'stop grad' controlled by util_dist_mode: 1 ========
+# (a). topo mode: 3 works better with stop grad -- util_dist_mode: 1, it improves traj_loss with SGPO
+#                 verify this, also test its behavior for other adv term variants
+
+
+
 # =================================================================================
-# All-rollout SoRL with Topological Similarity Regularization
+# Stop Gradient on worse rollout | narrowed choice on topo reg mode
 # =================================================================================
-# SGPO + topo regularization (topo mode: 3 | covariance)
-# - sweep on weight (alpha topo)
-# - sweep on rollout adv mode: (arg.mode 0: SGPO, 1: all rollout, 2: distillation (favor familiar abstraction), 3: exploitation (favor useful abstraction), 4: exploration (favor un-familiar abstraction))
 
 EXPLORATION_MODE_DESC=("SGPO (favor useless abstraction)" "all rollout" "distillation (favor familiar abstraction)" "exploitation (favor useful abstraction)" "exploration (favor un-familiar abstraction)")
-TOPO_MODE_DESC=("dot product" "cosine similarity" "correlation" "covariance" "normalized squared diff of diff" "symmetric KL divergence" "cross entropy distance")
-for EXPLORATION_MODE in 0 1 2 3 4; do
-  for ALPHA_TOPO in 0.0 0.1 0.5 1.0 2.0 5.0; do
-    for TOPO_MODE in 0 1 2 3 4 5 6; do
+TOPO_MODE_DESC=("dot product" "cosine similarity" "correlation" "covariance")
+for EXPLORATION_MODE in 0; do
+  for ALPHA_TOPO in 5.0; do
+    for TOPO_MODE in 0 1 2; do
       torchrun \
         --nproc_per_node=$N_GPUS \
         --master_addr=$MASTER_ADDR \
@@ -75,6 +78,7 @@ for EXPLORATION_MODE in 0 1 2 3 4; do
         --alpha_topo $ALPHA_TOPO \
         --steps_per_cycle $NUM_ITERATIONS \
         --exploration_fraction 1.0 \
+        --util_dist_mode 1 \
         --run_info "${EXPLORATION_MODE_DESC[$EXPLORATION_MODE]} + topo regularization (mode: ${TOPO_MODE} | ${TOPO_MODE_DESC[$TOPO_MODE]}) with weight: ${ALPHA_TOPO}"
     done
   done 
