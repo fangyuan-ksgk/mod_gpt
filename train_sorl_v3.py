@@ -59,14 +59,15 @@ def parse_args():
     parser.add_argument("--exploration_till_vocab_util", type=float, default=0.5) # exploration till vocabulary utilization reaches this threshold
     parser.add_argument("--use_off_policy_distillation", action="store_true", default=False) # use off-policy distillation
     parser.add_argument("--use_on_policy_distillation", action="store_true", default=False) # use on-policy distillation
+    parser.add_argument("--use_off_policy_immitation", action="store_true", default=False) # use off-policy imitation
+    parser.add_argument("--use_on_policy_immitation", action="store_true", default=False) # use on-policy imitation
     parser.add_argument("--use_off_policy_exploitation", action="store_true", default=False) # use off-policy exploitation
     parser.add_argument("--use_on_policy_exploitation", action="store_true", default=False) # use on-policy exploitation
-    parser.add_argument("--exploitation_mode", type=int, default=2) # mode for exploitation (favor familiar abstraction / favor useful abstraction)
     parser.add_argument("--do_reinit", action="store_true", default=False) # do reinitialization
     parser.add_argument("--reinit_mode", type=int, default=0) # mode for reinitialization (a). abstract only / b). embedding + head / c). all parameters
     parser.add_argument("--alpha_topo", type=float, default=1.0) # alpha for topo loss
-    parser.add_argument("--topo_mode", type=int, default=3) # mode for topo loss (0: dot product, 1: correlation, 2: covariance)
-    parser.add_argument("--util_dist_mode", type=int, default=0) # mode for utility distance (0: naive, 1: stop gradient on worse rollout)
+    parser.add_argument("--topo_mode", type=int, default=0) # mode for topo loss (0: dot product, 1: correlation, 2: covariance)
+    parser.add_argument("--util_dist_mode", type=int, default=1) # mode for utility distance (0: naive, 1: stop gradient on worse rollout)
     parser.add_argument("--run_info", type=str, default="") # run info
 
     return parser.parse_args()
@@ -244,9 +245,10 @@ class Hyperparameters:
     exploration_till_vocab_util: float = 0.5 # exploration till vocabulary utilization reaches this threshold
     use_off_policy_distillation: bool = False # use off-policy distillation
     use_on_policy_distillation: bool = False # use on-policy distillation
+    use_off_policy_immitation: bool = False # use off-policy exploitation
+    use_on_policy_immitation: bool = False # use on-policy exploitation
     use_off_policy_exploitation: bool = False # use off-policy exploitation
     use_on_policy_exploitation: bool = False # use on-policy exploitation
-    exploitation_mode: int = 2 # mode for exploitation (favor familiar abstraction / favor useful abstraction)
     do_reinit: bool = False # do reinitialization
     reinit_mode: int = 0 # mode for reinitialization (a). abstract only / b). embedding + head / c). all parameters
     alpha_topo: float = 1.0 # alpha for topo loss
@@ -530,16 +532,27 @@ for step in range(train_steps + 1):
                                                                     n=n, K=args.K, max_iterations=args.max_iterations, 
                                                                     memory_span=memory_span, attn_blocksize=attn_blocksize, 
                                                                     temperature=temperature_train, mode=args.mode)
-                elif args.use_off_policy_exploitation: 
+                elif args.use_off_policy_immitation: 
                     search_tokens, search_ppt, search_adv, abs_dist = sorl_search(tokens, ref_model, 
                                                                     n=n, K=args.K, max_iterations=args.max_iterations, 
                                                                     memory_span=memory_span, attn_blocksize=attn_blocksize, 
-                                                                    temperature=temperature_train, mode=args.exploitation_mode)
-                elif args.use_on_policy_exploitation: 
+                                                                    temperature=temperature_train, mode=2)
+                elif args.use_on_policy_immitation: 
                     search_tokens, search_ppt, search_adv, abs_dist = sorl_search(tokens, model, 
                                                                     n=n, K=args.K, max_iterations=args.max_iterations, 
                                                                     memory_span=memory_span, attn_blocksize=attn_blocksize, 
-                                                                    temperature=temperature_train, mode=args.exploitation_mode)
+                                                                    temperature=temperature_train, mode=2)
+                elif args.use_off_policy_exploitation:
+                    search_tokens, search_ppt, search_adv, abs_dist = sorl_search(tokens, model, 
+                                                                    n=n, K=args.K, max_iterations=args.max_iterations, 
+                                                                    memory_span=memory_span, attn_blocksize=attn_blocksize, 
+                                                                    temperature=temperature_train, mode=3, 
+                                                                    ref_model=ref_model)
+                elif args.use_on_policy_exploitation:
+                    search_tokens, search_ppt, search_adv, abs_dist = sorl_search(tokens, model, 
+                                                                    n=n, K=args.K, max_iterations=args.max_iterations, 
+                                                                    memory_span=memory_span, attn_blocksize=attn_blocksize, 
+                                                                    temperature=temperature_train, mode=3)
                 else:
                     search_tokens, search_ppt, search_adv = select_best_sorl_search(tokens, model, 
                                                                     n=n, K=args.K, max_iterations=args.max_iterations, 
@@ -577,7 +590,7 @@ for step in range(train_steps + 1):
     avg_util_rate /= train_accumulation_steps
     cycle_step = step % args.steps_per_cycle
     if cycle_step >= (args.steps_per_cycle * args.exploration_fraction) and avg_util_rate >= args.exploration_till_vocab_util:
-        if phase == "exploration": # EMA model pinned at the start of exploitation phase (off-policy distillation)
+        if phase == "exploration": # EMA model pinned at the start of exploitation phase (off-policy distillation / immitation / exploitation)
             with torch.no_grad():
                 for p_ema, p_online in zip(ref_model.parameters(), model.parameters()):
                     p_ema.data.copy_(p_online.data)
@@ -648,9 +661,10 @@ print0(f"-- exploration_fraction: {args.exploration_fraction}", console=True)
 print0(f"-- exploration_till_vocab_util: {args.exploration_till_vocab_util}", console=True)
 print0(f"-- use_off_policy_distillation: {args.use_off_policy_distillation}", console=True)
 print0(f"-- use_on_policy_distillation: {args.use_on_policy_distillation}", console=True)
+print0(f"-- use_off_policy_immitation: {args.use_off_policy_immitation}", console=True)
+print0(f"-- use_on_policy_immitation: {args.use_on_policy_immitation}", console=True)
 print0(f"-- use_off_policy_exploitation: {args.use_off_policy_exploitation}", console=True)
 print0(f"-- use_on_policy_exploitation: {args.use_on_policy_exploitation}", console=True)
-print0(f"-- exploitation_mode: {args.exploitation_mode}", console=True)
 print0(f"-- do_reinit: {args.do_reinit}", console=True)
 print0(f"-- reinit_mode: {args.reinit_mode}", console=True)
 print0(f"-- alpha_topo: {args.alpha_topo}", console=True)

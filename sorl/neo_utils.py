@@ -4,6 +4,7 @@ from sorl.gat_sim import BOS_TOKEN_ID, GAT, recursion, extract_and_sample, recur
 import torch.nn.functional as F
 from typing import Optional, Union
 from sorl.topo import doc_hamming_dist_pairwise, compute_correlation, compute_topo_loss, doc_util_dist, doc_levenshtein_dist, compute_util_dist
+from torch import nn 
 
 
 @torch.compile
@@ -346,19 +347,27 @@ def sorl_search_v3(tokens, model, n=3, K=3, max_iterations=1,
 def sorl_search_v4(tokens, model, n=3, K=3, max_iterations=1,
                 memory_span=1792, attn_blocksize=1792, temperature: Union[float, torch.Tensor] = 1.0, truncate_seq_len: bool = True, 
                 alpha_select: float = 0.0, select_mode: str = "abs_ppt", # placeholder
-                loss_mask: Optional[torch.Tensor] = None, mode: int = 0, topo_abs_dist_mode: int = 0):
+                loss_mask: Optional[torch.Tensor] = None, mode: int = 0, topo_abs_dist_mode: int = 0, ref_model: Optional[nn.Module] = None):
     """
     Complete SoRL search pipeline:
     1. Direct rollout without greedy sample. 
     2. Compute reward for each rollout
     """
     # --- generate & evaluate rollouts ---
-    search_data, search_ppt = sorl_rollout_v2(tokens, model, n=n, K=K, 
+    if ref_model is not None:
+        search_data, search_ppt = sorl_rollout_v2(tokens, ref_model, n=n, K=K, 
                                max_iterations=max_iterations,
                                memory_span=memory_span,
                                attn_blocksize=attn_blocksize,
                                temperature=temperature,
                                truncate_seq_len=truncate_seq_len)
+    else:
+        search_data, search_ppt = sorl_rollout_v2(tokens, model, n=n, K=K, 
+                                max_iterations=max_iterations,
+                                memory_span=memory_span,
+                                attn_blocksize=attn_blocksize,
+                                temperature=temperature,
+                                truncate_seq_len=truncate_seq_len)
     search_ppt = search_ppt.reshape(search_data.shape[0], -1)
 
     # --- compute reward for each rollout & abs distance matrix ---
