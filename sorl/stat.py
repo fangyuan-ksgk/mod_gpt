@@ -432,31 +432,35 @@ def plot_vocab_abs_dynamics(data):
 
 def plot_training_metrics_combined(data):
     """
-    Visualizes training dynamics for vocab_util, search_adv, and abs_loss on one plot
+    Visualizes training dynamics for vocab_util, search_adv, abs_loss, and topo_sim on one plot
     with phase annotations.
 
     Args:
         data (defaultdict): A defaultdict containing lists for 'vocab_util', 
-                            'search_adv', 'abs_loss', and 'phase'.
+                            'search_adv', 'abs_loss', 'topo_sim', 'topo_sim_greedy', and 'phase'.
     """
     # Extract data
     vocab_util = data['vocab_util']
     search_adv = data['search_adv']
     abs_loss = data['abs_loss']
+    topo_sim = data.get('topo_sim', None)
+    topo_sim_greedy = data.get('topo_sim_greedy', None)
     if 'phase' not in data: 
         data['phase'] = ['exploration'] * len(vocab_util)
     phase = data['phase']
     steps = range(len(vocab_util))
 
     # --- Plotting Setup ---
-    fig, ax1 = plt.subplots(figsize=(14, 7))
+    fig, ax1 = plt.subplots(figsize=(16, 8))
     
-    # Create second and third y-axes
+    # Create second, third, and fourth y-axes
     ax2 = ax1.twinx()
     ax3 = ax1.twinx()
+    ax4 = ax1.twinx()
     
-    # Offset the third axis to the right
+    # Offset the third and fourth axes to the right
     ax3.spines['right'].set_position(('outward', 60))
+    ax4.spines['right'].set_position(('outward', 130))
 
     # --- Phase Annotation ---
     phase_start = 0
@@ -506,14 +510,30 @@ def plot_training_metrics_combined(data):
     ax3.set_ylabel('Abstraction Loss', color='r', fontsize=14)
     ax3.tick_params(axis='y', labelcolor='r', labelsize=12)
 
+    # Plot topo_sim metrics on the fourth y-axis (ax4)
+    lines = [p1, p2, p3]
+    if topo_sim is not None:
+        p4, = ax4.plot(steps, topo_sim, 'purple', marker='^', markersize=3, 
+                       linewidth=2, label='Topo Sim (random)', alpha=0.8, linestyle='--')
+        lines.append(p4)
+    if topo_sim_greedy is not None:
+        p5, = ax4.plot(steps, topo_sim_greedy, 'magenta', marker='v', markersize=3, 
+                       linewidth=2, label='Topo Sim (greedy)', alpha=0.8, linestyle='-.')
+        lines.append(p5)
+    
+    if topo_sim is not None or topo_sim_greedy is not None:
+        ax4.set_ylabel('Topological Similarity', color='purple', fontsize=14)
+        ax4.tick_params(axis='y', labelcolor='purple', labelsize=12)
+        ax4.axhline(0, color='grey', linestyle='--', linewidth=0.8, alpha=0.3)
+
     # --- Title and Legend ---
-    plt.title('Training Dynamics: Vocab, Search Advantage, and Abs Loss', 
+    plt.title('Training Dynamics: Vocab, Search Advantage, Abs Loss & Topo Sim', 
               fontsize=16, fontweight='bold', pad=20)
     
     # Create a combined legend with metrics and phases
-    lines = [p1, p2, p3] + list(phase_labels.values())
+    lines = lines + list(phase_labels.values())
     labels = [l.get_label() for l in lines]
-    ax1.legend(lines, labels, loc='upper left', fontsize=12, framealpha=0.9)
+    ax1.legend(lines, labels, loc='upper left', fontsize=11, framealpha=0.9, ncol=2)
     
     # Grid on primary axis
     ax1.grid(True, linestyle='--', alpha=0.3)
@@ -524,12 +544,13 @@ def plot_training_metrics_combined(data):
 
 def save_training_dynamics(loss_record, save_path, run_info=""):
     """
-    Visualizes training dynamics for vocab_util, search_adv, abs_loss, and traj_loss
+    Visualizes training dynamics for vocab_util, search_adv, abs_loss, traj_loss, and topo_sim
     with phase annotations and saves to file.
     
     Args:
         loss_record (defaultdict): Contains 'traj_loss', 'abs_loss', 'search_advantage', 
-                                   'util_rate', 'phase' (validation-level, optional),
+                                   'util_rate', 'topo_sim', 'topo_sim_greedy', 
+                                   'phase' (validation-level, optional),
                                    'train_phase', 'train_avg_util_rate' (training-level, optional)
         save_path (str): Path to save the figure (e.g., 'logs/run_id/training_dynamics.png')
         run_info (str): Optional info to add to title
@@ -542,6 +563,14 @@ def save_training_dynamics(loss_record, save_path, run_info=""):
     abs_loss = [t.cpu().item() if torch.is_tensor(t) else t for t in loss_record['abs_loss']]
     search_adv = [t.cpu().item() * 100 if torch.is_tensor(t) else t * 100 
                   for t in loss_record['search_advantage']]  # Convert to percentage
+    
+    # Topo sim metrics (optional)
+    topo_sim = None
+    topo_sim_greedy = None
+    if 'topo_sim' in loss_record and loss_record['topo_sim']:
+        topo_sim = [t.cpu().item() if torch.is_tensor(t) else t for t in loss_record['topo_sim']]
+    if 'topo_sim_greedy' in loss_record and loss_record['topo_sim_greedy']:
+        topo_sim_greedy = [t.cpu().item() if torch.is_tensor(t) else t for t in loss_record['topo_sim_greedy']]
     
     # Use granular train data if available, otherwise fall back to validation data
     if 'train_avg_util_rate' in loss_record and loss_record['train_avg_util_rate']:
@@ -575,16 +604,18 @@ def save_training_dynamics(loss_record, save_path, run_info=""):
         vocab_util_steps = val_steps
     
     # --- Plotting Setup ---
-    fig, ax1 = plt.subplots(figsize=(16, 8))
+    fig, ax1 = plt.subplots(figsize=(18, 9))
     
-    # Create second, third, and fourth y-axes
+    # Create second, third, fourth, and fifth y-axes
     ax2 = ax1.twinx()
     ax3 = ax1.twinx()
     ax4 = ax1.twinx()
+    ax5 = ax1.twinx()
     
     # Offset the axes
     ax3.spines['right'].set_position(('outward', 70))
     ax4.spines['right'].set_position(('outward', 140))
+    ax5.spines['right'].set_position(('outward', 210))
     
     # --- Phase Annotation (use all training steps) ---
     phase_start = 0
@@ -643,17 +674,33 @@ def save_training_dynamics(loss_record, save_path, run_info=""):
     ax4.set_ylabel('Abstraction Loss', color='r', fontsize=14, fontweight='bold')
     ax4.tick_params(axis='y', labelcolor='r', labelsize=12)
     
+    # ax5: Topological Similarity (purple/magenta) - validation checkpoints only
+    lines = [p1, p2, p3, p4]
+    if topo_sim is not None:
+        p5, = ax5.plot(val_steps, topo_sim, 'purple', marker='^', markersize=5, 
+                       linewidth=2.5, label='Topo Sim (random)', alpha=0.9, linestyle='--')
+        lines.append(p5)
+    if topo_sim_greedy is not None:
+        p6, = ax5.plot(val_steps, topo_sim_greedy, 'magenta', marker='v', markersize=5, 
+                       linewidth=2.5, label='Topo Sim (greedy)', alpha=0.9, linestyle='-.')
+        lines.append(p6)
+    
+    if topo_sim is not None or topo_sim_greedy is not None:
+        ax5.set_ylabel('Topological Similarity', color='purple', fontsize=14, fontweight='bold')
+        ax5.tick_params(axis='y', labelcolor='purple', labelsize=12)
+        ax5.axhline(0, color='grey', linestyle='--', linewidth=1, alpha=0.5)
+    
     # --- Title and Legend ---
-    title = 'Training Dynamics: Vocab, Search Adv, Traj Loss, Abs Loss'
+    title = 'Training Dynamics: Vocab, Search Adv, Traj Loss, Abs Loss, Topo Sim'
     if run_info:
         title += f'\n{run_info}'
     plt.title(title, fontsize=16, fontweight='bold', pad=20)
     
     # Combined legend
-    lines = [p1, p2, p3, p4] + list(phase_labels.values())
+    lines = lines + list(phase_labels.values())
     labels = [l.get_label() for l in lines]
-    ax1.legend(lines, labels, loc='upper left', fontsize=11, framealpha=0.95, 
-               ncol=2 if len(lines) > 4 else 1)
+    ax1.legend(lines, labels, loc='upper left', fontsize=10, framealpha=0.95, 
+               ncol=2 if len(lines) > 5 else 1)
     
     # Grid on primary axis
     ax1.grid(True, linestyle='--', alpha=0.3)

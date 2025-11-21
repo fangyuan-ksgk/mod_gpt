@@ -5,15 +5,18 @@ Quick testing of various topo_mode, util_dist_mode, and training settings
 
 import torch
 import argparse
+import os
+from pathlib import Path
 from collections import defaultdict
 from sorl.gat_sim import GAT, GATConfig, BOS_TOKEN_ID
 from sorl.neo_utils import (
     sorl_search_v4, compute_sgpo_loss_v2, compute_vocab_utilization_rate,
-    sorl_evaluate_v2, compute_loss
+    sorl_evaluate_v2
 )
 from sorl.gapt import GatedPhaseTransition
-from sorl.stat import plot_training_metrics_combined
+from sorl.stat import save_training_dynamics
 from data.copy_paste import CopyPasteDataLoader
+import pandas as pd
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Test SORL on Copy & Paste")
@@ -60,6 +63,7 @@ def parse_args():
     
     # Visualization
     parser.add_argument("--no_plot", action="store_true", help="Skip plotting at the end")
+    parser.add_argument("--save_path", type=str, default="logs/test_sorl.png", help="Save path for the plot")
     
     return parser.parse_args()
 
@@ -113,6 +117,10 @@ def main():
         [args.min_temperature, args.max_temperature],
         device=device
     )
+    temperatures_topo = torch.tensor(
+        [args.max_temperature, args.max_temperature],
+        device=device
+    )
     
     # Training loop
     record = defaultdict(list)
@@ -153,10 +161,18 @@ def main():
         loss.backward()
         optimizer.step()
         
+        # Print training loss periodically
+        if step % (args.eval_every * 10) == 0:
+            print(f"train step {step:3d} | "
+                  f"loss: {loss.item():.3f} | "
+                  f"traj: {traj_loss.item():.3f} | "
+                  f"grpo: {grpo_loss.item():.3f} | "
+                  f"topo: {topo_loss.item():.3f}")
+        
         # Periodic validation
         if step % args.eval_every == 0:
             with torch.no_grad():
-                val_tokens, val_adv, val_traj_loss, val_abs_loss, topo_sim = sorl_evaluate_v2(
+                val_tokens, val_adv, val_traj_loss, val_abs_loss, topo_sim_greedy = sorl_evaluate_v2(
                     tokens, model,
                     n=args.num_rollouts,
                     K=args.K,
@@ -166,42 +182,67 @@ def main():
                     temperature=temperatures_eval,
                     truncate_seq_len=False
                 )
-                val_traj_loss, val_abs_loss = compute_loss(
-                    val_tokens, model,
+                _, _, _, _, topo_sim = sorl_evaluate_v2(
+                    tokens, model,
+                    n=args.num_rollouts,
+                    K=args.K,
+                    max_iterations=args.max_iterations,
                     memory_span=memory_span,
-                    attn_blocksize=attn_blocksize
+                    attn_blocksize=attn_blocksize,
+                    temperature=temperatures_topo,
+                    truncate_seq_len=False
                 )
                 vocab_util = compute_vocab_utilization_rate(val_tokens, model)
                 
-                # Record metrics
-                record['vocab_util'].append(vocab_util * 100)
-                record['search_adv'].append(val_adv.item() * 100)
-                record['abs_loss'].append(val_abs_loss.item())
-                record['traj_loss'].append(val_traj_loss.item())
+                # Record metrics (use field names expected by save_training_dynamics)
+                record['util_rate'].append(vocab_util)
+                record['search_advantage'].append(val_adv)
+                record['abs_loss'].append(val_abs_loss)
+                record['traj_loss'].append(val_traj_loss)
                 record['alpha_loss'].append(args.alpha_loss)
-                record['topo_sim'].append(topo_sim.item())
+                record['topo_sim'].append(topo_sim)
+                record['topo_sim_greedy'].append(topo_sim_greedy)
                 
                 print(f"validation step {step:3d} | "
                       f"traj_loss: {val_traj_loss.item():.2f} | "
                       f"abs_loss: {val_abs_loss.item():.2f} | "
                       f"search adv: {val_adv.item() * 100:.2f}% | "
                       f"vocab util: {vocab_util * 100:.2f}% | "
-                      f"topo_sim: {topo_sim.item():.2f}")
+                      f"topo_sim: {topo_sim.item():.2f} | "
+                      f"topo_sim_greedy: {topo_sim_greedy.item():.2f}")
     
     print("\n" + "="*70)
     print("Training Complete!")
-    print(f"Final vocab util: {record['vocab_util'][-1]:.2f}%")
-    print(f"Final search advantage: {record['search_adv'][-1]:.2f}%")
-    print(f"Final topo_sim: {record['topo_sim'][-1]:.2f}")
+    print(f"Final vocab util: {record['util_rate'][-1] * 100:.2f}%")
+    print(f"Final search advantage: {record['search_advantage'][-1].item() * 100:.2f}%")
+    print(f"Final topo_sim: {record['topo_sim'][-1].item():.2f}")
+    print(f"Final topo_sim_greedy: {record['topo_sim_greedy'][-1].item():.2f}")
     print("="*70)
     
     # Visualize results
     if not args.no_plot:
         print("\nGenerating plots...")
-        plot_training_metrics_combined(record)
+        save_path = args.save_path
+        
+        # Ensure directory exists
+        save_dir = Path(save_path).parent
+        save_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Save plot and CSV
+        run_info = f"adv_mode={args.adv_mode}, topo_mode={args.topo_mode}, util_dist_mode={args.util_dist_mode}"
+        save_training_dynamics(record, save_path, run_info)
+        
+        # Convert tensors to scalars for CSV
+        record_dict = {}
+        for key, values in record.items():
+            record_dict[key] = [v.item() if torch.is_tensor(v) else v for v in values]
+        
+        df = pd.DataFrame(record_dict)
+        csv_path = save_path.replace('.png', '.csv')
+        df.to_csv(csv_path, index=False)
+        print(f"CSV saved to: {csv_path}")
     
     return record
 
 if __name__ == "__main__":
     main()
-

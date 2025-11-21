@@ -55,7 +55,8 @@ def parse_args():
     parser.add_argument("--select_mode", type=str, default="abs_ppt", choices=["abs_ppt", "vocab_util"])  # selection mode
     parser.add_argument("--use_resampling", action="store_true", default=False) # use resampling instead of selection
     parser.add_argument("--tau", type=float, default=2e-4) # temperature for resampling
-    parser.add_argument("--resample_mode", type=int, default=0, choices=[0, 1, 2, 3, 4, 5, 6, 7, 8]) # resample mode
+    parser.add_argument("--resample_mode", type=int, default=0, choices=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]) # resample mode
+    parser.add_argument("--curiosity_epsilon", type=float, default=0.2) # curiosity epsilon
     parser.add_argument("--alpha_loss", type=float, default=0.0)  # loss regularization strength
     parser.add_argument("--vocab_util_threshold", type=float, default=0.5) # vocabulary utilization threshold
     parser.add_argument("--min_alpha_loss", type=float, default=-0.1) # minimum alpha loss
@@ -233,6 +234,7 @@ class Hyperparameters:
     use_resampling: bool = False # use resampling instead of selection
     tau: float = 2e-4 # temperature for resampling
     resample_mode: int = 0 # resample mode
+    curiosity_epsilon: float = 0.2 # curiosity epsilon
     alpha_loss: float = 0.0 # loss regularization strength
     vocab_util_threshold: float = 0.5 # vocabulary utilization threshold
     min_alpha_loss: float = -0.1 # minimum alpha loss
@@ -486,7 +488,7 @@ for step in range(train_steps + 1):
                 search_tokens, search_ppt, search_adv = sorl_search(tokens, model, n=args.num_rollouts, K=args.K, max_iterations=args.max_iterations, 
                                                                     memory_span=memory_span, attn_blocksize=attn_blocksize, 
                                                                     temperature=temperature_train,
-                                                                    tau=args.tau, resample_mode=args.resample_mode)
+                                                                    tau=args.tau, resample_mode=args.resample_mode, curiosity_epsilon=args.curiosity_epsilon)
             else:
                 search_tokens, search_ppt, search_adv = sorl_search(tokens, model, n=args.num_rollouts, K=args.K, max_iterations=args.max_iterations, 
                                                                         memory_span=memory_span, attn_blocksize=attn_blocksize, 
@@ -554,6 +556,7 @@ print0(f"-- use_gapt: {args.use_gapt}", console=True)
 print0(f"-- use_resampling: {args.use_resampling}", console=True)
 print0(f"-- tau: {args.tau}", console=True)
 print0(f"-- resample_mode: {args.resample_mode}", console=True)
+print0(f"-- curiosity_epsilon: {args.curiosity_epsilon}", console=True)
 print0(f"-- alpha_select: {args.alpha_select}", console=True)
 print0(f"-- select_mode: {args.select_mode}", console=True)
 print0(f"-- alpha_loss: {args.alpha_loss}", console=True)

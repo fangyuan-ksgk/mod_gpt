@@ -116,7 +116,7 @@ def select_best_per_doc(search_data, ppt, levels, model, alpha_select: float = 0
 # Question #1. This is still 'document-level', I wonder what'd happen if we do 'per-abs-token' level resampling? 
 #              for instance, each abs token is in-charge of the next K tokens? But that'd lose the context
 
-def resample_rollout(search_data, ppt, levels, model, tau: float = 2e-4, resample_mode: int = 0): 
+def resample_rollout(search_data, ppt, levels, model, tau: float = 2e-4, resample_mode: int = 0, curiosity_epsilon: float = 0.2): 
 
     trajectory_mask = (levels[:, 1:] == 0).float()
     trajectory_ppt = ppt * trajectory_mask
@@ -151,6 +151,9 @@ def resample_rollout(search_data, ppt, levels, model, tau: float = 2e-4, resampl
     elif resample_mode == 8: # relative utility preference + abstraction curiosity (reverse)
         signal = 0.5 * (doc_ppt - doc_ppt.mean()) + \
          1.0 * (-doc_abs_ppt - (-doc_abs_ppt).mean())
+    elif resample_mode == 9: # w.p. epsion gets curious, otherwise favor utility
+        signal = torch.where(torch.rand(doc_ppt.shape[0], device=doc_ppt.device) < curiosity_epsilon, 
+                            -doc_abs_ppt, doc_ppt)
 
     logits = -(signal / tau)
     probs = torch.softmax(logits, dim=0).transpose(0, 1)
@@ -273,7 +276,7 @@ def sorl_search(tokens, model, n=3, K=3, max_iterations=1,
                 memory_span=1792, attn_blocksize=1792, temperature=1.0, truncate_seq_len: bool = True, 
                 alpha_select: float = 0.0, select_mode: str = "abs_ppt",
                 loss_mask: Optional[torch.Tensor] = None,
-                tau: float = 2e-4, resample_mode: int = 0):
+                tau: float = 2e-4, resample_mode: int = 0, curiosity_epsilon: float = 0.2):
     """
     SoRL with resampling (instead of selection)
     """
@@ -288,7 +291,7 @@ def sorl_search(tokens, model, n=3, K=3, max_iterations=1,
 
     # --- select best rollouts (based on trajectory perplexity) ---
     levels = (search_data >= model.vocab_sizes[0]).long()
-    select_data, select_ppt, select_ppt_advantage = resample_rollout(search_data, search_ppt, levels, model, tau=tau, resample_mode=resample_mode)
+    select_data, select_ppt, select_ppt_advantage = resample_rollout(search_data, search_ppt, levels, model, tau=tau, resample_mode=resample_mode, curiosity_epsilon=curiosity_epsilon)
     return select_data, select_ppt, select_ppt_advantage
 
 def sorl_search_v2(tokens, model, n=3, K=3, max_iterations=1,
@@ -439,6 +442,7 @@ def sorl_evaluate(tokens, model, n=2, K=4, max_iterations=1, memory_span=1792, a
     
     
     return search_data[:1], search_adv, traj_loss, abs_loss
+
 
 def sorl_evaluate_v2(tokens, model, n=2, K=4, max_iterations=1, memory_span=1792, attn_blocksize=1792, temperature: Union[float, torch.Tensor] = 1.0,
                   loss_mask: Optional[torch.Tensor] = None, truncate_seq_len: bool = True):

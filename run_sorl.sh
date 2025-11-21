@@ -53,7 +53,7 @@ EXPLORATION_MODE=0 # SGPO - exploration
 # =================================================================================
 
 EXPLORATION_MODE_DESC=("SGPO (favor useless abstraction)" "all rollout" "distillation (favor familiar abstraction)" "exploitation (favor useful abstraction)" "exploration (favor un-familiar abstraction)")
-TOPO_MODE_DESC=("dot product" "cosine similarity" "correlation" "covariance")
+TOPO_MODE_DESC=("dot product" "correlation" "covariance")
 for EXPLORATION_MODE in 0; do
   for ALPHA_TOPO in 5.0; do
     for TOPO_MODE in 0 1 2; do
@@ -84,6 +84,31 @@ for EXPLORATION_MODE in 0; do
   done 
 done
 
+# =================================================================================
+# Forced Randomness: train on random rollouts with probability = 'curiosity_epsilon'
+# =================================================================================
+
+for CURIOSITY_EPSILON in 0.1 0.2 0.3 0.4; do
+  torchrun \
+    --nproc_per_node=$N_GPUS \
+    --master_addr=$MASTER_ADDR \
+    --master_port=$MASTER_PORT \
+    train_sorl.py \
+    --batch_size $BATCH_SIZE \
+    --train_seq_len $TRAIN_SEQ_LEN \
+    --val_seq_len $VAL_SEQ_LEN \
+    --num_iterations $NUM_ITERATIONS \
+    --num_rollouts $NUM_ROLLOUTS \
+    --K 8 \
+    --max_iterations $MAX_ITERATIONS \
+    --use_static_memory_span \
+    --min_temperature 0.0 \
+    --temperature 5.0 \
+    --alpha_loss $ALPHA_LOSS \
+    --resample_mode 9 \
+    --curiosity_epsilon $CURIOSITY_EPSILON \
+    --run_info "SGPO exploration --> forced randomness with curiosity epsilon = ${CURIOSITY_EPSILON}"
+done
 
 
 # # =================================================================================
