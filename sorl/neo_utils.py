@@ -204,6 +204,18 @@ def compute_rollout_reward(search_data, ppt, levels, mode: int = 0):
     elif mode == 3: 
         # for distillation, encourage more useful abstractions
         advantage = (doc_ppt_mean - doc_ppt) / doc_ppt_std
+    elif mode == 4: 
+        # curiosity (favor less familiar abstraction)
+        doc_abs_ppt_mean = doc_abs_ppt.mean(dim=0, keepdim=True)
+        doc_abs_ppt_std = doc_abs_ppt.std(dim=0, keepdim=True, unbiased=False).clamp(min=1e-8)
+        advantage = (doc_abs_ppt - doc_abs_ppt_mean) / doc_abs_ppt_std
+    elif mode == 5: 
+        # curiosity + utility preference (naive combo 3:1)
+        doc_abs_ppt_mean = doc_abs_ppt.mean(dim=0, keepdim=True)
+        doc_abs_ppt_std = doc_abs_ppt.std(dim=0, keepdim=True, unbiased=False).clamp(min=1e-8)
+        curiosity_advantage = (doc_abs_ppt - doc_abs_ppt_mean) / doc_abs_ppt_std
+        utility_advantage = (doc_ppt_mean - doc_ppt) / doc_ppt_std
+        advantage = curiosity_advantage + 0.3 * utility_advantage
 
     doc_adv = torch.where(
         doc_ppt_std > 1e-8,
