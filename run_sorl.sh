@@ -90,92 +90,92 @@ EXPLORATION_MODE=0 # SGPO - exploration
 
 TOPO_MODE_DESC=("dot product" "correlation" "covariance")
 
-# Exp 0: Baseline with dot product, no stop grad
-echo "========================================="
-echo "Exp 0: SGPO + TopoReg (dot product, no stop grad)" --> off-policy exploitation
-echo "========================================="
-torchrun \
-  --nproc_per_node=$N_GPUS \
-  --master_addr=$MASTER_ADDR \
-  --master_port=$MASTER_PORT \
-  train_sorl_v3.py \
-  --batch_size $BATCH_SIZE \
-  --train_seq_len $TRAIN_SEQ_LEN \
-  --val_seq_len $VAL_SEQ_LEN \
-  --num_iterations $NUM_ITERATIONS \
-  --num_rollouts $NUM_ROLLOUTS \
-  --K 8 \
-  --max_iterations $MAX_ITERATIONS \
-  --use_static_memory_span \
-  --min_temperature 0.0 \
-  --temperature 5.0 \
-  --alpha_loss $ALPHA_LOSS \
-  --mode 0 \
-  --topo_mode 0 \
-  --alpha_topo 5.0 \
-  --steps_per_cycle $NUM_ITERATIONS \
-  --exploration_fraction 0.5 \
-  --util_dist_mode 0 \
-  --use_off_policy_exploitation \
-  --run_info "Exp0: SGPO + TopoReg (${TOPO_MODE_DESC[0]}, util_dist_mode=0, alpha_topo=5.0) --> off-policy exploitation"
+# # Exp 0: Baseline with dot product, no stop grad
+# echo "========================================="
+# echo "Exp 0: SGPO + TopoReg (dot product, no stop grad)" --> off-policy exploitation
+# echo "========================================="
+# torchrun \
+#   --nproc_per_node=$N_GPUS \
+#   --master_addr=$MASTER_ADDR \
+#   --master_port=$MASTER_PORT \
+#   train_sorl_v3.py \
+#   --batch_size $BATCH_SIZE \
+#   --train_seq_len $TRAIN_SEQ_LEN \
+#   --val_seq_len $VAL_SEQ_LEN \
+#   --num_iterations $NUM_ITERATIONS \
+#   --num_rollouts $NUM_ROLLOUTS \
+#   --K 8 \
+#   --max_iterations $MAX_ITERATIONS \
+#   --use_static_memory_span \
+#   --min_temperature 0.0 \
+#   --temperature 5.0 \
+#   --alpha_loss $ALPHA_LOSS \
+#   --mode 0 \
+#   --topo_mode 0 \
+#   --alpha_topo 5.0 \
+#   --steps_per_cycle $NUM_ITERATIONS \
+#   --exploration_fraction 0.5 \
+#   --util_dist_mode 0 \
+#   --use_off_policy_exploitation \
+#   --run_info "Exp0: SGPO + TopoReg (${TOPO_MODE_DESC[0]}, util_dist_mode=0, alpha_topo=5.0) --> off-policy exploitation"
 
-# Exp 1: Dot product with stop grad, alpha_topo=2.0
-echo "========================================="
-echo "Exp 1: SGPO + TopoReg (dot product, stop grad, alpha=2.0) --> off-policy exploitation"
-echo "========================================="
-torchrun \
-  --nproc_per_node=$N_GPUS \
-  --master_addr=$MASTER_ADDR \
-  --master_port=$MASTER_PORT \
-  train_sorl_v3.py \
-  --batch_size $BATCH_SIZE \
-  --train_seq_len $TRAIN_SEQ_LEN \
-  --val_seq_len $VAL_SEQ_LEN \
-  --num_iterations $NUM_ITERATIONS \
-  --num_rollouts $NUM_ROLLOUTS \
-  --K 8 \
-  --max_iterations $MAX_ITERATIONS \
-  --use_static_memory_span \
-  --min_temperature 0.0 \
-  --temperature 5.0 \
-  --alpha_loss $ALPHA_LOSS \
-  --mode 0 \
-  --topo_mode 0 \
-  --alpha_topo 2.0 \
-  --steps_per_cycle $NUM_ITERATIONS \
-  --exploration_fraction 0.5 \
-  --util_dist_mode 1 \
-  --use_off_policy_exploitation \
-  --run_info "Exp1: SGPO + TopoReg (${TOPO_MODE_DESC[0]}, util_dist_mode=1 stop_grad, alpha_topo=2.0) --> off-policy exploitation"
+# # Exp 1: Dot product with stop grad, alpha_topo=2.0
+# echo "========================================="
+# echo "Exp 1: SGPO + TopoReg (dot product, stop grad, alpha=2.0) --> off-policy exploitation"
+# echo "========================================="
+# torchrun \
+#   --nproc_per_node=$N_GPUS \
+#   --master_addr=$MASTER_ADDR \
+#   --master_port=$MASTER_PORT \
+#   train_sorl_v3.py \
+#   --batch_size $BATCH_SIZE \
+#   --train_seq_len $TRAIN_SEQ_LEN \
+#   --val_seq_len $VAL_SEQ_LEN \
+#   --num_iterations $NUM_ITERATIONS \
+#   --num_rollouts $NUM_ROLLOUTS \
+#   --K 8 \
+#   --max_iterations $MAX_ITERATIONS \
+#   --use_static_memory_span \
+#   --min_temperature 0.0 \
+#   --temperature 5.0 \
+#   --alpha_loss $ALPHA_LOSS \
+#   --mode 0 \
+#   --topo_mode 0 \
+#   --alpha_topo 2.0 \
+#   --steps_per_cycle $NUM_ITERATIONS \
+#   --exploration_fraction 0.5 \
+#   --util_dist_mode 1 \
+#   --use_off_policy_exploitation \
+#   --run_info "Exp1: SGPO + TopoReg (${TOPO_MODE_DESC[0]}, util_dist_mode=1 stop_grad, alpha_topo=2.0) --> off-policy exploitation"
 
-# Exp 2: Dot product with stop grad, alpha_topo=5.0
-echo "========================================="
-echo "Exp 2: SGPO + TopoReg (dot product, stop grad, alpha=5.0) --> off-policy exploitation"
-echo "========================================="
-torchrun \
-  --nproc_per_node=$N_GPUS \
-  --master_addr=$MASTER_ADDR \
-  --master_port=$MASTER_PORT \
-  train_sorl_v3.py \
-  --batch_size $BATCH_SIZE \
-  --train_seq_len $TRAIN_SEQ_LEN \
-  --val_seq_len $VAL_SEQ_LEN \
-  --num_iterations $NUM_ITERATIONS \
-  --num_rollouts $NUM_ROLLOUTS \
-  --K 8 \
-  --max_iterations $MAX_ITERATIONS \
-  --use_static_memory_span \
-  --min_temperature 0.0 \
-  --temperature 5.0 \
-  --alpha_loss $ALPHA_LOSS \
-  --mode 0 \
-  --topo_mode 0 \
-  --alpha_topo 5.0 \
-  --steps_per_cycle $NUM_ITERATIONS \
-  --exploration_fraction 0.5 \
-  --util_dist_mode 1 \
-  --use_off_policy_exploitation \
-  --run_info "Exp2: SGPO + TopoReg (${TOPO_MODE_DESC[0]}, util_dist_mode=1 stop_grad, alpha_topo=5.0) --> off-policy exploitation"
+# # Exp 2: Dot product with stop grad, alpha_topo=5.0
+# echo "========================================="
+# echo "Exp 2: SGPO + TopoReg (dot product, stop grad, alpha=5.0) --> off-policy exploitation"
+# echo "========================================="
+# torchrun \
+#   --nproc_per_node=$N_GPUS \
+#   --master_addr=$MASTER_ADDR \
+#   --master_port=$MASTER_PORT \
+#   train_sorl_v3.py \
+#   --batch_size $BATCH_SIZE \
+#   --train_seq_len $TRAIN_SEQ_LEN \
+#   --val_seq_len $VAL_SEQ_LEN \
+#   --num_iterations $NUM_ITERATIONS \
+#   --num_rollouts $NUM_ROLLOUTS \
+#   --K 8 \
+#   --max_iterations $MAX_ITERATIONS \
+#   --use_static_memory_span \
+#   --min_temperature 0.0 \
+#   --temperature 5.0 \
+#   --alpha_loss $ALPHA_LOSS \
+#   --mode 0 \
+#   --topo_mode 0 \
+#   --alpha_topo 5.0 \
+#   --steps_per_cycle $NUM_ITERATIONS \
+#   --exploration_fraction 0.5 \
+#   --util_dist_mode 1 \
+#   --use_off_policy_exploitation \
+#   --run_info "Exp2: SGPO + TopoReg (${TOPO_MODE_DESC[0]}, util_dist_mode=1 stop_grad, alpha_topo=5.0) --> off-policy exploitation"
 
 # Exp 3: Correlation with stop grad
 echo "========================================="
@@ -206,34 +206,34 @@ torchrun \
   --use_off_policy_distillation \
   --run_info "Exp3: SGPO + TopoReg (${TOPO_MODE_DESC[1]}, util_dist_mode=1, alpha_topo=5.0) --> off-policy distillation"
 
-# Exp 4: Correlation + off-policy imitation
-echo "========================================="
-echo "Exp 4: SGPO + TopoReg (correlation | alpha_topo=5.0) --> off-policy imitation"
-echo "========================================="
-torchrun \
-  --nproc_per_node=$N_GPUS \
-  --master_addr=$MASTER_ADDR \
-  --master_port=$MASTER_PORT \
-  train_sorl_v3.py \
-  --batch_size $BATCH_SIZE \
-  --train_seq_len $TRAIN_SEQ_LEN \
-  --val_seq_len $VAL_SEQ_LEN \
-  --num_iterations $NUM_ITERATIONS \
-  --num_rollouts $NUM_ROLLOUTS \
-  --K 8 \
-  --max_iterations $MAX_ITERATIONS \
-  --use_static_memory_span \
-  --min_temperature 0.0 \
-  --temperature 5.0 \
-  --alpha_loss $ALPHA_LOSS \
-  --mode 0 \
-  --topo_mode 1 \
-  --alpha_topo 5.0 \
-  --steps_per_cycle $NUM_ITERATIONS \
-  --exploration_fraction 0.5 \
-  --util_dist_mode 1 \
-  --use_off_policy_immitation \
-  --run_info "Exp4: SGPO + TopoReg (${TOPO_MODE_DESC[1]} | alpha_topo=5.0) --> off-policy imitation"
+# # Exp 4: Correlation + off-policy imitation
+# echo "========================================="
+# echo "Exp 4: SGPO + TopoReg (correlation | alpha_topo=5.0) --> off-policy imitation"
+# echo "========================================="
+# torchrun \
+#   --nproc_per_node=$N_GPUS \
+#   --master_addr=$MASTER_ADDR \
+#   --master_port=$MASTER_PORT \
+#   train_sorl_v3.py \
+#   --batch_size $BATCH_SIZE \
+#   --train_seq_len $TRAIN_SEQ_LEN \
+#   --val_seq_len $VAL_SEQ_LEN \
+#   --num_iterations $NUM_ITERATIONS \
+#   --num_rollouts $NUM_ROLLOUTS \
+#   --K 8 \
+#   --max_iterations $MAX_ITERATIONS \
+#   --use_static_memory_span \
+#   --min_temperature 0.0 \
+#   --temperature 5.0 \
+#   --alpha_loss $ALPHA_LOSS \
+#   --mode 0 \
+#   --topo_mode 1 \
+#   --alpha_topo 5.0 \
+#   --steps_per_cycle $NUM_ITERATIONS \
+#   --exploration_fraction 0.5 \
+#   --util_dist_mode 1 \
+#   --use_off_policy_immitation \
+#   --run_info "Exp4: SGPO + TopoReg (${TOPO_MODE_DESC[1]} | alpha_topo=5.0) --> off-policy imitation"
 
 # Exp 5: Correlation + off-policy distillation
 echo "========================================="
