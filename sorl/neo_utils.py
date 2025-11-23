@@ -517,6 +517,37 @@ def compute_loss(best_data, model, memory_span: int, attn_blocksize: int,
     abs_loss = (best_ppt[0] * valid_abs_mask).sum() / valid_abs_mask.sum().clamp(min=1)
     return traj_loss, abs_loss
 
+def compute_loss_with_kl(best_data, model, ref_model, memory_span: int, attn_blocksize: int,
+                 loss_mask: Optional[torch.Tensor] = None):
+    """Compute trajectory and abstraction loss from sorl_search output."""
+
+    best_ppt, _ = model.forward(best_data, memory_span, attn_blocksize)
+    best_ppt = best_ppt.reshape(best_data.shape[0], -1)
+    
+    ref_ppt, _ = ref_model.forward(best_data, memory_span, attn_blocksize)
+    ref_ppt = ref_ppt.reshape(best_data.shape[0], -1)
+
+    levels = (best_data >= model.vocab_sizes[0]).long()[:, 1:]
+
+    bos_pos_mask = torch.logical_and(
+        best_data[:, :-1] != BOS_TOKEN_ID, 
+        best_data[:, 1:] != BOS_TOKEN_ID
+    ).float()
+    traj_mask = (levels == 0).float()[0]
+    abs_mask = 1 - traj_mask
+
+    valid_traj_mask = bos_pos_mask[0] * traj_mask
+    valid_abs_mask = bos_pos_mask[0] * abs_mask
+
+    traj_loss = (best_ppt[0] * valid_traj_mask).sum() / valid_traj_mask.sum().clamp(min=1)
+    abs_loss = (best_ppt[0] * valid_abs_mask).sum() / valid_abs_mask.sum().clamp(min=1)
+
+    comput_kl = lambda p_new, p_ref: torch.exp(p_ref - p_new) - (p_ref - p_new) - 1
+    kl_loss = comput_kl(best_ppt[0], ref_ppt[0])
+    traj_kl_loss = (kl_loss * valid_traj_mask).sum() / valid_traj_mask.sum().clamp(min=1)
+    abs_kl_loss = (kl_loss * valid_abs_mask).sum() / valid_abs_mask.sum().clamp(min=1)
+
+    return traj_loss, abs_loss, traj_kl_loss, abs_kl_loss
 
 def compute_weighted_loss(best_data, token_adv, model, memory_span: int, attn_blocksize: int,
                  loss_mask: Optional[torch.Tensor] = None):

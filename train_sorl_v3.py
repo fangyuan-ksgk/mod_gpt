@@ -58,6 +58,8 @@ def parse_args():
     parser.add_argument("--exploration_fraction", type=float, default=0.5) # fraction of steps in exploration phase
     parser.add_argument("--exploration_till_vocab_util", type=float, default=0.5) # exploration till vocabulary utilization reaches this threshold
     parser.add_argument("--use_off_policy_distillation", action="store_true", default=False) # use off-policy distillation
+    parser.add_argument("--use_kl_regularization", action="store_true", default=False) # use kl regularization
+    parser.add_argument("--alpha_kl", type=float, default=0.0) # alpha for kl regularization    
     parser.add_argument("--use_on_policy_distillation", action="store_true", default=False) # use on-policy distillation
     parser.add_argument("--use_off_policy_immitation", action="store_true", default=False) # use off-policy imitation
     parser.add_argument("--use_on_policy_immitation", action="store_true", default=False) # use on-policy imitation
@@ -184,7 +186,7 @@ class Muon(torch.optim.Optimizer):
 
 # GAT model
 from sorl.gat_sim import GAT, GATConfig
-from sorl.neo_utils import compute_loss, compute_weighted_loss, reinit_model
+from sorl.neo_utils import compute_loss, compute_weighted_loss, reinit_model, compute_loss_with_kl
 from sorl.neo_utils import sorl_evaluate_v2 as sorl_evaluate
 from sorl.eval import compute_vocab_utilization_rate
 
@@ -246,6 +248,8 @@ class Hyperparameters:
     exploration_till_vocab_util: float = 0.5 # exploration till vocabulary utilization reaches this threshold
     use_off_policy_distillation: bool = False # use off-policy distillation
     use_on_policy_distillation: bool = False # use on-policy distillation
+    use_kl_regularization: bool = False # use kl regularization
+    alpha_kl: float = 0.0 # alpha for kl regularization
     use_off_policy_immitation: bool = False # use off-policy exploitation
     use_on_policy_immitation: bool = False # use on-policy exploitation
     use_off_policy_exploitation: bool = False # use off-policy exploitation
@@ -579,8 +583,13 @@ for step in range(train_steps + 1):
         else:
             if args.use_off_policy_exploitation or args.use_on_policy_exploitation or args.use_off_policy_immitation or args.use_on_policy_immitation: # reward-shaping with advantage
                 traj_loss, abs_loss = compute_weighted_loss(search_tokens, search_adv, model, memory_span, attn_blocksize)
-            else: 
-                traj_loss, abs_loss = compute_loss(search_tokens, model, memory_span=memory_span, attn_blocksize=attn_blocksize)
+            else: # distillation
+                if args.use_kl_regularization:
+                    traj_loss, abs_loss, traj_kl_loss, abs_kl_loss = compute_loss_with_kl(search_tokens, model, ref_model, memory_span, attn_blocksize)
+                    traj_loss = traj_loss + args.alpha_kl * traj_kl_loss
+                    abs_loss = abs_loss + args.alpha_kl * abs_kl_loss
+                else:
+                    traj_loss, abs_loss = compute_loss(search_tokens, model, memory_span=memory_span, attn_blocksize=attn_blocksize)
             
             topo_loss = torch.tensor(0.0, device=traj_loss.device, dtype=traj_loss.dtype)
 
@@ -593,7 +602,10 @@ for step in range(train_steps + 1):
         if phase == "exploration":
             print0(f" - step: {step} | accum step: {accum_step} | traj_loss: {traj_loss.item()} | sgpo_abs_loss: {abs_loss.item()} | topo_loss: {topo_loss.item()} | search_advantage: {search_adv.mean().item()} | phase: {phase}")
         else:
-            print0(f" - step: {step} | accum step: {accum_step} | traj_loss: {traj_loss.item()} | sgpo_abs_loss: {abs_loss.item()} | search_advantage: {search_adv.mean().item()} | phase: {phase}")
+            if args.use_kl_regularization:
+                print0(f" - step: {step} | accum step: {accum_step} | traj_loss: {traj_loss.item()} | sgpo_abs_loss: {abs_loss.item()} | traj_kl_loss: {traj_kl_loss.item()} | abs_kl_loss: {abs_kl_loss.item()} | search_advantage: {search_adv.mean().item()} | phase: {phase}")
+            else:
+                print0(f" - step: {step} | accum step: {accum_step} | traj_loss: {traj_loss.item()} | sgpo_abs_loss: {abs_loss.item()} | search_advantage: {search_adv.mean().item()} | phase: {phase}")
 
     # --- phase switch --- 
     avg_util_rate /= train_accumulation_steps
@@ -670,6 +682,8 @@ print0(f"-- exploration_fraction: {args.exploration_fraction}", console=True)
 print0(f"-- exploration_till_vocab_util: {args.exploration_till_vocab_util}", console=True)
 print0(f"-- use_off_policy_distillation: {args.use_off_policy_distillation}", console=True)
 print0(f"-- use_on_policy_distillation: {args.use_on_policy_distillation}", console=True)
+print0(f"-- use_kl_regularization: {args.use_kl_regularization}", console=True)
+print0(f"-- alpha_kl: {args.alpha_kl}", console=True)
 print0(f"-- use_off_policy_immitation: {args.use_off_policy_immitation}", console=True)
 print0(f"-- use_on_policy_immitation: {args.use_on_policy_immitation}", console=True)
 print0(f"-- use_off_policy_exploitation: {args.use_off_policy_exploitation}", console=True)
