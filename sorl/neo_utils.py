@@ -216,6 +216,20 @@ def compute_rollout_reward(search_data, ppt, levels, mode: int = 0):
         curiosity_advantage = (doc_abs_ppt - doc_abs_ppt_mean) / doc_abs_ppt_std
         utility_advantage = (doc_ppt_mean - doc_ppt) / doc_ppt_std
         advantage = curiosity_advantage + 0.3 * utility_advantage
+    elif mode == 6: 
+        # curiosity + utility preference (naive combo 10:1)
+        doc_abs_ppt_mean = doc_abs_ppt.mean(dim=0, keepdim=True)
+        doc_abs_ppt_std = doc_abs_ppt.std(dim=0, keepdim=True, unbiased=False).clamp(min=1e-8)
+        curiosity_advantage = (doc_abs_ppt - doc_abs_ppt_mean) / doc_abs_ppt_std
+        utility_advantage = (doc_ppt_mean - doc_ppt) / doc_ppt_std
+        advantage = curiosity_advantage + 0.1 * utility_advantage
+    elif mode == 7: 
+        # SGPO + familiarity preference (3:1)
+        doc_abs_ppt_mean = doc_abs_ppt.mean(dim=0, keepdim=True)
+        doc_abs_ppt_std = doc_abs_ppt.std(dim=0, keepdim=True, unbiased=False).clamp(min=1e-8)
+        familiarity_advantage = (doc_abs_ppt - doc_abs_ppt_mean) / doc_abs_ppt_std
+        utility_disadvantage = (doc_ppt - doc_ppt_mean) / doc_ppt_std
+        advantage = 0.3 * familiarity_advantage + utility_disadvantage
 
     doc_adv = torch.where(
         doc_ppt_std > 1e-8,

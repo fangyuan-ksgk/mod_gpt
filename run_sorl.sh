@@ -52,55 +52,61 @@ EXPLORATION_MODE=0 # SGPO - exploration
 # 
 
 
-TOPO_MODE_DESC=("dot product" "correlation" "covariance")
+ADV_MODE_DESC=("utility disadvantage" "all equal" "familiarity advantage" "utility preference" "curiosity" "curiosity + 0.3 * utility preference" "curiosity + 0.1 * utility preference" "utility disadvantage + 0.3 * familiarity preference")
 
 echo "========================================="
-echo "Exp 10.1: Off-policy + curiosity advantage SoRL (with all rollouts)"
+echo "Exp 10.1: ${ADV_MODE_DESC[0]}"
 echo "========================================="
-torchrun \
-  --nproc_per_node=$N_GPUS \
-  --master_addr=$MASTER_ADDR \
-  --master_port=$MASTER_PORT \
-  train_sorl_v2.py \
-  --batch_size $BATCH_SIZE \
-  --train_seq_len $TRAIN_SEQ_LEN \
-  --val_seq_len $VAL_SEQ_LEN \
-  --num_iterations $NUM_ITERATIONS \
-  --num_rollouts $NUM_ROLLOUTS \
-  --K 8 \
-  --max_iterations $MAX_ITERATIONS \
-  --use_static_memory_span \
-  --min_temperature 0.0 \
-  --temperature 5.0 \
-  --alpha_loss $ALPHA_LOSS \
-  --mode 4 \
-  --steps_per_cycle $MAX_ITERATIONS \
-  --exploration_fraction 1.0 \
-  --exploration_till_vocab_util 1.0 \
-  --run_info "Exp10.1: Off-policy + curiosity advantage SoRL (with all rollouts)"
+for ADV_MODE in {4..7}
+  torchrun \
+    --nproc_per_node=$N_GPUS \
+    --master_addr=$MASTER_ADDR \
+    --master_port=$MASTER_PORT \
+    train_sorl_v2.py \
+    --batch_size $BATCH_SIZE \
+    --train_seq_len $TRAIN_SEQ_LEN \
+    --val_seq_len $VAL_SEQ_LEN \
+    --num_iterations $NUM_ITERATIONS \
+    --num_rollouts $NUM_ROLLOUTS \
+    --K 8 \
+    --max_iterations $MAX_ITERATIONS \
+    --use_static_memory_span \
+    --min_temperature 0.0 \
+    --temperature 5.0 \
+    --alpha_loss $ALPHA_LOSS \
+    --mode $ADV_MODE \
+    --steps_per_cycle $MAX_ITERATIONS \
+    --exploration_fraction 1.0 \
+    --exploration_till_vocab_util 1.0 \
+    --run_info "Exp10.${ADV_MODE}: ${ADV_MODE_DESC[ADV_MODE]}"
+done
 
 
 echo "========================================="
-echo "Exp 10.2: Off-policy + curiosity advantage SoRL (with all rollouts)"
+echo "Exp 10.2: ${ADV_MODE_DESC[1]}" with Topo Regularization
 echo "========================================="
-torchrun \
-  --nproc_per_node=$N_GPUS \
-  --master_addr=$MASTER_ADDR \
-  --master_port=$MASTER_PORT \
-  train_sorl_v2.py \
-  --batch_size $BATCH_SIZE \
-  --train_seq_len $TRAIN_SEQ_LEN \
-  --val_seq_len $VAL_SEQ_LEN \
-  --num_iterations $NUM_ITERATIONS \
-  --num_rollouts $NUM_ROLLOUTS \
-  --K 8 \
-  --max_iterations $MAX_ITERATIONS \
-  --use_static_memory_span \
-  --min_temperature 0.0 \
-  --temperature 5.0 \
-  --alpha_loss $ALPHA_LOSS \
-  --mode 5 \
-  --steps_per_cycle $MAX_ITERATIONS \
-  --exploration_fraction 1.0 \
-  --exploration_till_vocab_util 1.0 \
-  --run_info "Exp10.2: Off-policy + curiosity + utility preference SoRL (with all rollouts)"
+for ADV_MODE in {4..7}
+  torchrun \
+    --nproc_per_node=$N_GPUS \
+    --master_addr=$MASTER_ADDR \
+    --master_port=$MASTER_PORT \
+    train_sorl_v3.py \
+    --batch_size $BATCH_SIZE \
+    --train_seq_len $TRAIN_SEQ_LEN \
+    --val_seq_len $VAL_SEQ_LEN \
+    --num_iterations $NUM_ITERATIONS \
+    --num_rollouts $NUM_ROLLOUTS \
+    --K 8 \
+    --max_iterations $MAX_ITERATIONS \
+    --use_static_memory_span \
+    --min_temperature 0.0 \
+    --temperature 5.0 \
+    --alpha_loss $ALPHA_LOSS \
+    --mode $ADV_MODE \
+    --steps_per_cycle $MAX_ITERATIONS \
+    --exploration_fraction 1.0 \
+    --exploration_till_vocab_util 1.0 \
+    --alpha_topo 2.0 \
+    --topo_mode 1 \
+    --run_info "Exp10.${ADV_MODE}: ${ADV_MODE_DESC[ADV_MODE]} with Topo Regularization (Correlation, alpha=2.0)"
+done
