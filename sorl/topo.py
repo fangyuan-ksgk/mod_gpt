@@ -182,6 +182,8 @@ def doc_hamming_dist_pairwise(tokens: torch.Tensor,
     Much faster than Levenshtein since abstract tokens are at same positions.
     """
     n_r, _ = tokens.shape
+    if n_r == 1: 
+        return torch.zeros(doc_idx.shape[1] - 1, device=tokens.device)
     assert n_r == 2, "doc_hamming_dist_pairwise currently supports exactly two rollouts"
 
     device = tokens.device

@@ -568,7 +568,7 @@ for step in range(train_steps + 1):
         if phase == "exploration": # reward-shaping on predictability loss (SGPO)
             traj_loss, abs_loss, topo_loss = compute_sgpo_loss(search_tokens, search_adv, abs_dist, model, memory_span, attn_blocksize, topo_mode=args.topo_mode, util_dist_mode=args.util_dist_mode)    
         else:
-            if args.use_off_policy_exploitation or args.use_on_policy_exploitation:
+            if args.use_off_policy_exploitation or args.use_on_policy_exploitation or args.use_off_policy_immitation or args.use_on_policy_immitation: # reward-shaping with advantage
                 traj_loss, abs_loss = compute_weighted_loss(search_tokens, search_adv, model, memory_span, attn_blocksize)
             else: 
                 traj_loss, abs_loss = compute_loss(search_tokens, model, memory_span=memory_span, attn_blocksize=attn_blocksize)
