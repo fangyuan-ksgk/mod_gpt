@@ -62,6 +62,7 @@ def parse_args():
     parser.add_argument("--use_off_policy_immitation", action="store_true", default=False) # use off-policy imitation
     parser.add_argument("--use_on_policy_immitation", action="store_true", default=False) # use on-policy imitation
     parser.add_argument("--use_off_policy_exploitation", action="store_true", default=False) # use off-policy exploitation
+    parser.add_argument("--use_reverse_off_policy_exploitation", action="store_true", default=False) # use reverse off-policy exploitation
     parser.add_argument("--use_on_policy_exploitation", action="store_true", default=False) # use on-policy exploitation
     parser.add_argument("--do_reinit", action="store_true", default=False) # do reinitialization
     parser.add_argument("--reinit_mode", type=int, default=0) # mode for reinitialization (a). abstract only / b). embedding + head / c). all parameters
@@ -248,6 +249,7 @@ class Hyperparameters:
     use_off_policy_immitation: bool = False # use off-policy exploitation
     use_on_policy_immitation: bool = False # use on-policy exploitation
     use_off_policy_exploitation: bool = False # use off-policy exploitation
+    use_reverse_off_policy_exploitation: bool = False # use reverse off-policy exploitation
     use_on_policy_exploitation: bool = False # use on-policy exploitation
     do_reinit: bool = False # do reinitialization
     reinit_mode: int = 0 # mode for reinitialization (a). abstract only / b). embedding + head / c). all parameters
@@ -548,6 +550,13 @@ for step in range(train_steps + 1):
                                                                     memory_span=memory_span, attn_blocksize=attn_blocksize, 
                                                                     temperature=temperature_train, mode=3, 
                                                                     ref_model=ref_model)
+                elif args.use_reverse_off_policy_exploitation: 
+                    search_tokens, search_ppt, search_adv, abs_dist = sorl_search(tokens, model, 
+                                                                    n=n, K=args.K, max_iterations=args.max_iterations, 
+                                                                    memory_span=memory_span, attn_blocksize=attn_blocksize, 
+                                                                    temperature=temperature_train, mode=3, 
+                                                                    ref_model=ref_model)
+                    search_adv = -search_adv
                 elif args.use_on_policy_exploitation:
                     search_tokens, search_ppt, search_adv, abs_dist = sorl_search(tokens, model, 
                                                                     n=n, K=args.K, max_iterations=args.max_iterations, 
@@ -665,6 +674,7 @@ print0(f"-- use_off_policy_immitation: {args.use_off_policy_immitation}", consol
 print0(f"-- use_on_policy_immitation: {args.use_on_policy_immitation}", console=True)
 print0(f"-- use_off_policy_exploitation: {args.use_off_policy_exploitation}", console=True)
 print0(f"-- use_on_policy_exploitation: {args.use_on_policy_exploitation}", console=True)
+print0(f"-- use_reverse_off_policy_exploitation: {args.use_reverse_off_policy_exploitation}", console=True)
 print0(f"-- do_reinit: {args.do_reinit}", console=True)
 print0(f"-- reinit_mode: {args.reinit_mode}", console=True)
 print0(f"-- alpha_topo: {args.alpha_topo}", console=True)
