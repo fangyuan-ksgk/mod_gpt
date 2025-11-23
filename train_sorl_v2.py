@@ -558,6 +558,7 @@ for step in range(train_steps + 1):
             else: 
                 if args.use_kl_regularization:
                     traj_loss, abs_loss, traj_kl_loss, abs_kl_loss = compute_loss_with_kl(search_tokens, model, ref_model, memory_span, attn_blocksize)
+                    print0(f" - KL: traj={traj_kl_loss.item():.4f}, abs={abs_kl_loss.item():.4f}")
                     traj_loss = traj_loss + args.alpha_kl * traj_kl_loss
                     abs_loss = abs_loss + args.alpha_kl * abs_kl_loss
                 else:
@@ -587,15 +588,14 @@ for step in range(train_steps + 1):
             n = 1
             temperature_train = torch.tensor([args.min_temperature], device="cuda")
 
-        # periodic ema update (interpolate between offline -> online model)
-        if args.use_ema_update: 
-            if cycle_step % args.ema_update_interval == 0:
-                with torch.no_grad():
-                    for p_ema, p_online in zip(ref_model.parameters(), model.parameters()):
-                        p_ema.data.mul_(1 - args.ema_alpha).add_(
-                            p_online.data, alpha=args.ema_alpha
-                        )
-
+            # periodic ema update (interpolate between offline -> online model)
+            if args.use_ema_update: 
+                if cycle_step % args.ema_update_interval == 0:
+                    with torch.no_grad():
+                        for p_ema, p_online in zip(ref_model.parameters(), model.parameters()):
+                            p_ema.data.mul_(1 - args.ema_alpha).add_(
+                                p_online.data, alpha=args.ema_alpha
+                            )
             
     elif cycle_step == 0:
         phase = "exploration"
