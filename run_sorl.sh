@@ -52,12 +52,28 @@ EXPLORATION_MODE=0 # SGPO - exploration
 # 
 
 
-ADV_MODE_DESC=("utility disadvantage" "all equal" "familiarity advantage" "utility preference" "curiosity" "curiosity + 0.3 * utility preference" "curiosity + 0.1 * utility preference" "utility disadvantage + 0.3 * familiarity preference" "curiosity + 10.0 * utility preference" "curiosity + 3.0 * utility preference")
+ADV_MODE_DESC=(
+    "utility disadvantage (SGPO)"
+    "all equal (baseline MLE)"
+    "familiarity advantage (distillation)"
+    "utility preference (distillation)"
+    "curiosity (favor unfamiliar)"
+    "curiosity + 0.3 * utility preference"
+    "curiosity + 0.1 * utility preference"
+    "SGPO + 0.3 * familiarity preference"
+    "curiosity + 10.0 * utility preference"
+    "curiosity + 3.0 * utility preference"
+    "variance scaling (normalized curiosity, coef=0.5)"
+    "conditional curiosity (dampened by alpha=0.3)"
+    "clipped curiosity (element-wise, 1x utility)"
+    "clipped curiosity + weighting (coef=0.5)"
+    "gated curiosity (utility-gated exploration, coef=0.3)"
+)
 
 echo "========================================="
 echo "Exp 10.1: SGPO Advantage Mode Sweep"
 echo "========================================="
-for ADV_MODE in {8..9}; do
+for ADV_MODE in {10..14}; do
   echo "Running ADV_MODE=${ADV_MODE}: ${ADV_MODE_DESC[ADV_MODE]}"
   torchrun \
     --nproc_per_node=$N_GPUS \
