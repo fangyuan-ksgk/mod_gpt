@@ -171,12 +171,38 @@ def resample_rollout(search_data, ppt, levels, model, tau: float = 2e-4, resampl
     return select_seq.unsqueeze(0), select_ppt, best_ppt_advantage.mean()
 
 
+class RunningRewardScaler:
+    def __init__(self, size=1, epsilon=1e-8):
+        self.mean = torch.zeros(size).float()
+        self.var = torch.ones(size).float()
+        self.count = epsilon
+
+    def update_and_normalize(self, batch_rewards):
+        batch_mean = batch_rewards.mean()
+        batch_var = batch_rewards.var(unbiased=False)
+        batch_count = batch_rewards.numel()  
+
+        delta = batch_mean - self.mean
+        tot_count = self.count + batch_count
+        
+        new_mean = self.mean + delta * batch_count / tot_count
+        m_a = self.var * self.count
+        m_b = batch_var * batch_count
+        M2 = m_a + m_b + delta**2 * self.count * batch_count / tot_count
+        new_var = M2 / tot_count
+        
+        self.mean = new_mean
+        self.var = new_var
+        self.count = tot_count
+
+        return batch_rewards / (torch.sqrt(self.var) + 1e-8)
+
 # --------- "Variants" to hard selection + train on single rollout --------
 # 1. Soft selection with 'resampling'
 # 2. Return all rollout, but with ppt & advantage for each rollout || here we no longer need "stitching"
 #    -> we'd need to reduce the seq_len to use more rollouts, then we'd increase the batch_size accordingly, it's fine
 # -------------------------------------------------------------------------
-def compute_rollout_reward(search_data, ppt, levels, mode: int = 0): 
+def compute_rollout_reward(search_data, ppt, levels, mode: int = 0, scaler: Optional[RunningRewardScaler] = None): 
     trajectory_mask = (levels[:, 1:] == 0).float()
     trajectory_ppt = ppt * trajectory_mask
     abs_ppt = ppt * (1 - trajectory_mask)
@@ -244,7 +270,42 @@ def compute_rollout_reward(search_data, ppt, levels, mode: int = 0):
         curiosity_advantage = (doc_abs_ppt - doc_abs_ppt_mean) / doc_abs_ppt_std
         utility_advantage = (doc_ppt_mean - doc_ppt) / doc_ppt_std
         advantage = curiosity_advantage + 3.0 * utility_advantage
-
+    elif mode == 10: # variance scaling
+        # rms # update running mean and variance
+        doc_abs_ppt_norm = scaler.update_and_normalize(doc_abs_ppt)
+        curiosity_coef = 0.5  
+        doc_rew = curiosity_coef * doc_abs_ppt_norm - doc_ppt
+        doc_rew_mean = doc_rew.mean(dim=0, keepdim=True)
+        doc_rew_std = doc_rew.std(dim=0, keepdim=True, unbiased=False).clamp(min=1e-8)
+        advantage = (doc_rew - doc_rew_mean) / doc_rew_std
+    elif mode == 11: # conditional curiosity
+        alpha = 0.3 # damping factor (blur curiosity gain with utility gain)
+        doc_rew = - doc_ppt / (1 + alpha * doc_abs_ppt)
+        doc_rew_mean = doc_rew.mean(dim=0, keepdim=True)
+        doc_rew_std = doc_rew.std(dim=0, keepdim=True, unbiased=False).clamp(min=1e-8)
+        advantage = (doc_rew - doc_rew_mean) / doc_rew_std
+    elif mode == 12: # clipped curiosity
+        doc_abs_ppt_clip = torch.minimum(doc_abs_ppt, doc_ppt.abs())
+        doc_rew = doc_abs_ppt_clip - doc_ppt
+        doc_rew_mean = doc_rew.mean(dim=0, keepdim=True)
+        doc_rew_std = doc_rew.std(dim=0, keepdim=True, unbiased=False).clamp(min=1e-8)
+        advantage = (doc_rew - doc_rew_mean) / doc_rew_std
+    elif mode == 13: # clipped curiosity
+        doc_abs_ppt_clip = torch.minimum(doc_abs_ppt, doc_ppt.abs())
+        curiosity_coef = 0.5
+        doc_rew = curiosity_coef * doc_abs_ppt_clip - doc_ppt
+        doc_rew_mean = doc_rew.mean(dim=0, keepdim=True)
+        doc_rew_std = doc_rew.std(dim=0, keepdim=True, unbiased=False).clamp(min=1e-8)
+        advantage = (doc_rew - doc_rew_mean) / doc_rew_std
+    elif mode == 14: 
+        # Only apply curiosity bonus when utility is already good (low ppt)
+        utility_gate = torch.sigmoid(-doc_ppt + 1.0)  # High when utility good
+        curiosity_bonus = 0.3 * doc_abs_ppt * utility_gate
+        doc_rew = -doc_ppt + curiosity_bonus
+        
+        doc_rew_mean = doc_rew.mean(dim=0, keepdim=True)
+        doc_rew_std = doc_rew.std(dim=0, keepdim=True, unbiased=False).clamp(min=1e-8)
+        advantage = (doc_rew - doc_rew_mean) / doc_rew_std
 
     doc_adv = torch.where(
         doc_ppt_std > 1e-8,
@@ -363,7 +424,7 @@ def sorl_search_v2(tokens, model, n=3, K=3, max_iterations=1,
 def sorl_search_v3(tokens, model, n=3, K=3, max_iterations=1,
                 memory_span=1792, attn_blocksize=1792, temperature: Union[float, torch.Tensor] = 1.0, truncate_seq_len: bool = True, 
                 alpha_select: float = 0.0, select_mode: str = "abs_ppt", # placeholder
-                loss_mask: Optional[torch.Tensor] = None, mode: int = 0):
+                loss_mask: Optional[torch.Tensor] = None, mode: int = 0, scaler: Optional[RunningRewardScaler] = None):
     """
     Complete SoRL search pipeline:
     1. Direct rollout without greedy sample. 
@@ -381,7 +442,7 @@ def sorl_search_v3(tokens, model, n=3, K=3, max_iterations=1,
     # --- compute reward for each rollout ---
     levels = (search_data >= model.vocab_sizes[0]).long()
 
-    token_adv = compute_rollout_reward(search_data, search_ppt, levels, mode=mode) # un-utility reward 
+    token_adv = compute_rollout_reward(search_data, search_ppt, levels, mode=mode, scaler=scaler) # un-utility reward 
     return search_data, search_ppt, token_adv
 
 

@@ -424,8 +424,10 @@ print("Train & Evaluation")
 
 train_loader = distributed_data_generator(args.train_files, world_size * args.train_seq_len, rank, world_size)
 
-# --- GAPT ---
+# --- GAPT & Reward Scaler ---
 from sorl.gapt import GatedPhaseTransition
+from sorl.neo_utils import RunningRewardScaler
+scaler = RunningRewardScaler()
 gapt = GatedPhaseTransition(p_m=args.traj_perplexity_patience, p_a=args.abs_perplexity_patience,
                             tau_plateau=args.tau_plateau, tau_spike=args.tau_spike)
 # -------------
@@ -516,7 +518,7 @@ for step in range(train_steps + 1):
                 search_tokens, search_ppt, search_adv = sorl_search(tokens, model, 
                                                                     n=n, K=args.K, max_iterations=args.max_iterations, 
                                                                     memory_span=memory_span, attn_blocksize=attn_blocksize, 
-                                                                    temperature=temperature_train, mode=args.mode)
+                                                                    temperature=temperature_train, mode=args.mode, scaler=scaler)
             else: # exploitation
                 if args.use_off_policy_distillation: 
                     search_tokens, search_ppt, search_adv = sorl_search(tokens, ref_model, 
