@@ -306,6 +306,18 @@ def compute_rollout_reward(search_data, ppt, levels, mode: int = 0, scaler: Opti
         doc_rew_mean = doc_rew.mean(dim=0, keepdim=True)
         doc_rew_std = doc_rew.std(dim=0, keepdim=True, unbiased=False).clamp(min=1e-8)
         advantage = (doc_rew - doc_rew_mean) / doc_rew_std
+    elif mode == 15: # curiosity (on both abs & traj tokens)
+        joint_curiosity = (doc_abs_ppt + doc_ppt)
+        joint_curiosity_mean = joint_curiosity.mean(dim=0, keepdim=True)
+        joint_curiosity_std = joint_curiosity.std(dim=0, keepdim=True, unbiased=False).clamp(min=1e-8)
+        joint_curiosity_advantage = (joint_curiosity - joint_curiosity_mean) / joint_curiosity_std
+        advantage = joint_curiosity_advantage
+    elif mode == 16: # joint familiarity 
+        joint_familiarity = - (doc_abs_ppt + doc_ppt)
+        joint_familiarity_mean = joint_familiarity.mean(dim=0, keepdim=True)
+        joint_familiarity_std = joint_familiarity.std(dim=0, keepdim=True, unbiased=False).clamp(min=1e-8)
+        joint_familiarity_advantage = (joint_familiarity - joint_familiarity_mean) / joint_familiarity_std
+        advantage = joint_familiarity_advantage
 
     doc_adv = torch.where(
         doc_ppt_std > 1e-8,
