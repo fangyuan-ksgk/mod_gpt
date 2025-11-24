@@ -257,19 +257,19 @@ def compute_rollout_reward(search_data, ppt, levels, mode: int = 0, scaler: Opti
         utility_disadvantage = (doc_ppt - doc_ppt_mean) / doc_ppt_std
         advantage = 0.3 * familiarity_advantage + utility_disadvantage
     elif mode == 8: 
-        # curiosity + utility preference (naive combo 1:10)
+        # curiosity + utility preference (naive combo 1:9) | extreme exploration observed (strange)
         doc_abs_ppt_mean = doc_abs_ppt.mean(dim=0, keepdim=True)
         doc_abs_ppt_std = doc_abs_ppt.std(dim=0, keepdim=True, unbiased=False).clamp(min=1e-8)
         curiosity_advantage = (doc_abs_ppt - doc_abs_ppt_mean) / doc_abs_ppt_std
         utility_advantage = (doc_ppt_mean - doc_ppt) / doc_ppt_std
-        advantage = curiosity_advantage + 10.0 * utility_advantage
+        advantage = 0.1 * curiosity_advantage + 0.9 * utility_advantage
     elif mode == 9: 
         # curiosity + utility preference (naive combo 1:3)
         doc_abs_ppt_mean = doc_abs_ppt.mean(dim=0, keepdim=True)
         doc_abs_ppt_std = doc_abs_ppt.std(dim=0, keepdim=True, unbiased=False).clamp(min=1e-8)
         curiosity_advantage = (doc_abs_ppt - doc_abs_ppt_mean) / doc_abs_ppt_std
         utility_advantage = (doc_ppt_mean - doc_ppt) / doc_ppt_std
-        advantage = curiosity_advantage + 3.0 * utility_advantage
+        advantage = 0.25 * curiosity_advantage + 0.75 * utility_advantage
     elif mode == 10: # variance scaling
         # rms # update running mean and variance
         doc_abs_ppt_norm = scaler.update_and_normalize(doc_abs_ppt)
