@@ -306,6 +306,24 @@ def compute_rollout_reward(search_data, ppt, levels, mode: int = 0, scaler: Opti
         doc_rew_mean = doc_rew.mean(dim=0, keepdim=True)
         doc_rew_std = doc_rew.std(dim=0, keepdim=True, unbiased=False).clamp(min=1e-8)
         advantage = (doc_rew - doc_rew_mean) / doc_rew_std
+    elif mode == 15: 
+        beta = 0.1 
+        gating_factor = torch.tanh(beta * doc_ppt.detach())
+
+        r_max = 5.0
+        capped_curiosity = doc_abs_ppt.clamp(max=r_max)
+        
+        lambda_val = 0.3
+        curiosity_bonus = gating_factor * lambda_val * capped_curiosity
+        doc_rew = -doc_ppt + curiosity_bonus
+
+        # Debugging stats
+        print(f"Gate Openness: {gating_factor.mean():.3f}, Bonus: {curiosity_bonus.mean():.3f}, Cost: {doc_ppt.mean():.3f}")
+
+        # Standard Advantage Calculation
+        doc_rew_mean = doc_rew.mean(dim=0, keepdim=True)
+        doc_rew_std = doc_rew.std(dim=0, keepdim=True, unbiased=False).clamp(min=1e-8)
+        advantage = (doc_rew - doc_rew_mean) / doc_rew_std
 
     doc_adv = torch.where(
         doc_ppt_std > 1e-8,
