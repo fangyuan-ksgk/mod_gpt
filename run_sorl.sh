@@ -49,204 +49,75 @@ EXPLORATION_MODE=0 # SGPO - exploration
 
 # --------------------------------------------------------------
 # Exp 10: curiosity advantage SoRL (with all rollouts)
-# 
-
-
-ADV_MODE_DESC=(
-    "utility disadvantage (SGPO)"
-    "all equal (baseline MLE)"
-    "familiarity advantage (distillation)"
-    "utility preference (distillation)"
-    "curiosity (favor unfamiliar)"
-    "curiosity + 0.3 * utility preference"
-    "curiosity + 0.1 * utility preference"
-    "SGPO + 0.3 * familiarity preference"
-    "0.1 * curiosity + 0.9 * utility preference"
-    "0.25 * curiosity + 0.75 * utility preference"
-    "variance scaling (normalized curiosity, coef=0.5)"
-    "conditional curiosity (dampened by alpha=0.3)"
-    "clipped curiosity (element-wise, 1x utility)"
-    "clipped curiosity + weighting (coef=0.5)"
-    "gated curiosity (utility-gated exploration, coef=0.3)"
-)
+# --------------------------------------------------------------
 
 # echo "========================================="
-# echo "Exp 10.1: SGPO Advantage Mode Sweep"
-# echo "========================================="
-# # run 3 to ensure positive search adv is achieved
-
-# fpr ADV_MODE in 3 
-# for ADV_MODE in {10..14}; do
-#   echo "Running ADV_MODE=${ADV_MODE}: ${ADV_MODE_DESC[ADV_MODE]}"
-#   torchrun \
-#     --nproc_per_node=$N_GPUS \
-#     --master_addr=$MASTER_ADDR \
-#     --master_port=$MASTER_PORT \
-#     train_sorl_v2.py \
-#     --batch_size $BATCH_SIZE \
-#     --train_seq_len $TRAIN_SEQ_LEN \
-#     --val_seq_len $VAL_SEQ_LEN \
-#     --num_iterations $NUM_ITERATIONS \
-#     --num_rollouts $NUM_ROLLOUTS \
-#     --K 8 \
-#     --max_iterations $MAX_ITERATIONS \
-#     --use_static_memory_span \
-#     --min_temperature 0.0 \
-#     --temperature 5.0 \
-#     --alpha_loss $ALPHA_LOSS \
-#     --mode $ADV_MODE \
-#     --steps_per_cycle $NUM_ITERATIONS \
-#     --exploration_fraction 1.0 \
-#     --exploration_till_vocab_util 1.0 \
-#     --run_info "Exp10.1.${ADV_MODE}: ${ADV_MODE_DESC[ADV_MODE]}"
-# done
-
-# echo "========================================="
-# echo "Exp 10.2: SGPO Advantage Mode Sweep with Explicit Explore Phase"
-# echo "========================================="
-# --> These doesn't work well, vocabulary collapsed with 5:1 ratio
-
-# for EXPLORE_EVERY in 2 5; do
-#   echo "Running explicit explore phase every ${EXPLORE_EVERY} steps"
-#   torchrun \
-#     --nproc_per_node=$N_GPUS \
-#     --master_addr=$MASTER_ADDR \
-#     --master_port=$MASTER_PORT \
-#     train_sorl_v2.py \
-#     --batch_size $BATCH_SIZE \
-#     --train_seq_len $TRAIN_SEQ_LEN \
-#     --val_seq_len $VAL_SEQ_LEN \
-#     --num_iterations $NUM_ITERATIONS \
-#     --num_rollouts $NUM_ROLLOUTS \
-#     --K 8 \
-#     --max_iterations $MAX_ITERATIONS \
-#     --use_static_memory_span \
-#     --min_temperature 0.0 \
-#     --temperature 5.0 \
-#     --alpha_loss $ALPHA_LOSS \
-#     --mode 3 \
-#     --steps_per_cycle $NUM_ITERATIONS \
-#     --exploration_fraction 1.0 \
-#     --exploration_till_vocab_util 1.0 \
-#     --use_explicit_explore_phase \
-#     --explore_every $EXPLORE_EVERY \
-#     --run_info "Exp10.2: explicit explore phase every $EXPLORE_EVERY steps"
-# done
-
-# # echo "========================================="
-# echo "Exp 10.3: Curiosity SoRL --> offline distillation"
+# Exp 11.1: SGPO --> offline distillation (gapt -- only in exploitation phase)
 # echo "========================================="
 
-torchrun \
-  --nproc_per_node=$N_GPUS \
-  --master_addr=$MASTER_ADDR \
-  --master_port=$MASTER_PORT \
-  train_sorl_v2.py \
-  --batch_size $BATCH_SIZE \
-  --train_seq_len $TRAIN_SEQ_LEN \
-  --val_seq_len $VAL_SEQ_LEN \
-  --num_iterations $NUM_ITERATIONS \
-  --num_rollouts $NUM_ROLLOUTS \
-  --K 8 \
-  --max_iterations $MAX_ITERATIONS \
-  --use_static_memory_span \
-  --min_temperature 0.0 \
-  --temperature 5.0 \
-  --alpha_loss $ALPHA_LOSS \
-  --mode 4 \
-  --steps_per_cycle $NUM_ITERATIONS \
-  --exploration_fraction 0.5 \
-  --exploration_till_vocab_util 0.5 \
-  --use_off_policy_distillation \
-  --do_reinit \
-  --reinit_mode 0 \
-  --run_info "Exp10.3: curiosity -> offline distillation"
+for TRAJ_PATIENCE in {100..500..100}; do
+  torchrun \
+    --nproc_per_node=$N_GPUS \
+    --master_addr=$MASTER_ADDR \
+    --master_port=$MASTER_PORT \
+    train_sorl_v2.py \
+    --batch_size $BATCH_SIZE \
+    --train_seq_len $TRAIN_SEQ_LEN \
+    --val_seq_len $VAL_SEQ_LEN \
+    --num_iterations $NUM_ITERATIONS \
+    --num_rollouts $NUM_ROLLOUTS \
+    --K 8 \
+    --max_iterations $MAX_ITERATIONS \
+    --use_static_memory_span \
+    --min_temperature 0.0 \
+    --temperature 5.0 \
+    --alpha_loss $ALPHA_LOSS \
+    --mode 0 \
+    --steps_per_cycle $NUM_ITERATIONS \
+    --exploration_fraction 0.5 \
+    --exploration_till_vocab_util 0.5 \
+    --use_off_policy_distillation \
+    --use_gapt \
+    --traj_perplexity_patience $TRAJ_PATIENCE \
+    --do_reinit \
+    --reinit_mode 0 \
+    --run_info "Exp11.1: SGPO -> offline distillation (gapt -- traj perplexity patience=$TRAJ_PATIENCE)"
+done
 
-
-# Exp 10.4, curiosity SoRL with topo reg (correlation)
+# Exp 11.2: Distillation with "active supression" on non-greedy rollouts
 # echo "========================================="
-# echo "Exp 10.4: Curiosity SoRL with Topo Reg (correlation)"
-# echo "========================================="
-
-torchrun \
-  --nproc_per_node=$N_GPUS \
-  --master_addr=$MASTER_ADDR \
-  --master_port=$MASTER_PORT \
-  train_sorl_v3.py \
-  --batch_size $BATCH_SIZE \
-  --train_seq_len $TRAIN_SEQ_LEN \
-  --val_seq_len $VAL_SEQ_LEN \
-  --num_iterations $NUM_ITERATIONS \
-  --num_rollouts $NUM_ROLLOUTS \
-  --K 8 \
-  --max_iterations $MAX_ITERATIONS \
-  --use_static_memory_span \
-  --min_temperature 0.0 \
-  --temperature 5.0 \
-  --alpha_loss $ALPHA_LOSS \
-  --mode 4 \
-  --steps_per_cycle $NUM_ITERATIONS \
-  --exploration_fraction 1.0 \
-  --exploration_till_vocab_util 1.0 \
-  --topo_mode 1 \
-  --alpha_topo 2.0 \
-
-
-# Exp 10.5: curiosity SoRL with topo reg (correlation) -> off-policy distillation
-# echo "========================================="
-# echo "Exp 10.5: curiosity SoRL with topo reg (correlation) -> off-policy distillation"
+# echo "Exp 11.2: Distillation with 'active supression' on non-greedy rollouts"
 # echo "========================================="
 
-torchrun \
-  --nproc_per_node=$N_GPUS \
-  --master_addr=$MASTER_ADDR \
-  --master_port=$MASTER_PORT \
-  train_sorl_v3.py \
-  --batch_size $BATCH_SIZE \
-  --train_seq_len $TRAIN_SEQ_LEN \
-  --val_seq_len $VAL_SEQ_LEN \
-  --num_iterations $NUM_ITERATIONS \
-  --num_rollouts $NUM_ROLLOUTS \
-  --K 8 \
-  --max_iterations $MAX_ITERATIONS \
-  --use_static_memory_span \
-  --min_temperature 0.0 \
-  --temperature 5.0 \
-  --alpha_loss $ALPHA_LOSS \
-  --mode 4 \
-  --steps_per_cycle $NUM_ITERATIONS \
-  --exploration_fraction 0.5 \
-  --exploration_till_vocab_util 0.5\
-  --use_off_policy_distillation \
-  --do_reinit \
-  --reinit_mode 0 \
-  --topo_mode 1 \
-  --alpha_topo 2.0 \
-  --run_info "Exp10.5: curiosity -> off-policy distillation"
+
+
+
 
 
 # Exp 10.6. SGPO (with topo reg, correlation) --> off-policy distillation
 # echo "========================================="
 # echo "Exp 10.6. SGPO (with topo reg, correlation) --> off-policy distillation"
 # echo "========================================="
+ALPHA_TOPOS=(0.5 1.0 1.5 2.0)
 
-torchrun \
-  --nproc_per_node=$N_GPUS \
-  --master_addr=$MASTER_ADDR \
-  --master_port=$MASTER_PORT \
-  train_sorl_v3.py \
-  --batch_size $BATCH_SIZE \
-  --train_seq_len $TRAIN_SEQ_LEN \
-  --val_seq_len $VAL_SEQ_LEN \
-  --num_iterations $NUM_ITERATIONS \
-  --num_rollouts $NUM_ROLLOUTS \
-  --K 8 \
-  --max_iterations $MAX_ITERATIONS \
-  --use_static_memory_span \
-  --min_temperature 0.0 \
-  --temperature 5.0 \
-  --alpha_loss $ALPHA_LOSS \
-  --mode 0 \
+for ALPHA_TOPO in "${ALPHA_TOPOS[@]}"; do
+  torchrun \
+    --nproc_per_node=$N_GPUS \
+    --master_addr=$MASTER_ADDR \
+    --master_port=$MASTER_PORT \
+    train_sorl_v3.py \
+    --batch_size $BATCH_SIZE \
+    --train_seq_len $TRAIN_SEQ_LEN \
+    --val_seq_len $VAL_SEQ_LEN \
+    --num_iterations $NUM_ITERATIONS \
+    --num_rollouts $NUM_ROLLOUTS \
+    --K 8 \
+    --max_iterations $MAX_ITERATIONS \
+    --use_static_memory_span \
+    --min_temperature 0.0 \
+    --temperature 5.0 \
+    --alpha_loss $ALPHA_LOSS \
+    --mode 0 \
   --steps_per_cycle $NUM_ITERATIONS \
   --exploration_fraction 0.5 \
   --exploration_till_vocab_util 0.5\
@@ -254,5 +125,6 @@ torchrun \
   --do_reinit \
   --reinit_mode 0 \
   --topo_mode 1 \
-  --alpha_topo 2.0 \
-  --run_info "Exp10.6: SGPO -> off-policy distillation"
+    --alpha_topo $ALPHA_TOPO \
+    --run_info "Exp10.6: SGPO -> off-policy distillation (topo reg alpha=$ALPHA_TOPO)"
+done

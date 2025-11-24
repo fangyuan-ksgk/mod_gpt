@@ -575,7 +575,7 @@ for step in range(train_steps + 1):
                 else:
                     traj_loss, abs_loss = compute_loss(search_tokens, model, memory_span=memory_span, attn_blocksize=attn_blocksize)
             
-        if args.use_gapt: 
+        if args.use_gapt and phase == "exploitation": 
             loss = gapt.step(traj_loss, alpha_loss * abs_loss, verbose=False)
         else: 
             loss = traj_loss + alpha_loss * abs_loss
