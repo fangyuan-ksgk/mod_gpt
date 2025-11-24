@@ -361,6 +361,10 @@ def get_lr(step: int):
 model: nn.Module = torch.compile(model, dynamic=True)
 ref_model: nn.Module = torch.compile(ref_model, dynamic=True)
 
+# --- reward scaler ---
+from sorl.neo_utils import RunningRewardScaler
+scaler = RunningRewardScaler()
+
 ########################################
 #            Warmup kernels            #
 ########################################
@@ -387,7 +391,7 @@ for i in range(warmup_steps):
     search_start = time.time()
     with torch.no_grad():
         search_tokens, search_ppt, search_adv = sorl_search(tokens, model, n=args.num_rollouts, K=args.K, max_iterations=args.max_iterations, memory_span=memory_span, attn_blocksize=attn_blocksize, 
-                                                                          temperature=temperature_warmup, mode=args.mode)
+                                                                          temperature=temperature_warmup, mode=args.mode, scaler=scaler)
     search_end = time.time()
     print(f" :: Sorl search takes {search_end - search_start} second")
     # --- compute loss --- 
@@ -426,8 +430,6 @@ train_loader = distributed_data_generator(args.train_files, world_size * args.tr
 
 # --- GAPT & Reward Scaler ---
 from sorl.gapt import GatedPhaseTransition
-from sorl.neo_utils import RunningRewardScaler
-scaler = RunningRewardScaler()
 gapt = GatedPhaseTransition(p_m=args.traj_perplexity_patience, p_a=args.abs_perplexity_patience,
                             tau_plateau=args.tau_plateau, tau_spike=args.tau_spike)
 # -------------
@@ -524,27 +526,27 @@ for step in range(train_steps + 1):
                     search_tokens, search_ppt, search_adv = sorl_search(tokens, ref_model, 
                                                                     n=n, K=args.K, max_iterations=args.max_iterations, 
                                                                     memory_span=memory_span, attn_blocksize=attn_blocksize, 
-                                                                    temperature=temperature_train, mode=args.mode)
+                                                                    temperature=temperature_train, mode=args.mode, scaler=scaler)
                 elif args.use_on_policy_distillation: 
                     search_tokens, search_ppt, search_adv = sorl_search(tokens, model, 
                                                                     n=n, K=args.K, max_iterations=args.max_iterations, 
                                                                     memory_span=memory_span, attn_blocksize=attn_blocksize, 
-                                                                    temperature=temperature_train, mode=args.mode)
+                                                                    temperature=temperature_train, mode=args.mode, scaler=scaler)
                 elif args.use_off_policy_exploitation: 
                     search_tokens, search_ppt, search_adv = sorl_search(tokens, ref_model, 
                                                                     n=n, K=args.K, max_iterations=args.max_iterations, 
                                                                     memory_span=memory_span, attn_blocksize=attn_blocksize, 
-                                                                    temperature=temperature_train, mode=args.exploitation_mode)
+                                                                    temperature=temperature_train, mode=args.exploitation_mode, scaler=scaler)
                 elif args.use_on_policy_exploitation: 
                     search_tokens, search_ppt, search_adv = sorl_search(tokens, model, 
                                                                     n=n, K=args.K, max_iterations=args.max_iterations, 
                                                                     memory_span=memory_span, attn_blocksize=attn_blocksize, 
-                                                                    temperature=temperature_train, mode=args.exploitation_mode)
+                                                                    temperature=temperature_train, mode=args.exploitation_mode, scaler=scaler)
                 else:
                     search_tokens, search_ppt, search_adv = select_best_sorl_search(tokens, model, 
                                                                     n=n, K=args.K, max_iterations=args.max_iterations, 
                                                                     memory_span=memory_span, attn_blocksize=attn_blocksize, 
-                                                                    temperature=temperature_train)
+                                                                    temperature=temperature_train, scaler=scaler)
 
         if search_tokens.shape[0] > 1: 
             avg_util_rate += compute_vocab_utilization_rate(search_tokens[:1, :], model) # greedy rollout vocab utilization check only
