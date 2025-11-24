@@ -158,6 +158,8 @@ torchrun \
   --exploration_fraction 0.5 \
   --exploration_till_vocab_util 0.5 \
   --use_off_policy_distillation \
+  --do_reinit \
+  --reinit_mode 0 \
   --run_info "Exp10.3: curiosity -> offline distillation"
 
 
@@ -216,6 +218,41 @@ torchrun \
   --exploration_fraction 0.5 \
   --exploration_till_vocab_util 0.5\
   --use_off_policy_distillation \
+  --do_reinit \
+  --reinit_mode 0 \
   --topo_mode 1 \
   --alpha_topo 2.0 \
   --run_info "Exp10.5: curiosity -> off-policy distillation"
+
+
+# Exp 10.6. SGPO (with topo reg, correlation) --> off-policy distillation
+# echo "========================================="
+# echo "Exp 10.6. SGPO (with topo reg, correlation) --> off-policy distillation"
+# echo "========================================="
+
+torchrun \
+  --nproc_per_node=$N_GPUS \
+  --master_addr=$MASTER_ADDR \
+  --master_port=$MASTER_PORT \
+  train_sorl_v3.py \
+  --batch_size $BATCH_SIZE \
+  --train_seq_len $TRAIN_SEQ_LEN \
+  --val_seq_len $VAL_SEQ_LEN \
+  --num_iterations $NUM_ITERATIONS \
+  --num_rollouts $NUM_ROLLOUTS \
+  --K 8 \
+  --max_iterations $MAX_ITERATIONS \
+  --use_static_memory_span \
+  --min_temperature 0.0 \
+  --temperature 5.0 \
+  --alpha_loss $ALPHA_LOSS \
+  --mode 0 \
+  --steps_per_cycle $NUM_ITERATIONS \
+  --exploration_fraction 0.5 \
+  --exploration_till_vocab_util 0.5\
+  --use_off_policy_distillation \
+  --do_reinit \
+  --reinit_mode 0 \
+  --topo_mode 1 \
+  --alpha_topo 2.0 \
+  --run_info "Exp10.6: SGPO -> off-policy distillation"
