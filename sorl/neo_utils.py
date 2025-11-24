@@ -171,11 +171,11 @@ def resample_rollout(search_data, ppt, levels, model, tau: float = 2e-4, resampl
     return select_seq.unsqueeze(0), select_ppt, best_ppt_advantage.mean()
 
 
-class RunningRewardScaler:
-    def __init__(self, size=1, epsilon=1e-8):
-        self.mean = torch.zeros(size).float()
-        self.var = torch.ones(size).float()
-        self.count = epsilon
+class RunningMeanStd:
+    def __init__(self, device='cpu'):
+        self.mean = torch.tensor(0.0, device=device)
+        self.var = torch.tensor(1.0, device=device)
+        self.count = 0
 
     def update_and_normalize(self, batch_rewards):
         batch_mean = batch_rewards.mean()

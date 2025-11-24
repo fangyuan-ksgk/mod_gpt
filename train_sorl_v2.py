@@ -363,7 +363,7 @@ ref_model: nn.Module = torch.compile(ref_model, dynamic=True)
 
 # --- reward scaler ---
 from sorl.neo_utils import RunningRewardScaler
-scaler = RunningRewardScaler()
+scaler = RunningRewardScaler(device='cuda')
 
 ########################################
 #            Warmup kernels            #
