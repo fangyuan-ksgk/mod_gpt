@@ -69,6 +69,8 @@ def parse_args():
     parser.add_argument("--use_ema_update", action="store_true", default=False) # use ema update
     parser.add_argument("--ema_update_interval", type=int, default=100) # interval for ema update
     parser.add_argument("--ema_alpha", type=float, default=0.01) # alpha for ema update
+    parser.add_argument("--use_explicit_explore_phase", action="store_true", default=False) # use explicit explore phase
+    parser.add_argument("--explore_every", type=int, default=100) # explore every how many steps
     return parser.parse_args()
 
 # -----------------------------------------------------------------------------
@@ -254,7 +256,9 @@ class Hyperparameters:
     use_ema_update: bool = False # use ema update
     ema_update_interval: int = 100 # interval for ema update
     ema_alpha: float = 0.01 # alpha for ema update
-
+    use_explicit_explore_phase: bool = False # use explicit explore phase
+    explore_every: int = 100 # explore every how many steps
+    
 cli_args = parse_args()
 args = Hyperparameters()
 for k, v in vars(cli_args).items():
@@ -517,10 +521,13 @@ for step in range(train_steps + 1):
         tokens = next(train_loader)
         with torch.no_grad(): 
             if phase == "exploration": # SGPO / All-rollout SoRL
+                adv_mode = args.mode
+                if step % args.explore_every == 0 and args.use_explicit_explore_phase: 
+                    adv_mode = 4 # curiosity
                 search_tokens, search_ppt, search_adv = sorl_search(tokens, model, 
                                                                     n=n, K=args.K, max_iterations=args.max_iterations, 
-                                                                    memory_span=memory_span, attn_blocksize=attn_blocksize, 
-                                                                    temperature=temperature_train, mode=args.mode, scaler=scaler)
+                                                                    memory_span=memory_span, attn_blocksize=attn_blocksize,
+                                                                    temperature=temperature_train, mode=adv_mode, scaler=scaler)
             else: # exploitation
                 if args.use_off_policy_distillation: 
                     search_tokens, search_ppt, search_adv = sorl_search(tokens, ref_model, 
@@ -670,6 +677,8 @@ print0(f"-- ema_update_interval: {args.ema_update_interval}", console=True)
 print0(f"-- ema_alpha: {args.ema_alpha}", console=True)
 print0(f"-- do_reinit: {args.do_reinit}", console=True)
 print0(f"-- reinit_mode: {args.reinit_mode}", console=True)
+print0(f"-- use_explicit_explore_phase: {args.use_explicit_explore_phase}", console=True)
+print0(f"-- explore_every: {args.explore_every}", console=True)
 # print0(f"loss record:\n{loss_record}", console=True)
 
 

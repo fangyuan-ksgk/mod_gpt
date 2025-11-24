@@ -70,14 +70,43 @@ ADV_MODE_DESC=(
     "gated curiosity (utility-gated exploration, coef=0.3)"
 )
 
-echo "========================================="
-echo "Exp 10.1: SGPO Advantage Mode Sweep"
-echo "========================================="
-# run 3 to ensure positive search adv is achieved
+# echo "========================================="
+# echo "Exp 10.1: SGPO Advantage Mode Sweep"
+# echo "========================================="
+# # run 3 to ensure positive search adv is achieved
 
-fpr ADV_MODE in 3 
-for ADV_MODE in {10..14}; do
-  echo "Running ADV_MODE=${ADV_MODE}: ${ADV_MODE_DESC[ADV_MODE]}"
+# fpr ADV_MODE in 3 
+# for ADV_MODE in {10..14}; do
+#   echo "Running ADV_MODE=${ADV_MODE}: ${ADV_MODE_DESC[ADV_MODE]}"
+#   torchrun \
+#     --nproc_per_node=$N_GPUS \
+#     --master_addr=$MASTER_ADDR \
+#     --master_port=$MASTER_PORT \
+#     train_sorl_v2.py \
+#     --batch_size $BATCH_SIZE \
+#     --train_seq_len $TRAIN_SEQ_LEN \
+#     --val_seq_len $VAL_SEQ_LEN \
+#     --num_iterations $NUM_ITERATIONS \
+#     --num_rollouts $NUM_ROLLOUTS \
+#     --K 8 \
+#     --max_iterations $MAX_ITERATIONS \
+#     --use_static_memory_span \
+#     --min_temperature 0.0 \
+#     --temperature 5.0 \
+#     --alpha_loss $ALPHA_LOSS \
+#     --mode $ADV_MODE \
+#     --steps_per_cycle $NUM_ITERATIONS \
+#     --exploration_fraction 1.0 \
+#     --exploration_till_vocab_util 1.0 \
+#     --run_info "Exp10.1.${ADV_MODE}: ${ADV_MODE_DESC[ADV_MODE]}"
+# done
+
+# echo "========================================="
+# echo "Exp 10.2: SGPO Advantage Mode Sweep with Explicit Explore Phase"
+# echo "========================================="
+
+for EXPLORE_EVERY in 2 5; do
+  echo "Running explicit explore phase every ${EXPLORE_EVERY} steps"
   torchrun \
     --nproc_per_node=$N_GPUS \
     --master_addr=$MASTER_ADDR \
@@ -94,40 +123,38 @@ for ADV_MODE in {10..14}; do
     --min_temperature 0.0 \
     --temperature 5.0 \
     --alpha_loss $ALPHA_LOSS \
-    --mode $ADV_MODE \
+    --mode 3 \
     --steps_per_cycle $NUM_ITERATIONS \
     --exploration_fraction 1.0 \
     --exploration_till_vocab_util 1.0 \
-    --run_info "Exp10.1.${ADV_MODE}: ${ADV_MODE_DESC[ADV_MODE]}"
+    --use_explicit_explore_phase \
+    --explore_every $EXPLORE_EVERY \
+    --run_info "Exp10.2: explicit explore phase every $EXPLORE_EVERY steps"
 done
 
-# echo "========================================="
-# echo "Exp 10.2: SGPO Advantage Mode Sweep with Topo Regularization"
-# echo "========================================="
-# for ADV_MODE in {4..7}; do
-#   echo "Running ADV_MODE=${ADV_MODE}: ${ADV_MODE_DESC[ADV_MODE]} with Topo Reg"
-#   torchrun \
-#     --nproc_per_node=$N_GPUS \
-#     --master_addr=$MASTER_ADDR \
-#     --master_port=$MASTER_PORT \
-#     train_sorl_v3.py \
-#     --batch_size $BATCH_SIZE \
-#     --train_seq_len $TRAIN_SEQ_LEN \
-#     --val_seq_len $VAL_SEQ_LEN \
-#     --num_iterations $NUM_ITERATIONS \
-#     --num_rollouts $NUM_ROLLOUTS \
-#     --K 8 \
-#     --max_iterations $MAX_ITERATIONS \
-#     --use_static_memory_span \
-#     --min_temperature 0.0 \
-#     --temperature 5.0 \
-#     --alpha_loss $ALPHA_LOSS \
-#     --mode $ADV_MODE \
-#     --steps_per_cycle $NUM_ITERATIONS \
-#     --exploration_fraction 1.0 \
-#     --exploration_till_vocab_util 1.0 \
-#     --alpha_topo 2.0 \
-#     --topo_mode 1 \
-#     --util_dist_mode 1 \
-#     --run_info "Exp10.2.${ADV_MODE}: ${ADV_MODE_DESC[ADV_MODE]} with Topo Regularization (Correlation, alpha=2.0)"
-# done
+# # echo "========================================="
+# # echo "Exp 10.3: Curiosity SoRL --> offline distillation"
+# # echo "========================================="
+
+# torchrun \
+#   --nproc_per_node=$N_GPUS \
+#   --master_addr=$MASTER_ADDR \
+#   --master_port=$MASTER_PORT \
+#   train_sorl_v2.py \
+#   --batch_size $BATCH_SIZE \
+#   --train_seq_len $TRAIN_SEQ_LEN \
+#   --val_seq_len $VAL_SEQ_LEN \
+#   --num_iterations $NUM_ITERATIONS \
+#   --num_rollouts $NUM_ROLLOUTS \
+#   --K 8 \
+#   --max_iterations $MAX_ITERATIONS \
+#   --use_static_memory_span \
+#   --min_temperature 0.0 \
+#   --temperature 5.0 \
+#   --alpha_loss $ALPHA_LOSS \
+#   --mode 4 \
+#   --steps_per_cycle 725 \
+#   --exploration_fraction 0.5 \
+#   --exploration_till_vocab_util 0.5 \
+#   --use_off_policy_distillation \
+#   --run_info "Exp10.3: curiosity -> offline distillation"

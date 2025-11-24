@@ -257,14 +257,14 @@ def compute_rollout_reward(search_data, ppt, levels, mode: int = 0, scaler: Opti
         utility_disadvantage = (doc_ppt - doc_ppt_mean) / doc_ppt_std
         advantage = 0.3 * familiarity_advantage + utility_disadvantage
     elif mode == 8: 
-        # curiosity + utility preference (naive combo 1:9) | extreme exploration observed (strange)
+        # curiosity + utility preference (0.1:0.9) | collapsed vocabulary with no advantage
         doc_abs_ppt_mean = doc_abs_ppt.mean(dim=0, keepdim=True)
         doc_abs_ppt_std = doc_abs_ppt.std(dim=0, keepdim=True, unbiased=False).clamp(min=1e-8)
         curiosity_advantage = (doc_abs_ppt - doc_abs_ppt_mean) / doc_abs_ppt_std
         utility_advantage = (doc_ppt_mean - doc_ppt) / doc_ppt_std
         advantage = 0.1 * curiosity_advantage + 0.9 * utility_advantage
     elif mode == 9: 
-        # curiosity + utility preference (naive combo 1:3)
+        # curiosity + utility preference (naive combo 0.25:0.75)
         doc_abs_ppt_mean = doc_abs_ppt.mean(dim=0, keepdim=True)
         doc_abs_ppt_std = doc_abs_ppt.std(dim=0, keepdim=True, unbiased=False).clamp(min=1e-8)
         curiosity_advantage = (doc_abs_ppt - doc_abs_ppt_mean) / doc_abs_ppt_std
@@ -278,13 +278,13 @@ def compute_rollout_reward(search_data, ppt, levels, mode: int = 0, scaler: Opti
         doc_rew_mean = doc_rew.mean(dim=0, keepdim=True)
         doc_rew_std = doc_rew.std(dim=0, keepdim=True, unbiased=False).clamp(min=1e-8)
         advantage = (doc_rew - doc_rew_mean) / doc_rew_std
-    elif mode == 11: # conditional curiosity
+    elif mode == 11: # conditional curiosity | no search adv observed, exploration
         alpha = 0.3 # damping factor (blur curiosity gain with utility gain)
         doc_rew = - doc_ppt / (1 + alpha * doc_abs_ppt)
         doc_rew_mean = doc_rew.mean(dim=0, keepdim=True)
         doc_rew_std = doc_rew.std(dim=0, keepdim=True, unbiased=False).clamp(min=1e-8)
         advantage = (doc_rew - doc_rew_mean) / doc_rew_std
-    elif mode == 12: # clipped curiosity
+    elif mode == 12: # clipped curiosity | no search adv observed, exploration
         doc_abs_ppt_clip = torch.minimum(doc_abs_ppt, doc_ppt.abs())
         doc_rew = doc_abs_ppt_clip - doc_ppt
         doc_rew_mean = doc_rew.mean(dim=0, keepdim=True)
