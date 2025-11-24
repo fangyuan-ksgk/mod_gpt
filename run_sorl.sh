@@ -158,3 +158,32 @@ done
 #   --exploration_till_vocab_util 0.5 \
 #   --use_off_policy_distillation \
 #   --run_info "Exp10.3: curiosity -> offline distillation"
+
+
+# Exp 10.4, curiosity SoRL with topo reg (correlation)
+# echo "========================================="
+# echo "Exp 10.4: Curiosity SoRL with Topo Reg (correlation)"
+# echo "========================================="
+
+torchrun \
+  --nproc_per_node=$N_GPUS \
+  --master_addr=$MASTER_ADDR \
+  --master_port=$MASTER_PORT \
+  train_sorl_v3.py \
+  --batch_size $BATCH_SIZE \
+  --train_seq_len $TRAIN_SEQ_LEN \
+  --val_seq_len $VAL_SEQ_LEN \
+  --num_iterations $NUM_ITERATIONS \
+  --num_rollouts $NUM_ROLLOUTS \
+  --K 8 \
+  --max_iterations $MAX_ITERATIONS \
+  --use_static_memory_span \
+  --min_temperature 0.0 \
+  --temperature 5.0 \
+  --alpha_loss $ALPHA_LOSS \
+  --mode 4 \
+  --steps_per_cycle $NUM_ITERATIONS \
+  --exploration_fraction 1.0 \
+  --exploration_till_vocab_util 1.0 \
+  --topo_mode 1 \
+  --alpha_topo 2.0 \
