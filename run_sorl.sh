@@ -52,12 +52,12 @@ EXPLORATION_MODE=0 # SGPO - exploration
 # 
 
 
-ADV_MODE_DESC=("utility disadvantage" "all equal" "familiarity advantage" "utility preference" "curiosity" "curiosity + 0.3 * utility preference" "curiosity + 0.1 * utility preference" "utility disadvantage + 0.3 * familiarity preference")
+ADV_MODE_DESC=("utility disadvantage" "all equal" "familiarity advantage" "utility preference" "curiosity" "curiosity + 0.3 * utility preference" "curiosity + 0.1 * utility preference" "utility disadvantage + 0.3 * familiarity preference" "curiosity + 10.0 * utility preference" "curiosity + 3.0 * utility preference")
 
 echo "========================================="
 echo "Exp 10.1: SGPO Advantage Mode Sweep"
 echo "========================================="
-for ADV_MODE in {4..7}; do
+for ADV_MODE in {8..9}; do
   echo "Running ADV_MODE=${ADV_MODE}: ${ADV_MODE_DESC[ADV_MODE]}"
   torchrun \
     --nproc_per_node=$N_GPUS \
@@ -82,33 +82,33 @@ for ADV_MODE in {4..7}; do
     --run_info "Exp10.1.${ADV_MODE}: ${ADV_MODE_DESC[ADV_MODE]}"
 done
 
-echo "========================================="
-echo "Exp 10.2: SGPO Advantage Mode Sweep with Topo Regularization"
-echo "========================================="
-for ADV_MODE in {4..7}; do
-  echo "Running ADV_MODE=${ADV_MODE}: ${ADV_MODE_DESC[ADV_MODE]} with Topo Reg"
-  torchrun \
-    --nproc_per_node=$N_GPUS \
-    --master_addr=$MASTER_ADDR \
-    --master_port=$MASTER_PORT \
-    train_sorl_v3.py \
-    --batch_size $BATCH_SIZE \
-    --train_seq_len $TRAIN_SEQ_LEN \
-    --val_seq_len $VAL_SEQ_LEN \
-    --num_iterations $NUM_ITERATIONS \
-    --num_rollouts $NUM_ROLLOUTS \
-    --K 8 \
-    --max_iterations $MAX_ITERATIONS \
-    --use_static_memory_span \
-    --min_temperature 0.0 \
-    --temperature 5.0 \
-    --alpha_loss $ALPHA_LOSS \
-    --mode $ADV_MODE \
-    --steps_per_cycle $NUM_ITERATIONS \
-    --exploration_fraction 1.0 \
-    --exploration_till_vocab_util 1.0 \
-    --alpha_topo 2.0 \
-    --topo_mode 1 \
-    --util_dist_mode 1 \
-    --run_info "Exp10.2.${ADV_MODE}: ${ADV_MODE_DESC[ADV_MODE]} with Topo Regularization (Correlation, alpha=2.0)"
-done
+# echo "========================================="
+# echo "Exp 10.2: SGPO Advantage Mode Sweep with Topo Regularization"
+# echo "========================================="
+# for ADV_MODE in {4..7}; do
+#   echo "Running ADV_MODE=${ADV_MODE}: ${ADV_MODE_DESC[ADV_MODE]} with Topo Reg"
+#   torchrun \
+#     --nproc_per_node=$N_GPUS \
+#     --master_addr=$MASTER_ADDR \
+#     --master_port=$MASTER_PORT \
+#     train_sorl_v3.py \
+#     --batch_size $BATCH_SIZE \
+#     --train_seq_len $TRAIN_SEQ_LEN \
+#     --val_seq_len $VAL_SEQ_LEN \
+#     --num_iterations $NUM_ITERATIONS \
+#     --num_rollouts $NUM_ROLLOUTS \
+#     --K 8 \
+#     --max_iterations $MAX_ITERATIONS \
+#     --use_static_memory_span \
+#     --min_temperature 0.0 \
+#     --temperature 5.0 \
+#     --alpha_loss $ALPHA_LOSS \
+#     --mode $ADV_MODE \
+#     --steps_per_cycle $NUM_ITERATIONS \
+#     --exploration_fraction 1.0 \
+#     --exploration_till_vocab_util 1.0 \
+#     --alpha_topo 2.0 \
+#     --topo_mode 1 \
+#     --util_dist_mode 1 \
+#     --run_info "Exp10.2.${ADV_MODE}: ${ADV_MODE_DESC[ADV_MODE]} with Topo Regularization (Correlation, alpha=2.0)"
+# done
