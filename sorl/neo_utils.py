@@ -171,7 +171,7 @@ def resample_rollout(search_data, ppt, levels, model, tau: float = 2e-4, resampl
     return select_seq.unsqueeze(0), select_ppt, best_ppt_advantage.mean()
 
 
-class RunningMeanStd:
+class RunningRewardScaler:
     def __init__(self, device='cpu'):
         self.mean = torch.tensor(0.0, device=device)
         self.var = torch.tensor(1.0, device=device)
