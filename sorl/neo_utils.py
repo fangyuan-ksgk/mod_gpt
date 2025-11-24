@@ -270,10 +270,10 @@ def compute_rollout_reward(search_data, ppt, levels, mode: int = 0, scaler: Opti
         curiosity_advantage = (doc_abs_ppt - doc_abs_ppt_mean) / doc_abs_ppt_std
         utility_advantage = (doc_ppt_mean - doc_ppt) / doc_ppt_std
         advantage = 0.25 * curiosity_advantage + 0.75 * utility_advantage
-    elif mode == 10: # variance scaling
+    elif mode == 10: # variance scaling 
         # rms # update running mean and variance
         doc_abs_ppt_norm = scaler.update_and_normalize(doc_abs_ppt)
-        curiosity_coef = 0.5  
+        curiosity_coef = 0.1  # 0.5 fails to exploit | reduce to 0.1
         doc_rew = curiosity_coef * doc_abs_ppt_norm - doc_ppt
         doc_rew_mean = doc_rew.mean(dim=0, keepdim=True)
         doc_rew_std = doc_rew.std(dim=0, keepdim=True, unbiased=False).clamp(min=1e-8)

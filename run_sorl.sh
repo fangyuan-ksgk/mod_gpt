@@ -61,8 +61,8 @@ ADV_MODE_DESC=(
     "curiosity + 0.3 * utility preference"
     "curiosity + 0.1 * utility preference"
     "SGPO + 0.3 * familiarity preference"
-    "curiosity + 10.0 * utility preference"
-    "curiosity + 3.0 * utility preference"
+    "0.1 * curiosity + 0.9 * utility preference"
+    "0.25 * curiosity + 0.75 * utility preference"
     "variance scaling (normalized curiosity, coef=0.5)"
     "conditional curiosity (dampened by alpha=0.3)"
     "clipped curiosity (element-wise, 1x utility)"
@@ -73,6 +73,9 @@ ADV_MODE_DESC=(
 echo "========================================="
 echo "Exp 10.1: SGPO Advantage Mode Sweep"
 echo "========================================="
+# run 3 to ensure positive search adv is achieved
+
+fpr ADV_MODE in 3 
 for ADV_MODE in {10..14}; do
   echo "Running ADV_MODE=${ADV_MODE}: ${ADV_MODE_DESC[ADV_MODE]}"
   torchrun \
