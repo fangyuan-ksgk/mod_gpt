@@ -13,6 +13,7 @@ from sorl.neo_utils import (
     sorl_search_v4, compute_sgpo_loss_v2, compute_vocab_utilization_rate,
     sorl_evaluate_v2
 )
+from sorl.topo import uniformity_loss, contrastive_loss
 from sorl.gapt import GatedPhaseTransition
 from sorl.stat import save_training_dynamics
 from data.copy_paste import CopyPasteDataLoader
@@ -48,7 +49,13 @@ def parse_args():
     
     # Loss weights
     parser.add_argument("--alpha_loss", type=float, default=0.1)
-    parser.add_argument("--alpha_topo", type=float, default=10.0)
+    parser.add_argument("--alpha_topo", type=float, default=0.0)
+
+    # Contrastive Loss
+    parser.add_argument("--use_contrastive_loss", action="store_true")
+    parser.add_argument("--use_uniformity_loss", action="store_true")
+    parser.add_argument("--contrast_loss_temp", type=float, default=1.0)
+    parser.add_argument("--contrast_loss_alpha", type=float, default=1.0)
     
     # Modes to test
     parser.add_argument("--adv_mode", type=int, default=0,
@@ -72,8 +79,10 @@ def main():
     
     print("="*70)
     print(f"Testing SORL on Copy & Paste Task")
-    print(f"topo_mode={args.topo_mode}, util_dist_mode={args.util_dist_mode}")
+    print(f"adv_mode={args.adv_mode}, topo_mode={args.topo_mode}, util_dist_mode={args.util_dist_mode}")
     print(f"alpha_loss={args.alpha_loss}, alpha_topo={args.alpha_topo}")
+    print(f"contrastive_loss={args.use_contrastive_loss}, uniformity_loss={args.use_uniformity_loss}")
+    print(f"contrast_loss_alpha={args.contrast_loss_alpha}, contrast_loss_temp={args.contrast_loss_temp}")
     print("="*70)
     
     # Setup model
@@ -150,12 +159,18 @@ def main():
             topo_mode=args.topo_mode,
             util_dist_mode=args.util_dist_mode
         )
-        
+        if args.use_contrastive_loss:
+            contrast_loss = contrastive_loss(model.transformer.wte.weight, temp=args.contrast_loss_temp)
+        elif args.use_uniformity_loss:
+            contrast_loss = uniformity_loss(model.transformer.wte.weight, t=args.contrast_loss_temp)
+        else:
+            contrast_loss = torch.tensor(0.0, device=device)
+
         # Combine losses
         if args.use_gapt and gapt is not None:
-            loss = gapt.step(traj_loss, args.alpha_loss * grpo_loss + args.alpha_topo * topo_loss)
+            loss = gapt.step(traj_loss, args.alpha_loss * grpo_loss + args.alpha_topo * topo_loss + args.contrast_loss_alpha * contrast_loss)
         else:
-            loss = traj_loss + args.alpha_loss * grpo_loss + args.alpha_topo * topo_loss
+            loss = traj_loss + args.alpha_loss * grpo_loss + args.alpha_topo * topo_loss + args.contrast_loss_alpha * contrast_loss
         
         # Optimize
         loss.backward()
@@ -163,11 +178,13 @@ def main():
         
         # Print training loss periodically
         if step % (args.eval_every * 10) == 0:
+            contrast_val = contrast_loss.item() if torch.is_tensor(contrast_loss) else contrast_loss
             print(f"train step {step:3d} | "
                   f"loss: {loss.item():.3f} | "
                   f"traj: {traj_loss.item():.3f} | "
                   f"grpo: {grpo_loss.item():.3f} | "
-                  f"topo: {topo_loss.item():.3f}")
+                  f"topo: {topo_loss.item():.3f} | "
+                  f"contrast (wte): {contrast_val:.3f}")
         
         # Periodic validation
         if step % args.eval_every == 0:
@@ -195,6 +212,7 @@ def main():
                 vocab_util = compute_vocab_utilization_rate(val_tokens, model)
                 
                 # Record metrics (use field names expected by save_training_dynamics)
+                contrast_val = contrast_loss.item() if torch.is_tensor(contrast_loss) else contrast_loss
                 record['util_rate'].append(vocab_util)
                 record['search_advantage'].append(val_adv)
                 record['abs_loss'].append(val_abs_loss)
@@ -202,14 +220,16 @@ def main():
                 record['alpha_loss'].append(args.alpha_loss)
                 record['topo_sim'].append(topo_sim)
                 record['topo_sim_greedy'].append(topo_sim_greedy)
-                
+                record['contrast_loss'].append(contrast_val)
+
                 print(f"validation step {step:3d} | "
                       f"traj_loss: {val_traj_loss.item():.2f} | "
                       f"abs_loss: {val_abs_loss.item():.2f} | "
                       f"search adv: {val_adv.item() * 100:.2f}% | "
                       f"vocab util: {vocab_util * 100:.2f}% | "
                       f"topo_sim: {topo_sim.item():.2f} | "
-                      f"topo_sim_greedy: {topo_sim_greedy.item():.2f}")
+                      f"topo_sim_greedy: {topo_sim_greedy.item():.2f} | "
+                      f"contrast (wte): {contrast_val:.3f}")
     
     print("\n" + "="*70)
     print("Training Complete!")
@@ -229,7 +249,8 @@ def main():
         save_dir.mkdir(parents=True, exist_ok=True)
         
         # Save plot and CSV
-        run_info = f"adv_mode={args.adv_mode}, topo_mode={args.topo_mode}, util_dist_mode={args.util_dist_mode}"
+        loss_type = "contrastive" if args.use_contrastive_loss else ("uniformity" if args.use_uniformity_loss else "none")
+        run_info = f"adv={args.adv_mode}, topo={args.topo_mode}, util={args.util_dist_mode}, {loss_type}_loss, α={args.contrast_loss_alpha}, T={args.contrast_loss_temp}"
         save_training_dynamics(record, save_path, run_info)
         
         # Convert tensors to scalars for CSV

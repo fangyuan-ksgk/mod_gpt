@@ -7,6 +7,7 @@ Topological Similarity:
 
 import numpy as np
 import torch
+import torch.nn.functional as F
 
 # ratio returns the levenshtein ratio instead of levenshtein distance
 # print_matrix prints the matrix
@@ -365,3 +366,32 @@ def compute_util_dist(ppt: torch.Tensor, mode: int = 0) -> torch.Tensor:
     else:
         raise ValueError(f"Unknown mode: {mode}")
     return util_dist
+
+# Contrastive Loss
+def uniformity_loss(z, t=2):
+    """
+    Calculates the Uniformity Loss from Wang & Isola (2020).
+    L_uniformity = log( E[ exp( -t * ||x - y||^2 ) ] )
+    
+    Args:
+        z: Input tensor of shape [batch_size, dim] (or [vocab_size, dim])
+        t: Temperature/Kernel width parameter (Default: 2)
+    """
+    
+    z = F.normalize(z, p=2, dim=1)
+    sq_dist = torch.pdist(z, p=2).pow(2)
+    gaussian_kernel = sq_dist.mul(-t).exp()
+    
+    return gaussian_kernel.mean().log()
+
+def contrastive_loss(z, temp=1.0):
+
+    z = F.normalize(z, p=2, dim=1)
+    sim_matrix = z @ z.t()
+    sim_matrix = sim_matrix / temp
+    
+    n = z.shape[0]
+    mask = torch.eye(n, device=z.device).bool()
+    sim_matrix.masked_fill_(mask, float('-inf'))
+    denominator_loss = torch.logsumexp(sim_matrix, dim=1).mean()
+    return denominator_loss
