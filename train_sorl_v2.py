@@ -71,6 +71,7 @@ def parse_args():
     parser.add_argument("--ema_alpha", type=float, default=0.01) # alpha for ema update
     parser.add_argument("--use_explicit_explore_phase", action="store_true", default=False) # use explicit explore phase
     parser.add_argument("--explore_every", type=int, default=100) # explore every how many steps
+    parser.add_argument("--save_checkpoint", action="store_true", default=False) # save checkpoint after SGPO
     return parser.parse_args()
 
 # -----------------------------------------------------------------------------
