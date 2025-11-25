@@ -160,9 +160,9 @@ def main():
             util_dist_mode=args.util_dist_mode
         )
         if args.use_contrastive_loss:
-            contrast_loss = contrastive_loss(model.transformer.wte.weight, temp=args.contrast_loss_temp)
+            contrast_loss = contrastive_loss(model.transformer.wte.weight[model.vocab_sizes[0]:], temp=args.contrast_loss_temp)
         elif args.use_uniformity_loss:
-            contrast_loss = uniformity_loss(model.transformer.wte.weight, t=args.contrast_loss_temp)
+            contrast_loss = uniformity_loss(model.transformer.wte.weight[model.vocab_sizes[0]:], t=args.contrast_loss_temp)
         else:
             contrast_loss = torch.tensor(0.0, device=device)
 

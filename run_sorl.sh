@@ -135,6 +135,35 @@ EXPLORATION_MODE=0 # SGPO - exploration
 # Exp 12.1 || Longer exploitation phase (SGPO -> Offline distillation)
 # Fix MAX_ITERATIONS as a shell variable, not Python assignment
 
+# ========================
+# SGPO to save checkpoint 
+# ========================
+NUM_ITERATIONS=1750
+torchrun \
+  --nproc_per_node=$N_GPUS \
+  --master_addr=$MASTER_ADDR \
+  --master_port=$MASTER_PORT \
+  train_sorl_v2.py \
+  --batch_size $BATCH_SIZE \
+  --train_seq_len $TRAIN_SEQ_LEN \
+  --val_seq_len $VAL_SEQ_LEN \
+  --num_iterations $NUM_ITERATIONS \
+  --num_rollouts $NUM_ROLLOUTS \
+  --K 8 \
+  --max_iterations $MAX_ITERATIONS \
+  --use_static_memory_span \
+  --min_temperature 0.0 \
+  --temperature 5.0 \
+  --alpha_loss $ALPHA_LOSS \
+  --mode 0 \
+  --steps_per_cycle $NUM_ITERATIONS \
+  --exploration_fraction 1.0 \
+  --exploration_till_vocab_util 1.0 \
+  --use_off_policy_distillation \
+  --save_checkpoint \
+  --run_info "Exp13.1: SGPO to save checkpoint"
+
+
 # ======================
 # Fixed re-init mode 4
 # ======================
