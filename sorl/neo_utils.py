@@ -5,6 +5,7 @@ import torch.nn.functional as F
 from typing import Optional, Union
 from sorl.topo import doc_hamming_dist_pairwise, compute_correlation, compute_topo_loss, doc_util_dist, doc_levenshtein_dist, compute_util_dist
 from torch import nn 
+import math
 
 
 @torch.compile
@@ -867,11 +868,28 @@ def reinit_model(model, mode: int = 0):
 
         elif mode == 4: # all parameter re-initialized
             for name, param in model.named_parameters():
-                if param.requires_grad:
-                    if param.dim() >= 2:
+                if not param.requires_grad:
+                    continue
+                    
+                # Special scalar parameters
+                if 'skip_weights' in name:
+                    torch.nn.init.ones_(param)
+                elif 'lamb' in name and param.dim() == 0:  # CausalSelfAttention.lamb
+                    param.data.fill_(0.5)
+                elif 'lambdas' in name and param.dim() == 1:  # Block.lambdas
+                    param.data.copy_(torch.tensor([1., 0.], device=param.device))
+                # Projection layers that should be zeroed
+                elif 'lm_head.weight' in name or 'c_proj.weight' in name:
+                    torch.nn.init.zeros_(param)
+                # 2D+ parameters (Linear layers, embeddings)
+                elif param.dim() >= 2:
+                    if 'wte' in name:  # Embedding
                         torch.nn.init.normal_(param, mean=0.0, std=1.0)
-                    else:
-                        torch.nn.init.zeros_(param)
+                    else:  # Linear layers - use Kaiming uniform like PyTorch default
+                        torch.nn.init.kaiming_uniform_(param, a=math.sqrt(5))
+                # Other scalar parameters (biases, etc.) - PyTorch Linear doesn't use bias
+                else:
+                    torch.nn.init.zeros_(param)
 
         else:
             raise ValueError(f"Unknown reinit mode {mode}")
