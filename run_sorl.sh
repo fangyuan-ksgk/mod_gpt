@@ -55,76 +55,133 @@ EXPLORATION_MODE=0 # SGPO - exploration
 # Exp 11.1: SGPO --> offline distillation (gapt -- only in exploitation phase)
 # echo "========================================="
 
-for TRAJ_PATIENCE in {100..500..100}; do
-  torchrun \
-    --nproc_per_node=$N_GPUS \
-    --master_addr=$MASTER_ADDR \
-    --master_port=$MASTER_PORT \
-    train_sorl_v2.py \
-    --batch_size $BATCH_SIZE \
-    --train_seq_len $TRAIN_SEQ_LEN \
-    --val_seq_len $VAL_SEQ_LEN \
-    --num_iterations $NUM_ITERATIONS \
-    --num_rollouts $NUM_ROLLOUTS \
-    --K 8 \
-    --max_iterations $MAX_ITERATIONS \
-    --use_static_memory_span \
-    --min_temperature 0.0 \
-    --temperature 5.0 \
-    --alpha_loss $ALPHA_LOSS \
-    --mode 0 \
-    --steps_per_cycle $NUM_ITERATIONS \
-    --exploration_fraction 0.5 \
-    --exploration_till_vocab_util 0.5 \
-    --use_off_policy_distillation \
-    --use_gapt \
-    --traj_perplexity_patience $TRAJ_PATIENCE \
-    --do_reinit \
-    --reinit_mode 0 \
-    --run_info "Exp11.1: SGPO -> offline distillation (gapt -- traj perplexity patience=$TRAJ_PATIENCE)"
-done
+# for TRAJ_PATIENCE in {100..500..100}; do
+#   torchrun \
+#     --nproc_per_node=$N_GPUS \
+#     --master_addr=$MASTER_ADDR \
+#     --master_port=$MASTER_PORT \
+#     train_sorl_v2.py \
+#     --batch_size $BATCH_SIZE \
+#     --train_seq_len $TRAIN_SEQ_LEN \
+#     --val_seq_len $VAL_SEQ_LEN \
+#     --num_iterations $NUM_ITERATIONS \
+#     --num_rollouts $NUM_ROLLOUTS \
+#     --K 8 \
+#     --max_iterations $MAX_ITERATIONS \
+#     --use_static_memory_span \
+#     --min_temperature 0.0 \
+#     --temperature 5.0 \
+#     --alpha_loss $ALPHA_LOSS \
+#     --mode 0 \
+#     --steps_per_cycle $NUM_ITERATIONS \
+#     --exploration_fraction 0.5 \
+#     --exploration_till_vocab_util 0.5 \
+#     --use_off_policy_distillation \
+#     --use_gapt \
+#     --traj_perplexity_patience $TRAJ_PATIENCE \
+#     --do_reinit \
+#     --reinit_mode 0 \
+#     --run_info "Exp11.1: SGPO -> offline distillation (gapt -- traj perplexity patience=$TRAJ_PATIENCE)"
+# done
 
-# Exp 11.2: Distillation with "active supression" on non-greedy rollouts
-# echo "========================================="
-# echo "Exp 11.2: Distillation with 'active supression' on non-greedy rollouts"
-# echo "========================================="
-
-
+# # Exp 11.2: Distillation with "active supression" on non-greedy rollouts
+# # echo "========================================="
+# # echo "Exp 11.2: Distillation with 'active supression' on non-greedy rollouts"
+# # echo "========================================="
 
 
 
 
-# Exp 10.6. SGPO (with topo reg, correlation) --> off-policy distillation
-# echo "========================================="
-# echo "Exp 10.6. SGPO (with topo reg, correlation) --> off-policy distillation"
-# echo "========================================="
-ALPHA_TOPOS=(0.5 1.0 1.5 2.0)
 
-for ALPHA_TOPO in "${ALPHA_TOPOS[@]}"; do
-  torchrun \
-    --nproc_per_node=$N_GPUS \
-    --master_addr=$MASTER_ADDR \
-    --master_port=$MASTER_PORT \
-    train_sorl_v3.py \
-    --batch_size $BATCH_SIZE \
-    --train_seq_len $TRAIN_SEQ_LEN \
-    --val_seq_len $VAL_SEQ_LEN \
-    --num_iterations $NUM_ITERATIONS \
-    --num_rollouts $NUM_ROLLOUTS \
-    --K 8 \
-    --max_iterations $MAX_ITERATIONS \
-    --use_static_memory_span \
-    --min_temperature 0.0 \
-    --temperature 5.0 \
-    --alpha_loss $ALPHA_LOSS \
-    --mode 0 \
+
+# # Exp 10.6. SGPO (with topo reg, correlation) --> off-policy distillation
+# # echo "========================================="
+# # echo "Exp 10.6. SGPO (with topo reg, correlation) --> off-policy distillation"
+# # echo "========================================="
+# ALPHA_TOPOS=(0.5 1.0 1.5 2.0)
+
+# for ALPHA_TOPO in "${ALPHA_TOPOS[@]}"; do
+#   torchrun \
+#     --nproc_per_node=$N_GPUS \
+#     --master_addr=$MASTER_ADDR \
+#     --master_port=$MASTER_PORT \
+#     train_sorl_v3.py \
+#     --batch_size $BATCH_SIZE \
+#     --train_seq_len $TRAIN_SEQ_LEN \
+#     --val_seq_len $VAL_SEQ_LEN \
+#     --num_iterations $NUM_ITERATIONS \
+#     --num_rollouts $NUM_ROLLOUTS \
+#     --K 8 \
+#     --max_iterations $MAX_ITERATIONS \
+#     --use_static_memory_span \
+#     --min_temperature 0.0 \
+#     --temperature 5.0 \
+#     --alpha_loss $ALPHA_LOSS \
+#     --mode 0 \
+#   --steps_per_cycle $NUM_ITERATIONS \
+#   --exploration_fraction 0.5 \
+#   --exploration_till_vocab_util 0.5\
+#   --use_off_policy_distillation \
+#   --do_reinit \
+#   --reinit_mode 0 \
+#   --topo_mode 1 \
+#     --alpha_topo $ALPHA_TOPO \
+#     --run_info "Exp10.6: SGPO -> off-policy distillation (topo reg alpha=$ALPHA_TOPO)"
+# done
+
+# Observation #1. 
+# Combining GAPT with SGPO -> Exploitation pipeline yields no benefit, we are better off training for longer. (3.26 is possible with longer exploit phase)
+
+# Exp 12.1 || Longer exploitation phase (SGPO -> Offline distillation)
+MAX_ITERATIONS = 3500
+torchrun \
+  --nproc_per_node=$N_GPUS \
+  --master_addr=$MASTER_ADDR \
+  --master_port=$MASTER_PORT \
+  train_sorl_v2.py \
+  --batch_size $BATCH_SIZE \
+  --train_seq_len $TRAIN_SEQ_LEN \
+  --val_seq_len $VAL_SEQ_LEN \
+  --num_iterations $NUM_ITERATIONS \
+  --num_rollouts $NUM_ROLLOUTS \
+  --K 8 \
+  --max_iterations $MAX_ITERATIONS \
+  --use_static_memory_span \
+  --min_temperature 0.0 \
+  --temperature 5.0 \
+  --alpha_loss $ALPHA_LOSS \
+  --mode 0 \
   --steps_per_cycle $NUM_ITERATIONS \
   --exploration_fraction 0.5 \
-  --exploration_till_vocab_util 0.5\
+  --exploration_till_vocab_util 0.5 \
   --use_off_policy_distillation \
   --do_reinit \
   --reinit_mode 0 \
-  --topo_mode 1 \
-    --alpha_topo $ALPHA_TOPO \
-    --run_info "Exp10.6: SGPO -> off-policy distillation (topo reg alpha=$ALPHA_TOPO)"
-done
+  --run_info "Exp11.1: SGPO -> offline distillation (2x compute)"
+
+
+# Question #1. 
+# - It's not clear whether on language modeling task, select-one SoRL with [0.5, 5.0] temperature leads to collpased vocabulary, when 
+#   we adopt GAPT to opimize the traj_perplexity. The explore->exploit pipeline reaches a 3.34 traj loss at the end, this means we underperform
+#   baseline by 0.04 here. Plus, the explore -> exploit pipeline produces only 1 - 2% search adv at the moment. If we repeat the explore->exploit
+#   loop for longer, we can reach a similar traj loss (so exploit phase needs to be longer), let's run the prior experiment to verify that 'greedy'
+#   vocabulary collapse with select-one SoRL. 
+torchrun \
+    --nproc_per_node=$N_GPUS \
+    --master_addr=$MASTER_ADDR \
+    --master_port=$MASTER_PORT \
+    train_sorl.py \
+    --batch_size $BATCH_SIZE \
+    --train_seq_len $TRAIN_SEQ_LEN \
+    --val_seq_len $VAL_SEQ_LEN \
+    --num_iterations $NUM_ITERATIONS \
+    --num_rollouts $NUM_ROLLOUTS \
+    --K 8 \
+    --max_iterations $MAX_ITERATIONS \
+    --use_static_memory_span \
+    --min_temperature 0.5 \
+    --temperature 5.0 \
+    --alpha_loss $ALPHA_LOSS \
+    --use_gapt \
+    --traj_perplexity_patience 50 \
+    --run_info "Exp9.1: select-one SoRL (t=[0.5, 5.0]) + GAPT produces non-collaopsed vocabulary with minimal search adv?"
