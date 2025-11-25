@@ -134,38 +134,13 @@ EXPLORATION_MODE=0 # SGPO - exploration
 
 # Exp 12.1 || Longer exploitation phase (SGPO -> Offline distillation)
 # Fix MAX_ITERATIONS as a shell variable, not Python assignment
-MAX_ITERATIONS=3500
-
-# torchrun \
-#   --nproc_per_node=$N_GPUS \
-#   --master_addr=$MASTER_ADDR \
-#   --master_port=$MASTER_PORT \
-#   train_sorl_v2.py \
-#   --batch_size $BATCH_SIZE \
-#   --train_seq_len $TRAIN_SEQ_LEN \
-#   --val_seq_len $VAL_SEQ_LEN \
-#   --num_iterations $NUM_ITERATIONS \
-#   --num_rollouts $NUM_ROLLOUTS \
-#   --K 8 \
-#   --max_iterations $MAX_ITERATIONS \
-#   --use_static_memory_span \
-#   --min_temperature 0.0 \
-#   --temperature 5.0 \
-#   --alpha_loss $ALPHA_LOSS \
-#   --mode 0 \
-#   --steps_per_cycle $NUM_ITERATIONS \
-#   --exploration_fraction 0.5 \
-#   --exploration_till_vocab_util 0.5 \
-#   --use_off_policy_distillation \
-#   --do_reinit \
-#   --reinit_mode 0 \
-#   --run_info "Exp11.1: SGPO -> offline distillation (2x compute)"
 
 # ======================
 # Fixed re-init mode 4
 # ======================
 # We should not be able to observe proper search_adv after the off-policy distillation process
 # ---------------------------------------------------------------------------------------------
+NUM_ITERATIONS=3500
 
 torchrun \
   --nproc_per_node=$N_GPUS \
@@ -193,6 +168,32 @@ torchrun \
   --run_info "Exp11.1: SGPO -> offline distillation (all parameter re-initialized, 2x compute, justified as we start from scratch again)"
 
 
+torchrun \
+  --nproc_per_node=$N_GPUS \
+  --master_addr=$MASTER_ADDR \
+  --master_port=$MASTER_PORT \
+  train_sorl_v2.py \
+  --batch_size $BATCH_SIZE \
+  --train_seq_len $TRAIN_SEQ_LEN \
+  --val_seq_len $VAL_SEQ_LEN \
+  --num_iterations $NUM_ITERATIONS \
+  --num_rollouts $NUM_ROLLOUTS \
+  --K 8 \
+  --max_iterations $MAX_ITERATIONS \
+  --use_static_memory_span \
+  --min_temperature 0.0 \
+  --temperature 5.0 \
+  --alpha_loss $ALPHA_LOSS \
+  --mode 0 \
+  --steps_per_cycle $NUM_ITERATIONS \
+  --exploration_fraction 0.5 \
+  --exploration_till_vocab_util 0.5 \
+  --use_off_policy_distillation \
+  --do_reinit \
+  --reinit_mode 0 \
+  --run_info "Exp11.1: SGPO -> offline distillation (2x compute)"
+
+
 # Question #1. 
 # - It's not clear whether on language modeling task, select-one SoRL with [0.5, 5.0] temperature leads to collapsed vocabulary, when 
 #   we adopt GAPT to optimize the traj_perplexity. The explore->exploit pipeline reaches a 3.34 traj loss at the end, this means we underperform
@@ -200,7 +201,7 @@ torchrun \
 #   loop for longer, we can reach a similar traj loss (so exploit phase needs to be longer), let's run the prior experiment to verify that 'greedy'
 #   vocabulary collapse with select-one SoRL. 
 
-MAX_ITERATIONS=1750
+NUM_ITERATIONS=1750
 torchrun \
   --nproc_per_node=$N_GPUS \
   --master_addr=$MASTER_ADDR \
