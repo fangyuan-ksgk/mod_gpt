@@ -251,5 +251,27 @@ torchrun \
   --traj_perplexity_patience 50 \
   --run_info "Exp9.1: select-one SoRL (t=[0.5, 5.0]) + GAPT produces non-collapsed vocabulary with minimal search adv?"
 
+# Question #3. 
+# adaptive alpha -- does it work? 
+torchrun \
+  --nproc_per_node=$N_GPUS \
+  --master_addr=$MASTER_ADDR \
+  --master_port=$MASTER_PORT \
+  train_sorl.py \
+  --batch_size $BATCH_SIZE \
+  --train_seq_len $TRAIN_SEQ_LEN \
+  --val_seq_len $VAL_SEQ_LEN \
+  --num_iterations $NUM_ITERATIONS \
+  --num_rollouts $NUM_ROLLOUTS \
+  --K 8 \
+  --max_iterations $MAX_ITERATIONS \
+  --use_static_memory_span \
+  --min_temperature 0.5 \
+  --temperature 5.0 \
+  --alpha_loss $ALPHA_LOSS \
+  --use_adaptive_alpha \
+  --run_info "Exp13.2: adaptive alpha loss"
+
+
 # Question #2. 
 # - Does EMA based distillation produce better 'search advantage'? 
