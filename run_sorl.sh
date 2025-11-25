@@ -133,7 +133,9 @@ EXPLORATION_MODE=0 # SGPO - exploration
 # Combining GAPT with SGPO -> Exploitation pipeline yields no benefit, we are better off training for longer. (3.26 is possible with longer exploit phase)
 
 # Exp 12.1 || Longer exploitation phase (SGPO -> Offline distillation)
-MAX_ITERATIONS = 3500
+# Fix MAX_ITERATIONS as a shell variable, not Python assignment
+MAX_ITERATIONS=3500
+
 torchrun \
   --nproc_per_node=$N_GPUS \
   --master_addr=$MASTER_ADDR \
@@ -159,29 +161,59 @@ torchrun \
   --reinit_mode 0 \
   --run_info "Exp11.1: SGPO -> offline distillation (2x compute)"
 
+torchrun \
+  --nproc_per_node=$N_GPUS \
+  --master_addr=$MASTER_ADDR \
+  --master_port=$MASTER_PORT \
+  train_sorl_v2.py \
+  --batch_size $BATCH_SIZE \
+  --train_seq_len $TRAIN_SEQ_LEN \
+  --val_seq_len $VAL_SEQ_LEN \
+  --num_iterations $NUM_ITERATIONS \
+  --num_rollouts $NUM_ROLLOUTS \
+  --K 8 \
+  --max_iterations $MAX_ITERATIONS \
+  --use_static_memory_span \
+  --min_temperature 0.0 \
+  --temperature 5.0 \
+  --alpha_loss $ALPHA_LOSS \
+  --mode 0 \
+  --steps_per_cycle $NUM_ITERATIONS \
+  --exploration_fraction 0.5 \
+  --exploration_till_vocab_util 0.5 \
+  --use_off_policy_distillation \
+  --do_reinit \
+  --reinit_mode 4 \
+  --run_info "Exp11.1: SGPO -> offline distillation (all parameter re-initialized, 2x compute, justified as we start from scratch again)"
+
 
 # Question #1. 
-# - It's not clear whether on language modeling task, select-one SoRL with [0.5, 5.0] temperature leads to collpased vocabulary, when 
-#   we adopt GAPT to opimize the traj_perplexity. The explore->exploit pipeline reaches a 3.34 traj loss at the end, this means we underperform
+# - It's not clear whether on language modeling task, select-one SoRL with [0.5, 5.0] temperature leads to collapsed vocabulary, when 
+#   we adopt GAPT to optimize the traj_perplexity. The explore->exploit pipeline reaches a 3.34 traj loss at the end, this means we underperform
 #   baseline by 0.04 here. Plus, the explore -> exploit pipeline produces only 1 - 2% search adv at the moment. If we repeat the explore->exploit
 #   loop for longer, we can reach a similar traj loss (so exploit phase needs to be longer), let's run the prior experiment to verify that 'greedy'
 #   vocabulary collapse with select-one SoRL. 
+
+MAX_ITERATIONS=1750
 torchrun \
-    --nproc_per_node=$N_GPUS \
-    --master_addr=$MASTER_ADDR \
-    --master_port=$MASTER_PORT \
-    train_sorl.py \
-    --batch_size $BATCH_SIZE \
-    --train_seq_len $TRAIN_SEQ_LEN \
-    --val_seq_len $VAL_SEQ_LEN \
-    --num_iterations $NUM_ITERATIONS \
-    --num_rollouts $NUM_ROLLOUTS \
-    --K 8 \
-    --max_iterations $MAX_ITERATIONS \
-    --use_static_memory_span \
-    --min_temperature 0.5 \
-    --temperature 5.0 \
-    --alpha_loss $ALPHA_LOSS \
-    --use_gapt \
-    --traj_perplexity_patience 50 \
-    --run_info "Exp9.1: select-one SoRL (t=[0.5, 5.0]) + GAPT produces non-collaopsed vocabulary with minimal search adv?"
+  --nproc_per_node=$N_GPUS \
+  --master_addr=$MASTER_ADDR \
+  --master_port=$MASTER_PORT \
+  train_sorl.py \
+  --batch_size $BATCH_SIZE \
+  --train_seq_len $TRAIN_SEQ_LEN \
+  --val_seq_len $VAL_SEQ_LEN \
+  --num_iterations $NUM_ITERATIONS \
+  --num_rollouts $NUM_ROLLOUTS \
+  --K 8 \
+  --max_iterations $MAX_ITERATIONS \
+  --use_static_memory_span \
+  --min_temperature 0.5 \
+  --temperature 5.0 \
+  --alpha_loss $ALPHA_LOSS \
+  --use_gapt \
+  --traj_perplexity_patience 50 \
+  --run_info "Exp9.1: select-one SoRL (t=[0.5, 5.0]) + GAPT produces non-collapsed vocabulary with minimal search adv?"
+
+# Question #2. 
+# - Does EMA based distillation produce better 'search advantage'? 

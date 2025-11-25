@@ -865,5 +865,13 @@ def reinit_model(model, mode: int = 0):
         elif mode == 3: # abstract embedding only
             _normal_slice(model.transformer.wte.weight, abstract_slice)
 
+        elif mode == 4: # all parameter re-initialized
+            for name, param in model.named_parameters():
+                if param.requires_grad:
+                    if param.dim() >= 2:
+                        torch.nn.init.normal_(param, mean=0.0, std=1.0)
+                    else:
+                        torch.nn.init.zeros_(param)
+
         else:
             raise ValueError(f"Unknown reinit mode {mode}")
