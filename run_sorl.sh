@@ -36,6 +36,10 @@ EXPLORATION_MODE=0 # SGPO - exploration
 # - can we somehow add the topological smimilarity term into the adv formulation to 'regulate' the preference for horrble abstraction? 
 
 
+# Exp 11.4: Test out 'select best per abs' function
+# Exp 11.5: Re-test 'select best per doc' function (now that infer-abs-mask is fixed)
+
+
 # echo "========================================="
 # echo "BASELINE: No Abstraction (Standard GPT)"
 # echo "========================================="
@@ -50,14 +54,70 @@ EXPLORATION_MODE=0 # SGPO - exploration
 # Exp 11.2 
 # All things with memory compression (SGPO, SGPO->offline exploitation, SGPO->offline distillation)
 
-for MEMORY_SPAN in 16 32 64 128 256 512 1024 1792; do
+# for MEMORY_SPAN in 16 32 64 128 256 512 1024 1792; do
 
-  NUM_ITERATIONS=3500
+#   NUM_ITERATIONS=3500
+#   torchrun \
+#     --nproc_per_node=$N_GPUS \
+#     --master_addr=$MASTER_ADDR \
+#     --master_port=$MASTER_PORT \
+#     train_sorl_v2.py \
+#     --batch_size $BATCH_SIZE \
+#     --train_seq_len $TRAIN_SEQ_LEN \
+#     --val_seq_len $VAL_SEQ_LEN \
+#     --num_iterations $NUM_ITERATIONS \
+#     --num_rollouts $NUM_ROLLOUTS \
+#     --K 8 \
+#     --max_iterations $MAX_ITERATIONS \
+#     --min_memory_span $MEMORY_SPAN \
+#     --min_temperature 0.0 \
+#     --temperature 5.0 \
+#     --alpha_loss $ALPHA_LOSS \
+#     --mode 0 \
+#     --steps_per_cycle $NUM_ITERATIONS \
+#     --exploration_fraction 0.5 \
+#     --exploration_till_vocab_util 0.5 \
+#     --use_off_policy_exploitation \
+#     --do_reinit \
+#     --reinit_mode 0 \
+#     --run_info "Exp11.1: SGPO -> offline immitation abs wte & head re-init (memory span=$MEMORY_SPAN)"
+
+#   NUM_ITERATIONS=3500
+#   STEPS_PER_CYCLE=1750
+#   torchrun \
+#     --nproc_per_node=$N_GPUS \
+#     --master_addr=$MASTER_ADDR \
+#     --master_port=$MASTER_PORT \
+#     train_sorl_v2.py \
+#     --batch_size $BATCH_SIZE \
+#     --train_seq_len $TRAIN_SEQ_LEN \
+#     --val_seq_len $VAL_SEQ_LEN \
+#     --num_iterations $NUM_ITERATIONS \
+#     --num_rollouts $NUM_ROLLOUTS \
+#     --K 8 \
+#     --max_iterations $MAX_ITERATIONS \
+#     --min_memory_span $MEMORY_SPAN \
+#     --min_temperature 0.0 \
+#     --temperature 5.0 \
+#     --alpha_loss $ALPHA_LOSS \
+#     --mode 0 \
+#     --steps_per_cycle $STEPS_PER_CYCLE \
+#     --exploration_fraction 0.5 \
+#     --exploration_till_vocab_util 0.5 \
+#     --use_off_policy_exploitation \
+#     --do_reinit \
+#     --reinit_mode 0 \
+#     --run_info "Exp11.1: SGPO -> offline immitation abs wte & head re-init (memory span=$MEMORY_SPAN)"
+# done
+
+# Exp 11.3
+# - does a larger 'vocab size' help alleviate vocabulary collapse? let's try it on baseline select-best SoRL
+for VOCAB_SIZE in 1024 4096 8192 16384; do
   torchrun \
     --nproc_per_node=$N_GPUS \
     --master_addr=$MASTER_ADDR \
     --master_port=$MASTER_PORT \
-    train_sorl_v2.py \
+    train_sorl.py \
     --batch_size $BATCH_SIZE \
     --train_seq_len $TRAIN_SEQ_LEN \
     --val_seq_len $VAL_SEQ_LEN \
@@ -65,48 +125,13 @@ for MEMORY_SPAN in 16 32 64 128 256 512 1024 1792; do
     --num_rollouts $NUM_ROLLOUTS \
     --K 8 \
     --max_iterations $MAX_ITERATIONS \
-    --min_memory_span $MEMORY_SPAN \
+    --abstract_vocab_size $VOCAB_SIZE \
+    --use_static_memory_span \
     --min_temperature 0.0 \
     --temperature 5.0 \
     --alpha_loss $ALPHA_LOSS \
-    --mode 0 \
-    --steps_per_cycle $NUM_ITERATIONS \
-    --exploration_fraction 0.5 \
-    --exploration_till_vocab_util 0.5 \
-    --use_off_policy_immitation \
-    --do_reinit \
-    --reinit_mode 0 \
-    --run_info "Exp11.1: SGPO -> offline immitation abs wte & head re-init (memory span=$MEMORY_SPAN)"
-
-  NUM_ITERATIONS=3500
-  STEPS_PER_CYCLE=1750
-  torchrun \
-    --nproc_per_node=$N_GPUS \
-    --master_addr=$MASTER_ADDR \
-    --master_port=$MASTER_PORT \
-    train_sorl_v2.py \
-    --batch_size $BATCH_SIZE \
-    --train_seq_len $TRAIN_SEQ_LEN \
-    --val_seq_len $VAL_SEQ_LEN \
-    --num_iterations $NUM_ITERATIONS \
-    --num_rollouts $NUM_ROLLOUTS \
-    --K 8 \
-    --max_iterations $MAX_ITERATIONS \
-    --min_memory_span $MEMORY_SPAN \
-    --min_temperature 0.0 \
-    --temperature 5.0 \
-    --alpha_loss $ALPHA_LOSS \
-    --mode 0 \
-    --steps_per_cycle $STEPS_PER_CYCLE \
-    --exploration_fraction 0.5 \
-    --exploration_till_vocab_util 0.5 \
-    --use_off_policy_immitation \
-    --do_reinit \
-    --reinit_mode 0 \
-    --run_info "Exp11.1: SGPO -> offline immitation abs wte & head re-init (memory span=$MEMORY_SPAN)"
+    --run_info "Exp11.3: SGPO -> select-one SoRL (vocab size=$VOCAB_SIZE)"
 done
-
-
 
 
 # --------------------------------------------------------------

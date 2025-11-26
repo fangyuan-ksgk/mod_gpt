@@ -465,33 +465,6 @@ def sorl_search_v4(tokens, model, n=3, K=3, max_iterations=1,
  
     return search_data, search_ppt, token_adv, abs_dist
 
-
-# Change --> "exploration encouragement" 
-
-def sorl_search_v5(tokens, model, ref_model, n=3, K=3, max_iterations=1,
-                memory_span=1792, attn_blocksize=1792, temperature: Union[float, torch.Tensor] = 1.0, truncate_seq_len: bool = True, 
-                alpha_select: float = 0.0, select_mode: str = "abs_ppt", # placeholder
-                loss_mask: Optional[torch.Tensor] = None, mode: int = 0, topo_abs_dist_mode: int = 0):
-
-    search_data, search_ppt = sorl_rollout_v2(tokens, model, n=n, K=K, 
-                                max_iterations=max_iterations,
-                                memory_span=memory_span,
-                                attn_blocksize=attn_blocksize,
-                                temperature=temperature,
-                                truncate_seq_len=truncate_seq_len)
-
-    ref_ppt, _ = ref_model.forward(search_data, memory_span, attn_blocksize)
-    ref_ppt = ref_ppt.reshape(search_data.shape[0], -1)
-
-    # --- compute reward for each rollout ---
-    levels = (search_data >= model.vocab_sizes[0]).long()
-
-    token_adv = compute_rollout_reward(search_data, ref_ppt, levels, mode=mode) # un-utility reward 
-    return search_data, ref_ppt, token_adv
-    
-
-
-
 def evaluate_topo_similarity(search_data, ppt, model, topo_mode: int = 1, util_dist_mode: int = 0):
     """Again, Levenshtein distance is too slow for GPU, we keep the 'True levenshtein' commented out and use the battle-proof ver. """ 
 
