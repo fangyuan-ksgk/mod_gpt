@@ -26,8 +26,10 @@ def infer_rythmic_insert_mask(tokens, K, traj_vocab_size):
     
     reference_pos = last_ref_pos.gather(1, bos_cumsum)
     within_doc_pos = positions - reference_pos
-    
-    insert_mask = (within_doc_pos % K == 0) & (within_doc_pos > 0)
+    next_is_bos = torch.zeros_like(is_bos, dtype=torch.bool)
+    next_is_bos[:, :-1] = is_bos[:, 1:].bool()
+
+    insert_mask = (within_doc_pos % K == 0) & (within_doc_pos > 0) & (~next_is_bos)    
     return insert_mask
 
 def insert_tokens(tokens, insert_mask, placeholder_token):
@@ -95,7 +97,7 @@ def select_best_per_doc(search_data, ppt, levels, model, alpha_select: float = 0
     doc_idx = doc_idx - doc_idx.min(dim=1, keepdim=True).values # idx starts from 0  
     doc_ppt = avg_ppt_per_sample(trajectory_ppt, doc_idx[:,1:])
 
-    if select_mode == "abs_ppt":
+    if select_mode == "abs_ppt": # linear combo of curiosity force
         doc_abs_ppt = avg_ppt_per_sample(abs_ppt, doc_idx[:,1:])
         regularized_ppt = doc_ppt - alpha_select * doc_abs_ppt # ver. 1 
     else: 
@@ -237,88 +239,15 @@ def compute_rollout_reward(search_data, ppt, levels, mode: int = 0, scaler: Opti
         doc_abs_ppt_std = doc_abs_ppt.std(dim=0, keepdim=True, unbiased=False).clamp(min=1e-8)
         advantage = (doc_abs_ppt - doc_abs_ppt_mean) / doc_abs_ppt_std
     elif mode == 5: 
-        # curiosity + utility preference (naive combo 3:1)
-        doc_abs_ppt_mean = doc_abs_ppt.mean(dim=0, keepdim=True)
-        doc_abs_ppt_std = doc_abs_ppt.std(dim=0, keepdim=True, unbiased=False).clamp(min=1e-8)
-        curiosity_advantage = (doc_abs_ppt - doc_abs_ppt_mean) / doc_abs_ppt_std
-        utility_advantage = (doc_ppt_mean - doc_ppt) / doc_ppt_std
-        advantage = curiosity_advantage + 0.3 * utility_advantage
+        # stochastic exploration encouragement 
+        advantage = torch.relu(doc_ppt[:1] - doc_ppt[1:])
     elif mode == 6: 
-        # curiosity + utility preference (naive combo 10:1)
-        doc_abs_ppt_mean = doc_abs_ppt.mean(dim=0, keepdim=True)
-        doc_abs_ppt_std = doc_abs_ppt.std(dim=0, keepdim=True, unbiased=False).clamp(min=1e-8)
-        curiosity_advantage = (doc_abs_ppt - doc_abs_ppt_mean) / doc_abs_ppt_std
-        utility_advantage = (doc_ppt_mean - doc_ppt) / doc_ppt_std
-        advantage = curiosity_advantage + 0.1 * utility_advantage
+        # stochastic exploration encouragement (relative improvement)
+        advantage = torch.relu((doc_ppt[:1] - doc_ppt[1:]) / (doc_ppt[:1].clamp(min=1e-8)))
+        advantage = advantage.clamp(max=1.0)
     elif mode == 7: 
-        # SGPO + familiarity preference (3:1)
-        doc_abs_ppt_mean = doc_abs_ppt.mean(dim=0, keepdim=True)
-        doc_abs_ppt_std = doc_abs_ppt.std(dim=0, keepdim=True, unbiased=False).clamp(min=1e-8)
-        familiarity_advantage = (doc_abs_ppt - doc_abs_ppt_mean) / doc_abs_ppt_std
-        utility_disadvantage = (doc_ppt - doc_ppt_mean) / doc_ppt_std
-        advantage = 0.3 * familiarity_advantage + utility_disadvantage
-    elif mode == 8: 
-        # curiosity + utility preference (0.1:0.9) | collapsed vocabulary with no advantage
-        doc_abs_ppt_mean = doc_abs_ppt.mean(dim=0, keepdim=True)
-        doc_abs_ppt_std = doc_abs_ppt.std(dim=0, keepdim=True, unbiased=False).clamp(min=1e-8)
-        curiosity_advantage = (doc_abs_ppt - doc_abs_ppt_mean) / doc_abs_ppt_std
-        utility_advantage = (doc_ppt_mean - doc_ppt) / doc_ppt_std
-        advantage = 0.1 * curiosity_advantage + 0.9 * utility_advantage
-    elif mode == 9: 
-        # curiosity + utility preference (naive combo 0.25:0.75)
-        doc_abs_ppt_mean = doc_abs_ppt.mean(dim=0, keepdim=True)
-        doc_abs_ppt_std = doc_abs_ppt.std(dim=0, keepdim=True, unbiased=False).clamp(min=1e-8)
-        curiosity_advantage = (doc_abs_ppt - doc_abs_ppt_mean) / doc_abs_ppt_std
-        utility_advantage = (doc_ppt_mean - doc_ppt) / doc_ppt_std
-        advantage = 0.25 * curiosity_advantage + 0.75 * utility_advantage
-    elif mode == 10: # variance scaling 
-        # rms # update running mean and variance
-        doc_abs_ppt_norm = scaler.update_and_normalize(doc_abs_ppt)
-        curiosity_coef = 0.1  # 0.5 fails to exploit | reduce to 0.1
-        doc_rew = curiosity_coef * doc_abs_ppt_norm - doc_ppt
-        doc_rew_mean = doc_rew.mean(dim=0, keepdim=True)
-        doc_rew_std = doc_rew.std(dim=0, keepdim=True, unbiased=False).clamp(min=1e-8)
-        advantage = (doc_rew - doc_rew_mean) / doc_rew_std
-    elif mode == 11: # conditional curiosity | no search adv observed, exploration
-        alpha = 0.3 # damping factor (blur curiosity gain with utility gain)
-        doc_rew = - doc_ppt / (1 + alpha * doc_abs_ppt)
-        doc_rew_mean = doc_rew.mean(dim=0, keepdim=True)
-        doc_rew_std = doc_rew.std(dim=0, keepdim=True, unbiased=False).clamp(min=1e-8)
-        advantage = (doc_rew - doc_rew_mean) / doc_rew_std
-    elif mode == 12: # clipped curiosity | no search adv observed, exploration
-        doc_abs_ppt_clip = torch.minimum(doc_abs_ppt, doc_ppt.abs())
-        doc_rew = doc_abs_ppt_clip - doc_ppt
-        doc_rew_mean = doc_rew.mean(dim=0, keepdim=True)
-        doc_rew_std = doc_rew.std(dim=0, keepdim=True, unbiased=False).clamp(min=1e-8)
-        advantage = (doc_rew - doc_rew_mean) / doc_rew_std
-    elif mode == 13: # clipped curiosity | no search adv observed, exploration
-        doc_abs_ppt_clip = torch.minimum(doc_abs_ppt, doc_ppt.abs())
-        curiosity_coef = 0.5
-        doc_rew = curiosity_coef * doc_abs_ppt_clip - doc_ppt
-        doc_rew_mean = doc_rew.mean(dim=0, keepdim=True)
-        doc_rew_std = doc_rew.std(dim=0, keepdim=True, unbiased=False).clamp(min=1e-8)
-        advantage = (doc_rew - doc_rew_mean) / doc_rew_std
-    elif mode == 14:
-        # Only apply curiosity bonus when utility is already good (low ppt)
-        utility_gate = torch.sigmoid(-doc_ppt + 1.0)  # High when utility good
-        curiosity_bonus = 0.3 * doc_abs_ppt * utility_gate
-        doc_rew = -doc_ppt + curiosity_bonus
-        
-        doc_rew_mean = doc_rew.mean(dim=0, keepdim=True)
-        doc_rew_std = doc_rew.std(dim=0, keepdim=True, unbiased=False).clamp(min=1e-8)
-        advantage = (doc_rew - doc_rew_mean) / doc_rew_std
-    elif mode == 15: # curiosity (on both abs & traj tokens)
-        joint_curiosity = (doc_abs_ppt + doc_ppt)
-        joint_curiosity_mean = joint_curiosity.mean(dim=0, keepdim=True)
-        joint_curiosity_std = joint_curiosity.std(dim=0, keepdim=True, unbiased=False).clamp(min=1e-8)
-        joint_curiosity_advantage = (joint_curiosity - joint_curiosity_mean) / joint_curiosity_std
-        advantage = joint_curiosity_advantage
-    elif mode == 16: # joint familiarity 
-        joint_familiarity = - (doc_abs_ppt + doc_ppt)
-        joint_familiarity_mean = joint_familiarity.mean(dim=0, keepdim=True)
-        joint_familiarity_std = joint_familiarity.std(dim=0, keepdim=True, unbiased=False).clamp(min=1e-8)
-        joint_familiarity_advantage = (joint_familiarity - joint_familiarity_mean) / joint_familiarity_std
-        advantage = joint_familiarity_advantage
+        # stochastic exploration encouragement (binary reward)
+        advantage = torch.where(doc_ppt[:1] > doc_ppt[1:], 1.0, 0.0)
 
     doc_adv = torch.where(
         doc_ppt_std > 1e-8,
@@ -366,6 +295,27 @@ def compute_rollout_reward_v2(search_data, ppt, levels, mode: int = 0, topo_abs_
         doc_abs_ppt_mean = doc_abs_ppt.mean(dim=0, keepdim=True)
         doc_abs_ppt_std = doc_abs_ppt.std(dim=0, keepdim=True, unbiased=False).clamp(min=1e-8)
         advantage = (doc_ppt - doc_ppt_mean) / doc_ppt_std
+    elif mode == 5: 
+        # stochastic exploration encouragement 
+        advantage = torch.relu(doc_ppt[:1] - doc_ppt[1:])
+    elif mode == 6: 
+        # stochastic exploration encouragement (relative improvement)
+        advantage = torch.relu((doc_ppt[:1] - doc_ppt[1:]) / (doc_ppt[:1].clamp(min=1e-8)))
+        advantage = advantage.clamp(max=1.0)
+    elif mode == 7: 
+        # stochastic exploration encouragement (binary reward)
+        advantage = torch.where(doc_ppt[:1] > doc_ppt[1:], 1.0, 0.0)
+    elif mode == 8: 
+        # stochastic exploration encouragement (scaled relative improvement)
+        advantage = (torch.relu(doc_ppt[:1] - doc_ppt[1:]) * 10).clamp(max=5.0)
+    elif mode == 9: 
+        advantage = (doc_ppt_mean - doc_ppt) / doc_ppt_std
+        advantage = torch.cat([advantage[:1], advantage[1:].clamp(min=0.0)], dim=0)
+    elif mode == 10: 
+        advantage = (doc_ppt_mean - doc_ppt) / doc_ppt_std
+        scaled_advantage = torch.where(advantage[1:] < 0, advantage[1:] * 0.2, advantage[1:])
+        advantage = torch.cat([advantage[:1], scaled_advantage], dim=0)
+
 
     doc_adv = torch.where(
         doc_ppt_std > 1e-8,
@@ -491,6 +441,32 @@ def sorl_search_v4(tokens, model, n=3, K=3, max_iterations=1,
     token_adv, abs_dist = compute_rollout_reward_v2(search_data, search_ppt, levels, mode=mode, topo_abs_dist_mode=topo_abs_dist_mode) # un-utility reward
  
     return search_data, search_ppt, token_adv, abs_dist
+
+
+# Change --> "exploration encouragement" 
+
+def sorl_search_v5(tokens, model, ref_model, n=3, K=3, max_iterations=1,
+                memory_span=1792, attn_blocksize=1792, temperature: Union[float, torch.Tensor] = 1.0, truncate_seq_len: bool = True, 
+                alpha_select: float = 0.0, select_mode: str = "abs_ppt", # placeholder
+                loss_mask: Optional[torch.Tensor] = None, mode: int = 0, topo_abs_dist_mode: int = 0):
+
+    search_data, search_ppt = sorl_rollout_v2(tokens, model, n=n, K=K, 
+                                max_iterations=max_iterations,
+                                memory_span=memory_span,
+                                attn_blocksize=attn_blocksize,
+                                temperature=temperature,
+                                truncate_seq_len=truncate_seq_len)
+
+    ref_ppt, _ = ref_model.forward(search_data, memory_span, attn_blocksize)
+    ref_ppt = ref_ppt.reshape(search_data.shape[0], -1)
+
+    # --- compute reward for each rollout ---
+    levels = (search_data >= model.vocab_sizes[0]).long()
+
+    token_adv = compute_rollout_reward(search_data, ref_ppt, levels, mode=mode) # un-utility reward 
+    return search_data, ref_ppt, token_adv
+    
+
 
 
 def evaluate_topo_similarity(search_data, ppt, model, topo_mode: int = 1, util_dist_mode: int = 0):
@@ -752,6 +728,33 @@ def compute_sgpo_loss_v2(rollout_data, token_adv, abs_dist, model, memory_span: 
     topo_loss = compute_topo_loss(abs_dist, util_dist, mode=topo_mode)
 
     return traj_loss, grpo_loss, topo_loss
+
+def compute_partial_loss(rollout_data, token_adv, model, memory_span: int, attn_blocksize: int, w_util_greedy: float = 1.0, w_util_stochastic: float = 1.0): 
+    # Encourage partial exploration (stochastic rollout)
+    rollout_ppt, _ = model.forward(rollout_data, memory_span, attn_blocksize)
+    rollout_ppt = rollout_ppt.reshape(rollout_data.shape[0], -1)
+
+    levels = (rollout_data >= model.vocab_sizes[0]).long()[:, 1:]  # [n_rollouts, seq_len-1]
+    bos_pos_mask = torch.logical_and(
+        rollout_data[:, :-1] != BOS_TOKEN_ID, 
+        rollout_data[:, 1:] != BOS_TOKEN_ID
+    ).float()
+    
+    traj_mask = (levels == 0).float()  
+    abs_mask = (levels > 0).float() 
+    valid_traj_mask = bos_pos_mask * traj_mask 
+    valid_abs_mask = bos_pos_mask * abs_mask
+
+    greedy_util_loss = (rollout_ppt[:1] * valid_traj_mask[:1]).sum() / valid_traj_mask[:1].sum().clamp(min=1)
+    stochastic_util_loss = (rollout_ppt[1:] * valid_traj_mask[1:]).sum() / valid_traj_mask[1:].sum().clamp(min=1)
+    traj_loss = (w_util_greedy * greedy_util_loss + w_util_stochastic * stochastic_util_loss) / (w_util_greedy + w_util_stochastic)
+    
+    surrogat_loss = rollout_ppt[1:] * token_adv[1:]
+    partial_loss = (surrogat_loss * valid_abs_mask[1:]).sum() / valid_abs_mask[1:].sum().clamp(min=1)
+
+    greedy_abs_loss = (rollout_ppt[:1] * valid_traj_mask[:1]).sum() / valid_traj_mask[:1].sum().clamp(min=1)
+ 
+    return traj_loss, partial_loss, greedy_abs_loss
 
 
 # def compute_inverse_sgpo_loss(rollout_data, token_adv, model, memory_span: int, attn_blocksize: int):
