@@ -78,7 +78,7 @@ class GAT(nn.Module):
             window_mask = q_idx - kv_idx < attn_blocksize
             is_higher_level = levels[b, kv_idx] > 0
             is_recent = (q_idx - kv_idx) <= memory_span
-            memory_compression_mask = is_higher_level | is_recent 
+            memory_compression_mask = is_higher_level | is_recent
             return causal_mask & document_mask & window_mask & memory_compression_mask
 
         S = idx.shape[1]
@@ -121,7 +121,6 @@ class GAT(nn.Module):
         bos_pos_mask = torch.logical_and(idx[:, :-1] != BOS_TOKEN_ID, idx[:, 1:] != BOS_TOKEN_ID).view(-1).float()        
         loss = loss * bos_pos_mask
         
-        # return loss, logits.detach()
         return loss, logits
 
 def get_next_token_level(seq_length, abstraction_interval):

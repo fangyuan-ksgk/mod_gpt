@@ -26,10 +26,10 @@ def infer_rythmic_insert_mask(tokens, K, traj_vocab_size):
     
     reference_pos = last_ref_pos.gather(1, bos_cumsum)
     within_doc_pos = positions - reference_pos
-    next_is_bos = torch.zeros_like(is_bos, dtype=torch.bool)
-    next_is_bos[:, :-1] = is_bos[:, 1:].bool()
+    no_fill = torch.ones_like(is_bos, dtype=torch.bool, device=tokens.device)
+    no_fill[:, :-1] = is_bos[:, 1:].bool()
 
-    insert_mask = (within_doc_pos % K == 0) & (within_doc_pos > 0) & (~next_is_bos)    
+    insert_mask = (within_doc_pos % K == 0) & (within_doc_pos > 0) & (~no_fill)    
     return insert_mask
 
 def insert_tokens(tokens, insert_mask, placeholder_token):
@@ -116,6 +116,29 @@ def select_best_per_doc(search_data, ppt, levels, model, alpha_select: float = 0
     best_ppt_advantage = (max_doc_ppt - min_doc_ppt) / max_doc_ppt.clamp(min=1e-8)
 
     return best_seq.unsqueeze(0), best_ppt, best_ppt_advantage.mean()
+
+def compute_abs_util(trajectory_ppt, abs_ppt, K): 
+    chunk_means = F.avg_pool1d(F.pad(trajectory_ppt.float()[:, 1:], (0, K)), kernel_size=K, stride=1)
+    abs_util = chunk_means[abs_ppt > 0].reshape(abs_ppt.shape[0], -1)
+    return abs_util
+
+def select_best_per_abs(search_data, ppt, levels, model, K): 
+
+    trajectory_mask = (levels[:, 1:] == 0).float()
+    trajectory_ppt = ppt * trajectory_mask
+    abs_ppt = ppt * (1 - trajectory_mask)
+
+    abs_util = compute_abs_util(trajectory_ppt, abs_ppt, K) # compute p(s | a)
+    min_abs_util, best_rollout_per_abs = abs_util.min(dim=0)
+
+    best_seq = search_data[0].clone()
+    is_abs = (levels[0] != 0)
+    abs_positions = torch.where(is_abs)[0]
+    chosen_tokens = search_data[best_rollout_per_abs, abs_positions]
+
+    best_seq[is_abs] = chosen_tokens
+
+    return best_seq
 
 # Question #1. This is still 'document-level', I wonder what'd happen if we do 'per-abs-token' level resampling? 
 #              for instance, each abs token is in-charge of the next K tokens? But that'd lose the context
