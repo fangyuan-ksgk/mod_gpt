@@ -7,3 +7,5 @@ logs/*
 *.png
 *.bin
 results_*
+*.gif
+*.pt

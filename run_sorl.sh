@@ -28,18 +28,6 @@ ALPHA_LOSS=0.1
 EXPLORATION_MODE=0 # SGPO - exploration
 
 
-# Try the 'all-rollout SoRL' again
-# I'd like to ablate on some more variants of its adv formulation
-# - (1). adv \propto 1 / p(a | s)
-# - (2). adv \propto 
-# - p(a | s) / p(s | a) --> favor more familiar abstraction at same utility, favor less utility abstractino at same familiarity
-# - can we somehow add the topological smimilarity term into the adv formulation to 'regulate' the preference for horrble abstraction? 
-
-
-# Exp 11.4: Test out 'select best per abs' function
-# Exp 11.5: Re-test 'select best per doc' function (now that infer-abs-mask is fixed)
-
-
 # echo "========================================="
 # echo "BASELINE: No Abstraction (Standard GPT)"
 # echo "========================================="
@@ -49,6 +37,59 @@ EXPLORATION_MODE=0 # SGPO - exploration
 #   --train_seq_len $TRAIN_SEQ_LEN \
 #   --val_seq_len $VAL_SEQ_LEN \
 #   --num_iterations $NUM_ITERATIONS
+
+
+# ===============================================
+# Exp 12.1: 
+# - hypothesis: free-bit entropy regularization + select-best per abs SoRL gives non-collapsed vocabulary with positive search advantage
+# -             free-bit entropy regularization + select-best per doc SoRL gives non-collapsed vocabulary with positive search advantage
+# ===============================================
+for ALPHA_ENTROPY in 0.1 0.5 1.0; do
+  for TARGET_ENTROPY in 1.2 1.8 2.4 3.7; do
+    for USE_PER_ABS_SELECTION in true false; do
+      torchrun \
+        --nproc_per_node=$N_GPUS \
+        --master_addr=$MASTER_ADDR \
+        --master_port=$MASTER_PORT \
+        train_sorl_v5.py \
+        --batch_size $BATCH_SIZE \
+        --train_seq_len $TRAIN_SEQ_LEN \
+        --val_seq_len $VAL_SEQ_LEN \
+        --num_iterations $NUM_ITERATIONS \
+        --num_rollouts $NUM_ROLLOUTS \
+        --K 8 \
+        --max_iterations $MAX_ITERATIONS \
+        --min_temperature 0.0 \
+        --temperature 5.0 \
+        --alpha_loss $ALPHA_LOSS \
+        --alpha_entropy $ALPHA_ENTROPY \
+        --target_entropy $TARGET_ENTROPY \
+        --use_per_abs_selection \
+        --run_info "Exp12.1: Select-best SoRL with entropy regularization (alpha_entropy=$ALPHA_ENTROPY, target_entropy=$TARGET_ENTROPY, use_per_abs_selection)"
+
+      torchrun \
+        --nproc_per_node=$N_GPUS \
+        --master_addr=$MASTER_ADDR \
+        --master_port=$MASTER_PORT \
+        train_sorl_v5.py \
+        --batch_size $BATCH_SIZE \
+        --train_seq_len $TRAIN_SEQ_LEN \
+        --val_seq_len $VAL_SEQ_LEN \
+        --num_iterations $NUM_ITERATIONS \
+        --num_rollouts $NUM_ROLLOUTS \
+        --K 8 \
+        --max_iterations $MAX_ITERATIONS \
+        --min_temperature 0.0 \
+        --temperature 5.0 \
+        --alpha_loss $ALPHA_LOSS \
+        --alpha_entropy $ALPHA_ENTROPY \
+        --target_entropy $TARGET_ENTROPY \
+        --run_info "Exp12.1: Select-best SoRL with entropy regularization (alpha_entropy=$ALPHA_ENTROPY, target_entropy=$TARGET_ENTROPY, use_per_doc_selection)"
+    done
+  done
+done
+
+
 
 
 # Exp 11.2 
@@ -110,28 +151,28 @@ EXPLORATION_MODE=0 # SGPO - exploration
 #     --run_info "Exp11.1: SGPO -> offline immitation abs wte & head re-init (memory span=$MEMORY_SPAN)"
 # done
 
-# Exp 11.3
-# - does a larger 'vocab size' help alleviate vocabulary collapse? let's try it on baseline select-best SoRL
-for VOCAB_SIZE in 1024 4096 8192 16384; do
-  torchrun \
-    --nproc_per_node=$N_GPUS \
-    --master_addr=$MASTER_ADDR \
-    --master_port=$MASTER_PORT \
-    train_sorl.py \
-    --batch_size $BATCH_SIZE \
-    --train_seq_len $TRAIN_SEQ_LEN \
-    --val_seq_len $VAL_SEQ_LEN \
-    --num_iterations $NUM_ITERATIONS \
-    --num_rollouts $NUM_ROLLOUTS \
-    --K 8 \
-    --max_iterations $MAX_ITERATIONS \
-    --abstract_vocab_size $VOCAB_SIZE \
-    --use_static_memory_span \
-    --min_temperature 0.0 \
-    --temperature 5.0 \
-    --alpha_loss $ALPHA_LOSS \
-    --run_info "Exp11.3: SGPO -> select-one SoRL (vocab size=$VOCAB_SIZE)"
-done
+# # Exp 11.3
+# # - does a larger 'vocab size' help alleviate vocabulary collapse? let's try it on baseline select-best SoRL
+# for VOCAB_SIZE in 1024 4096 8192 16384; do
+#   torchrun \
+#     --nproc_per_node=$N_GPUS \
+#     --master_addr=$MASTER_ADDR \
+#     --master_port=$MASTER_PORT \
+#     train_sorl.py \
+#     --batch_size $BATCH_SIZE \
+#     --train_seq_len $TRAIN_SEQ_LEN \
+#     --val_seq_len $VAL_SEQ_LEN \
+#     --num_iterations $NUM_ITERATIONS \
+#     --num_rollouts $NUM_ROLLOUTS \
+#     --K 8 \
+#     --max_iterations $MAX_ITERATIONS \
+#     --abstract_vocab_size $VOCAB_SIZE \
+#     --use_static_memory_span \
+#     --min_temperature 0.0 \
+#     --temperature 5.0 \
+#     --alpha_loss $ALPHA_LOSS \
+#     --run_info "Exp11.3: SGPO -> select-one SoRL (vocab size=$VOCAB_SIZE)"
+# done
 
 
 # --------------------------------------------------------------
@@ -359,8 +400,4 @@ done
 #   --alpha_loss $ALPHA_LOSS \
 #   --use_adaptive_alpha \
 #   --run_info "Exp13.2: adaptive alpha loss"
-
-
-# Question #2. 
-# - Does EMA based distillation produce better 'search advantage'? 
 

@@ -219,10 +219,10 @@ def visualize_abstraction_dynamics(greedy_stat, random_stat, abs_probs, step, vo
     for val_idx in range(vocab_size):
         dom_abs = dominant_abs[val_idx]
         dom_prob = abs_probs_np[val_idx, dom_abs]
-        if dom_prob > 0.4:  # Only show if reasonably confident
-            ax2.text(val_idx, 1.02, f'{dom_abs}', ha='center', va='bottom', 
-                    fontsize=11, fontweight='bold', color=abs_colors[dom_abs])
-    
+        # if dom_prob > 0.4:  # Only show if reasonably confident
+        ax2.text(val_idx, 1.02, f'{dom_abs}', ha='center', va='bottom', 
+                fontsize=11, fontweight='bold', color=abs_colors[dom_abs])
+
     ax2.set_xlabel('Value', fontsize=13, fontweight='bold')
     ax2.set_ylabel('Probability', fontsize=13, fontweight='bold')
     ax2.set_title(f'Model Abstraction Preferences (Step {step})', fontsize=15, fontweight='bold')
@@ -237,7 +237,16 @@ def visualize_abstraction_dynamics(greedy_stat, random_stat, abs_probs, step, vo
     avg_entropy = np.mean(entropies)
     max_entropy = np.log(num_abs)
     entropy_text = f'Avg Entropy: {avg_entropy:.2f} / {max_entropy:.2f}'
-    ax2.text(0.02, 0.98, entropy_text, transform=ax2.transAxes, 
+
+    norms = np.linalg.norm(abs_probs_np, axis=1, keepdims=True)
+    norms[norms == 0] = 1e-8
+    normalized_probs = abs_probs_np / norms
+    sim_matrix = np.dot(normalized_probs, normalized_probs.T)
+    mask = ~np.eye(vocab_size, dtype=bool)
+    avg_similarity = sim_matrix[mask].mean()
+    similarity_text = f'Avg Similarity: {avg_similarity:.2f}'
+    
+    ax2.text(0.02, 0.98, entropy_text + '\n' + similarity_text, transform=ax2.transAxes, 
             fontsize=10, verticalalignment='top',
             bbox=dict(boxstyle='round', facecolor='lightblue', alpha=0.5))
     

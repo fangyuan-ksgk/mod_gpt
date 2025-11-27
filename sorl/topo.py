@@ -8,6 +8,7 @@ Topological Similarity:
 import numpy as np
 import torch
 import torch.nn.functional as F
+import torch.nn.init as init
 
 # ratio returns the levenshtein ratio instead of levenshtein distance
 # print_matrix prints the matrix
@@ -395,3 +396,66 @@ def contrastive_loss(z, temp=1.0):
     sim_matrix.masked_fill_(mask, float('-inf'))
     denominator_loss = torch.logsumexp(sim_matrix, dim=1).mean()
     return denominator_loss
+
+
+def orthogonalize_abs_param(model, gain=1.0, do_wte=True, do_head=True):
+
+    traj_vocab_size = model.vocab_sizes[0]
+    total_vocab_size = sum(model.vocab_sizes)
+
+    if do_wte:  
+        with torch.no_grad():
+            # Create temporary matrix for orthogonalization
+            abs_wte = model.transformer.wte.weight[traj_vocab_size:total_vocab_size]
+            init.orthogonal_(abs_wte, gain=gain)
+            model.transformer.wte.weight[traj_vocab_size:total_vocab_size] = abs_wte
+    
+    if do_head:
+        with torch.no_grad():
+            abs_head = model.lm_head.weight[traj_vocab_size:total_vocab_size]
+            init.orthogonal_(abs_head, gain=gain)
+            model.lm_head.weight[traj_vocab_size:total_vocab_size] = abs_head
+
+
+def compute_abs_contrastive_loss(model):
+    traj_vocab_size = model.vocab_sizes[0]
+    total_vocab_size = sum(model.vocab_sizes)
+    
+    abs_wte = model.transformer.wte.weight[traj_vocab_size:total_vocab_size]
+    
+    abs_wte_norm = F.normalize(abs_wte, p=2, dim=1)
+    
+    sim_matrix = torch.matmul(abs_wte_norm, abs_wte_norm.t())
+    
+    mask = torch.eye(sim_matrix.size(0), device=sim_matrix.device).bool()
+    off_diag_sim = sim_matrix[~mask]
+    
+    contrast_loss = (off_diag_sim ** 2).mean()
+    return contrast_loss 
+
+def compute_abs_uniformity_loss(model):
+    traj_vocab_size = model.vocab_sizes[0]
+    total_vocab_size = sum(model.vocab_sizes)
+    
+    abs_wte = model.transformer.wte.weight[traj_vocab_size:total_vocab_size]
+    
+    abs_wte_norm = F.normalize(abs_wte, p=2, dim=1)
+    
+    uniformity_loss = uniformity_loss(abs_wte_norm)
+    return uniformity_loss
+
+import lejepa
+univariate_test = lejepa.univariate.EppsPulley(n_points=17)
+emb_reg_fn = lejepa.multivariate.SlicingUnivariateTest(
+    univariate_test=univariate_test, 
+    num_slices=1024
+)
+
+def compute_abs_isotropy_loss(model, reg_fn=emb_reg_fn):
+    traj_vocab_size = model.vocab_sizes[0]
+    total_vocab_size = sum(model.vocab_sizes)
+    
+    abs_wte = model.transformer.wte.weight[traj_vocab_size:total_vocab_size]    
+    abs_wte_norm = F.normalize(abs_wte, p=2, dim=1)
+    
+    return reg_fn(abs_wte_norm)

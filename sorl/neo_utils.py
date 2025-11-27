@@ -466,6 +466,31 @@ def sorl_search_v4(tokens, model, n=3, K=3, max_iterations=1,
  
     return search_data, search_ppt, token_adv, abs_dist
 
+
+def sorl_search_v5(tokens, model, n=3, K=3, max_iterations=1,
+                memory_span=1792, attn_blocksize=1792, temperature: Union[float, torch.Tensor] = 1.0, truncate_seq_len: bool = True, use_per_abs_selection: bool = False): 
+    """
+    Hopefully the last ver |:->))
+    """
+    # --- generate & evaluate rollouts ---
+    search_data, search_ppt = sorl_rollout_v2(tokens, model, n=n, K=K, 
+                               max_iterations=max_iterations,
+                               memory_span=memory_span,
+                               attn_blocksize=attn_blocksize,
+                               temperature=temperature,
+                               truncate_seq_len=truncate_seq_len)
+    search_ppt = search_ppt.reshape(search_data.shape[0], -1)
+
+    # --- select best rollouts ---
+    levels = (search_data >= model.vocab_sizes[0]).long()
+    if use_per_abs_selection: 
+        best_data = select_best_per_abs(search_data, search_ppt, levels, model, K)
+    else: 
+        best_data, _, _ = select_best_per_doc(search_data, search_ppt, levels, model)  # stay with default for select mode (for now)
+
+    return best_data
+    
+
 def evaluate_topo_similarity(search_data, ppt, model, topo_mode: int = 1, util_dist_mode: int = 0):
     """Again, Levenshtein distance is too slow for GPU, we keep the 'True levenshtein' commented out and use the battle-proof ver. """ 
 
@@ -536,7 +561,6 @@ def sorl_evaluate(tokens, model, n=2, K=4, max_iterations=1, memory_span=1792, a
     
     traj_loss = (greedy_ppt * valid_traj).sum() / valid_traj.sum().clamp(min=1)
     abs_loss = (greedy_ppt * valid_abs).sum() / valid_abs.sum().clamp(min=1)
-    
     
     return search_data[:1], search_adv, traj_loss, abs_loss
 
