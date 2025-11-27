@@ -55,6 +55,13 @@ def parse_args():
     parser.add_argument("--alpha_entropy", type=float, default=0.0) # entropy loss weight
     parser.add_argument("--target_entropy", type=float, default=1.2) # target entropy
     parser.add_argument("--use_per_abs_selection", action="store_true", default=False)
+
+    # GAPT
+    parser.add_argument("--use_gapt", action="store_true", default=False) # use GAPT to balance objectives
+    parser.add_argument("--traj_perplexity_patience", type=int, default=5) # patience for traj perplexity
+    parser.add_argument("--abs_perplexity_patience", type=int, default=5) # patience for abstract perplexity
+    parser.add_argument("--tau_plateau", type=float, default=0.01) # plateau threshold for traj perplexity
+    parser.add_argument("--tau_spike", type=float, default=0.1) # spike threshold for traj perplexity
     
     parser.add_argument("--run_info", type=str, default="")
 
@@ -230,6 +237,12 @@ class Hyperparameters:
     alpha_loss: float = 0.0
     alpha_entropy: float = 0.0
     target_entropy: float = 1.2
+
+    use_gapt: bool = False
+    traj_perplexity_patience: int = 5
+    abs_perplexity_patience: int = 5
+    tau_plateau: float = 0.01
+    tau_spike: float = 0.1
     
     run_info: str = ""
 
