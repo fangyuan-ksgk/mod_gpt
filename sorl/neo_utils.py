@@ -139,7 +139,7 @@ def select_best_per_abs(search_data, ppt, levels, model, K):
 
     best_seq[is_abs] = chosen_tokens
 
-    return best_seq
+    return best_seq.unsqueeze(0)
 
 # Question #1. This is still 'document-level', I wonder what'd happen if we do 'per-abs-token' level resampling? 
 #              for instance, each abs token is in-charge of the next K tokens? But that'd lose the context
