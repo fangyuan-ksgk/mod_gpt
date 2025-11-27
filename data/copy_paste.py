@@ -155,7 +155,7 @@ def visualize_abstraction_dynamics(greedy_stat, random_stat, abs_probs, step, vo
         mask = (greedy_abs == abs_idx)
         if mask.any():
             ax1.scatter(greedy_values[mask], greedy_util[mask], 
-                       c=[abs_colors[abs_idx]], marker='o', s=150, alpha=0.7, 
+                       c=[abs_colors[abs_idx]], marker='*', s=150, alpha=0.7, 
                        edgecolors=[abs_colors[abs_idx]], linewidths=1.5)
     
     # Plot random rollout - triangles colored by abstraction
@@ -163,7 +163,7 @@ def visualize_abstraction_dynamics(greedy_stat, random_stat, abs_probs, step, vo
         mask = (random_abs == abs_idx)
         if mask.any():
             ax1.scatter(random_values[mask], random_util[mask], 
-                       c=[abs_colors[abs_idx]], marker='^', s=150, alpha=0.7, 
+                       c=[abs_colors[abs_idx]], marker='o', s=150, alpha=0.7, 
                        edgecolors=[abs_colors[abs_idx]], linewidths=1.5)
     
     # Build legend: shape meanings + color meanings

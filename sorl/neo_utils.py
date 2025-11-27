@@ -2,6 +2,7 @@ import torch
 # from sorl.gat_act import BOS_TOKEN_ID, search, GAT, recursion, infer_level
 from sorl.gat_sim import BOS_TOKEN_ID, GAT, recursion, extract_and_sample, recursion_v2
 import torch.nn.functional as F
+from torch.distributions import Categorical
 from typing import Optional, Union
 from sorl.topo import doc_hamming_dist_pairwise, compute_correlation, compute_topo_loss, doc_util_dist, doc_levenshtein_dist, compute_util_dist
 from torch import nn 
@@ -597,12 +598,45 @@ def compute_loss(best_data, model, memory_span: int, attn_blocksize: int,
     traj_mask = (levels == 0).float()[0]
     abs_mask = 1 - traj_mask
 
-    valid_traj_mask = bos_pos_mask[0] * traj_mask
-    valid_abs_mask = bos_pos_mask[0] * abs_mask
+    valid_traj_mask = bos_pos_mask * traj_mask
+    valid_abs_mask = bos_pos_mask * abs_mask
 
-    traj_loss = (best_ppt[0] * valid_traj_mask).sum() / valid_traj_mask.sum().clamp(min=1)
-    abs_loss = (best_ppt[0] * valid_abs_mask).sum() / valid_abs_mask.sum().clamp(min=1)
+    # Note: we only compute loss on 'first rollout' (greedy one)
+    traj_loss = (best_ppt * valid_traj_mask).sum() / valid_traj_mask.sum().clamp(min=1)
+    abs_loss = (best_ppt * valid_abs_mask).sum() / valid_abs_mask.sum().clamp(min=1)
     return traj_loss, abs_loss
+
+def compute_loss_with_entropy(data, model, memory_span: int, attn_blocksize: int, 
+                                loss_mask: Optional[torch.Tensor] = None, target_entropy: float = 999.9):
+
+    ppt, logits = model.forward(data, memory_span, attn_blocksize)
+    ppt = ppt.reshape(data.shape[0], -1)
+    logits = logits.reshape(data.shape[0], -1, logits.size(-1))
+
+    levels = (data >= model.vocab_sizes[0]).long()[:, 1:]
+    bos_pos_mask = torch.logical_and(
+        data[:, :-1] != BOS_TOKEN_ID, 
+        data[:, 1:] != BOS_TOKEN_ID
+    ).float()
+
+    traj_mask = (levels[0] == 0).float()
+    abs_mask = 1 - traj_mask
+
+    valid_traj_mask = bos_pos_mask * traj_mask
+    valid_abs_mask = bos_pos_mask * abs_mask
+
+    traj_loss = (ppt * valid_traj_mask).sum() / valid_traj_mask.sum().clamp(min=1)
+    abs_loss = (ppt * valid_abs_mask).sum() / valid_abs_mask.sum().clamp(min=1)
+
+
+    abs_positions = abs_mask.bool()
+    abs_logits = logits[:, :-1][:, abs_positions, model.vocab_sizes[0]:]
+
+    dist = Categorical(logits=abs_logits)
+    abs_entropy = dist.entropy()
+    entropy_loss = torch.clamp(target_entropy - abs_entropy, min=0.0).mean()
+
+    return traj_loss, abs_loss, entropy_loss
 
 def compute_loss_with_kl(best_data, model, ref_model, memory_span: int, attn_blocksize: int,
                  loss_mask: Optional[torch.Tensor] = None):
@@ -623,14 +657,14 @@ def compute_loss_with_kl(best_data, model, ref_model, memory_span: int, attn_blo
     traj_mask = (levels == 0).float()[0]
     abs_mask = 1 - traj_mask
 
-    valid_traj_mask = bos_pos_mask[0] * traj_mask
-    valid_abs_mask = bos_pos_mask[0] * abs_mask
+    valid_traj_mask = bos_pos_mask * traj_mask
+    valid_abs_mask = bos_pos_mask * abs_mask
 
-    traj_loss = (best_ppt[0] * valid_traj_mask).sum() / valid_traj_mask.sum().clamp(min=1)
-    abs_loss = (best_ppt[0] * valid_abs_mask).sum() / valid_abs_mask.sum().clamp(min=1)
+    traj_loss = (best_ppt * valid_traj_mask).sum() / valid_traj_mask.sum().clamp(min=1)
+    abs_loss = (best_ppt * valid_abs_mask).sum() / valid_abs_mask.sum().clamp(min=1)
 
     comput_kl = lambda p_new, p_ref: torch.exp(p_ref - p_new) - (p_ref - p_new) - 1
-    kl_loss = comput_kl(best_ppt[0], ref_ppt[0])
+    kl_loss = comput_kl(best_ppt, ref_ppt)
     traj_kl_loss = (kl_loss * valid_traj_mask).sum() / valid_traj_mask.sum().clamp(min=1)
     abs_kl_loss = (kl_loss * valid_abs_mask).sum() / valid_abs_mask.sum().clamp(min=1)
 
@@ -654,8 +688,8 @@ def compute_weighted_loss(best_data, token_adv, model, memory_span: int, attn_bl
     valid_traj_mask = bos_pos_mask[0] * traj_mask
     valid_abs_mask = bos_pos_mask[0] * abs_mask
 
-    traj_loss = (best_ppt[0] * valid_traj_mask).sum() / valid_traj_mask.sum().clamp(min=1)
-    abs_loss = (best_ppt[0] * valid_abs_mask).sum() / valid_abs_mask.sum().clamp(min=1)
+    traj_loss = (best_ppt.mean(dim=0) * valid_traj_mask).sum() / valid_traj_mask.sum().clamp(min=1)
+    abs_loss = (best_ppt.mean(dim=0) * valid_abs_mask).sum() / valid_abs_mask.sum().clamp(min=1)
     return traj_loss, abs_loss     
 
 # Should GRPO loss mask out trajectory tokens? GAPT requires this separation. 
@@ -752,32 +786,6 @@ def compute_partial_loss(rollout_data, token_adv, model, memory_span: int, attn_
  
     return traj_loss, partial_loss, greedy_abs_loss
 
-
-# def compute_inverse_sgpo_loss(rollout_data, token_adv, model, memory_span: int, attn_blocksize: int):
-#     """
-#     Inverse SGPO + exploitation (alpha_loss > 0) leads to emergence of abstraction structure (non-collapsed greedy vocab utilization) 
-#     """
-#     rollout_ppt, _ = model.forward(rollout_data, memory_span, attn_blocksize)
-#     rollout_ppt = rollout_ppt.reshape(rollout_data.shape[0], -1)
-
-#     levels = (rollout_data >= model.vocab_sizes[0]).long()[:, 1:]  # [n_rollouts, seq_len-1]
-#     bos_pos_mask = torch.logical_and(
-#         rollout_data[:, :-1] != BOS_TOKEN_ID, 
-#         rollout_data[:, 1:] != BOS_TOKEN_ID
-#     ).float()
-    
-#     traj_mask = (levels == 0).float()  
-#     abs_mask = (levels > 0).float() 
-#     valid_traj_mask = bos_pos_mask * traj_mask 
-#     valid_abs_mask = bos_pos_mask * abs_mask
-
-#     abs_loss = (rollout_ppt * valid_abs_mask).sum() / valid_abs_mask.sum().clamp(min=1)
-
-#     # Improve utility discriminately 
-#     surrogate_loss = rollout_ppt * token_adv 
-#     traj_loss = (surrogate_loss * valid_traj_mask).sum() / valid_traj_mask.sum().clamp(min=1)    
-
-#     return traj_loss, abs_loss
 
 
 def compute_clip_sgpo_loss(rollout_data, reference_ppt, token_adv, model, memory_span: int, attn_blocksize: int, epsilon: float = 0.1): 
