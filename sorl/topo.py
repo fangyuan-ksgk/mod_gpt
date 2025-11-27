@@ -443,19 +443,3 @@ def compute_abs_uniformity_loss(model):
     
     uniformity_loss = uniformity_loss(abs_wte_norm)
     return uniformity_loss
-
-import lejepa
-univariate_test = lejepa.univariate.EppsPulley(n_points=17)
-emb_reg_fn = lejepa.multivariate.SlicingUnivariateTest(
-    univariate_test=univariate_test, 
-    num_slices=1024
-)
-
-def compute_abs_isotropy_loss(model, reg_fn=emb_reg_fn):
-    traj_vocab_size = model.vocab_sizes[0]
-    total_vocab_size = sum(model.vocab_sizes)
-    
-    abs_wte = model.transformer.wte.weight[traj_vocab_size:total_vocab_size]    
-    abs_wte_norm = F.normalize(abs_wte, p=2, dim=1)
-    
-    return reg_fn(abs_wte_norm)
