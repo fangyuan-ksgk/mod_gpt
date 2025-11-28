@@ -55,6 +55,7 @@ def parse_args():
     parser.add_argument("--alpha_entropy", type=float, default=0.0) # entropy loss weight
     parser.add_argument("--target_entropy", type=float, default=1.2) # target entropy
     parser.add_argument("--use_per_abs_selection", action="store_true", default=False)
+    parser.add_argument("--use_orthogonal_init", action="store_true", default=False)
 
     # GAPT
     parser.add_argument("--use_gapt", action="store_true", default=False) # use GAPT to balance objectives
@@ -313,6 +314,10 @@ for m in model.modules():
         m.bfloat16()
 for param in model.parameters():
     dist.broadcast(param.detach(), 0)
+
+if args.use_orthogonal_init:
+    from sorl.topo import orthogonalize_abs_param
+    orthogonalize_abs_param(model, gain=1.0, do_wte=True, do_head=True)
 
 # collect the parameters to optimize
 hidden_matrix_params = [p for n,p in model.transformer.h.named_parameters() if p.ndim >= 2 and "embed" not in n]

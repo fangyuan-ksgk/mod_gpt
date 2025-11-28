@@ -67,6 +67,7 @@ for ALPHA_ENTROPY in 0.1 1.0; do
       --alpha_loss $ALPHA_LOSS \
       --alpha_entropy $ALPHA_ENTROPY \
       --target_entropy $TARGET_ENTROPY \
-      --run_info "Exp12.1: Select-best SoRL with entropy regularization (alpha_entropy=$ALPHA_ENTROPY, target_entropy=$TARGET_ENTROPY, use_per_doc_selection)"
+      --use_orthogonal_init \
+      --run_info "Exp12.1: Select-best SoRL with entropy regularization (alpha_entropy=$ALPHA_ENTROPY, target_entropy=$TARGET_ENTROPY, use_per_doc_selection, use orthogonal initialization)"
   done
 done
