@@ -46,9 +46,10 @@ EXPLORATION_MODE=0 # SGPO - exploration
 # - obs #1. 'select-best per-abs' gives negative search advantage. 
 # - obs #2. alpha_entropy=0.1 + target entropy=1.2 gives 2 word vocabulary (not exactly collapsed)
 # - hypo #1. I suspect the key is larger 'target_entropy', the weak alpha_entropy essentially losen such constraint.
+# Get to extreme, just to see if we can avoid collapse, we'd worry about optimal setting later
 # ===============================================
 for ALPHA_ENTROPY in 0.1 1.0; do
-  for TARGET_ENTROPY in 1.8 2.4 3.7 4.5 5.3 6.0 7.2 8.4 9.6; do
+  for TARGET_ENTROPY in 12.0 11.0 10.0 9.0 8.0 7.0 6.0 5.0; do
     torchrun \
       --nproc_per_node=$N_GPUS \
       --master_addr=$MASTER_ADDR \
