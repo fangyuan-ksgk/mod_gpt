@@ -309,15 +309,15 @@ from sorl.neo_utils import sorl_search_v5 as sorl_search
 
 model: nn.Module = GAT(model_config).cuda()
     
+if args.use_orthogonal_init:
+    from sorl.topo import orthogonalize_abs_param
+    orthogonalize_abs_param(model, gain=1.0, do_wte=True, do_head=True)
+
 for m in model.modules():
     if isinstance(m, nn.Embedding):
         m.bfloat16()
 for param in model.parameters():
     dist.broadcast(param.detach(), 0)
-
-if args.use_orthogonal_init:
-    from sorl.topo import orthogonalize_abs_param
-    orthogonalize_abs_param(model, gain=1.0, do_wte=True, do_head=True)
 
 # collect the parameters to optimize
 hidden_matrix_params = [p for n,p in model.transformer.h.named_parameters() if p.ndim >= 2 and "embed" not in n]
