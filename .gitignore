@@ -9,3 +9,4 @@ logs/*
 results_*
 *.gif
 *.pt
+.DS_Store

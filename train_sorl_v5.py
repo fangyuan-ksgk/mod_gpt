@@ -352,6 +352,7 @@ def get_lr(step: int):
 # SoRL loss function
 from sorl.info import SoRLLoss
 loss_fn = SoRLLoss(model.vocab_sizes[1], decay=args.decay, target_vocab_util=args.target_vocab_util)
+loss_fn = loss_fn.to(device)
 
 # compile model
 model: nn.Module = torch.compile(model, dynamic=True)
