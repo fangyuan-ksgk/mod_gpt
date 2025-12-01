@@ -470,8 +470,8 @@ for step in range(train_steps + 1):
                 val_loss["traj_loss"] += val_traj_loss
                 val_loss["abs_loss"] += val_abs_loss
                 val_loss["search_advantage"] += val_adv.mean()
-                val_loss["marg_entropy"] += marg_ent.item()
-                val_loss["cond_entropy"] += cond_ent.item()
+                val_loss["marg_entropy"] += marg_ent
+                val_loss["cond_entropy"] += cond_ent
                 val_loss["util_rate"] += torch.tensor(util_rate, device=val_traj_loss.device)
             
         for name in val_loss: 
