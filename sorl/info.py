@@ -7,8 +7,8 @@ from sorl.gat_sim import BOS_TOKEN_ID
 class MutualInformationLoss(nn.Module):
     def __init__(self, vocab_size, decay=0.99, target_vocab_util=0.8):
         super().__init__()
-        self.decay = decay        
-        target_val = torch.log(torch.tensor(vocab_size * target_vocab_util, device=vocab_size.device))
+        self.decay = decay       
+        target_val = torch.log(vocab_size * target_vocab_util) 
         self.register_buffer('target_marginal_entropy', target_val)
         
         self.register_buffer('running_marginal', torch.ones(vocab_size, device=vocab_size.device) / vocab_size)
