@@ -6,7 +6,6 @@ from typing import Optional
 from dataclasses import dataclass
 from torch.nn.attention.flex_attention import flex_attention, create_block_mask
 
-from sorl.info import get_zipf_prior
 
 # GPT 
 # --------------------------------------------------------------------------------------------------------------------------
@@ -18,15 +17,6 @@ def norm(x):
 class CastedLinear(nn.Linear):
     def __init__(self, in_features, out_features):
         super().__init__(in_features, out_features, bias=False)
-    def forward(self, x):
-        return F.linear(x, self.weight.to(x.dtype))
-
-class ZipfLinear(nn.Linear): 
-    def __init__(self, in_features, out_features):
-        super().__init__(in_features, out_features, bias=False)
-        zip_logit_bias = torch.log(get_zipf_prior(out_features, alpha=1.0))
-        zip_logit_bias = zip_logit_bias.view(-1, 1)
-        self.register_buffer('zipf_bias', zip_logit_bias)
     def forward(self, x):
         return F.linear(x, self.weight.to(x.dtype))
 
