@@ -43,8 +43,8 @@ EXPLORATION_MODE=0 # SGPO - exploration
 # - hypothesis: mutual information regularization (especially marginal entropy maximization) helps avoid vocabulary collapse, whilst retaining search adv for select-best SoRL
 # - we'll sweep on different choices on alpha_marg_ent, alpha_cond_ent, decay and target_vocab_util, starting with the first 2
 # ===============================================
-for ALPHA_MARG_ENT in 1.0 10.0 50.0; do
-  for ALPHA_COND_ENT in 0.1 1.0 10.0 50.0; do
+for ALPHA_MARG_ENT in 1.0 5.0 10.0; do
+  for ALPHA_COND_ENT in 1.0 5.0 10.0; do
     for DECAY in 0.8; do
       for TARGET_VOCAB_UTIL in 0.8; do
         torchrun \
@@ -68,6 +68,7 @@ for ALPHA_MARG_ENT in 1.0 10.0 50.0; do
           --target_vocab_util $TARGET_VOCAB_UTIL \
           --use_orthogonal_init \
           --run_info "Exp12.2: Mutual info regularization (alpha_marg_ent=$ALPHA_MARG_ENT, alpha_cond_ent=$ALPHA_COND_ENT, decay=$DECAY, target_vocab_util=$TARGET_VOCAB_UTIL)"
-        done
       done
     done
+  done
+done
