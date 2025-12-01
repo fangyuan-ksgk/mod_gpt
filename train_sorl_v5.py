@@ -52,10 +52,12 @@ def parse_args():
     # Loss / Regularization
     parser.add_argument("--alpha_select", type=float, default=0.0)  # selection regularization strength
     parser.add_argument("--alpha_loss", type=float, default=0.0)  # abs loss weight
-    parser.add_argument("--alpha_entropy", type=float, default=0.0) # entropy loss weight
-    parser.add_argument("--target_entropy", type=float, default=1.2) # target entropy
     parser.add_argument("--use_per_abs_selection", action="store_true", default=False)
     parser.add_argument("--use_orthogonal_init", action="store_true", default=False)
+    parser.add_argument("--alpha_marg_ent", type=float, default=1.0) # marginal entropy weight
+    parser.add_argument("--alpha_cond_ent", type=float, default=1.0) # conditional entropy weight
+    parser.add_argument("--decay", type=float, default=0.8) # decay for mutual information loss
+    parser.add_argument("--target_vocab_util", type=float, default=0.9) # target vocabulary utilization
 
     # GAPT
     parser.add_argument("--use_gapt", action="store_true", default=False) # use GAPT to balance objectives
@@ -236,8 +238,10 @@ class Hyperparameters:
     use_per_abs_selection: bool = False
     alpha_select: float = 0.0
     alpha_loss: float = 0.0
-    alpha_entropy: float = 0.0
-    target_entropy: float = 1.2
+    alpha_marg_ent: float = 1.0
+    alpha_cond_ent: float = 1.0
+    decay: float = 0.8
+    target_vocab_util: float = 0.9
 
     use_gapt: bool = False
     traj_perplexity_patience: int = 5
@@ -345,6 +349,10 @@ def get_lr(step: int):
         w = (1 - x) / args.cooldown_frac
         return w * 1.0 + (1 - w) * 0.1
 
+# SoRL loss function
+from sorl.info import SoRLLoss
+loss_fn = SoRLLoss(model.vocab_sizes[1], decay=args.decay, target_vocab_util=args.target_vocab_util)
+
 # compile model
 model: nn.Module = torch.compile(model, dynamic=True)
 
@@ -378,11 +386,11 @@ for i in range(warmup_steps):
     search_end = time.time()
     print(f" :: Sorl search takes {search_end - search_start} second")
     # --- compute loss --- 
-    traj_loss, abs_loss, entropy_loss = compute_loss_with_entropy(search_tokens, model, memory_span=memory_span, attn_blocksize=attn_blocksize, target_entropy=args.target_entropy)
+    traj_loss, abs_loss, marg_ent, cond_ent = loss_fn(search_tokens, model, memory_span=memory_span, attn_blocksize=attn_blocksize)
     forward_end = time.time()
     print(f" :: Loss computation takes {forward_end - search_end} second")
     # --- backward --- 
-    loss = traj_loss + args.alpha_loss * abs_loss + args.alpha_entropy * entropy_loss
+    loss = traj_loss + args.alpha_loss * abs_loss + args.alpha_marg_ent * marg_ent + args.alpha_cond_ent * cond_ent
     loss.backward() 
     backward_end = time.time()
     print(f" :: Backward takes {backward_end - forward_end} second")
@@ -457,9 +465,12 @@ for step in range(train_steps + 1):
                 val_tokens, val_adv, val_traj_loss, val_abs_loss = sorl_evaluate(tokens, model, n=args.num_rollouts_val, K=args.K, max_iterations=args.max_iterations, 
                                                                     memory_span=memory_span, attn_blocksize=attn_blocksize, temperature=temperature_val)
                 util_rate = compute_vocab_utilization_rate(val_tokens, model)
+                _, _, marg_ent, cond_ent = loss_fn(val_tokens, model, memory_span=memory_span, attn_blocksize=attn_blocksize)
                 val_loss["traj_loss"] += val_traj_loss
                 val_loss["abs_loss"] += val_abs_loss
                 val_loss["search_advantage"] += val_adv.mean()
+                val_loss["marg_entropy"] += marg_ent.item()
+                val_loss["cond_entropy"] += cond_ent.item()
                 val_loss["util_rate"] += torch.tensor(util_rate, device=val_traj_loss.device)
             
         for name in val_loss: 
@@ -496,16 +507,16 @@ for step in range(train_steps + 1):
                                                                 use_per_abs_selection=args.use_per_abs_selection)
 
         # --- compute loss --- 
-        traj_loss, abs_loss, entropy_loss = compute_loss_with_entropy(search_tokens, model, memory_span=memory_span, attn_blocksize=attn_blocksize, target_entropy=args.target_entropy)
+        traj_loss, abs_loss, marg_ent, cond_ent = loss_fn(search_tokens, model, memory_span=memory_span, attn_blocksize=attn_blocksize)
         
         # --- GAPT: balance objectives ---
         if args.use_gapt: 
-            loss = gapt.step(traj_loss, args.alpha_loss * abs_loss + args.alpha_entropy * entropy_loss, verbose=False)
+            loss = gapt.step(traj_loss, args.alpha_loss * abs_loss + args.alpha_marg_ent * marg_ent + args.alpha_cond_ent * cond_ent, verbose=False)
         else: 
-            loss = traj_loss + args.alpha_loss * abs_loss + args.alpha_entropy * entropy_loss
+            loss = traj_loss + args.alpha_loss * abs_loss + args.alpha_marg_ent * marg_ent + args.alpha_cond_ent * cond_ent
         
         loss.backward()
-        print0(f" - step: {step} | accum step: {accum_step} | traj_loss: {traj_loss.item()} | abs_loss: {abs_loss.item()} | entropy_loss: {entropy_loss.item()}")
+        print0(f" - step: {step} | accum step: {accum_step} | traj_loss: {traj_loss.item()} | abs_loss: {abs_loss.item()} | marg_entropy: {marg_ent.item()} | cond_entropy: {cond_ent.item()}")
         
     for param in model.parameters():
         param.grad /= train_accumulation_steps
@@ -546,8 +557,10 @@ print0(f"-- abstract_vocab_size: {args.abstract_vocab_size}", console=True)
 print0(f"-- use_per_abs_selection: {args.use_per_abs_selection}", console=True)
 print0(f"-- alpha_select: {args.alpha_select}", console=True)
 print0(f"-- alpha_loss: {args.alpha_loss}", console=True)
-print0(f"-- alpha_entropy: {args.alpha_entropy}", console=True)
-print0(f"-- target_entropy: {args.target_entropy}", console=True)
+print0(f"-- alpha_marg_ent: {args.alpha_marg_ent}", console=True)
+print0(f"-- alpha_cond_ent: {args.alpha_cond_ent}", console=True)
+print0(f"-- decay: {args.decay}", console=True)
+print0(f"-- target_vocab_util: {args.target_vocab_util}", console=True)
 print0(f"loss record:\n{loss_record}", console=True)
 
 dist.destroy_process_group()
