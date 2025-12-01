@@ -76,3 +76,23 @@ class SoRLLoss(nn.Module):
 
         # --- Return: p(s | a), p(a | s), H(p(a)), H(p(a | s)) ---
         return traj_loss, abs_loss, marginal_entropy, conditional_entropy
+
+# Sinkhorn logit transform: towards a Zipfian distribution
+
+def get_zipf_prior(vocab_size, alpha=1.0, device='cpu'):
+    ranks = torch.arange(1, vocab_size + 1, dtype=torch.float32, device=device)
+    freqs = 1.0 / (ranks ** alpha)
+    return (freqs / freqs.sum()).view(-1, 1)
+
+def zipf_logit_transform(logits, alpha=1.0, n_iters=3):
+
+    B, V = logits.shape
+    device = logits.device
+    log_r = torch.log(get_zipf_prior(V, alpha=alpha, device=device).squeeze() * B)
+    
+    M = logits.t() 
+    for _ in range(n_iters):
+        M = M - torch.logsumexp(M, dim=1, keepdim=True)  
+        M = M - torch.logsumexp(M, dim=0, keepdim=True)  
+        M = M + log_r.unsqueeze(1)                        
+    return M.t()

@@ -391,7 +391,7 @@ for i in range(warmup_steps):
     forward_end = time.time()
     print(f" :: Loss computation takes {forward_end - search_end} second")
     # --- backward --- 
-    loss = traj_loss + args.alpha_loss * abs_loss + args.alpha_marg_ent * marg_ent + args.alpha_cond_ent * cond_ent
+    loss = traj_loss + args.alpha_loss * abs_loss - args.alpha_marg_ent * marg_ent + args.alpha_cond_ent * cond_ent
     loss.backward() 
     backward_end = time.time()
     print(f" :: Backward takes {backward_end - forward_end} second")
@@ -512,9 +512,9 @@ for step in range(train_steps + 1):
         
         # --- GAPT: balance objectives ---
         if args.use_gapt: 
-            loss = gapt.step(traj_loss, args.alpha_loss * abs_loss + args.alpha_marg_ent * marg_ent + args.alpha_cond_ent * cond_ent, verbose=False)
+            loss = gapt.step(traj_loss, args.alpha_loss * abs_loss - args.alpha_marg_ent * marg_ent + args.alpha_cond_ent * cond_ent, verbose=False)
         else: 
-            loss = traj_loss + args.alpha_loss * abs_loss + args.alpha_marg_ent * marg_ent + args.alpha_cond_ent * cond_ent
+            loss = traj_loss + args.alpha_loss * abs_loss - args.alpha_marg_ent * marg_ent + args.alpha_cond_ent * cond_ent
         
         loss.backward()
         print0(f" - step: {step} | accum step: {accum_step} | traj_loss: {traj_loss.item()} | abs_loss: {abs_loss.item()} | marg_entropy: {marg_ent.item()} | cond_entropy: {cond_ent.item()}")
