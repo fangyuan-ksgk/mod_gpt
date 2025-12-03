@@ -68,7 +68,6 @@ class SoRLLoss(nn.Module):
         traj_loss = (ppt * valid_traj_mask).sum() / valid_traj_mask.sum().clamp(min=1)
         abs_loss = (ppt * valid_abs_mask).sum() / valid_abs_mask.sum().clamp(min=1)
 
-
         abs_positions = abs_mask.bool()
         abs_logits = logits[:, :-1][:, abs_positions, model.vocab_sizes[0]:]
 

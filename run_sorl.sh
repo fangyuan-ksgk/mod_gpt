@@ -43,32 +43,66 @@ EXPLORATION_MODE=0 # SGPO - exploration
 # - hypothesis: mutual information regularization (especially marginal entropy maximization) helps avoid vocabulary collapse, whilst retaining search adv for select-best SoRL
 # - we'll sweep on different choices on alpha_marg_ent, alpha_cond_ent, decay and target_vocab_util, starting with the first 2
 # ===============================================
-for ALPHA_MARG_ENT in 1.0 5.0 10.0; do
-  for ALPHA_COND_ENT in 1.0 5.0 10.0; do
-    for DECAY in 0.8; do
-      for TARGET_VOCAB_UTIL in 0.8; do
-        torchrun \
-          --nproc_per_node=$N_GPUS \
-          --master_addr=$MASTER_ADDR \
-          --master_port=$MASTER_PORT \
-          train_sorl_v5.py \
-          --batch_size $BATCH_SIZE \
-          --train_seq_len $TRAIN_SEQ_LEN \
-          --val_seq_len $VAL_SEQ_LEN \
-          --num_iterations $NUM_ITERATIONS \
-          --num_rollouts $NUM_ROLLOUTS \
-          --K 8 \
-          --max_iterations $MAX_ITERATIONS \
-          --min_temperature 0.0 \
-          --temperature 5.0 \
-          --alpha_loss $ALPHA_LOSS \
-          --alpha_marg_ent $ALPHA_MARG_ENT \
-          --alpha_cond_ent $ALPHA_COND_ENT \
-          --decay $DECAY \
-          --target_vocab_util $TARGET_VOCAB_UTIL \
-          --use_orthogonal_init \
-          --run_info "Exp12.2: Mutual info regularization (alpha_marg_ent=$ALPHA_MARG_ENT, alpha_cond_ent=$ALPHA_COND_ENT, decay=$DECAY, target_vocab_util=$TARGET_VOCAB_UTIL)"
-      done
-    done
+# for ALPHA_MARG_ENT in 1.0 5.0 10.0; do
+#   for ALPHA_COND_ENT in 1.0 5.0 10.0; do
+#     for DECAY in 0.8; do
+#       for TARGET_VOCAB_UTIL in 0.8; do
+#         torchrun \
+#           --nproc_per_node=$N_GPUS \
+#           --master_addr=$MASTER_ADDR \
+#           --master_port=$MASTER_PORT \
+#           train_sorl_v5.py \
+#           --batch_size $BATCH_SIZE \
+#           --train_seq_len $TRAIN_SEQ_LEN \
+#           --val_seq_len $VAL_SEQ_LEN \
+#           --num_iterations $NUM_ITERATIONS \
+#           --num_rollouts $NUM_ROLLOUTS \
+#           --K 8 \
+#           --max_iterations $MAX_ITERATIONS \
+#           --min_temperature 0.0 \
+#           --temperature 5.0 \
+#           --alpha_loss $ALPHA_LOSS \
+#           --alpha_marg_ent $ALPHA_MARG_ENT \
+#           --alpha_cond_ent $ALPHA_COND_ENT \
+#           --decay $DECAY \
+#           --target_vocab_util $TARGET_VOCAB_UTIL \
+#           --use_orthogonal_init \
+#           --run_info "Exp12.2: Mutual info regularization (alpha_marg_ent=$ALPHA_MARG_ENT, alpha_cond_ent=$ALPHA_COND_ENT, decay=$DECAY, target_vocab_util=$TARGET_VOCAB_UTIL)"
+#       done
+#     done
+#   done
+# done
+
+
+# ===============================================
+# Exp 12.3: 
+# - we regularize marginal entropy only, but adds extra free-bit constraint 
+# - hypothesis: less uniform distribution gives bigger search adv
+# ===============================================
+ALPHA_COND_ENT=0.0
+ALPHA_MARG_ENT=1.0
+for DECAY in 0.8; do
+  for TARGET_VOCAB_UTIL in 0.2 0.3 0.4 0.5 0.6 0.7; do 
+    torchrun \
+      --nproc_per_node=$N_GPUS \
+      --master_addr=$MASTER_ADDR \
+      --master_port=$MASTER_PORT \
+      train_sorl_v5.py \
+      --batch_size $BATCH_SIZE \
+      --train_seq_len $TRAIN_SEQ_LEN \
+      --val_seq_len $VAL_SEQ_LEN \
+      --num_iterations $NUM_ITERATIONS \
+      --num_rollouts $NUM_ROLLOUTS \
+      --K 8 \
+      --max_iterations $MAX_ITERATIONS \
+      --min_temperature 0.0 \
+      --temperature 5.0 \
+      --alpha_loss $ALPHA_LOSS \
+      --alpha_marg_ent $ALPHA_MARG_ENT \
+      --alpha_cond_ent $ALPHA_COND_ENT \
+      --decay $DECAY \
+      --target_vocab_util $TARGET_VOCAB_UTIL \
+      --use_orthogonal_init \
+      --run_info "Exp12.3: Mutual info regularization (alpha_marg_ent=$ALPHA_MARG_ENT, alpha_cond_ent=$ALPHA_COND_ENT, decay=$DECAY, target_vocab_util=$TARGET_VOCAB_UTIL)"
   done
 done
