@@ -1,6 +1,6 @@
 import torch
 # from sorl.gat_act import BOS_TOKEN_ID, search, GAT, recursion, infer_level
-from sorl.gat_sim import BOS_TOKEN_ID, GAT, recursion, extract_and_sample, recursion_v2
+from sorl.gat_sim import BOS_TOKEN_ID, GAT, recursion, extract_and_sample, recursion_v2, recursion_v3
 import torch.nn.functional as F
 from torch.distributions import Categorical
 from typing import Optional, Union
@@ -74,6 +74,28 @@ def sorl_rollout_v2(data: torch.Tensor, model: GAT, n: int, K: int, max_iteratio
                                 memory_span=memory_span, attn_blocksize=attn_blocksize, temperature=temperature)
 
     return search_data, search_ppt
+
+@torch.no_grad()
+def sorl_rollout_v3(data: torch.Tensor, model: GAT, n: int, K: int, max_iterations: int, memory_span: int, attn_blocksize: int, temperature: Union[float, torch.Tensor] = 0.0,
+                 truncate_seq_len: bool = True):
+    """
+    Direct rollout without greedy sample. 
+    """
+    assert data.shape[0] == 1, "only single sample supported"
+    data_len = data.shape[1]
+
+    # --- repeat data & add placeholder tokens ---
+    insert_mask = infer_rythmic_insert_mask(data, K, model.vocab_sizes[0])
+    data = insert_tokens(data, insert_mask, model.vocab_sizes[0].item())
+    if truncate_seq_len:
+        data = data[:, :data_len] # avoids recompilation
+    repeat_data = data.repeat_interleave(n, dim=0)
+
+    # --- search --- 
+    search_data, search_ppt, abs_logits = recursion_v3(model, repeat_data, max_iterations=max_iterations, 
+                                memory_span=memory_span, attn_blocksize=attn_blocksize, temperature=temperature)
+
+    return search_data, search_ppt, abs_logits
 
 def avg_ppt_per_sample(ppt, ppt_idx):
     """Average perplexity per document, per rollout."""
@@ -570,12 +592,12 @@ def sorl_evaluate_v2(tokens, model, n=2, K=4, max_iterations=1, memory_span=1792
     """
     Search & Check greedy rollout advantage & topological similarity
     """
-    search_data, search_ppt = sorl_rollout_v2(tokens, model, n=n, K=K, 
-                               max_iterations=max_iterations,
-                               memory_span=memory_span,
-                               attn_blocksize=attn_blocksize,
-                               temperature=temperature,
-                               truncate_seq_len=truncate_seq_len)
+    search_data, search_ppt, abs_logits = sorl_rollout_v3(tokens, model, n=n, K=K, 
+                                                        max_iterations=max_iterations,
+                                                        memory_span=memory_span,
+                                                        attn_blocksize=attn_blocksize,
+                                                        temperature=temperature,
+                                                        truncate_seq_len=truncate_seq_len)
     search_ppt = search_ppt.reshape(search_data.shape[0], -1)
 
     # Get valid positions
@@ -601,10 +623,10 @@ def sorl_evaluate_v2(tokens, model, n=2, K=4, max_iterations=1, memory_span=1792
     traj_loss = (greedy_ppt * valid_traj).sum() / valid_traj.sum().clamp(min=1)
     abs_loss = (greedy_ppt * valid_abs).sum() / valid_abs.sum().clamp(min=1)
 
-    # --- topological similarity ---
-    correlation = evaluate_topo_similarity(search_data, search_ppt, model, topo_mode = 1)
-    
-    return search_data[:1], search_adv, traj_loss, abs_loss, correlation
+    greedy_abs_logits = abs_logits[0, abs_mask.bool(), :]
+    greedy_abs_tokens = search_data[0, 1:][abs_mask.bool()]
+
+    return search_data[:1], search_adv, traj_loss, abs_loss, greedy_abs_logits, greedy_abs_tokens
 
 def compute_loss(best_data, model, memory_span: int, attn_blocksize: int,
                  loss_mask: Optional[torch.Tensor] = None):
