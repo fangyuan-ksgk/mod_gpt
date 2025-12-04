@@ -10,6 +10,7 @@ from matplotlib.patches import FancyBboxPatch
 import matplotlib.patheffects as PathEffects
 from PIL import Image
 import io
+from sklearn.decomposition import PCA
 
 
 class TinyStoriesDataLoader:
@@ -409,69 +410,66 @@ def visualize_alignment_compact(tokens, abs_tokens, doc_ids, model, enc, K=4, do
     
     return img
 
-
-
 def visualize_clustering(sim_matrix, doc_ids=None, title="Knowledge Map", seed=42):
     """
-    Clean, light-themed clustering visualization with smart labeling.
+    Stable, light-themed clustering visualization using PCA and fixed limits.
+    Prevents jitter between frames in animation.
     """
-    
 
-    # --- 1. Physics / MDS Projection ---
+    # --- 1. Stable Projection (PCA) ---
+    # We project the similarity matrix itself (which is rotation invariant relative to the features)
+    # Cosine similarity is bounded [-1, 1], so PCA projection space is roughly bounded.
+    
     if isinstance(sim_matrix, torch.Tensor):
-        dist_matrix = 1 - sim_matrix
-        device = dist_matrix.device
+        # Convert to numpy for sklearn
+        X = sim_matrix.cpu().numpy()
+        device = sim_matrix.device
     else:
-        dist_matrix = 1 - torch.tensor(sim_matrix)
+        X = sim_matrix
         device = 'cpu'
         
-    n = len(dist_matrix)
-    
-    # Classic MDS
-    D_sq = dist_matrix ** 2
-    H = torch.eye(n, device=device) - torch.ones(n, n, device=device) / n
-    B = -0.5 * H @ D_sq @ H
-    eigvals, eigvecs = torch.linalg.eigh(B)
-    idx = torch.argsort(eigvals, descending=True)[:2]
-    coords = eigvecs[:, idx] * torch.sqrt(torch.abs(eigvals[idx])).unsqueeze(0)
-    coords = coords.cpu().numpy()
+    # PCA is deterministic given the same data (unlike t-SNE)
+    # and doesn't arbitrarily rotate like MDS might if eigvals switch order slightly
+    pca = PCA(n_components=2, random_state=seed)
+    coords = pca.fit_transform(X)
     
     # --- 2. Styling (Light Theme) ---
-    plt.style.use('default')  # Reset to standard white background
+    plt.style.use('default')
     bg_color = '#ffffff'
-    grid_color = '#e0e0e0'  # Light gray grid
+    grid_color = '#e0e0e0'
     
     fig, ax = plt.subplots(figsize=(14, 10), facecolor=bg_color)
     ax.set_facecolor(bg_color)
     
-    # "RPG Class" Palette (Vibrant but visible on white)
-    rpg_colors = [
-        '#00a8cc', # Cyan/Blue
-        '#e63946', # Red
-        '#2a9d8f', # Teal/Green
-        '#e9c46a', # Mustard/Yellow
-        '#9b5de5', # Purple
-        '#f4a261', # Orange
-    ]
+    # "RPG Class" Palette
+    rpg_colors = ['#00a8cc', '#e63946', '#2a9d8f', '#e9c46a', '#9b5de5', '#f4a261']
     
-    # Assign colors
     if doc_ids is not None:
         c_indices = [int(d.item()) % len(rpg_colors) for d in doc_ids]
         node_colors = [rpg_colors[i] for i in c_indices]
         labels = [str(d.item()) for d in doc_ids]
     else:
+        n = len(sim_matrix)
         node_colors = [rpg_colors[i % len(rpg_colors)] for i in range(n)]
         labels = [str(i) for i in range(n)]
 
     # --- 3. Draw The Map ---
     
+    # CRITICAL FIX FOR JITTER: Fixed Axis Limits
+    # PCA on cosine sim matrix typically falls within [-1.5, 1.5] range
+    # We fix the camera so the 'world' doesn't shake.
+    ax.set_xlim(-1.5, 1.5)
+    ax.set_ylim(-1.5, 1.5)
+    
     # A. Subtle Grid
     ax.grid(True, color=grid_color, linestyle='--', linewidth=0.8, alpha=0.5)
 
     # B. Connections (The "Roads")
-    # Connect top 15% closest nodes
+    # Use distance derived from similarity for thresholding logic
+    dist_matrix = 1 - torch.tensor(X)
     threshold = torch.quantile(dist_matrix[dist_matrix > 0], 0.15)
     
+    n = len(X)
     for i in range(n):
         for j in range(i+1, n):
             if dist_matrix[i, j] < threshold:
@@ -481,63 +479,51 @@ def visualize_clustering(sim_matrix, doc_ids=None, title="Knowledge Map", seed=4
                        color='gray', 
                        alpha=alpha, linewidth=1, zorder=1)
 
-    # C. Nodes (Strategy Game Tokens)
-    # 1. Shadow/Outline
+    # C. Nodes
     ax.scatter(coords[:, 0], coords[:, 1], c='black', s=100, alpha=0.2, zorder=2)
-    # 2. Main Token
     ax.scatter(coords[:, 0], coords[:, 1], c=node_colors, s=80, 
               edgecolors='white', linewidth=1.5, zorder=3)
 
-    # --- 4. Smart Labeling (De-cluttered) ---
-    degrees = (dist_matrix < threshold).sum(dim=1).cpu().numpy()
-    sorted_indices = np.argsort(-degrees) # Label most connected first
+    # --- 4. Smart Labeling ---
+    degrees = (dist_matrix < threshold).sum(dim=1).numpy()
+    sorted_indices = np.argsort(-degrees)
     
     labeled_positions = []
     
-    x_span = coords[:, 0].max() - coords[:, 0].min()
-    y_span = coords[:, 1].max() - coords[:, 1].min()
-    min_dist_x = x_span * 0.08
-    min_dist_y = y_span * 0.08
+    # Fixed scale params since axes are fixed
+    min_dist = 0.25 # approx 8% of 3.0 range
     
     for idx in sorted_indices:
         x, y = coords[idx]
         
-        # Collision check
+        # Check against fixed bounds to avoid labels flying off map
+        if not (-1.4 < x < 1.4 and -1.4 < y < 1.4):
+            continue
+
         is_crowded = False
         for (lx, ly) in labeled_positions:
-            if abs(x - lx) < min_dist_x and abs(y - ly) < min_dist_y:
+            if abs(x - lx) < min_dist and abs(y - ly) < min_dist:
                 is_crowded = True
                 break
         
         if not is_crowded:
             label_text = f"Doc {labels[idx]}"
-            
-            # Label with "Speech Bubble" style outline
-            text = ax.text(x, y + y_span*0.035, 
+            text = ax.text(x, y + 0.08, 
                           label_text, 
-                          color='#333333',  # Dark gray text
+                          color='#333333', 
                           fontsize=10, 
                           fontweight='bold', 
                           ha='center', va='bottom', 
                           zorder=10)
-            
-            # Thick white outline to stand out against lines/grid
             text.set_path_effects([PathEffects.withStroke(linewidth=4, foreground='white', alpha=0.9)])
-            
             labeled_positions.append((x, y))
 
     # --- 5. Clean UI ---
     ax.set_title(title, fontsize=16, color='#333333', weight='bold', pad=20)
-    
-    # Clean spines
     for spine in ax.spines.values():
         spine.set_visible(False)
-        
     ax.tick_params(left=False, bottom=False, labelleft=False, labelbottom=False)
-    ax.set_xlabel("Semantic Dimension 1", color='gray', fontsize=9, labelpad=10)
-    ax.set_ylabel("Semantic Dimension 2", color='gray', fontsize=9, labelpad=10)
 
-    # Convert to Image
     buf = io.BytesIO()
     plt.tight_layout()
     fig.savefig(buf, format='png', dpi=150, bbox_inches='tight', facecolor=bg_color)
