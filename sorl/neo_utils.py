@@ -897,7 +897,8 @@ def generate(model, idx, K, max_iterations=0, memory_span=1792, attn_blocksize=1
     idx = insert_tokens(idx, insert_mask, model.vocab_sizes[0].item())
 
     # --- prefix recursion (abstraction) ---
-    recursion_mask = (idx >= model.vocab_sizes[0])
+    # recursion_mask = (idx >= model.vocab_sizes[0]) # abstract recursion
+    recursion_mask = (idx == model.vocab_sizes[0]) # abstract pre-fill only
     recursion_mask[:, 0] = False
     for _ in range(max_iterations): 
         _, logits = model.forward(idx, memory_span, attn_blocksize)

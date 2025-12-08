@@ -522,7 +522,7 @@ for step in range(train_steps + 1):
             loss = traj_loss + args.alpha_loss * abs_loss - args.alpha_marg_ent * marg_ent
         
         loss.backward()
-        print0(f" - step: {step} | accum step: {accum_step} | traj_loss: {traj_loss.item()} | abs_loss: {abs_loss.item()} | marg_entropy: {marg_ent.item()} | cond_entropy: {cond_ent.item()}")
+        print0(f" - step: {step} | accum step: {accum_step} | traj_loss: {traj_loss.item()} | abs_loss: {abs_loss.item()} | marg_entropy: {marg_ent.item()}")
         
     for param in model.parameters():
         param.grad /= train_accumulation_steps
