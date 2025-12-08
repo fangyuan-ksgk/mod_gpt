@@ -140,6 +140,33 @@ def select_best_per_doc(search_data, ppt, levels, model, alpha_select: float = 0
 
     return best_seq.unsqueeze(0), best_ppt, best_ppt_advantage.mean()
 
+def select_best_per_doc_v2(search_data, ppt, levels, r_min: float = 1.0, reward_mode: int = 0):
+    trajectory_mask = (levels[:, 1:] == 0).float()
+    trajectory_ppt = ppt * trajectory_mask
+    abs_ppt = ppt * (1 - trajectory_mask)
+    
+    doc_idx = (search_data == BOS_TOKEN_ID).cumsum(dim=1)
+    doc_idx = doc_idx - doc_idx.min(dim=1, keepdim=True).values # idx starts from 0  
+    doc_ppt = avg_ppt_per_sample(trajectory_ppt, doc_idx[:,1:])
+
+    min_doc_ppt, best_rollout_per_doc = doc_ppt.min(dim=0) # argmin
+    rollout_for_each_pos = best_rollout_per_doc[doc_idx[0]]
+
+    best_seq = search_data[rollout_for_each_pos, torch.arange(search_data.shape[1], device=search_data.device)]
+    best_ppt = ppt[rollout_for_each_pos[1:], torch.arange(ppt.shape[1], device=ppt.device)]
+
+    max_doc_ppt = doc_ppt.max(dim=0).values
+    best_ppt_advantage = (max_doc_ppt - min_doc_ppt) / max_doc_ppt.clamp(min=1e-8)
+
+    # --- utility reward --- 
+    if reward_mode == 0: # exponential PMI: r = max(exp(PMI), r_min)
+        utility_reward = torch.exp(max_doc_ppt - min_doc_ppt).clamp(min=r_min)
+    elif reward_mode == 1: # PMI = log(p(s | a)/p(s))
+        utility_reward = (max_doc_ppt - min_doc_ppt).clamp(min=r_min)
+    utility_reward = utility_reward[doc_idx[0]]
+
+    return best_seq.unsqueeze(0), best_ppt, best_ppt_advantage.mean(), utility_reward
+
 def compute_abs_util(trajectory_ppt, abs_ppt, K): 
     chunk_means = F.avg_pool1d(F.pad(trajectory_ppt.float()[:, 1:], (0, K)), kernel_size=K, stride=1)
     abs_util = chunk_means[abs_ppt > 0].reshape(abs_ppt.shape[0], -1)

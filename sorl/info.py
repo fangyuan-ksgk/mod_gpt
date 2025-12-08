@@ -47,9 +47,10 @@ class SoRLLoss(nn.Module):
         self.decay = decay
         self.mutual_info_loss = MutualInformationLoss(abs_vocab_size, decay, target_vocab_util)
 
-    def forward(self, data, model, memory_span: int, attn_blocksize: int):
+    def forward(self, data, model, memory_span: int, attn_blocksize: int, utility_reward: torch.Tensor):
 
         ppt, logits = model.forward(data, memory_span, attn_blocksize)
+        ppt = ppt * utility_reward
         ppt = ppt.reshape(data.shape[0], -1)
         logits = logits.reshape(data.shape[0], -1, logits.size(-1))
 
@@ -219,7 +220,7 @@ class Zipfian2gramLoss(nn.Module):
         zipf_prior = get_zipf_prior(vocab_size, target_vocab_util)
         self.register_buffer('zipf_prior', zipf_prior)
         # Running marginal is a transition matrix [V, V]
-        self.register_buffer('running_marginal', torch.ones(vocab_size, vocab_size) / (vocab_size ** 2))
+        self.register_buffer('running_marginal', torch.ones(vocab_size, device=vocab_size.device) / vocab_size)
 
     def forward(self, logits):
         """
@@ -294,51 +295,22 @@ class SoRLLoss_v3(nn.Module):
         # --- Return: p(s | a), p(a | s), KL(p(a_t, a_t+1), soft_zipf_prior) ---
         return traj_loss, abs_loss, soft_zipf_kl
 
-
-class MarginalEntropyLoss(nn.Module):
-    def __init__(self, vocab_size, decay=0.8, target_vocab_util=0.8):
-        super().__init__()
-        self.decay = decay       
-        target_val = torch.log(vocab_size * target_vocab_util) 
-        self.register_buffer('target_marginal_entropy', target_val)
-        
-        self.register_buffer('running_marginal', torch.ones(vocab_size, device=vocab_size.device) / vocab_size)
-
-    def forward(self, logits):
-        """
-        logits: [Batch, Vocab]
-        """
-        probs = F.softmax(logits, dim=-1)
-        
-        batch_marginal = probs.mean(dim=[0, 1])
-        
-        with torch.no_grad():
-             new_avg = self.decay * self.running_marginal + (1 - self.decay) * batch_marginal
-             self.running_marginal.copy_(new_avg)
-
-        mixed_marginal = self.decay * self.running_marginal + (1 - self.decay) * batch_marginal
-        marginal_entropy = -torch.sum(mixed_marginal * torch.log(mixed_marginal + 1e-10))
-        marginal_entropy = torch.clamp(marginal_entropy - self.target_marginal_entropy, max=0.0) + self.target_marginal_entropy
-
-        # --- Return marginal entropy ---
-        return marginal_entropy
-
-
 class SoRLLoss_v4(nn.Module): 
     """
-    SoRL loss: p(s | a), p(a | s), KL(p(a_t, a_t+1), soft_zipf_prior), H(p(s))
+    SoRL loss: p(s | a), p(a | s), KL(p(a_t, a_t+1), soft_zipf_prior)
     """
 
-    def __init__(self, abs_vocab_size, traj_vocab_size, decay=0.8, target_vocab_util=0.8):
+    def __init__(self, abs_vocab_size, decay=0.8, target_vocab_util=0.8):
         super().__init__()
         self.decay = decay
         self.zipf_loss = Zipfian2gramLoss(abs_vocab_size, decay, target_vocab_util)
-        self.marg_ent_loss = MarginalEntropyLoss(traj_vocab_size, decay, target_vocab_util)
 
-    def forward(self, data, model, memory_span: int, attn_blocksize: int):
+    def forward(self, data, model, memory_span: int, attn_blocksize: int, 
+                      utility_reward: torch.Tensor):
 
         ppt, logits = model.forward(data, memory_span, attn_blocksize)
         ppt = ppt.reshape(data.shape[0], -1)
+        ppt = ppt * utility_reward
         logits = logits.reshape(data.shape[0], -1, logits.size(-1))
 
         levels = (data >= model.vocab_sizes[0]).long()[:, 1:]
@@ -361,9 +333,5 @@ class SoRLLoss_v4(nn.Module):
 
         soft_zipf_kl = self.zipf_loss(abs_logits)
 
-        # traj logits predicted by abtract tokens
-        abs_pred_logits = logits[data >= model.vocab_sizes[0]][:, :model.vocab_sizes[0]]
-        traj_marg_ent = self.marg_ent_loss(abs_pred_logits)
-
-        # --- Return: p(s | a), p(a | s), KL(p(a_t, a_t+1), soft_zipf_prior), H(p(s)) ---
-        return traj_loss, abs_loss, soft_zipf_kl, traj_marg_ent
+        # --- Return: p(s | a), p(a | s), KL(p(a_t, a_t+1), soft_zipf_prior) ---
+        return traj_loss, abs_loss, soft_zipf_kl
