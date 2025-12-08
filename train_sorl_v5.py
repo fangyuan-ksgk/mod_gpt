@@ -55,9 +55,10 @@ def parse_args():
     parser.add_argument("--use_per_abs_selection", action="store_true", default=False)
     parser.add_argument("--use_orthogonal_init", action="store_true", default=False)
     parser.add_argument("--alpha_marg_ent", type=float, default=1.0) # marginal entropy weight
-    parser.add_argument("--alpha_cond_ent", type=float, default=1.0) # conditional entropy weight
     parser.add_argument("--decay", type=float, default=0.8) # decay for mutual information loss
     parser.add_argument("--target_vocab_util", type=float, default=0.9) # target vocabulary utilization
+    parser.add_argument("--reg_abs_marg_ent", action="store_true", default=False) # regularize on marginal entropy of abstract tokens
+    parser.add_argument("--reg_abs_zipf", action="store_true", default=False) # regularize on zipf distribution of abstract tokens
 
     # GAPT
     parser.add_argument("--use_gapt", action="store_true", default=False) # use GAPT to balance objectives
@@ -239,9 +240,8 @@ class Hyperparameters:
     alpha_select: float = 0.0
     alpha_loss: float = 0.0
     alpha_marg_ent: float = 1.0
-    alpha_cond_ent: float = 1.0
     decay: float = 0.8
-    target_vocab_util: float = 0.9
+    target_vocab_util: float = 0.8
 
     use_gapt: bool = False
     traj_perplexity_patience: int = 5
@@ -350,8 +350,14 @@ def get_lr(step: int):
         return w * 1.0 + (1 - w) * 0.1
 
 # SoRL loss function
-from sorl.info import SoRLLoss
-loss_fn = SoRLLoss(model.vocab_sizes[1], decay=args.decay, target_vocab_util=args.target_vocab_util)
+assert args.reg_abs_marg_ent or args.reg_abs_zipf, "Either reg_abs_marg_ent or reg_abs_zipf must be True"
+if args.reg_abs_marg_ent: 
+    from sorl.info import SoRLLoss
+    loss_fn = SoRLLoss(model.vocab_sizes[1], decay=args.decay, target_vocab_util=args.target_vocab_util)
+elif args.reg_abs_zipf: 
+    from sorl.info import SoRLLoss_v3
+    loss_fn = SoRLLoss_v3(model.vocab_sizes[1], decay=args.decay, target_vocab_util=args.target_vocab_util)
+
 loss_fn = loss_fn.to(device)
 
 # compile model
@@ -387,11 +393,11 @@ for i in range(warmup_steps):
     search_end = time.time()
     print(f" :: Sorl search takes {search_end - search_start} second")
     # --- compute loss --- 
-    traj_loss, abs_loss, marg_ent, cond_ent = loss_fn(search_tokens, model, memory_span=memory_span, attn_blocksize=attn_blocksize)
+    traj_loss, abs_loss, marg_ent = loss_fn(search_tokens, model, memory_span=memory_span, attn_blocksize=attn_blocksize)
     forward_end = time.time()
     print(f" :: Loss computation takes {forward_end - search_end} second")
     # --- backward --- 
-    loss = traj_loss + args.alpha_loss * abs_loss - args.alpha_marg_ent * marg_ent + args.alpha_cond_ent * cond_ent
+    loss = traj_loss + args.alpha_loss * abs_loss - args.alpha_marg_ent * marg_ent
     loss.backward() 
     backward_end = time.time()
     print(f" :: Backward takes {backward_end - forward_end} second")
@@ -466,12 +472,11 @@ for step in range(train_steps + 1):
                 val_tokens, val_adv, val_traj_loss, val_abs_loss = sorl_evaluate(tokens, model, n=args.num_rollouts_val, K=args.K, max_iterations=args.max_iterations, 
                                                                     memory_span=memory_span, attn_blocksize=attn_blocksize, temperature=temperature_val)
                 util_rate = compute_vocab_utilization_rate(val_tokens, model)
-                _, _, marg_ent, cond_ent = loss_fn(val_tokens, model, memory_span=memory_span, attn_blocksize=attn_blocksize)
+                _, _, marg_ent = loss_fn(val_tokens, model, memory_span=memory_span, attn_blocksize=attn_blocksize)
                 val_loss["traj_loss"] += val_traj_loss
                 val_loss["abs_loss"] += val_abs_loss
                 val_loss["search_advantage"] += val_adv.mean()
-                val_loss["marg_entropy"] += marg_ent
-                val_loss["cond_entropy"] += cond_ent
+                val_loss["marg_kl_divergence"] += marg_ent
                 val_loss["util_rate"] += torch.tensor(util_rate, device=val_traj_loss.device)
             
         for name in val_loss: 
@@ -508,13 +513,13 @@ for step in range(train_steps + 1):
                                                                 use_per_abs_selection=args.use_per_abs_selection)
 
         # --- compute loss --- 
-        traj_loss, abs_loss, marg_ent, cond_ent = loss_fn(search_tokens, model, memory_span=memory_span, attn_blocksize=attn_blocksize)
+        traj_loss, abs_loss, marg_ent = loss_fn(search_tokens, model, memory_span=memory_span, attn_blocksize=attn_blocksize)
         
         # --- GAPT: balance objectives ---
         if args.use_gapt: 
-            loss = gapt.step(traj_loss, args.alpha_loss * abs_loss - args.alpha_marg_ent * marg_ent + args.alpha_cond_ent * cond_ent, verbose=False)
+            loss = gapt.step(traj_loss, args.alpha_loss * abs_loss - args.alpha_marg_ent * marg_ent, verbose=False)
         else: 
-            loss = traj_loss + args.alpha_loss * abs_loss - args.alpha_marg_ent * marg_ent + args.alpha_cond_ent * cond_ent
+            loss = traj_loss + args.alpha_loss * abs_loss - args.alpha_marg_ent * marg_ent
         
         loss.backward()
         print0(f" - step: {step} | accum step: {accum_step} | traj_loss: {traj_loss.item()} | abs_loss: {abs_loss.item()} | marg_entropy: {marg_ent.item()} | cond_entropy: {cond_ent.item()}")
@@ -559,9 +564,10 @@ print0(f"-- use_per_abs_selection: {args.use_per_abs_selection}", console=True)
 print0(f"-- alpha_select: {args.alpha_select}", console=True)
 print0(f"-- alpha_loss: {args.alpha_loss}", console=True)
 print0(f"-- alpha_marg_ent: {args.alpha_marg_ent}", console=True)
-print0(f"-- alpha_cond_ent: {args.alpha_cond_ent}", console=True)
 print0(f"-- decay: {args.decay}", console=True)
 print0(f"-- target_vocab_util: {args.target_vocab_util}", console=True)
+print0(f"-- reg_abs_marg_ent: {args.reg_abs_marg_ent}", console=True)
+print0(f"-- reg_abs_zipf: {args.reg_abs_zipf}", console=True)
 print0(f"loss record:\n{loss_record}", console=True)
 
 dist.destroy_process_group()

@@ -8,6 +8,7 @@ from dataclasses import dataclass
 import matplotlib.pyplot as plt
 from matplotlib.patches import FancyBboxPatch
 import matplotlib.patheffects as PathEffects
+from collections import Counter
 from PIL import Image
 import io
 from sklearn.decomposition import PCA
@@ -221,7 +222,17 @@ class AbstractionStatistics:
     @property 
     def valid_docs(self): 
         return self.docs_updated.nonzero().squeeze()
-    
+
+    @property
+    def vocab_util(self): 
+        return (self.abs_seqs.unique().size(0) / self.abs_vocab_size).item()
+
+    @property 
+    def bigram_rep_rate(self):
+        repetitions = (self.abs_seqs[:, :-1] == self.abs_seqs[:, 1:]).float()
+        rep_rate = repetitions.mean().item()
+        return rep_rate
+
     def compute_cross_doc_logit_sim(self, method='flatten', docs=None):
         """Compute logit similarity on-demand."""
         if docs is None:
@@ -328,13 +339,14 @@ def visualize_alignment_compact(tokens, abs_tokens, doc_ids, model, enc, K=4, do
         ax.axis('off')
         
         # Colors
-        colors = plt.cm.tab20(np.array(abs_seq[:n_chunks_display]) / model.vocab_sizes[1])
+        tab20 = plt.cm.tab20.colors
+        colors = [tab20[tok % 20] for tok in abs_seq[:n_chunks_display]]
         
         # Title
         title = f"Doc {doc_ids[d_idx].item()}: Text ↔ Abstraction (K={K})"
         if is_truncated:
             title += f" [showing {n_chunks_display}/{n_chunks} chunks]"
-        ax.text(5, 2.85, title, fontsize=11, weight='bold', ha='center')
+        ax.text(5, 2.85, title, fontsize=18, weight='bold', ha='center')
         
         # Top row: Text chunks (WIDE)
         text_y = 2.2
@@ -410,80 +422,60 @@ def visualize_alignment_compact(tokens, abs_tokens, doc_ids, model, enc, K=4, do
     
     return img
 
-def visualize_clustering(sim_matrix, doc_ids=None, title="Knowledge Map", seed=42):
+def visualize_clustering(sim_matrix, abs_stats, abs_shift=50257, doc_ids=None, step=0, title="Story Abstraction Cluster", seed=42):
     """
-    Stable, light-themed clustering visualization using PCA and fixed limits.
-    Prevents jitter between frames in animation.
+    Clustering Map with embedded Distribution HUD (Bottom-Left).
     """
-
-    # --- 1. Stable Projection (PCA) ---
-    # We project the similarity matrix itself (which is rotation invariant relative to the features)
-    # Cosine similarity is bounded [-1, 1], so PCA projection space is roughly bounded.
-    
+    # --- 1. Physics / PCA Projection ---
     if isinstance(sim_matrix, torch.Tensor):
-        # Convert to numpy for sklearn
         X = sim_matrix.cpu().numpy()
-        device = sim_matrix.device
     else:
         X = sim_matrix
-        device = 'cpu'
-        
-    # PCA is deterministic given the same data (unlike t-SNE)
-    # and doesn't arbitrarily rotate like MDS might if eigvals switch order slightly
+    
     pca = PCA(n_components=2, random_state=seed)
     coords = pca.fit_transform(X)
     
-    # --- 2. Styling (Light Theme) ---
+    # --- 2. Main Plot Setup ---
     plt.style.use('default')
     bg_color = '#ffffff'
-    grid_color = '#e0e0e0'
     
-    fig, ax = plt.subplots(figsize=(14, 10), facecolor=bg_color)
+    fig, ax = plt.subplots(figsize=(14, 14), facecolor=bg_color)
     ax.set_facecolor(bg_color)
     
-    # "RPG Class" Palette
+    # --- 3. Draw Clustering (Same as before) ---
+    # Colors
     rpg_colors = ['#00a8cc', '#e63946', '#2a9d8f', '#e9c46a', '#9b5de5', '#f4a261']
-    
     if doc_ids is not None:
         c_indices = [int(d.item()) % len(rpg_colors) for d in doc_ids]
         node_colors = [rpg_colors[i] for i in c_indices]
         labels = [str(d.item()) for d in doc_ids]
     else:
-        n = len(sim_matrix)
+        n = len(X)
         node_colors = [rpg_colors[i % len(rpg_colors)] for i in range(n)]
         labels = [str(i) for i in range(n)]
 
-    # --- 3. Draw The Map ---
-    
-    # CRITICAL FIX FOR JITTER: Fixed Axis Limits
-    # PCA on cosine sim matrix typically falls within [-1.5, 1.5] range
-    # We fix the camera so the 'world' doesn't shake.
+    # Fixed Limits
     ax.set_xlim(-1.5, 1.5)
     ax.set_ylim(-1.5, 1.5)
     
-    # A. Subtle Grid
-    ax.grid(True, color=grid_color, linestyle='--', linewidth=0.8, alpha=0.5)
-
-    # B. Connections (The "Roads")
-    # Use distance derived from similarity for thresholding logic
+    # Grid & Connections
+    ax.grid(True, color='#e0e0e0', linestyle='--', linewidth=0.8, alpha=0.5)
+    
     dist_matrix = 1 - torch.tensor(X)
     threshold = torch.quantile(dist_matrix[dist_matrix > 0], 0.15)
-    
     n = len(X)
     for i in range(n):
         for j in range(i+1, n):
             if dist_matrix[i, j] < threshold:
                 alpha = 0.4 * (1 - (dist_matrix[i, j] / threshold).item())
-                ax.plot([coords[i, 0], coords[j, 0]], 
-                       [coords[i, 1], coords[j, 1]], 
-                       color='gray', 
-                       alpha=alpha, linewidth=1, zorder=1)
+                ax.plot([coords[i, 0], coords[j, 0]], [coords[i, 1], coords[j, 1]], 
+                       color='gray', alpha=alpha, linewidth=1, zorder=1)
 
-    # C. Nodes
-    ax.scatter(coords[:, 0], coords[:, 1], c='black', s=100, alpha=0.2, zorder=2)
-    ax.scatter(coords[:, 0], coords[:, 1], c=node_colors, s=80, 
-              edgecolors='white', linewidth=1.5, zorder=3)
+    # Nodes
+    ax.scatter(coords[:, 0], coords[:, 1], c='black', s=150, alpha=0.2, zorder=2)
+    ax.scatter(coords[:, 0], coords[:, 1], c=node_colors, s=120, edgecolors='white', linewidth=1.5, zorder=3)
 
+    # Labels (Simplified for brevity)
     # --- 4. Smart Labeling ---
     degrees = (dist_matrix < threshold).sum(dim=1).numpy()
     sorted_indices = np.argsort(-degrees)
@@ -507,121 +499,242 @@ def visualize_clustering(sim_matrix, doc_ids=None, title="Knowledge Map", seed=4
                 break
         
         if not is_crowded:
-            label_text = f"Doc {labels[idx]}"
+            label_text = f"Story {labels[idx]}"
             text = ax.text(x, y + 0.08, 
                           label_text, 
                           color='#333333', 
-                          fontsize=10, 
+                          fontsize=15, 
                           fontweight='bold', 
                           ha='center', va='bottom', 
                           zorder=10)
             text.set_path_effects([PathEffects.withStroke(linewidth=4, foreground='white', alpha=0.9)])
             labeled_positions.append((x, y))
 
-    # --- 5. Clean UI ---
-    ax.set_title(title, fontsize=16, color='#333333', weight='bold', pad=20)
-    for spine in ax.spines.values():
-        spine.set_visible(False)
+            
+    # Titles
+    ax.set_title(title, fontsize=20, color='#333333', weight='bold', pad=20)
+    for spine in ax.spines.values(): spine.set_visible(False)
     ax.tick_params(left=False, bottom=False, labelleft=False, labelbottom=False)
+
+    ax_hist = ax.inset_axes([0.02, 0.02, 0.50, 0.20]) 
+    
+    # Calculate Distribution
+    valid_docs = abs_stats.docs_updated.nonzero().squeeze()
+    if len(valid_docs.shape) == 0: valid_docs = valid_docs.unsqueeze(0)
+    all_tokens = (abs_stats.abs_seqs[valid_docs] - abs_shift).flatten().cpu().numpy()
+    vocab_size = abs_stats.abs_vocab_size 
+            
+    counts = np.bincount(all_tokens, minlength=vocab_size)
+    counts = counts[:vocab_size]
+    probs = counts / (counts.sum() + 1e-10)
+
+    # Styling the Inset
+    # Semi-transparent background box
+    ax_hist.patch.set_facecolor('lightblue')
+    ax_hist.patch.set_alpha(0.1)
+    ax_hist.patch.set_edgecolor('#cccccc')
+    ax_hist.patch.set_linewidth(1)
+    
+    # Plot Bars
+    tab20 = plt.cm.tab20.colors
+    bar_colors = [tab20[i % 20] for i in range(vocab_size)]
+    ax_hist.bar(range(vocab_size), probs, color=bar_colors, alpha=0.9, width=0.8)
+    
+    # Minimalist Axis Styling
+    ax_hist.set_ylim(0, 0.7)
+    ax_hist.set_xticks(range(vocab_size))
+    # Smaller fonts for the mini-map
+    ax_hist.set_xticklabels([f"a{i}" for i in range(vocab_size)], fontsize=12, fontweight='bold', color='#444')
+    ax_hist.set_yticks([]) # Hide Y values
+    for spine in ['top', 'right', 'left']:
+        ax_hist.spines[spine].set_visible(False)
+        
+    ax_hist.text(0.05, 0.85, f"P(A)", transform=ax_hist.transAxes, 
+                 fontsize=20, fontweight='bold', color='#333')
+    
+    # --- 5. Stats Text Box (Top-Left) ---
+    if isinstance(sim_matrix, torch.Tensor):
+        mask = ~torch.eye(len(sim_matrix), dtype=torch.bool, device=sim_matrix.device)
+        if len(sim_matrix) > 1:
+            avg_sim = sim_matrix[mask].mean().item()
+        else:
+            avg_sim = 0.0
+    else:
+        avg_sim = 0.0
+        
+    # Hamming
+    hamming = abs_stats.compute_cross_doc_hamming(docs=abs_stats.valid_docs)
+    if len(hamming) > 1:
+        mask_h = ~torch.eye(len(hamming), dtype=torch.bool, device=hamming.device)
+        avg_ham = hamming[mask_h].mean().item()
+    else:
+        avg_ham = 0.0
+    
+    stats_text = f"Avg Logit Sim: {avg_sim:.3f}\nAvg Hamming Dist: {avg_ham:.1f}\nVocab Util: {abs_stats.vocab_util * 100:.1f}%"
+    ax.text(0.02, 0.98, stats_text, transform=ax.transAxes, fontsize=20,
+            verticalalignment='top', bbox=dict(boxstyle='round', facecolor='white', alpha=0.9))
+
+    # Update Title with Step
+    ax.set_title(f"{title} (Step {step})", fontsize=20, color='#333333', weight='bold', pad=20)
+    
+    # =========================================================================
 
     buf = io.BytesIO()
     plt.tight_layout()
-    fig.savefig(buf, format='png', dpi=150, bbox_inches='tight', facecolor=bg_color)
+    fig.savefig(buf, format='png', dpi=120, bbox_inches='tight', facecolor=bg_color)
     buf.seek(0)
     img = Image.open(buf).copy()
     buf.close()
     plt.close(fig)
-    
     return img
 
-def visualize_distribution(abs_stats, step=0, title="Abstract Token Distribution P(A)"):
+def stitch_images(img_align, img_cluster, padding=20):
     """
-    Histogram of abstract token usage.
+    Stitch Alignment (Left) and Cluster Map (Right) side-by-side.
+    Centers them vertically.
     """
+    # Calculate dimensions
+    total_width = img_align.width + img_cluster.width + padding
+    max_height = max(img_align.height, img_cluster.height)
+    
+    # Create blank canvas
+    final_img = Image.new('RGB', (total_width, max_height), (255, 255, 255))
+    
+    # Paste Alignment (Left) - Center vertically
+    y_align = (max_height - img_align.height) // 2
+    final_img.paste(img_align, (0, y_align))
+    
+    # Paste Cluster Map (Right) - Center vertically
+    y_cluster = (max_height - img_cluster.height) // 2
+    final_img.paste(img_cluster, (img_align.width + padding, y_cluster))
+    
+    return final_img
+
+
+def stitch_dashboard(img_align, img_cluster, img_3gram, padding=20):
+    from PIL import Image, ImageDraw
+    
+    # Dimensions
+    left_width = max(img_align.width, img_3gram.width)
+    left_height = img_align.height + img_3gram.height + padding
+    total_height = max(left_height, img_cluster.height)
+    total_width = left_width + img_cluster.width + padding * 2 # Extra padding for separator
+    
+    canvas = Image.new('RGB', (total_width, total_height), (255, 255, 255))
+    draw = ImageDraw.Draw(canvas)
+    
+    # Paste Left
+    x_align = (left_width - img_align.width) // 2
+    canvas.paste(img_align, (x_align, 0))
+    
+    x_3gram = (left_width - img_3gram.width) // 2
+    y_3gram = img_align.height + padding
+    canvas.paste(img_3gram, (x_3gram, y_3gram))
+    
+    # Separator Line
+    x_sep = left_width + padding
+    draw.line([(x_sep, 20), (x_sep, total_height - 20)], fill='#eeeeee', width=3)
+    
+    # Paste Right
+    x_cluster = left_width + padding * 2
+    y_cluster = (total_height - img_cluster.height) // 2
+    canvas.paste(img_cluster, (x_cluster, y_cluster))
+    
+    return canvas
+    
+
+def visualize_ngram_statistics(abs_stats, abs_shift=50257, n_gram_n=2, top_k=10, step=0):
+    """
+    Visualize top N-gram statistics
+    """
+
     valid_docs = abs_stats.docs_updated.nonzero().squeeze()
     if len(valid_docs.shape) == 0: valid_docs = valid_docs.unsqueeze(0)
+    seqs_list = (abs_stats.abs_seqs[valid_docs] - abs_shift).cpu().tolist()
     
-    all_tokens = abs_stats.abs_seqs[valid_docs].flatten().cpu().numpy()
+    ngram_counts = Counter()
+    total_ngrams = 0
+    for seq in seqs_list:
+        if len(seq) < n_gram_n: continue
+        for i in range(len(seq) - n_gram_n + 1):
+            ngram = tuple(seq[i : i+n_gram_n])
+            ngram_counts[ngram] += 1
+            total_ngrams += 1
     
-    vocab_size = abs_stats.abs_vocab_size 
+    top_ngrams = ngram_counts.most_common(top_k)
     
-    if len(all_tokens) > 0 and all_tokens.max() >= vocab_size:
-        if all_tokens.min() >= 50257: # approximate BOS
-             all_tokens = all_tokens - all_tokens.min()
-        else:
-             all_tokens = all_tokens[all_tokens < vocab_size]
+    # --- VISUALIZATION ---
+    plt.style.use('default')
+    fig, ax = plt.subplots(figsize=(10, 6), facecolor='white')
+    ax.set_facecolor('white')
+    ax.axis('off')
+    
+    tab20 = plt.cm.tab20.colors
+    
+    ax.text(0.5, 0.95, f"Top {n_gram_n}-gram Patterns (Step {step})", 
+            fontsize=20, weight='bold', ha='center', color='#333')
+    
+    # --- CARD VIEW for Trigrams+ ---
+    y_start = 0.8
+    y_step = 0.8 / top_k
+    
+    for i, (ngram, count) in enumerate(top_ngrams):
+        pct = (count / total_ngrams) * 100
+        y = y_start - i * y_step
+        
 
-    counts = np.bincount(all_tokens, minlength=vocab_size)
-    counts = counts[:vocab_size]
-    probs = counts / (counts.sum() + 1e-10) 
-    
-    fig, ax = plt.subplots(figsize=(12, 4))
-    
-    colors = plt.cm.tab20(np.arange(vocab_size) / vocab_size)
-    
-    bars = ax.bar(range(vocab_size), probs, color=colors, edgecolor='black', linewidth=1.5)
-    
-    # X-Axis styling
-    ax.set_xticks(range(vocab_size))
-    ax.set_xticklabels([f"a{i}" for i in range(vocab_size)], fontsize=18, fontweight='bold')
-    
-    # Y-Axis styling (Matched size!)
-    ax.set_ylabel("P(A)", fontsize=20, fontweight='bold')
-    ax.tick_params(axis='y', labelsize=18)  # <--- Added this line
-    ax.set_ylim(0, 1.0) 
-    
-    # Add values on top
-    for bar in bars:
-        height = bar.get_height()
-        if height > 0.01: 
-            ax.text(bar.get_x() + bar.get_width()/2., height + 0.02,
-                    f'{height:.2f}',
-                    ha='center', va='bottom', fontsize=16, fontweight='bold')
+        total_width = n_gram_n * 0.8 # approx width units
+        start_x = 0.5 - (total_width / 20) # Roughly center
+        
+        bar_width = (pct / top_ngrams[0][1] * total_ngrams) * 0.8 # Scale relative to max
+        
+        # Draw Tokens
+        x_cursor = 0.25
+        for token in ngram:
+            color = tab20[token % 20]
+            # Token Box
+            ax.add_patch(FancyBboxPatch((x_cursor, y - 0.04), 0.08, 0.08,
+                                        boxstyle="round,pad=0.02",
+                                        facecolor=color, alpha=0.9,
+                                        edgecolor='black', linewidth=1))
+            ax.text(x_cursor + 0.04, y, f"a{token}", ha='center', va='center', fontsize=18, weight='bold')
             
-    # Add step indicator
-    ax.text(0.98, 0.9, f"STEP: {step}", transform=ax.transAxes, 
-            fontsize=20, fontweight='bold', color='red', ha='right')
+            # Arrow to next
+            if token != ngram[-1]:
+                ax.text(x_cursor + 0.1, y, "→", ha='center', va='center', color='gray', fontsize=18)
+            
+            x_cursor += 0.14
+        
+        # Frequency Label
+        ax.text(0.8, y, f"{count} ({pct:.1f}%)", ha='left', va='center', fontsize=18, fontfamily='monospace')
+        
+        # Progress bar
+        ax.add_patch(FancyBboxPatch((0.8, y - 0.04), pct/100 * 2.0, 0.01,
+                                    boxstyle="round,pad=0.01", color='gray', alpha=0.3))
 
     plt.tight_layout()
     
     buf = io.BytesIO()
     fig.savefig(buf, format='png', dpi=120, bbox_inches='tight')
-    buf.seek(0)
-    img = Image.open(buf).copy()
-    buf.close()
-    plt.close(fig)
+    buf.seek(0); img = Image.open(buf).copy(); buf.close(); plt.close(fig)
     return img
 
-def stitch_images(img1, img2, padding=20):
-    """Stitch two images horizontally with padding."""
-    # Create new blank image
-    total_width = img1.width + img2.width + padding
-    max_height = max(img1.height, img2.height)
     
-    new_img = Image.new('RGB', (total_width, max_height), (255, 255, 255))
-    
-    # Paste images
-    # Center vertically if heights differ
-    y1_offset = (max_height - img1.height) // 2
-    y2_offset = (max_height - img2.height) // 2
-    
-    new_img.paste(img1, (0, y1_offset))
-    new_img.paste(img2, (img1.width + padding, y2_offset))
-    
-    return new_img
-
-def visualize_dynamics(abs_stats, loader, model, enc, K, doc_ids=torch.arange(0, 100, 25), max_chunks=8):
+def visualize_dynamics(abs_stats, loader, model, enc, K, step=0, doc_ids=torch.arange(0, 100, 34), max_chunks=8):
     tokens, _ = loader.get_specific(doc_ids)
     abs_tokens = abs_stats.abs_seqs[doc_ids]
     abs_tokens[abs_tokens == 0] += BOS_TOKEN_ID
     valid_ids = torch.arange(0, doc_ids.shape[0]).tolist()
     img_align = visualize_alignment_compact(tokens, abs_tokens, doc_ids, model, enc, K=4, doc_idx=valid_ids, max_chunks=8)
 
-    # (c). visualize clustering of all stories' abstract logits
     doc_ids = abs_stats.valid_docs
     cs_sim = abs_stats.compute_cross_doc_logit_sim()
-    img_sim = visualize_clustering(cs_sim, doc_ids=doc_ids, title="")
+    img_sim = visualize_clustering(cs_sim, abs_stats, doc_ids=doc_ids, step=step, title="Story Cluster")
+
+    img_3gram = visualize_ngram_statistics(abs_stats, n_gram_n=3)
 
     # stitch 2 images together (1 row 2 column)
-    final_img = stitch_images(img_align, img_sim)
+    # final_img = stitch_images(img_align, img_sim)
+    final_img = stitch_dashboard(img_align, img_sim, img_3gram)
     return final_img
+
