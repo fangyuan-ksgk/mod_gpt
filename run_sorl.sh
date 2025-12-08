@@ -76,6 +76,7 @@ EXPLORATION_MODE=0 # SGPO - exploration
 
 # ===============================================
 # Exp 12.4: 
+# -> Fixed bug where we - marg_ent_w * marg_ent, bigram zipfian loss should be minimized
 # - Can Bigram Zipfian regularization help improve search adv? 
 # -> we'll prefer it due to it induces better grammatical structure
 # ===============================================

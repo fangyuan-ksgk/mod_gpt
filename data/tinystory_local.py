@@ -738,3 +738,146 @@ def visualize_dynamics(abs_stats, loader, model, enc, K, step=0, doc_ids=torch.a
     final_img = stitch_dashboard(img_align, img_sim, img_3gram)
     return final_img
 
+
+def visualize_interleaved_alignment(sequence, model, enc, K=4, max_chunks=None):
+    """
+    Visualizes the alignment of an interleaved sequence (text + abstract tokens)
+    in a compact, continuous stream.
+    
+    Args:
+        sequence: 1D tensor or list of integers.
+        model: Model object with vocab_sizes.
+        enc: Tokenizer object.
+        K: Chunk size (unused for logic, but kept for interface compatibility).
+        max_chunks: Maximum number of groups to display.
+    """
+    if isinstance(sequence, torch.Tensor):
+        sequence = sequence.flatten().tolist()
+    
+    abs_start = model.vocab_sizes[0]
+    
+    # --- 1. Parse Interleaved Sequence ---
+    groups = []
+    current_text = []
+    current_abs = None
+    
+    for token in sequence:
+        if token >= abs_start:
+            if current_abs is not None or current_text:
+                groups.append({'abs': current_abs, 'text': current_text})
+            current_abs = token - abs_start
+            current_text = []
+        else:
+            current_text.append(token)
+            
+    if current_abs is not None or current_text:
+        groups.append({'abs': current_abs, 'text': current_text})
+
+    # Slice to keep the MOST RECENT chunks (sliding window)
+    if max_chunks is not None and len(groups) > max_chunks:
+        groups = groups[-max_chunks:]
+
+    n_groups = len(groups)
+    if n_groups == 0:
+        return Image.new('RGB', (200, 100), color='white')
+
+    # --- 2. Setup Figure (Compact & Fixed Width) ---
+    # Tighter spacing: box_width ~= spacing for continuous look
+    box_width = 1.6
+    spacing = 1.65  
+    margin = 0.5
+    
+    # Use max_chunks for width calculation if available to keep GIF frame size constant
+    width_reference = max_chunks if max_chunks is not None else n_groups
+    fig_width = max(8, width_reference * spacing + margin * 2)
+    
+    fig_height = 3.5  # Reduced height
+    
+    fig, ax = plt.subplots(figsize=(fig_width, fig_height))
+    ax.set_xlim(0, fig_width)
+    ax.set_ylim(0, 3.5)
+    ax.axis('off')
+    
+    tab20 = plt.cm.tab20.colors
+    
+    # --- 3. Draw Groups ---
+    start_x = margin + box_width / 2
+    text_y_center = 2.2
+    abs_y_center = 0.8
+    
+    for i, group in enumerate(groups):
+        abs_id = group['abs']
+        text_ids = group['text']
+        
+        x_center = start_x + i * spacing
+        x_left = x_center - box_width / 2
+        
+        # Color Logic
+        if abs_id is not None:
+            color = tab20[abs_id % 20]
+            face_alpha = 0.2
+            edge_color = color
+        else:
+            color = 'gray'
+            face_alpha = 0.05
+            edge_color = 'lightgray'
+            
+        # --- Top: Text Chunk ---
+        text_content = enc.decode(text_ids)
+        if not text_content: 
+            display_text = ""
+        else:
+            display_text = text_content.replace('\n', '\\n')
+            if len(display_text) > 30: # Slightly tighter truncation
+                display_text = display_text[:27] + "..."
+        
+        # Text Box (Continuous Stream)
+        ax.add_patch(FancyBboxPatch(
+            (x_left, text_y_center - 0.3),
+            box_width, 0.6,
+            boxstyle="round,pad=0.02,rounding_size=0.1", # Less rounded corners for continuity
+            facecolor=color, alpha=face_alpha,
+            edgecolor=edge_color, linewidth=1
+        ))
+        
+        ax.text(x_center, text_y_center, display_text, 
+                fontsize=10, ha='center', va='center', wrap=True, family='monospace')
+
+        # --- Bottom: Abstract Token (Shrunk & Connected) ---
+        if abs_id is not None:
+            # Connection Line
+            ax.plot([x_center, x_center], [text_y_center - 0.3, abs_y_center + 0.15], 
+                    color=color, alpha=0.5, linewidth=1, linestyle='-')
+            
+            # Tiny Abstract Box
+            abs_size = 0.35
+            ax.add_patch(FancyBboxPatch(
+                (x_center - abs_size/2, abs_y_center - abs_size/2),
+                abs_size, abs_size,
+                boxstyle="circle,pad=0.1", # Changed to circle/compact style
+                facecolor=color, alpha=0.9,
+                edgecolor='black', linewidth=1
+            ))
+            
+            ax.text(x_center, abs_y_center, f"{abs_id}", 
+                   fontsize=18, ha='center', va='center', weight='bold', color='black')
+        else:
+            ax.text(x_center, abs_y_center, "Start", 
+                   fontsize=17, ha='center', va='center', color='gray')
+
+    # Footer
+    abs_seq_str = " → ".join([f"{g['abs']}" for g in groups if g['abs'] is not None])
+    ax.text(fig_width/2, 0.1, f"Abstract Path: {abs_seq_str}", 
+            fontsize=9, ha='center', style='italic', color='gray')
+            
+    plt.tight_layout()
+    
+    # Convert
+    buf = io.BytesIO()
+    fig.savefig(buf, format='png', dpi=100, bbox_inches='tight', facecolor='white')
+    buf.seek(0)
+    img = Image.open(buf).copy()
+    buf.close()
+    plt.close(fig)
+    
+    return img

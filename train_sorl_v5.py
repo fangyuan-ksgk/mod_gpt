@@ -354,6 +354,7 @@ assert args.reg_abs_marg_ent or args.reg_abs_zipf, "Either reg_abs_marg_ent or r
 if args.reg_abs_marg_ent: 
     from sorl.info import SoRLLoss
     loss_fn = SoRLLoss(model.vocab_sizes[1], decay=args.decay, target_vocab_util=args.target_vocab_util)
+    args.alpha_marg_ent *= -1.0
 elif args.reg_abs_zipf: 
     from sorl.info import SoRLLoss_v3
     loss_fn = SoRLLoss_v3(model.vocab_sizes[1], decay=args.decay, target_vocab_util=args.target_vocab_util)
@@ -397,7 +398,7 @@ for i in range(warmup_steps):
     forward_end = time.time()
     print(f" :: Loss computation takes {forward_end - search_end} second")
     # --- backward --- 
-    loss = traj_loss + args.alpha_loss * abs_loss - args.alpha_marg_ent * marg_ent
+    loss = traj_loss + args.alpha_loss * abs_loss + args.alpha_marg_ent * marg_ent
     loss.backward() 
     backward_end = time.time()
     print(f" :: Backward takes {backward_end - forward_end} second")
@@ -517,9 +518,9 @@ for step in range(train_steps + 1):
         
         # --- GAPT: balance objectives ---
         if args.use_gapt: 
-            loss = gapt.step(traj_loss, args.alpha_loss * abs_loss - args.alpha_marg_ent * marg_ent, verbose=False)
+            loss = gapt.step(traj_loss, args.alpha_loss * abs_loss + args.alpha_marg_ent * marg_ent, verbose=False)
         else: 
-            loss = traj_loss + args.alpha_loss * abs_loss - args.alpha_marg_ent * marg_ent
+            loss = traj_loss + args.alpha_loss * abs_loss + args.alpha_marg_ent * marg_ent
         
         loss.backward()
         print0(f" - step: {step} | accum step: {accum_step} | traj_loss: {traj_loss.item()} | abs_loss: {abs_loss.item()} | marg_entropy: {marg_ent.item()}")
