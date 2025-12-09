@@ -3,6 +3,7 @@ import torch
 from torch import nn 
 import torch.nn.functional as F
 from sorl.gat_sim import BOS_TOKEN_ID
+from sorl.topo import compute_topo_loss, pairwise_hamming_dist
 
 class MutualInformationLoss(nn.Module):
     def __init__(self, vocab_size, decay=0.8, target_vocab_util=0.8):
@@ -335,3 +336,60 @@ class SoRLLoss_v4(nn.Module):
 
         # --- Return: p(s | a), p(a | s), KL(p(a_t, a_t+1), soft_zipf_prior) ---
         return traj_loss, abs_loss, soft_zipf_kl
+
+
+class SoRLLoss_v5(nn.Module): 
+    """
+    SoRL loss: p(s | a), p(a | s), KL(p(a_t, a_t+1), soft_zipf_prior), corr(d(a), d(r))
+    """
+
+    def __init__(self, abs_vocab_size, decay=0.8, target_vocab_util=0.8):
+        super().__init__()
+        self.decay = decay
+        self.zipf_loss = Zipfian2gramLoss(abs_vocab_size, decay, target_vocab_util)
+
+    def forward(self, data, model, memory_span: int, attn_blocksize: int, 
+                      utility_reward: torch.Tensor):
+
+        ppt, logits = model.forward(data, memory_span, attn_blocksize)
+        ppt = ppt.reshape(data.shape[0], -1)
+        ppt = ppt * utility_reward
+        logits = logits.reshape(data.shape[0], -1, logits.size(-1))
+
+        levels = (data >= model.vocab_sizes[0]).long()[:, 1:]
+        bos_pos_mask = torch.logical_and(
+            data[:, :-1] != BOS_TOKEN_ID, 
+            data[:, 1:] != BOS_TOKEN_ID
+        ).float()
+
+        traj_mask = (levels[0] == 0).float()
+        abs_mask = 1 - traj_mask
+
+        valid_traj_mask = bos_pos_mask * traj_mask
+        valid_abs_mask = bos_pos_mask * abs_mask
+
+        traj_loss = (ppt * valid_traj_mask).sum() / valid_traj_mask.sum().clamp(min=1)
+        abs_loss = (ppt * valid_abs_mask).sum() / valid_abs_mask.sum().clamp(min=1)
+
+        abs_positions = abs_mask.bool()
+        abs_logits = logits[:, :-1][:, abs_positions, model.vocab_sizes[0]:]
+
+        soft_zipf_kl = self.zipf_loss(abs_logits)
+
+        # --- topo similarity loss --- 
+        levels = (data >= model.vocab_sizes[0])
+        abs_data = data[levels].reshape((data == BOS_TOKEN_ID).sum(), -1)
+        abs_dist = pairwise_hamming_dist(abs_data)
+
+        eos_mask = torch.cat([(data[0, 1:] == BOS_TOKEN_ID), torch.tensor([True], device=data.device)])
+        eos_logits = logits[:, eos_mask, :]
+        eos_dist = torch.cdist(eos_logits, eos_logits, p=1)
+
+        # eos_logits_norm = F.normalize(eos_logits, p=2, dim=-1)  # [B, D, V]
+        # cosine_sim = torch.bmm(eos_logits_norm, eos_logits_norm.transpose(1, 2))  # [B, D, D]
+        # eos_dist = 1 - cosine_sim  # [B, D, D]
+
+        topo_loss = compute_topo_loss(abs_dist, eos_dist, mode=1)
+
+        # --- Return: p(s | a), p(a | s), KL(p(a_t, a_t+1), soft_zipf_prior) ---
+        return traj_loss, abs_loss, soft_zipf_kl, topo_loss

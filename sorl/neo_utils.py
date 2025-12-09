@@ -1,11 +1,10 @@
 import torch
-# from sorl.gat_act import BOS_TOKEN_ID, search, GAT, recursion, infer_level
-from sorl.gat_sim import BOS_TOKEN_ID, GAT, recursion, extract_and_sample, recursion_v2, recursion_v3
+from sorl.gat_act import BOS_TOKEN_ID, search, GAT, recursion, infer_level
+from sorl.gat_sim import BOS_TOKEN_ID, GAT, recursion, extract_and_sample, recursion_v3
 import torch.nn.functional as F
 from torch.distributions import Categorical
 from typing import Optional, Union
-from sorl.topo import doc_hamming_dist_pairwise, compute_correlation, compute_topo_loss, doc_util_dist, doc_levenshtein_dist, compute_util_dist
-from torch import nn 
+from torch import nn                
 import math
 
 
@@ -334,78 +333,6 @@ def compute_rollout_reward(search_data, ppt, levels, mode: int = 0, scaler: Opti
     return token_adv
 
 
-def compute_rollout_reward_v2(search_data, ppt, levels, mode: int = 0, topo_abs_dist_mode: int = 0): 
-    
-    trajectory_mask = (levels[:, 1:] == 0).float()
-    trajectory_ppt = ppt * trajectory_mask
-    abs_ppt = ppt * (1 - trajectory_mask)
-
-    doc_idx = (search_data == BOS_TOKEN_ID).cumsum(dim=1)
-    doc_idx = doc_idx - doc_idx.min(dim=1, keepdim=True).values # idx starts from 0  
-    doc_ppt = avg_ppt_per_sample(trajectory_ppt, doc_idx[:,1:])
-    doc_abs_ppt = avg_ppt_per_sample(abs_ppt, doc_idx[:,1:])
-
-    # group advantage by documnet | same way GRPO's advantage is computed | like GSPO since adv is sequence level
-    doc_ppt_mean = doc_ppt.mean(dim=0, keepdim=True)  # Keep dim for broadcasting
-    doc_ppt_std = doc_ppt.std(dim=0, keepdim=True, unbiased=False).clamp(min=1e-8)  # Avoid division by zero
-    
-    if mode == 0:
-        # SGPO, encourage picking a with low p(s | a)
-        advantage = (doc_ppt - doc_ppt_mean) / doc_ppt_std
-    elif mode == 1:
-        # No advantage (baseline MLE) | more stable abstraction | all-rollout SoRL
-        advantage = torch.ones_like(doc_ppt)
-    elif mode == 2: 
-        # distillation, encourage picking a with high p(a | s)
-        doc_abs_ppt_mean = doc_abs_ppt.mean(dim=0, keepdim=True)
-        doc_abs_ppt_std = doc_abs_ppt.std(dim=0, keepdim=True, unbiased=False).clamp(min=1e-8)
-        advantage = - (doc_abs_ppt - doc_abs_ppt_mean) / doc_abs_ppt_std
-    elif mode == 3: 
-        # exploitation, encourage picking a with high p(s | a)
-        advantage = (doc_ppt_mean - doc_ppt) / doc_ppt_std
-    elif mode == 4:
-        # exploration, encourage picking a with low p(a | s)
-        doc_abs_ppt_mean = doc_abs_ppt.mean(dim=0, keepdim=True)
-        doc_abs_ppt_std = doc_abs_ppt.std(dim=0, keepdim=True, unbiased=False).clamp(min=1e-8)
-        advantage = (doc_ppt - doc_ppt_mean) / doc_ppt_std
-    elif mode == 5: 
-        # stochastic exploration encouragement 
-        advantage = torch.relu(doc_ppt[:1] - doc_ppt[1:])
-    elif mode == 6: 
-        # stochastic exploration encouragement (relative improvement)
-        advantage = torch.relu((doc_ppt[:1] - doc_ppt[1:]) / (doc_ppt[:1].clamp(min=1e-8)))
-        advantage = advantage.clamp(max=1.0)
-    elif mode == 7: 
-        # stochastic exploration encouragement (binary reward)
-        advantage = torch.where(doc_ppt[:1] > doc_ppt[1:], 1.0, 0.0)
-    elif mode == 8: 
-        # stochastic exploration encouragement (scaled relative improvement)
-        advantage = (torch.relu(doc_ppt[:1] - doc_ppt[1:]) * 10).clamp(max=5.0)
-    elif mode == 9: 
-        advantage = (doc_ppt_mean - doc_ppt) / doc_ppt_std
-        advantage = torch.cat([advantage[:1], advantage[1:].clamp(min=0.0)], dim=0)
-    elif mode == 10: 
-        advantage = (doc_ppt_mean - doc_ppt) / doc_ppt_std
-        scaled_advantage = torch.where(advantage[1:] < 0, advantage[1:] * 0.2, advantage[1:])
-        advantage = torch.cat([advantage[:1], scaled_advantage], dim=0)
-
-
-    doc_adv = torch.where(
-        doc_ppt_std > 1e-8,
-        advantage,
-        torch.zeros_like(doc_ppt)
-    )
-
-    token_adv = doc_adv.gather(1, doc_idx[:,1:])
-
-    # --- abs distance matrix --- 
-    abs_mask = levels.bool()
-    # This is likely the culprit, we need to benchmark the speed of this one ...
-    abs_dist = doc_hamming_dist_pairwise(search_data, doc_idx, abs_mask, normalize=True)
-
-    return token_adv, abs_dist
-
-
 # Reflection 1. what if we have a 'information bottleneck mask' to mute future influence 
 #               applied to both ACT & selection? 
 import time
@@ -539,41 +466,6 @@ def sorl_search_v5(tokens, model, n=3, K=3, max_iterations=1,
 
     return best_data
     
-
-def evaluate_topo_similarity(search_data, ppt, model, topo_mode: int = 1, util_dist_mode: int = 0):
-    """Again, Levenshtein distance is too slow for GPU, we keep the 'True levenshtein' commented out and use the battle-proof ver. """ 
-
-    levels = (search_data >= model.vocab_sizes[0]).long()
-    # (a). document idx
-    doc_idx = (search_data == BOS_TOKEN_ID).cumsum(dim=1)
-    doc_idx = doc_idx - doc_idx.min(dim=1, keepdim=True).values # idx starts from 0 
-
-    # (b). per-document trajectory ppt
-    trajectory_mask = (levels[:, 1:] == 0).float()
-    trajectory_ppt = ppt * trajectory_mask
-    abs_ppt = ppt * (1 - trajectory_mask)
-
-    doc_ppt = avg_ppt_per_sample(trajectory_ppt, doc_idx[:,1:])  # Shape: (n_rollouts, n_docs)
-
-    # (Alternative: aligned with training setting, use hamming distance)
-    abs_mask = levels.bool()
-    abs_dist = doc_hamming_dist_pairwise(search_data, doc_idx, abs_mask, normalize=True)
-    
-    util_dist = compute_util_dist(ppt, mode=util_dist_mode)
-
-    topo_loss = compute_topo_loss(abs_dist, util_dist, mode=topo_mode)
-
-    # # (c). d(a1, a2) :: pairwise levenshtein distance matrix || simplest case, n=2
-    # abs_mask = search_data >= model.vocab_sizes[0]  # True for abstraction tokens
-    # abs_dist_matrix = doc_levenshtein_dist(search_data, doc_idx, abs_mask, normalize=True)
-
-    # # (d). d(p(s|a1), p(s|a2)) :: utility distance matrix
-    # util_dist_matrix = doc_util_dist(doc_ppt)
-
-    # # (e). Compute correlation
-    # correlation = compute_correlation(abs_dist_matrix, util_dist_matrix)
-
-    return -topo_loss
 
 def sorl_evaluate(tokens, model, n=2, K=4, max_iterations=1, memory_span=1792, attn_blocksize=1792, temperature: Union[float, torch.Tensor] = 1.0,
                   loss_mask: Optional[torch.Tensor] = None, truncate_seq_len: bool = True):
@@ -803,34 +695,6 @@ def compute_sgpo_loss(rollout_data, token_adv, model, memory_span: int, attn_blo
     grpo_loss = (surrogate_loss * valid_abs_mask).sum() / valid_abs_mask.sum().clamp(min=1)
 
     return traj_loss, grpo_loss
-
-def compute_sgpo_loss_v2(rollout_data, token_adv, abs_dist, model, memory_span: int, attn_blocksize: int, topo_mode: int = 1, util_dist_mode: int = 1):
-    """Default: correlation based topo regularization + stop grad on worse rollout"""
-    rollout_ppt, _ = model.forward(rollout_data, memory_span, attn_blocksize)
-    rollout_ppt = rollout_ppt.reshape(rollout_data.shape[0], -1)
-
-    levels = (rollout_data >= model.vocab_sizes[0]).long()[:, 1:]  # [n_rollouts, seq_len-1]
-    bos_pos_mask = torch.logical_and(
-        rollout_data[:, :-1] != BOS_TOKEN_ID, 
-        rollout_data[:, 1:] != BOS_TOKEN_ID
-    ).float()
-    
-    traj_mask = (levels == 0).float()  
-    abs_mask = (levels > 0).float() 
-    valid_traj_mask = bos_pos_mask * traj_mask 
-    valid_abs_mask = bos_pos_mask * abs_mask
-
-    traj_loss = (rollout_ppt * valid_traj_mask).sum() / valid_traj_mask.sum().clamp(min=1)    
-
-    # Pick discriminatively
-    surrogate_loss = rollout_ppt * token_adv 
-    grpo_loss = (surrogate_loss * valid_abs_mask).sum() / valid_abs_mask.sum().clamp(min=1)
-
-    # Compute topological similarity regularization loss
-    util_dist = compute_util_dist(rollout_ppt, mode=util_dist_mode)
-    topo_loss = compute_topo_loss(abs_dist, util_dist, mode=topo_mode)
-
-    return traj_loss, grpo_loss, topo_loss
 
 def compute_partial_loss(rollout_data, token_adv, model, memory_span: int, attn_blocksize: int, w_util_greedy: float = 1.0, w_util_stochastic: float = 1.0): 
     # Encourage partial exploration (stochastic rollout)
