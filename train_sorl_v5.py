@@ -59,6 +59,7 @@ def parse_args():
     parser.add_argument("--target_vocab_util", type=float, default=0.9) # target vocabulary utilization
     parser.add_argument("--reg_abs_marg_ent", action="store_true", default=False) # regularize on marginal entropy of abstract tokens
     parser.add_argument("--reg_abs_zipf", action="store_true", default=False) # regularize on zipf distribution of abstract tokens
+    parser.add_argument("--utility_scaling", action="store_true", default=False) # scale utility by document perplexity
 
     # GAPT
     parser.add_argument("--use_gapt", action="store_true", default=False) # use GAPT to balance objectives
@@ -242,6 +243,9 @@ class Hyperparameters:
     alpha_marg_ent: float = 1.0
     decay: float = 0.8
     target_vocab_util: float = 0.8
+    utility_scaling: bool = False
+    reg_abs_marg_ent: bool = False
+    reg_abs_zipf: bool = False
 
     use_gapt: bool = False
     traj_perplexity_patience: int = 5
@@ -305,7 +309,7 @@ print0(nvidia_smi())
 print0("="*100)
 
 # --- sorl search ---
-from sorl.neo_utils import sorl_search_v5 as sorl_search
+from sorl.neo_utils import sorl_search_v6 as sorl_search
 
 ########################################
 #    Construct model and optimizer     #
@@ -350,7 +354,7 @@ def get_lr(step: int):
         return w * 1.0 + (1 - w) * 0.1
 
 # SoRL loss function
-assert args.reg_abs_marg_ent or args.reg_abs_zipf, "Either reg_abs_marg_ent or reg_abs_zipf must be True"
+assert args.reg_abs_marg_ent or args.reg_abs_zipf or args.utility_scaling, "Either reg_abs_marg_ent or reg_abs_zipf or utility_scaling must be True"
 if args.reg_abs_marg_ent: 
     from sorl.info import SoRLLoss
     loss_fn = SoRLLoss(model.vocab_sizes[1], decay=args.decay, target_vocab_util=args.target_vocab_util)
@@ -358,7 +362,9 @@ if args.reg_abs_marg_ent:
 elif args.reg_abs_zipf: 
     from sorl.info import SoRLLoss_v3
     loss_fn = SoRLLoss_v3(model.vocab_sizes[1], decay=args.decay, target_vocab_util=args.target_vocab_util)
-
+if args.utility_scaling:
+    from sorl.info import SoRLLoss_v4
+    loss_fn = SoRLLoss_v4(model.vocab_sizes[1], decay=args.decay, target_vocab_util=args.target_vocab_util)
 loss_fn = loss_fn.to(device)
 
 # compile model
@@ -389,12 +395,15 @@ for i in range(warmup_steps):
     # --- sorl search --- 
     search_start = time.time()
     with torch.no_grad():
-        search_tokens = sorl_search(tokens, model, n=args.num_rollouts, K=args.K, max_iterations=args.max_iterations, memory_span=memory_span, attn_blocksize=attn_blocksize, 
+        search_tokens, rew = sorl_search(tokens, model, n=args.num_rollouts, K=args.K, max_iterations=args.max_iterations, memory_span=memory_span, attn_blocksize=attn_blocksize, 
                                                                           temperature=temperature_warmup, use_per_abs_selection=args.use_per_abs_selection)
     search_end = time.time()
     print(f" :: Sorl search takes {search_end - search_start} second")
     # --- compute loss --- 
-    traj_loss, abs_loss, marg_ent = loss_fn(search_tokens, model, memory_span=memory_span, attn_blocksize=attn_blocksize)
+    if args.utility_scaling:
+        traj_loss, abs_loss, marg_ent = loss_fn(search_tokens, model, memory_span=memory_span, attn_blocksize=attn_blocksize, utility_reward=rew)
+    else:
+        traj_loss, abs_loss, marg_ent = loss_fn(search_tokens, model, memory_span=memory_span, attn_blocksize=attn_blocksize)
     forward_end = time.time()
     print(f" :: Loss computation takes {forward_end - search_end} second")
     # --- backward --- 
@@ -473,11 +482,11 @@ for step in range(train_steps + 1):
                 val_tokens, val_adv, val_traj_loss, val_abs_loss = sorl_evaluate(tokens, model, n=args.num_rollouts_val, K=args.K, max_iterations=args.max_iterations, 
                                                                     memory_span=memory_span, attn_blocksize=attn_blocksize, temperature=temperature_val)
                 util_rate = compute_vocab_utilization_rate(val_tokens, model)
-                _, _, marg_ent = loss_fn(val_tokens, model, memory_span=memory_span, attn_blocksize=attn_blocksize)
+                # _, _, marg_ent = loss_fn(val_tokens, model, memory_span=memory_span, attn_blocksize=attn_blocksize)
                 val_loss["traj_loss"] += val_traj_loss
                 val_loss["abs_loss"] += val_abs_loss
                 val_loss["search_advantage"] += val_adv.mean()
-                val_loss["marg_kl_divergence"] += marg_ent
+                # val_loss["marg_kl_divergence"] += marg_ent
                 val_loss["util_rate"] += torch.tensor(util_rate, device=val_traj_loss.device)
             
         for name in val_loss: 
@@ -508,13 +517,16 @@ for step in range(train_steps + 1):
     for accum_step in range(train_accumulation_steps): 
         tokens = next(train_loader)
         with torch.no_grad(): 
-            search_tokens = sorl_search(tokens, model, n=args.num_rollouts, K=args.K, max_iterations=args.max_iterations, 
+            search_tokens, rew = sorl_search(tokens, model, n=args.num_rollouts, K=args.K, max_iterations=args.max_iterations, 
                                                                 memory_span=memory_span, attn_blocksize=attn_blocksize, 
                                                                 temperature=temperature_train,
                                                                 use_per_abs_selection=args.use_per_abs_selection)
 
         # --- compute loss --- 
-        traj_loss, abs_loss, marg_ent = loss_fn(search_tokens, model, memory_span=memory_span, attn_blocksize=attn_blocksize)
+        if args.utility_scaling:
+            traj_loss, abs_loss, marg_ent = loss_fn(search_tokens, model, memory_span=memory_span, attn_blocksize=attn_blocksize, utility_reward=rew)
+        else:
+            traj_loss, abs_loss, marg_ent = loss_fn(search_tokens, model, memory_span=memory_span, attn_blocksize=attn_blocksize)
         
         # --- GAPT: balance objectives ---
         if args.use_gapt: 
@@ -569,6 +581,7 @@ print0(f"-- decay: {args.decay}", console=True)
 print0(f"-- target_vocab_util: {args.target_vocab_util}", console=True)
 print0(f"-- reg_abs_marg_ent: {args.reg_abs_marg_ent}", console=True)
 print0(f"-- reg_abs_zipf: {args.reg_abs_zipf}", console=True)
+print0(f"-- utility_scaling: {args.utility_scaling}", console=True)
 print0(f"-- use_gapt: {args.use_gapt}", console=True)
 print0(f"-- traj_perplexity_patience: {args.traj_perplexity_patience}", console=True)
 print0(f"-- abs_perplexity_patience: {args.abs_perplexity_patience}", console=True)
