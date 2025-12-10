@@ -350,11 +350,14 @@ class SoRLLoss_v5(nn.Module):
 
     def forward(self, data, model, memory_span: int, attn_blocksize: int, 
                       utility_reward: torch.Tensor):
+ 
+        # topo distance on hidden states instead of logits 
 
-        ppt, logits = model.forward(data, memory_span, attn_blocksize)
+        ppt, logits, hidden_states = model.forward_with_hidden_states(data, memory_span, attn_blocksize)
         ppt = ppt.reshape(data.shape[0], -1)
         ppt = ppt * utility_reward
         logits = logits.reshape(data.shape[0], -1, logits.size(-1))
+        hidden_states = hidden_states.reshape(data.shape[0], -1, hidden_states.size(-1))
 
         levels = (data >= model.vocab_sizes[0]).long()[:, 1:]
         bos_pos_mask = torch.logical_and(
@@ -382,12 +385,14 @@ class SoRLLoss_v5(nn.Module):
         abs_dist = pairwise_hamming_dist(abs_data)
 
         eos_mask = torch.cat([(data[0, 1:] == BOS_TOKEN_ID), torch.tensor([True], device=data.device)])
-        eos_logits = logits[:, eos_mask, :]
-        eos_dist = torch.cdist(eos_logits, eos_logits, p=1)
+        eos_reps = hidden_states[:, eos_mask, :]
+        # eos_dist = torch.cdist(eos_reps, eos_reps, p=1)
+        # eos_logits = logits[:, eos_mask, :]
+        # eos_dist = torch.cdist(eos_logits, eos_logits, p=1)
 
-        # eos_logits_norm = F.normalize(eos_logits, p=2, dim=-1)  # [B, D, V]
-        # cosine_sim = torch.bmm(eos_logits_norm, eos_logits_norm.transpose(1, 2))  # [B, D, D]
-        # eos_dist = 1 - cosine_sim  # [B, D, D]
+        eos_rep_norm = F.normalize(eos_reps, p=2, dim=-1)
+        cosine_sim = torch.bmm(eos_rep_norm, eos_rep_norm.transpose(1, 2))
+        eos_dist = 1 - cosine_sim
 
         topo_loss = compute_topo_loss(abs_dist, eos_dist, mode=1)
 

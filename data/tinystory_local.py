@@ -12,6 +12,7 @@ from collections import Counter
 from PIL import Image
 import io
 from sklearn.decomposition import PCA
+from scipy.interpolate import griddata
 
 
 class TinyStoriesDataLoader:
@@ -197,8 +198,9 @@ class AbstractionStatistics:
         self.abs_seqs = torch.zeros(self.n_doc, self.n_abs, dtype=torch.long, device=self.device)
         self.abs_logits = torch.zeros(self.n_doc, self.n_abs, self.abs_vocab_size, dtype=torch.float32, device=self.device)
         self.docs_updated = torch.zeros(self.n_doc, dtype=torch.bool, device=self.device)
-    
-    def update(self, abs_logits, abs_tokens, doc_ids):
+        self.traj_perplexity = torch.zeros(self.n_doc, dtype=torch.float32, device=self.device) # - log p(s | a) for each document
+
+    def update(self, abs_logits, traj_loss, abs_tokens, doc_ids):
         """Store raw data only. Handles duplicate doc_ids by taking the first occurrence."""
         
         batch_size = doc_ids.shape[0]
@@ -217,6 +219,7 @@ class AbstractionStatistics:
         
         self.abs_seqs[batch_doc_indices] = selected_tokens
         self.abs_logits[batch_doc_indices] = selected_logits
+        self.traj_perplexity[batch_doc_indices] = traj_loss
         self.docs_updated[batch_doc_indices] = True
 
     @property 
@@ -261,6 +264,12 @@ class AbstractionStatistics:
             mismatches = (seqs[i:i+1] != seqs).float()
             hamming[i] = mismatches.sum(dim=1)
         return hamming
+
+    # def save(self, path): 
+
+    # @classmethod 
+    # def load(cls, path): 
+
 
 def visualize_alignment_compact(tokens, abs_tokens, doc_ids, model, enc, K=4, doc_idx=0, max_chunks=None):
     """Compact funnel-shaped visualization: wide text → compressed abstractions.
@@ -881,3 +890,173 @@ def visualize_interleaved_alignment(sequence, model, enc, K=4, max_chunks=None):
     plt.close(fig)
     
     return img
+
+
+def fig_to_pil(fig):
+    import io
+    from PIL import Image
+    buf = io.BytesIO()
+    fig.savefig(buf, format='png', dpi=100, 
+                bbox_inches='tight', 
+                pad_inches=0.3,  # <-- Add padding here
+                facecolor='white')
+    buf.seek(0)
+    img = Image.open(buf).copy()
+    buf.close()
+    plt.close(fig)
+    return img
+
+
+def visualize_perplexity_terrain(coords_2d, perplexity, trained_idx=None, step=0, resolution=50):
+    """
+    Smooth interpolated surface with VISIBLE trained point marker.
+    """
+    fig = plt.figure(figsize=(13, 9))
+    ax = fig.add_subplot(111, projection='3d')
+    
+    x = coords_2d[:, 0]
+    y = coords_2d[:, 1]
+    z = perplexity.cpu().numpy() if torch.is_tensor(perplexity) else np.array(perplexity)
+    
+    # Create grid for interpolation
+    xi = np.linspace(x.min() - 0.1, x.max() + 0.1, resolution)
+    yi = np.linspace(y.min() - 0.1, y.max() + 0.1, resolution)
+    Xi, Yi = np.meshgrid(xi, yi)
+    
+    # Interpolate
+    Zi = griddata((x, y), z, (Xi, Yi), method='cubic')
+    Zi_nearest = griddata((x, y), z, (Xi, Yi), method='nearest')
+    Zi = np.where(np.isnan(Zi), Zi_nearest, Zi)
+    
+    # Plot surface with lower alpha so marker shows through
+    surf = ax.plot_surface(Xi, Yi, Zi, cmap='coolwarm', alpha=0.6,
+                           edgecolor='none', antialiased=True)
+    
+    # Scatter original points
+    ax.scatter(x, y, z, c='gray', s=20, alpha=0.4, depthshade=False)
+    
+    # ===== PROMINENT TRAINED POINT MARKER =====
+    if trained_idx is not None:
+        tx, ty, tz = x[trained_idx], y[trained_idx], z[trained_idx]
+        z_max = z.max()
+        
+        # Vertical line from surface to above (makes it pop)
+        ax.plot([tx, tx], [ty, ty], [tz, z_max + 0.15], 
+                color='black', linewidth=2, linestyle='--', alpha=0.8)
+        
+        # Star marker ABOVE the surface (elevated)
+        ax.scatter([tx], [ty], [z_max + 0.15], 
+                   c='red', s=500, marker='*', edgecolors='black', linewidth=2,
+                   zorder=100, depthshade=False)
+        
+        # Also mark the actual point on the surface
+        ax.scatter([tx], [ty], [tz], 
+                   c='yellow', s=150, marker='o', edgecolors='black', linewidth=2,
+                   zorder=99, depthshade=False)
+        
+        # Label
+        ax.text(tx, ty, z_max + 0.2, f'Training: {trained_idx}', 
+                fontsize=12, ha='center', fontweight='bold', color='red')
+    
+    ax.set_xlabel('Abstract Dim 1', fontsize=10)
+    ax.set_ylabel('Abstract Dim 2', fontsize=10)
+    ax.set_zlabel('Perplexity', fontsize=10)
+    ax.set_title(f'Perplexity Terrain (Step {step})', fontsize=14)
+    
+    fig.colorbar(surf, ax=ax, shrink=0.5, label='Perplexity')
+    ax.view_init(elev=25, azim=45)
+    
+    plt.tight_layout()
+    return fig_to_pil(fig)
+
+
+def visualize_perplexity_comparison(search_data, search_ppt, 
+                                     abs_start=None, model=None, enc=None):
+    """
+    Side-by-side comparison of per-token perplexity.
+    Uses 'A1' notation for abstract tokens.
+    """
+    greedy_ppt = search_ppt[0]
+    greedy_seq = search_data[0]
+    random_ppt = search_ppt[1]
+    random_seq = search_data[1]
+
+    if abs_start is None and model is not None:
+        abs_start = model.vocab_sizes[0].item()
+    
+    # ... conversion to numpy ...
+    greedy_seq = greedy_seq.cpu().numpy()
+    greedy_ppt = greedy_ppt.cpu().numpy()
+    random_seq = random_seq.cpu().numpy()
+    random_ppt = random_ppt.cpu().numpy()
+    
+    greedy_ppl = np.exp(greedy_ppt)
+    random_ppl = np.exp(random_ppt)
+    
+    # Helper to format labels
+    def get_token_str(t):
+        if t >= abs_start:
+            return f"A{t - abs_start}"
+        try:
+            return enc.decode([t]).strip()
+        except:
+            return str(t)
+
+    # Assuming sequences are aligned or roughly same length
+    # We'll iterate and pair them up
+    n = min(len(greedy_seq), len(random_seq)) - 1  # -1 because ppt is for next token
+    
+    labels = []
+    is_abs = []
+    
+    for i in range(n):
+        g_tok = greedy_seq[i+1] # Next token (prediction target)
+        r_tok = random_seq[i+1]
+        
+        g_str = get_token_str(g_tok)
+        r_str = get_token_str(r_tok)
+        
+        # Check if abstract
+        g_is_abs = (g_tok >= abs_start)
+        r_is_abs = (r_tok >= abs_start)
+        
+        if g_is_abs or r_is_abs:
+            label = f"{g_str}|{r_str}"
+            is_abs.append(True)
+        else:
+            label = g_str # Assuming traj tokens are identical until divergence
+            is_abs.append(False)
+            
+        labels.append(label)
+
+    # Plot
+    fig, ax = plt.subplots(figsize=(18, 6))
+    
+    x = np.arange(n)
+    width = 0.35
+    
+    # Greedy bars
+    ax.bar(x - width/2, greedy_ppl[:n], width, label='Greedy', color='steelblue', alpha=0.8)
+    
+    # Random bars
+    ax.bar(x + width/2, random_ppl[:n], width, label='Random', color='salmon', alpha=0.8)
+    
+    # Highlight Abstract Tokens (Red text for Ax)
+    ax.set_xticks(x)
+    
+    # Color tick labels based on abstract status
+    tick_labels = ax.set_xticklabels(labels, rotation=90, fontsize=10)
+    for i, label in enumerate(tick_labels):
+        if is_abs[i]:
+            label.set_color('red')
+            label.set_fontweight('bold')
+    
+    ax.set_yscale('log')
+    ax.set_ylabel('Perplexity (Log Scale)')
+    ax.set_title('Per-Token Perplexity: Greedy vs Random Rollout', fontsize=14)
+    ax.legend()
+    ax.grid(axis='y', linestyle='--', alpha=0.3)
+    
+    plt.tight_layout()
+    
+    return fig_to_pil(fig)

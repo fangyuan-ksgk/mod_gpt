@@ -123,6 +123,29 @@ class GAT(nn.Module):
         
         return loss, logits
 
+    # -------------------------------------------------
+    # To be removed, if not useful after experiments
+    # -------------------------------------------------
+    def forward_with_hidden_states(self, idx, memory_span, attn_blocksize): 
+
+        x = self._forward_pass(idx, memory_span, attn_blocksize)
+        logits = self.lm_head(x)
+        logits = 30 * torch.tanh(logits / 30)
+        logits = logits.float()
+
+        # --- loss --- 
+        loss = F.cross_entropy(
+            logits[:, :-1].contiguous().view(-1, logits.size(-1)), 
+            idx[:, 1:].contiguous().view(-1).long(), 
+            reduction="none"
+        )
+        
+        # Don't predict: (1) what comes after BOS, (2) BOS itself
+        bos_pos_mask = torch.logical_and(idx[:, :-1] != BOS_TOKEN_ID, idx[:, 1:] != BOS_TOKEN_ID).view(-1).float()        
+        loss = loss * bos_pos_mask
+        return loss, logits, x
+
+
 def get_next_token_level(seq_length, abstraction_interval):
     # assumes L=2 (to be extended)
     assert seq_length > 0, "Sequence length must be greater than 0"

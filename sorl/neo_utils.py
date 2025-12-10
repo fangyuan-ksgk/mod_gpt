@@ -465,6 +465,26 @@ def sorl_search_v5(tokens, model, n=3, K=3, max_iterations=1,
         best_data, _, _ = select_best_per_doc(search_data, search_ppt, levels, model)  # stay with default for select mode (for now)
 
     return best_data
+
+def sorl_search_v6(tokens, model, n=3, K=3, max_iterations=1,
+                memory_span=1792, attn_blocksize=1792, temperature: Union[float, torch.Tensor] = 1.0, truncate_seq_len: bool = True, r_min: float = 1.0, reward_mode: int = 0): 
+    """
+    Hopefully the last ver |:->)) | Utility reward scaling
+    """
+    # --- generate & evaluate rollouts ---
+    search_data, search_ppt = sorl_rollout_v2(tokens, model, n=n, K=K, 
+                               max_iterations=max_iterations,
+                               memory_span=memory_span,
+                               attn_blocksize=attn_blocksize,
+                               temperature=temperature,
+                               truncate_seq_len=truncate_seq_len)
+    search_ppt = search_ppt.reshape(search_data.shape[0], -1)
+
+    # --- select best rollouts ---
+    levels = (search_data >= model.vocab_sizes[0]).long()
+
+    best_data, _, _, utility_reward = select_best_per_doc_v2(search_data, search_ppt, levels, r_min=r_min, reward_mode=reward_mode)
+    return best_data, utility_reward
     
 
 def sorl_evaluate(tokens, model, n=2, K=4, max_iterations=1, memory_span=1792, attn_blocksize=1792, temperature: Union[float, torch.Tensor] = 1.0,
