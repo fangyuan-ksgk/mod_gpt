@@ -396,7 +396,7 @@ for i in range(warmup_steps):
     search_start = time.time()
     with torch.no_grad():
         search_tokens, rew = sorl_search(tokens, model, n=args.num_rollouts, K=args.K, max_iterations=args.max_iterations, memory_span=memory_span, attn_blocksize=attn_blocksize, 
-                                                                          temperature=temperature_warmup, use_per_abs_selection=args.use_per_abs_selection)
+                                                                          temperature=temperature_warmup)
     search_end = time.time()
     print(f" :: Sorl search takes {search_end - search_start} second")
     # --- compute loss --- 
