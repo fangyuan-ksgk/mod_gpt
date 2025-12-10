@@ -401,7 +401,7 @@ for i in range(warmup_steps):
     print(f" :: Sorl search takes {search_end - search_start} second")
     # --- compute loss --- 
     if args.utility_scaling:
-        traj_loss, abs_loss, marg_ent = loss_fn(search_tokens, model, memory_span=memory_span, attn_blocksize=attn_blocksize, utility_reward=rew)
+        traj_loss, abs_loss, marg_ent = loss_fn(search_tokens, model, memory_span=memory_span, attn_blocksize=attn_blocksize, utility_reward=rew[1:])
     else:
         traj_loss, abs_loss, marg_ent = loss_fn(search_tokens, model, memory_span=memory_span, attn_blocksize=attn_blocksize)
     forward_end = time.time()
@@ -524,7 +524,7 @@ for step in range(train_steps + 1):
 
         # --- compute loss --- 
         if args.utility_scaling:
-            traj_loss, abs_loss, marg_ent = loss_fn(search_tokens, model, memory_span=memory_span, attn_blocksize=attn_blocksize, utility_reward=rew)
+            traj_loss, abs_loss, marg_ent = loss_fn(search_tokens, model, memory_span=memory_span, attn_blocksize=attn_blocksize, utility_reward=rew[1:])
         else:
             traj_loss, abs_loss, marg_ent = loss_fn(search_tokens, model, memory_span=memory_span, attn_blocksize=attn_blocksize)
         
