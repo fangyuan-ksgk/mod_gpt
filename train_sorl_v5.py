@@ -52,7 +52,6 @@ def parse_args():
     # Loss / Regularization
     parser.add_argument("--alpha_select", type=float, default=0.0)  # selection regularization strength
     parser.add_argument("--alpha_loss", type=float, default=0.0)  # abs loss weight
-    parser.add_argument("--use_per_abs_selection", action="store_true", default=False)
     parser.add_argument("--use_orthogonal_init", action="store_true", default=False)
     parser.add_argument("--alpha_marg_ent", type=float, default=1.0) # marginal entropy weight
     parser.add_argument("--decay", type=float, default=0.8) # decay for mutual information loss
@@ -237,7 +236,6 @@ class Hyperparameters:
     use_static_memory_span: bool = False
     min_memory_span: int = 64
     
-    use_per_abs_selection: bool = False
     alpha_select: float = 0.0
     alpha_loss: float = 0.0
     alpha_marg_ent: float = 1.0
@@ -520,7 +518,7 @@ for step in range(train_steps + 1):
             search_tokens, rew = sorl_search(tokens, model, n=args.num_rollouts, K=args.K, max_iterations=args.max_iterations, 
                                                                 memory_span=memory_span, attn_blocksize=attn_blocksize, 
                                                                 temperature=temperature_train,
-                                                                use_per_abs_selection=args.use_per_abs_selection)
+                                                                )
 
         # --- compute loss --- 
         if args.utility_scaling:
@@ -573,7 +571,6 @@ print0(f"-- min_temperature: {args.min_temperature}", console=True)
 print0(f"-- use_static_memory_span: {args.use_static_memory_span}", console=True)
 print0(f"-- min_memory_span: {args.min_memory_span}", console=True)
 print0(f"-- abstract_vocab_size: {args.abstract_vocab_size}", console=True)
-print0(f"-- use_per_abs_selection: {args.use_per_abs_selection}", console=True)
 print0(f"-- alpha_select: {args.alpha_select}", console=True)
 print0(f"-- alpha_loss: {args.alpha_loss}", console=True)
 print0(f"-- alpha_marg_ent: {args.alpha_marg_ent}", console=True)
