@@ -969,6 +969,110 @@ def visualize_perplexity_terrain(coords_2d, perplexity, trained_idx=None, step=0
     plt.tight_layout()
     return fig_to_pil(fig)
 
+def visualize_forget_terrain(coords_2d, perplexity, trained_idx=None, step=0, resolution=50):
+    """
+    Smooth interpolated surface with VISIBLE trained point marker.
+    """
+    fig = plt.figure(figsize=(13, 9))
+    ax = fig.add_subplot(111, projection='3d')
+    ax.computed_zorder = False
+    
+    x = coords_2d[:, 0]
+    y = coords_2d[:, 1]
+    z = perplexity.cpu().numpy() if torch.is_tensor(perplexity) else np.array(perplexity)
+    
+    # Create grid for interpolation
+    xi = np.linspace(x.min() - 0.1, x.max() + 0.1, resolution)
+    yi = np.linspace(y.min() - 0.1, y.max() + 0.1, resolution)
+    Xi, Yi = np.meshgrid(xi, yi)
+    
+    # Interpolate
+    Zi = griddata((x, y), z, (Xi, Yi), method='cubic')
+    Zi_nearest = griddata((x, y), z, (Xi, Yi), method='nearest')
+    Zi = np.where(np.isnan(Zi), Zi_nearest, Zi)
+    
+    # Plot surface
+    surf = ax.plot_surface(Xi, Yi, Zi, cmap='coolwarm', alpha=0.6,
+                           edgecolor='none', antialiased=True)
+
+    # ===== PROMINENT TRAINED POINT MARKER =====
+    if trained_idx is not None:
+        tx, ty, tz = x[trained_idx], y[trained_idx], z[trained_idx]
+        
+        # 1. Star marker ABOVE (Larger & Red)
+        ax.scatter([tx], [ty], [tz], 
+                   c='red', s=600, marker='*', edgecolors='white', linewidth=1.5,
+                   zorder=100, depthshade=False)
+        
+        # 3. Label with Box (Clear Annotation)
+        ax.text(tx, ty, tz-1.6, f'Training Sample\n(Epicenter)', 
+                fontsize=12, ha='center', fontweight='bold', color='black',
+                bbox=dict(facecolor='white', alpha=1.0, edgecolor='red', boxstyle='round,pad=0.3'))
+    
+    # Intuitive Labels
+    ax.set_xlabel('Abstract Rep (PCA 1)', fontsize=11)
+    ax.set_ylabel('Abstract Rep (PCA 2)', fontsize=11)
+    ax.set_zlabel('Forgetting (Δ Perplexity)', fontsize=11)
+    ax.set_title(f'Abstraction Predicts Forgetting Terrain', fontsize=14)
+    
+    fig.colorbar(surf, ax=ax, shrink=0.5, label='Magnitude of Forgetting')
+    ax.view_init(elev=25, azim=45) # Original Angle Preserved
+    
+    plt.tight_layout()
+    return fig_to_pil(fig)
+
+def visualize_forget_terrain(coords_2d, perplexity, trained_idx=None, step=0, resolution=50):
+    """
+    Smooth interpolated surface with VISIBLE trained point marker.
+    """
+    fig = plt.figure(figsize=(13, 9))
+    ax = fig.add_subplot(111, projection='3d')
+    ax.computed_zorder = False
+    
+    x = coords_2d[:, 0]
+    y = coords_2d[:, 1]
+    z = perplexity.cpu().numpy() if torch.is_tensor(perplexity) else np.array(perplexity)
+    
+    # Create grid for interpolation
+    xi = np.linspace(x.min() - 0.1, x.max() + 0.1, resolution)
+    yi = np.linspace(y.min() - 0.1, y.max() + 0.1, resolution)
+    Xi, Yi = np.meshgrid(xi, yi)
+    
+    # Interpolate
+    Zi = griddata((x, y), z, (Xi, Yi), method='cubic')
+    Zi_nearest = griddata((x, y), z, (Xi, Yi), method='nearest')
+    Zi = np.where(np.isnan(Zi), Zi_nearest, Zi)
+    
+    # Plot surface
+    surf = ax.plot_surface(Xi, Yi, Zi, cmap='coolwarm', alpha=0.6,
+                           edgecolor='none', antialiased=True)
+
+    # ===== PROMINENT TRAINED POINT MARKER =====
+    if trained_idx is not None:
+        tx, ty, tz = x[trained_idx], y[trained_idx], z[trained_idx]
+        
+        # 1. Star marker ABOVE (Larger & Red)
+        ax.scatter([tx], [ty], [tz], 
+                   c='red', s=600, marker='*', edgecolors='white', linewidth=1.5,
+                   zorder=100, depthshade=False)
+        
+        # 3. Label with Box (Clear Annotation)
+        ax.text(tx, ty, tz-1.6, f'Training Sample\n(Epicenter)', 
+                fontsize=12, ha='center', fontweight='bold', color='black',
+                bbox=dict(facecolor='white', alpha=1.0, edgecolor='red', boxstyle='round,pad=0.3'))
+    
+    # Intuitive Labels
+    ax.set_xlabel('Abstract Rep (PCA 1)', fontsize=11)
+    ax.set_ylabel('Abstract Rep (PCA 2)', fontsize=11)
+    ax.set_zlabel('Forgetting (Δ Perplexity)', fontsize=11)
+    ax.set_title(f'Abstraction Predicts Forgetting Terrain', fontsize=14)
+    
+    fig.colorbar(surf, ax=ax, shrink=0.5, label='Magnitude of Forgetting')
+    ax.view_init(elev=25, azim=45) # Original Angle Preserved
+    
+    plt.tight_layout()
+    return fig_to_pil(fig)
+
 
 def visualize_perplexity_comparison(search_data, search_ppt, 
                                      abs_start=None, model=None, enc=None):
