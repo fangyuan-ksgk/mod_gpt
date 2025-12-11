@@ -1,6 +1,5 @@
-# SoRL on GAT (pre-training) || SGPO exploration (verify vocabulary emergence first), and see if it's possible to match LM performance
-# - Topological Similarity Regularization included in exploration phase
-# ------------------------------------------------------------------------------------------------------------------------------------
+# SoRL on TinyStories ... (in fact it's complete reusable for all dataset)
+# -------------------------------------------------------------------------------------
 # Modded gpt speedrun (GPU poor ver. minus Hopper optimization tricks such as FP8 matmul etc.)
 # Heavily borrow code from @KellerJordan
 
@@ -27,51 +26,48 @@ import argparse
 # -----------------------------------------------------------------------------
 def parse_args():
     parser = argparse.ArgumentParser()
+    # Data & Training
     parser.add_argument("--batch_size", type=int, default=16)
-    parser.add_argument("--train_files", type=str, default="data/fineweb10B/fineweb_train_*.bin")
-    parser.add_argument("--val_files", type=str, default="data/fineweb10B/fineweb_val_*.bin")
-    parser.add_argument("--test_files", type=str, default="data/multiplication_test_ood*.bin")
+    parser.add_argument("--train_files", type=str, default="data/tinystories/tinystory_train_*.bin")
+    parser.add_argument("--val_files", type=str, default="data/tinystories/tinystory_val_*.bin")
     parser.add_argument("--train_seq_len", type=int, default=32*1024)
     parser.add_argument("--val_seq_len", type=int, default=32*1024)
-    parser.add_argument("--log_grad_info", action="store_true")
     parser.add_argument("--num_iterations", type=int, default=1750)
-    parser.add_argument("--use_prior_weights", action="store_true")
-    parser.add_argument("--prior_weight", type=str, default="natural")
-
+    parser.add_argument("--save_checkpoint", action="store_true", default=False)
+    parser.add_argument("--log_grad_info", action="store_true")
+    
+    # SoRL / Search
     parser.add_argument("--num_rollouts", type=int, default=2)
     parser.add_argument("--num_rollouts_val", type=int, default=2)
     parser.add_argument("--K", type=int, default=8)
     parser.add_argument("--max_iterations", type=int, default=2)
     parser.add_argument("--temperature", type=float, default=5.0) # search temperature
     parser.add_argument("--min_temperature", type=float, default=0.0) # prediction temperature
-    parser.add_argument("--use_static_memory_span", action="store_true", default=False)
+    
+    # Architecture / Vocab
     parser.add_argument("--abstract_vocab_size", type=int, default=256)
-    parser.add_argument("--use_gapt", action="store_true", default=False) # focus on traj perplexity, treat abs loss as auxiliary loss
-    parser.add_argument("--min_memory_span", type=int, default=64) # control verbatim memory span
+    parser.add_argument("--use_static_memory_span", action="store_true", default=False)
+    parser.add_argument("--min_memory_span", type=int, default=64)
+    
+    # Loss / Regularization
+    parser.add_argument("--alpha_select", type=float, default=0.0)  # selection regularization strength
+    parser.add_argument("--alpha_loss", type=float, default=0.0)  # abs loss weight
+    parser.add_argument("--use_orthogonal_init", action="store_true", default=False)
+    parser.add_argument("--alpha_marg_ent", type=float, default=1.0) # marginal entropy weight
+    parser.add_argument("--decay", type=float, default=0.8) # decay for mutual information loss
+    parser.add_argument("--target_vocab_util", type=float, default=0.9) # target vocabulary utilization
+    parser.add_argument("--reg_abs_marg_ent", action="store_true", default=False) # regularize on marginal entropy of abstract tokens
+    parser.add_argument("--reg_abs_zipf", action="store_true", default=False) # regularize on zipf distribution of abstract tokens
+    parser.add_argument("--utility_scaling", action="store_true", default=False) # scale utility by document perplexity
+
+    # GAPT
+    parser.add_argument("--use_gapt", action="store_true", default=False) # use GAPT to balance objectives
     parser.add_argument("--traj_perplexity_patience", type=int, default=5) # patience for traj perplexity
     parser.add_argument("--abs_perplexity_patience", type=int, default=5) # patience for abstract perplexity
     parser.add_argument("--tau_plateau", type=float, default=0.01) # plateau threshold for traj perplexity
     parser.add_argument("--tau_spike", type=float, default=0.1) # spike threshold for traj perplexity
-    parser.add_argument("--alpha_loss", type=float, default=0.0)  # loss regularization strength
-    parser.add_argument("--mode", type=int, default=0) # mode for reward computation (SGPO ver. / standardized ver. / etc.)
-    parser.add_argument("--steps_per_cycle", type=int, default=725) # number of steps in exploration phase
-    parser.add_argument("--exploration_fraction", type=float, default=0.5) # fraction of steps in exploration phase
-    parser.add_argument("--exploration_till_vocab_util", type=float, default=0.5) # exploration till vocabulary utilization reaches this threshold
-    parser.add_argument("--use_off_policy_distillation", action="store_true", default=False) # use off-policy distillation
-    parser.add_argument("--use_kl_regularization", action="store_true", default=False) # use kl regularization
-    parser.add_argument("--alpha_kl", type=float, default=0.0) # alpha for kl regularization    
-    parser.add_argument("--use_on_policy_distillation", action="store_true", default=False) # use on-policy distillation
-    parser.add_argument("--use_off_policy_immitation", action="store_true", default=False) # use off-policy imitation
-    parser.add_argument("--use_on_policy_immitation", action="store_true", default=False) # use on-policy imitation
-    parser.add_argument("--use_off_policy_exploitation", action="store_true", default=False) # use off-policy exploitation
-    parser.add_argument("--use_reverse_off_policy_exploitation", action="store_true", default=False) # use reverse off-policy exploitation
-    parser.add_argument("--use_on_policy_exploitation", action="store_true", default=False) # use on-policy exploitation
-    parser.add_argument("--do_reinit", action="store_true", default=False) # do reinitialization
-    parser.add_argument("--reinit_mode", type=int, default=0) # mode for reinitialization (a). abstract only / b). embedding + head / c). all parameters
-    parser.add_argument("--alpha_topo", type=float, default=1.0) # alpha for topo loss
-    parser.add_argument("--topo_mode", type=int, default=0) # mode for topo loss (0: dot product, 1: correlation, 2: covariance)
-    parser.add_argument("--util_dist_mode", type=int, default=1) # mode for utility distance (0: naive, 1: stop gradient on worse rollout)
-    parser.add_argument("--run_info", type=str, default="") # run info
+    
+    parser.add_argument("--run_info", type=str, default="")
 
     return parser.parse_args()
 
@@ -186,8 +182,7 @@ class Muon(torch.optim.Optimizer):
 
 # GAT model
 from sorl.gat_sim import GAT, GATConfig
-from sorl.neo_utils import compute_loss, compute_weighted_loss, reinit_model, compute_loss_with_kl
-from sorl.neo_utils import sorl_evaluate_v2 as sorl_evaluate
+from sorl.neo_utils import sorl_evaluate
 from sorl.eval import compute_vocab_utilization_rate
 
 # -----------------------------------------------------------------------------
@@ -210,57 +205,53 @@ master_process = (rank == 0) # this process will do logging, checkpointing etc.
 @dataclass
 class Hyperparameters:
     # data
-    train_files : str = "data/fineweb10B/fineweb_train_*.bin" # input .bin to train on
-    val_files : str = "data/fineweb10B/fineweb_val_*.bin" # input .bin to eval validation loss on
-    val_tokens : int = 10485760 # how many tokens of validation data? it's important to keep this fixed for consistent comparisons
-    train_seq_len : int = 32*1024 # FlexAttention sequence length (per GPU)
-    val_seq_len : int = 32*1024 # FlexAttention sequence length for validation (per GPU)
-    batch_size : int = 8 # Batch size, across all devices
+    train_files : str = "data/fineweb10B/fineweb_train_*.bin"
+    val_files : str = "data/fineweb10B/fineweb_val_*.bin"
+    val_tokens : int = 10485760 
+    train_seq_len : int = 32*1024
+    val_seq_len : int = 32*1024
+    batch_size : int = 16
+    
     # optimization
-    num_iterations : int = 1750 # number of iterations to run
-    cooldown_frac : float = 0.4 # fraction of training spent cooling down the learning rate
+    num_iterations : int = 1750
+    cooldown_frac : float = 0.4
+    
     # architecture
     vocab_size : int = 50257
     abstract_vocab_size : int = 256
+    
     # evaluation and logging
-    val_loss_every : int = 125 # every how many steps to evaluate val loss? 0 for only at the end
+    val_loss_every : int = 125 
     save_checkpoint : bool = False
     log_grad_info: bool = False
-    use_prior_weights: bool = False
-    prior_weight: str = "natural"
-    mode: int = 0 # mode for reward computation (SGPO ver. / standardized ver. / etc.)
+    
     # sorl specific
-    num_rollouts: int = 2 # number of candidates to rollout
-    num_rollouts_val: int = 4 # number of candidates to rollout for validation
-    K: int = 8 # abstract ratio
-    max_iterations: int = 1 # max number of iterations to search
-    temperature: float = 5.0 # temperature for search
-    min_temperature: float = 0.0 # minimum temperature for search
-    use_gapt: bool = False # use GAPT
-    min_memory_span: int = 64 # minimum memory span
-    traj_perplexity_patience: int = 5 # patience for traj perplexity
-    abs_perplexity_patience: int = 5 # patience for abstract perplexity
-    tau_plateau: float = 0.01 # plateau threshold for traj perplexity
-    tau_spike: float = 0.1 # spike threshold for traj perplexity
-    alpha_loss: float = 0.0 # loss regularization strength
-    steps_per_cycle: int = 725 # number of steps in exploration phase
-    exploration_fraction: float = 0.5 # fraction of steps in exploration phase
-    exploration_till_vocab_util: float = 0.5 # exploration till vocabulary utilization reaches this threshold
-    use_off_policy_distillation: bool = False # use off-policy distillation
-    use_on_policy_distillation: bool = False # use on-policy distillation
-    use_kl_regularization: bool = False # use kl regularization
-    alpha_kl: float = 0.0 # alpha for kl regularization
-    use_off_policy_immitation: bool = False # use off-policy exploitation
-    use_on_policy_immitation: bool = False # use on-policy exploitation
-    use_off_policy_exploitation: bool = False # use off-policy exploitation
-    use_reverse_off_policy_exploitation: bool = False # use reverse off-policy exploitation
-    use_on_policy_exploitation: bool = False # use on-policy exploitation
-    do_reinit: bool = False # do reinitialization
-    reinit_mode: int = 0 # mode for reinitialization (a). abstract only / b). embedding + head / c). all parameters
-    alpha_topo: float = 1.0 # alpha for topo loss
-    topo_mode: int = 3 # mode for topo loss (0: dot product, 1: correlation, 3: covariance)
-    util_dist_mode: int = 0 # mode for utility distance (0: naive, 1: stop gradient on worse rollout)
-    run_info: str = "" # run info
+    num_rollouts: int = 2
+    num_rollouts_val: int = 2
+    K: int = 8
+    max_iterations: int = 2
+    temperature: float = 5.0
+    min_temperature: float = 0.5
+    
+    use_static_memory_span: bool = False
+    min_memory_span: int = 64
+    
+    alpha_select: float = 0.0
+    alpha_loss: float = 0.0
+    alpha_marg_ent: float = 1.0
+    decay: float = 0.8
+    target_vocab_util: float = 0.8
+    utility_scaling: bool = False
+    reg_abs_marg_ent: bool = False
+    reg_abs_zipf: bool = False
+
+    use_gapt: bool = False
+    traj_perplexity_patience: int = 5
+    abs_perplexity_patience: int = 5
+    tau_plateau: float = 0.01
+    tau_spike: float = 0.1
+    
+    run_info: str = ""
 
 cli_args = parse_args()
 args = Hyperparameters()
@@ -316,10 +307,7 @@ print0(nvidia_smi())
 print0("="*100)
 
 # --- sorl search ---
-from sorl.neo_utils import sorl_search_v4 as sorl_search
-from sorl.neo_utils import sorl_search_v2 as select_best_sorl_search
-from sorl.neo_utils import compute_sgpo_loss_v2 as compute_sgpo_loss
-from sorl.stat import save_training_dynamics
+from sorl.neo_utils import sorl_search_v6 as sorl_search
 
 ########################################
 #    Construct model and optimizer     #
@@ -327,16 +315,15 @@ from sorl.stat import save_training_dynamics
 
 model: nn.Module = GAT(model_config).cuda()
     
+if args.use_orthogonal_init:
+    from sorl.topo import orthogonalize_abs_param
+    orthogonalize_abs_param(model, gain=1.0, do_wte=True, do_head=True)
+
 for m in model.modules():
     if isinstance(m, nn.Embedding):
         m.bfloat16()
 for param in model.parameters():
     dist.broadcast(param.detach(), 0)
-
-ref_model = copy.deepcopy(model)
-ref_model.eval()
-ref_model.requires_grad_(False)
-
 
 # collect the parameters to optimize
 hidden_matrix_params = [p for n,p in model.transformer.h.named_parameters() if p.ndim >= 2 and "embed" not in n]
@@ -364,9 +351,22 @@ def get_lr(step: int):
         w = (1 - x) / args.cooldown_frac
         return w * 1.0 + (1 - w) * 0.1
 
+# SoRL loss function
+assert args.reg_abs_marg_ent or args.reg_abs_zipf or args.utility_scaling, "Either reg_abs_marg_ent or reg_abs_zipf or utility_scaling must be True"
+if args.reg_abs_marg_ent: 
+    from sorl.info import SoRLLoss
+    loss_fn = SoRLLoss(model.vocab_sizes[1], decay=args.decay, target_vocab_util=args.target_vocab_util)
+    args.alpha_marg_ent *= -1.0
+elif args.reg_abs_zipf: 
+    from sorl.info import SoRLLoss_v3
+    loss_fn = SoRLLoss_v3(model.vocab_sizes[1], decay=args.decay, target_vocab_util=args.target_vocab_util)
+if args.utility_scaling:
+    from sorl.info import SoRLLoss_v4
+    loss_fn = SoRLLoss_v4(model.vocab_sizes[1], decay=args.decay, target_vocab_util=args.target_vocab_util)
+loss_fn = loss_fn.to(device)
+
 # compile model
 model: nn.Module = torch.compile(model, dynamic=True)
-ref_model: nn.Module = torch.compile(ref_model, dynamic=True)
 
 ########################################
 #            Warmup kernels            #
@@ -393,19 +393,19 @@ for i in range(warmup_steps):
     # --- sorl search --- 
     search_start = time.time()
     with torch.no_grad():
-        search_tokens, search_ppt, search_adv, abs_dist = sorl_search(tokens, model, n=args.num_rollouts, K=args.K, max_iterations=args.max_iterations, memory_span=memory_span, attn_blocksize=attn_blocksize, 
-                                                                          temperature=temperature_warmup, mode=args.mode)
+        search_tokens, rew = sorl_search(tokens, model, n=args.num_rollouts, K=args.K, max_iterations=args.max_iterations, memory_span=memory_span, attn_blocksize=attn_blocksize, 
+                                                                          temperature=temperature_warmup)
     search_end = time.time()
     print(f" :: Sorl search takes {search_end - search_start} second")
     # --- compute loss --- 
-    if i % 2 == 0:
-        traj_loss, abs_loss, topo_loss = compute_sgpo_loss(search_tokens, search_adv, abs_dist, model, memory_span, attn_blocksize, util_dist_mode=args.util_dist_mode)    
+    if args.utility_scaling:
+        traj_loss, abs_loss, marg_ent = loss_fn(search_tokens, model, memory_span=memory_span, attn_blocksize=attn_blocksize, utility_reward=rew[1:])
     else:
-        traj_loss, abs_loss = compute_loss(search_tokens, model, memory_span=memory_span, attn_blocksize=attn_blocksize)
+        traj_loss, abs_loss, marg_ent = loss_fn(search_tokens, model, memory_span=memory_span, attn_blocksize=attn_blocksize)
     forward_end = time.time()
-    print(f" :: {'SGPO' if i % 2 == 0 else 'Normal'} Loss computation takes {forward_end - search_end} second")
+    print(f" :: Loss computation takes {forward_end - search_end} second")
     # --- backward --- 
-    loss = traj_loss + abs_loss 
+    loss = traj_loss + args.alpha_loss * abs_loss + args.alpha_marg_ent * marg_ent
     loss.backward() 
     backward_end = time.time()
     print(f" :: Backward takes {backward_end - forward_end} second")
@@ -437,11 +437,11 @@ gapt = GatedPhaseTransition(p_m=args.traj_perplexity_patience, p_a=args.abs_perp
                             tau_plateau=args.tau_plateau, tau_spike=args.tau_spike)
 # -------------
 temperature_val = torch.cat([
-    torch.tensor([args.min_temperature], device="cuda"),  # Greedy for first rollout
+    torch.tensor([0.0], device="cuda"),  # Greedy for first rollout
     torch.full((args.num_rollouts_val - 1,), 10.0, device="cuda")  # High temp for diversity
 ])
 temperature_train = torch.cat([
-    torch.tensor([args.min_temperature], device="cuda"),  # Greedy for first rollout
+    torch.tensor([args.min_temperature], device="cuda"),
     torch.full((args.num_rollouts - 1,), args.temperature, device="cuda")  # High temp for diversity
 ])
 
@@ -454,10 +454,6 @@ train_steps = args.num_iterations
 loss_record = defaultdict(list)
 test_loss_record = defaultdict(list)
 early_stop = False
-alpha_loss = args.alpha_loss
-alpha_topo = args.alpha_topo
-phase = "exploration"
-n = args.num_rollouts
 
 for step in range(train_steps + 1):
     last_step = (step == train_steps) or early_stop
@@ -481,20 +477,20 @@ for step in range(train_steps + 1):
         with torch.no_grad():
             for i in range(val_steps):
                 tokens = next(val_loader)
-                val_tokens, val_adv, val_traj_loss, val_abs_loss, val_topo_sim = sorl_evaluate(tokens, model, n=args.num_rollouts_val, K=args.K, max_iterations=args.max_iterations, 
+                val_tokens, val_adv, val_traj_loss, val_abs_loss = sorl_evaluate(tokens, model, n=args.num_rollouts_val, K=args.K, max_iterations=args.max_iterations, 
                                                                     memory_span=memory_span, attn_blocksize=attn_blocksize, temperature=temperature_val)
                 util_rate = compute_vocab_utilization_rate(val_tokens, model)
+                # _, _, marg_ent = loss_fn(val_tokens, model, memory_span=memory_span, attn_blocksize=attn_blocksize)
                 val_loss["traj_loss"] += val_traj_loss
                 val_loss["abs_loss"] += val_abs_loss
                 val_loss["search_advantage"] += val_adv.mean()
+                # val_loss["marg_kl_divergence"] += marg_ent
                 val_loss["util_rate"] += torch.tensor(util_rate, device=val_traj_loss.device)
-                val_loss["topo_sim"] += val_topo_sim
             
         for name in val_loss: 
             val_loss[name] /= val_steps
             dist.all_reduce(val_loss[name], op=dist.ReduceOp.AVG)            
             loss_record[name].append(val_loss[name])
-        loss_record["phase"].append(phase)
 
         del val_loader           
         val_info = " ".join([f"{item} loss: {value:.4f}" for (item, value) in val_loss.items()])
@@ -507,7 +503,6 @@ for step in range(train_steps + 1):
     if last_step:
         if master_process: 
             os.makedirs(f"logs/{run_id}", exist_ok=True)
-            save_training_dynamics(loss_record, f"logs/{run_id}/training_dynamics.png", args.run_info)
 
             if args.save_checkpoint:
                 log = dict(step=step, code=code, model=model.state_dict(), optimizers=[opt.state_dict() for opt in optimizers])
@@ -517,122 +512,29 @@ for step in range(train_steps + 1):
         break            
             
     # --------------- TRAINING SECTION -----------------
-    avg_util_rate = 0.0
     for accum_step in range(train_accumulation_steps): 
         tokens = next(train_loader)
         with torch.no_grad(): 
-
-            if phase == "exploration": # SGPO / All-rollout SoRL (with topo sim, we should try different mode again to ablate things)
-                search_tokens, search_ppt, search_adv, abs_dist = sorl_search(tokens, model, 
-                                                                    n=n, K=args.K, max_iterations=args.max_iterations, 
-                                                                    memory_span=memory_span, attn_blocksize=attn_blocksize, 
-                                                                    temperature=temperature_train, mode=args.mode)
-            else: # exploitation
-                if args.use_off_policy_distillation: 
-                    search_tokens, search_ppt, search_adv, abs_dist = sorl_search(tokens, ref_model, 
-                                                                    n=n, K=args.K, max_iterations=args.max_iterations, 
-                                                                    memory_span=memory_span, attn_blocksize=attn_blocksize, 
-                                                                    temperature=temperature_train, mode=args.mode)
-                elif args.use_on_policy_distillation: 
-                    search_tokens, search_ppt, search_adv, abs_dist = sorl_search(tokens, model, 
-                                                                    n=n, K=args.K, max_iterations=args.max_iterations, 
-                                                                    memory_span=memory_span, attn_blocksize=attn_blocksize, 
-                                                                    temperature=temperature_train, mode=args.mode)
-                elif args.use_off_policy_immitation: 
-                    search_tokens, search_ppt, search_adv, abs_dist = sorl_search(tokens, ref_model, 
-                                                                    n=n, K=args.K, max_iterations=args.max_iterations, 
-                                                                    memory_span=memory_span, attn_blocksize=attn_blocksize, 
-                                                                    temperature=temperature_train, mode=2)
-                elif args.use_on_policy_immitation: 
-                    search_tokens, search_ppt, search_adv, abs_dist = sorl_search(tokens, model, 
-                                                                    n=n, K=args.K, max_iterations=args.max_iterations, 
-                                                                    memory_span=memory_span, attn_blocksize=attn_blocksize, 
-                                                                    temperature=temperature_train, mode=2)
-                elif args.use_off_policy_exploitation:
-                    search_tokens, search_ppt, search_adv, abs_dist = sorl_search(tokens, model, 
-                                                                    n=n, K=args.K, max_iterations=args.max_iterations, 
-                                                                    memory_span=memory_span, attn_blocksize=attn_blocksize, 
-                                                                    temperature=temperature_train, mode=3, 
-                                                                    ref_model=ref_model)
-                elif args.use_reverse_off_policy_exploitation: 
-                    search_tokens, search_ppt, search_adv, abs_dist = sorl_search(tokens, model, 
-                                                                    n=n, K=args.K, max_iterations=args.max_iterations, 
-                                                                    memory_span=memory_span, attn_blocksize=attn_blocksize, 
-                                                                    temperature=temperature_train, mode=3, 
-                                                                    ref_model=ref_model)
-                    search_adv = -search_adv
-                elif args.use_on_policy_exploitation:
-                    search_tokens, search_ppt, search_adv, abs_dist = sorl_search(tokens, model, 
-                                                                    n=n, K=args.K, max_iterations=args.max_iterations, 
-                                                                    memory_span=memory_span, attn_blocksize=attn_blocksize, 
-                                                                    temperature=temperature_train, mode=3)
-                else:
-                    search_tokens, search_ppt, search_adv = select_best_sorl_search(tokens, model, 
-                                                                    n=n, K=args.K, max_iterations=args.max_iterations, 
-                                                                    memory_span=memory_span, attn_blocksize=attn_blocksize, 
-                                                                    temperature=temperature_train)
-
-        if search_tokens.shape[0] > 1: 
-            avg_util_rate += compute_vocab_utilization_rate(search_tokens[:1, :], model) # greedy rollout vocab utilization check only
-        else:
-            avg_util_rate += compute_vocab_utilization_rate(search_tokens, model)
+            search_tokens, rew = sorl_search(tokens, model, n=args.num_rollouts, K=args.K, max_iterations=args.max_iterations, 
+                                                                memory_span=memory_span, attn_blocksize=attn_blocksize, 
+                                                                temperature=temperature_train,
+                                                                )
 
         # --- compute loss --- 
-        if phase == "exploration": # reward-shaping on predictability loss (SGPO)
-            traj_loss, abs_loss, topo_loss = compute_sgpo_loss(search_tokens, search_adv, abs_dist, model, memory_span, attn_blocksize, topo_mode=args.topo_mode, util_dist_mode=args.util_dist_mode)    
+        if args.utility_scaling:
+            traj_loss, abs_loss, marg_ent = loss_fn(search_tokens, model, memory_span=memory_span, attn_blocksize=attn_blocksize, utility_reward=rew[1:])
         else:
-            if args.use_off_policy_exploitation or args.use_on_policy_exploitation or args.use_off_policy_immitation or args.use_on_policy_immitation: # reward-shaping with advantage
-                traj_loss, abs_loss = compute_weighted_loss(search_tokens, search_adv, model, memory_span, attn_blocksize)
-            else: # distillation
-                if args.use_kl_regularization:
-                    traj_loss, abs_loss, traj_kl_loss, abs_kl_loss = compute_loss_with_kl(search_tokens, model, ref_model, memory_span, attn_blocksize)
-                    traj_loss = traj_loss + args.alpha_kl * traj_kl_loss
-                    abs_loss = abs_loss + args.alpha_kl * abs_kl_loss
-                else:
-                    traj_loss, abs_loss = compute_loss(search_tokens, model, memory_span=memory_span, attn_blocksize=attn_blocksize)
-            
-            topo_loss = torch.tensor(0.0, device=traj_loss.device, dtype=traj_loss.dtype)
-
+            traj_loss, abs_loss, marg_ent = loss_fn(search_tokens, model, memory_span=memory_span, attn_blocksize=attn_blocksize)
+        
+        # --- GAPT: balance objectives ---
         if args.use_gapt: 
-            loss = gapt.step(traj_loss, alpha_loss * abs_loss + alpha_topo * topo_loss, verbose=False)
+            loss = gapt.step(traj_loss, args.alpha_loss * abs_loss + args.alpha_marg_ent * marg_ent, verbose=False)
         else: 
-            loss = traj_loss + alpha_loss * abs_loss + alpha_topo * topo_loss
+            loss = traj_loss + args.alpha_loss * abs_loss + args.alpha_marg_ent * marg_ent
         
         loss.backward()
-        if phase == "exploration":
-            print0(f" - step: {step} | accum step: {accum_step} | traj_loss: {traj_loss.item()} | sgpo_abs_loss: {abs_loss.item()} | topo_loss: {topo_loss.item()} | search_advantage: {search_adv.mean().item()} | phase: {phase}")
-        else:
-            if args.use_kl_regularization:
-                print0(f" - step: {step} | accum step: {accum_step} | traj_loss: {traj_loss.item()} | sgpo_abs_loss: {abs_loss.item()} | traj_kl_loss: {traj_kl_loss.item()} | abs_kl_loss: {abs_kl_loss.item()} | search_advantage: {search_adv.mean().item()} | phase: {phase}")
-            else:
-                print0(f" - step: {step} | accum step: {accum_step} | traj_loss: {traj_loss.item()} | sgpo_abs_loss: {abs_loss.item()} | search_advantage: {search_adv.mean().item()} | phase: {phase}")
-
-    # --- phase switch --- 
-    avg_util_rate /= train_accumulation_steps
-    cycle_step = step % args.steps_per_cycle
-    if cycle_step >= (args.steps_per_cycle * args.exploration_fraction) and avg_util_rate >= args.exploration_till_vocab_util:
-        if phase == "exploration": # EMA model pinned at the start of exploitation phase (off-policy distillation / immitation / exploitation)
-            with torch.no_grad():
-                for p_ema, p_online in zip(ref_model.parameters(), model.parameters()):
-                    p_ema.data.copy_(p_online.data)
-            if args.do_reinit: 
-                reinit_model(model, mode=args.reinit_mode)
-
-        phase = "exploitation"
-        if args.use_off_policy_distillation or args.use_on_policy_distillation:
-            n = 1
-            temperature_train = torch.tensor([args.min_temperature], device="cuda")
-            
-    elif cycle_step == 0:
-        phase = "exploration"
-        n = args.num_rollouts
-        temperature_train = torch.cat([
-            torch.tensor([args.min_temperature], device="cuda"),  # Greedy for first rollout
-            torch.full((args.num_rollouts - 1,), args.temperature, device="cuda")  # High temp for diversity
-        ])
-    loss_record["train_phase"].append(phase)
-    loss_record["train_avg_util_rate"].append(avg_util_rate)
-
+        print0(f" - step: {step} | accum step: {accum_step} | traj_loss: {traj_loss.item()} | abs_loss: {abs_loss.item()} | marg_entropy: {marg_ent.item()}")
+        
     for param in model.parameters():
         param.grad /= train_accumulation_steps
         dist.all_reduce(param.grad, op=dist.ReduceOp.AVG)
@@ -648,14 +550,13 @@ for step in range(train_steps + 1):
         opt.step()
     # null the gradients
     model.zero_grad(set_to_none=True)
-
     # ----------------------------------------------------
     # logging
     approx_training_time_ms = training_time_ms + 1000 * (time.perf_counter() - t0)
     print0(f"step:{step+1}/{train_steps} train_time:{approx_training_time_ms:.0f}ms step_avg:{approx_training_time_ms/(step + 1):.2f}ms", console=True)
 
 print0(f"peak memory allocated: {torch.cuda.max_memory_allocated() // 1024 // 1024} MiB "
-       f"reserved: {torch.cuda.max_memory_reserved() // 1024 // 1024} MiB", console=True)    
+       f"reserved: {torch.cuda.max_memory_reserved() // 1024 // 1024} MiB", console=True)
 
 print0(f"Experiment configuration: {args.run_info}\n", console=True)
 print0(f"-- batch_size: {args.batch_size}", console=True)
@@ -670,31 +571,19 @@ print0(f"-- min_temperature: {args.min_temperature}", console=True)
 print0(f"-- use_static_memory_span: {args.use_static_memory_span}", console=True)
 print0(f"-- min_memory_span: {args.min_memory_span}", console=True)
 print0(f"-- abstract_vocab_size: {args.abstract_vocab_size}", console=True)
-print0(f"-- use_gapt: {args.use_gapt}", console=True)
+print0(f"-- alpha_select: {args.alpha_select}", console=True)
 print0(f"-- alpha_loss: {args.alpha_loss}", console=True)
+print0(f"-- alpha_marg_ent: {args.alpha_marg_ent}", console=True)
+print0(f"-- decay: {args.decay}", console=True)
+print0(f"-- target_vocab_util: {args.target_vocab_util}", console=True)
+print0(f"-- reg_abs_marg_ent: {args.reg_abs_marg_ent}", console=True)
+print0(f"-- reg_abs_zipf: {args.reg_abs_zipf}", console=True)
+print0(f"-- utility_scaling: {args.utility_scaling}", console=True)
+print0(f"-- use_gapt: {args.use_gapt}", console=True)
 print0(f"-- traj_perplexity_patience: {args.traj_perplexity_patience}", console=True)
 print0(f"-- abs_perplexity_patience: {args.abs_perplexity_patience}", console=True)
 print0(f"-- tau_plateau: {args.tau_plateau}", console=True)
 print0(f"-- tau_spike: {args.tau_spike}", console=True)
-print0(f"-- mode: {args.mode}", console=True)
-print0(f"-- steps_per_cycle: {args.steps_per_cycle}", console=True)
-print0(f"-- exploration_fraction: {args.exploration_fraction}", console=True)
-print0(f"-- exploration_till_vocab_util: {args.exploration_till_vocab_util}", console=True)
-print0(f"-- use_off_policy_distillation: {args.use_off_policy_distillation}", console=True)
-print0(f"-- use_on_policy_distillation: {args.use_on_policy_distillation}", console=True)
-print0(f"-- use_kl_regularization: {args.use_kl_regularization}", console=True)
-print0(f"-- alpha_kl: {args.alpha_kl}", console=True)
-print0(f"-- use_off_policy_immitation: {args.use_off_policy_immitation}", console=True)
-print0(f"-- use_on_policy_immitation: {args.use_on_policy_immitation}", console=True)
-print0(f"-- use_off_policy_exploitation: {args.use_off_policy_exploitation}", console=True)
-print0(f"-- use_on_policy_exploitation: {args.use_on_policy_exploitation}", console=True)
-print0(f"-- use_reverse_off_policy_exploitation: {args.use_reverse_off_policy_exploitation}", console=True)
-print0(f"-- do_reinit: {args.do_reinit}", console=True)
-print0(f"-- reinit_mode: {args.reinit_mode}", console=True)
-print0(f"-- alpha_topo: {args.alpha_topo}", console=True)
-print0(f"-- topo_mode: {args.topo_mode}", console=True)
-print0(f"-- util_dist_mode: {args.util_dist_mode}", console=True)
-# print0(f"loss record:\n{loss_record}", console=True)
-
+print0(f"loss record:\n{loss_record}", console=True)
 
 dist.destroy_process_group()
