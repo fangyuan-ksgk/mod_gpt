@@ -93,6 +93,7 @@ torchrun \
   --num_rollouts $NUM_ROLLOUTS \
   --K $K \
   --abstract_vocab_size $ABSTRACT_VOCAB_SIZE \
+  --save_checkpoint \
   --max_iterations $MAX_ITERATIONS \
   --min_temperature 0.0 \
   --temperature 5.0 \
