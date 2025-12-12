@@ -21,7 +21,7 @@ VAL_SEQ_LEN=$((16 * 1024))
 NUM_ITERATIONS=1750
 NUM_ROLLOUTS=2
 MAX_ITERATIONS=2
-N_GPUS=6
+N_GPUS=2
 MASTER_ADDR=127.0.0.1
 MASTER_PORT=29500
 ALPHA_LOSS=0.1
@@ -62,7 +62,7 @@ torchrun \
   --num_iterations $NUM_ITERATIONS \
   --num_rollouts $NUM_ROLLOUTS \
   --K $K \
-  --abstract_vocab_size 16 \ 
+  --abstract_vocab_size 16 \
   --max_iterations $MAX_ITERATIONS \
   --min_temperature 0.0 \
   --temperature 5.0 \
@@ -87,7 +87,7 @@ for MODEL_SIZE in "medium" "large" "xl"; do
     --num_rollouts $NUM_ROLLOUTS \
     --model_size $MODEL_SIZE \
     --K $K \
-    --abstract_vocab_size $ABSTRACT_VOCAB_SIZE \ 
+    --abstract_vocab_size $ABSTRACT_VOCAB_SIZE \
     --max_iterations $MAX_ITERATIONS \
     --min_temperature 0.0 \
     --temperature 5.0 \
@@ -114,7 +114,7 @@ for MODEL_SIZE in "medium" "large" "xl"; do
     --num_rollouts $NUM_ROLLOUTS \
     --model_size $MODEL_SIZE \
     --K $K \
-    --abstract_vocab_size 16 \ 
+    --abstract_vocab_size 16 \
     --max_iterations $MAX_ITERATIONS \
     --min_temperature 0.0 \
     --temperature 5.0 \
@@ -170,48 +170,48 @@ done
 # -> full tinystories dataset got about 1GB tokens
 # -> I don't think 500 step is sufficient here
 # ======================
-ALPHA_MARG_ENT=1.0
-DECAY=0.8
-TARGET_VOCAB_UTIL=0.8
-K=4
-ABSTRACT_VOCAB_SIZE=16
-torchrun \
-  --nproc_per_node=$N_GPUS \
-  --master_addr=$MASTER_ADDR \
-  --master_port=$MASTER_PORT \
-  train_sorl_v3.py \
-  --batch_size $BATCH_SIZE \
-  --train_seq_len $TRAIN_SEQ_LEN \
-  --val_seq_len $VAL_SEQ_LEN \
-  --num_iterations 5000 \
-  --num_rollouts $NUM_ROLLOUTS \
-  --K $K \
-  --abstract_vocab_size $ABSTRACT_VOCAB_SIZE \
-  --save_checkpoint \
-  --max_iterations $MAX_ITERATIONS \
-  --min_temperature 0.0 \
-  --temperature 5.0 \
-  --alpha_loss $ALPHA_LOSS \
-  --alpha_marg_ent $ALPHA_MARG_ENT \
-  --decay $DECAY \
-  --target_vocab_util $TARGET_VOCAB_UTIL \
-  --use_orthogonal_init \
-  --utility_scaling \
-  --use_static_memory_span \
-  --use_gapt \
-  --traj_perplexity_patience 40 \
-  --run_info "Exp2.1 TinyStories Dataset (K=$K, abstract_vocab_size=$ABSTRACT_VOCAB_SIZE, static memory span)"
+# ALPHA_MARG_ENT=1.0
+# DECAY=0.8
+# TARGET_VOCAB_UTIL=0.8
+# K=4
+# ABSTRACT_VOCAB_SIZE=16
+# torchrun \
+#   --nproc_per_node=$N_GPUS \
+#   --master_addr=$MASTER_ADDR \
+#   --master_port=$MASTER_PORT \
+#   train_sorl_v3.py \
+#   --batch_size $BATCH_SIZE \
+#   --train_seq_len $TRAIN_SEQ_LEN \
+#   --val_seq_len $VAL_SEQ_LEN \
+#   --num_iterations 5000 \
+#   --num_rollouts $NUM_ROLLOUTS \
+#   --K $K \
+#   --abstract_vocab_size $ABSTRACT_VOCAB_SIZE \
+#   --save_checkpoint \
+#   --max_iterations $MAX_ITERATIONS \
+#   --min_temperature 0.0 \
+#   --temperature 5.0 \
+#   --alpha_loss $ALPHA_LOSS \
+#   --alpha_marg_ent $ALPHA_MARG_ENT \
+#   --decay $DECAY \
+#   --target_vocab_util $TARGET_VOCAB_UTIL \
+#   --use_orthogonal_init \
+#   --utility_scaling \
+#   --use_static_memory_span \
+#   --use_gapt \
+#   --traj_perplexity_patience 40 \
+#   --run_info "Exp2.1 TinyStories Dataset (K=$K, abstract_vocab_size=$ABSTRACT_VOCAB_SIZE, static memory span)"
 
-# Basline on TinyStories
-torchrun \
-  --nproc_per_node=$N_GPUS \
-  --master_addr=$MASTER_ADDR \
-  --master_port=$MASTER_PORT \
-  train_base.py \
-  --batch_size $BATCH_SIZE \
-  --train_seq_len $TRAIN_SEQ_LEN \
-  --val_seq_len $VAL_SEQ_LEN \
-  --num_iterations $NUM_ITERATIONS \
-  --train_files "data/tinystories/tinystory_train_*.bin" \
-  --val_files "data/tinystories/tinystory_val_*.bin" \
-  --run_info "Baseline on TinyStories Dataset"
+# # Basline on TinyStories
+# torchrun \
+#   --nproc_per_node=$N_GPUS \
+#   --master_addr=$MASTER_ADDR \
+#   --master_port=$MASTER_PORT \
+#   train_base.py \
+#   --batch_size $BATCH_SIZE \
+#   --train_seq_len $TRAIN_SEQ_LEN \
+#   --val_seq_len $VAL_SEQ_LEN \
+#   --num_iterations $NUM_ITERATIONS \
+#   --train_files "data/tinystories/tinystory_train_*.bin" \
+#   --val_files "data/tinystories/tinystory_val_*.bin" \
+#   --run_info "Baseline on TinyStories Dataset"
