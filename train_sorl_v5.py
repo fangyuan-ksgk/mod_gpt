@@ -35,6 +35,9 @@ def parse_args():
     parser.add_argument("--val_seq_len", type=int, default=32*1024)
     parser.add_argument("--num_iterations", type=int, default=1750)
     parser.add_argument("--log_grad_info", action="store_true")
+
+    # Model 
+    parser.add_argument("--model_size", type=str, default="small") # model size
     
     # SoRL / Search
     parser.add_argument("--num_rollouts", type=int, default=2)
@@ -211,6 +214,9 @@ class Hyperparameters:
     train_seq_len : int = 32*1024
     val_seq_len : int = 32*1024
     batch_size : int = 16
+
+    # model
+    model_size: str = "small"
     
     # optimization
     num_iterations : int = 1750
@@ -567,6 +573,7 @@ print0(f"-- val_seq_len: {args.val_seq_len}", console=True)
 print0(f"-- num_iterations: {args.num_iterations}", console=True)
 print0(f"-- num_rollouts: {args.num_rollouts}", console=True)
 print0(f"-- K: {args.K}", console=True)
+print0(f"-- model_size: {args.model_size}", console=True)
 print0(f"-- max_iterations: {args.max_iterations}", console=True)
 print0(f"-- temperature: {args.temperature}", console=True)
 print0(f"-- min_temperature: {args.min_temperature}", console=True)
