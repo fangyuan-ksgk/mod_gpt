@@ -74,15 +74,29 @@ torchrun \
   --utility_scaling \
   --run_info "Exp 13.0: Smaller vocab size improves greedy advantage? (Fineweb 0.8B - GPT-2 small, abstract vocab size=16)"
 
+# Keep seq-len under control for larger models to avoid OOM.
+# Rough scaling at fixed batch/precision: activation mem ~ (n_layer * n_embd * seq_len).
+# Relative to GPT-2 small @ 16k:
+# - medium ~= 1.78x -> keep 16k
+# - large  ~= 4.00x -> use 8k (0.5x seq) => ~2.0x
+# - xl     ~= 7.11x -> use 4k (0.25x seq) => ~1.78x
 for MODEL_SIZE in "medium" "large" "xl"; do
+  LOCAL_TRAIN_SEQ_LEN=$TRAIN_SEQ_LEN
+  LOCAL_VAL_SEQ_LEN=$VAL_SEQ_LEN
+  case "$MODEL_SIZE" in
+    medium) LOCAL_TRAIN_SEQ_LEN=$((16 * 1024)); LOCAL_VAL_SEQ_LEN=$((16 * 1024)) ;;
+    large)  LOCAL_TRAIN_SEQ_LEN=$(( 8 * 1024)); LOCAL_VAL_SEQ_LEN=$(( 8 * 1024)) ;;
+    xl)     LOCAL_TRAIN_SEQ_LEN=$(( 4 * 1024)); LOCAL_VAL_SEQ_LEN=$(( 4 * 1024)) ;;
+  esac
+
   torchrun \
     --nproc_per_node=$N_GPUS \
     --master_addr=$MASTER_ADDR \
     --master_port=$MASTER_PORT \
     train_sorl_v5.py \
     --batch_size $BATCH_SIZE \
-    --train_seq_len $TRAIN_SEQ_LEN \
-    --val_seq_len $VAL_SEQ_LEN \
+    --train_seq_len $LOCAL_TRAIN_SEQ_LEN \
+    --val_seq_len $LOCAL_VAL_SEQ_LEN \
     --num_iterations $NUM_ITERATIONS \
     --num_rollouts $NUM_ROLLOUTS \
     --model_size $MODEL_SIZE \
@@ -100,7 +114,7 @@ for MODEL_SIZE in "medium" "large" "xl"; do
     --utility_scaling \
     --use_gapt \
     --traj_perplexity_patience 40 \
-    --run_info "Exp 13.0: Sweep on model size (Fineweb 0.8B - GPT-2 $MODEL_SIZE, abstract vocab size=$ABSTRACT_VOCAB_SIZE, static memory span)"
+    --run_info "Exp 13.0: Sweep on model size (Fineweb 0.8B - GPT-2 $MODEL_SIZE, train_seq_len=$LOCAL_TRAIN_SEQ_LEN, abstract_vocab_size=$ABSTRACT_VOCAB_SIZE, static memory span)"
 
   torchrun \
     --nproc_per_node=$N_GPUS \
@@ -108,8 +122,8 @@ for MODEL_SIZE in "medium" "large" "xl"; do
     --master_port=$MASTER_PORT \
     train_sorl_v5.py \
     --batch_size $BATCH_SIZE \
-    --train_seq_len $TRAIN_SEQ_LEN \
-    --val_seq_len $VAL_SEQ_LEN \
+    --train_seq_len $LOCAL_TRAIN_SEQ_LEN \
+    --val_seq_len $LOCAL_VAL_SEQ_LEN \
     --num_iterations $NUM_ITERATIONS \
     --num_rollouts $NUM_ROLLOUTS \
     --model_size $MODEL_SIZE \
@@ -127,22 +141,30 @@ for MODEL_SIZE in "medium" "large" "xl"; do
     --utility_scaling \
     --use_gapt \
     --traj_perplexity_patience 40 \
-    --run_info "Exp 13.0: Sweep on model size (Fineweb 0.8B - GPT-2 $MODEL_SIZE, abstract vocab size=$ABSTRACT_VOCAB_SIZE, static memory span)"
+    --run_info "Exp 13.0: Sweep on model size (Fineweb 0.8B - GPT-2 $MODEL_SIZE, train_seq_len=$LOCAL_TRAIN_SEQ_LEN, abstract_vocab_size=16, static memory span)"
 done
 
 
 for MODEL_SIZE in "medium" "large" "xl"; do
+  LOCAL_TRAIN_SEQ_LEN=$TRAIN_SEQ_LEN
+  LOCAL_VAL_SEQ_LEN=$VAL_SEQ_LEN
+  case "$MODEL_SIZE" in
+    medium) LOCAL_TRAIN_SEQ_LEN=$((16 * 1024)); LOCAL_VAL_SEQ_LEN=$((16 * 1024)) ;;
+    large)  LOCAL_TRAIN_SEQ_LEN=$(( 8 * 1024)); LOCAL_VAL_SEQ_LEN=$(( 8 * 1024)) ;;
+    xl)     LOCAL_TRAIN_SEQ_LEN=$(( 4 * 1024)); LOCAL_VAL_SEQ_LEN=$(( 4 * 1024)) ;;
+  esac
+
   torchrun \
     --nproc_per_node=$N_GPUS \
     --master_addr=$MASTER_ADDR \
     --master_port=$MASTER_PORT \
     train_base.py \
     --batch_size $BATCH_SIZE \
-    --train_seq_len $TRAIN_SEQ_LEN \
-    --val_seq_len $VAL_SEQ_LEN \
+    --train_seq_len $LOCAL_TRAIN_SEQ_LEN \
+    --val_seq_len $LOCAL_VAL_SEQ_LEN \
     --num_iterations $NUM_ITERATIONS \
     --model_size $MODEL_SIZE \
-    --run_info "Exp 13.0: Sweep on model size (Fineweb 0.8B - Baseline GPT-2 $MODEL_SIZE)"
+    --run_info "Exp 13.0: Sweep on model size (Fineweb 0.8B - Baseline GPT-2 $MODEL_SIZE, train_seq_len=$LOCAL_TRAIN_SEQ_LEN)"
 done
 
 
