@@ -32,6 +32,7 @@ def parse_args():
     parser.add_argument("--test_files", type=str, default="data/multiplication_test_ood*.bin")
     parser.add_argument("--train_seq_len", type=int, default=32*1024)
     parser.add_argument("--val_seq_len", type=int, default=32*1024)
+    parser.add_argument("--model_size", type=str, default="small") # model size
     parser.add_argument("--log_grad_info", action="store_true")
     parser.add_argument("--num_iterations", type=int, default=1750)
     parser.add_argument("--use_prior_weights", action="store_true")
@@ -175,6 +176,7 @@ class Hyperparameters:
     train_seq_len : int = 32*1024 # FlexAttention sequence length (per GPU)
     val_seq_len : int = 32*1024 # FlexAttention sequence length for validation (per GPU)
     batch_size : int = 8 # Batch size, across all devices
+    model_size: str = "small" # model size
     # optimization
     num_iterations : int = 1750 # number of iterations to run
     cooldown_frac : float = 0.4 # fraction of training spent cooling down the learning rate
@@ -195,7 +197,8 @@ for k, v in vars(cli_args).items():
         setattr(args, k, v)
 
 if "40" in torch.cuda.get_device_properties("cuda").name: 
-    model_config = GPTConfig(
+    model_config = GPTConfig.gpt_size(
+        args.model_size,
         vocab_size=args.vocab_size,
         flex_kernel_options={
             "BLOCK_M": 32, "BLOCK_N": 32,
@@ -203,7 +206,8 @@ if "40" in torch.cuda.get_device_properties("cuda").name:
         }
     )
 else:     
-    model_config = GPTConfig(
+    model_config = GPTConfig.gpt_size(
+        args.model_size,
         vocab_size=args.vocab_size,
         flex_kernel_options={
             "BLOCK_M": 64, "BLOCK_N": 64,
@@ -415,6 +419,7 @@ print0("Experiment configuration: \n", console=True)
 print0(f"-- batch_size: {args.batch_size}", console=True)
 print0(f"-- train_seq_len: {args.train_seq_len}", console=True)
 print0(f"-- val_seq_len: {args.val_seq_len}", console=True)
+print0(f"-- model_size: {args.model_size}", console=True)
 print0(f"loss record:\n{loss_record}", console=True)
 
 dist.destroy_process_group()

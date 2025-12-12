@@ -133,6 +133,7 @@ class Block(nn.Module):
 
 @dataclass
 class GPTConfig:
+    model_size: str = "small" # model size
     vocab_size : int = 50304
     n_layer : int = 12
     n_head : int = 6
@@ -140,6 +141,19 @@ class GPTConfig:
     flex_kernel_options: Optional[dict] = None
     device: str = "cuda" if torch.cuda.is_available() else "cpu"
     _compile: bool = True if device == "cuda" else False
+
+    @classmethod
+    def gpt_size(cls, size: str):
+        if size == "small":
+            return cls(n_layer=12, n_head=6, n_embd=768)
+        elif size == "medium":
+            return cls(n_layer=16, n_head=8, n_embd=1024)
+        elif size == "large":
+            return cls(n_layer=24, n_head=16, n_embd=1536)
+        elif size == "xl":
+            return cls(n_layer=32, n_head=24, n_embd=2048)
+        else:
+            raise ValueError(f"Invalid GPT size: {size}")
 
 
 class GPT(nn.Module):
