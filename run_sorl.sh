@@ -51,6 +51,12 @@ ABSTRACT_VOCAB_SIZE=256
 #   (b). sweep on larger parameter sized model instead
 # ================================================
 
+# Obs 
+# 1. GPT2-medium has better perplexity but on-par (slightly worse) greedy advatantage compared to GPT2-small 
+# Hyp
+# 1. We need bigger subset on FineWeb to include more repetition for abstraction to form (?)
+# 2. We need more epochs to let greedy adv to form for GPT2-medium (?)
+
 torchrun \
   --nproc_per_node=$N_GPUS \
   --master_addr=$MASTER_ADDR \
@@ -205,50 +211,51 @@ done
 # TinyStories Dataset 
 # - well-trained ckpt
 # -> full tinystories dataset got about 1GB tokens
-# -> I don't think 500 step is sufficient here
+# -> SORL + GAPT doesn't match baseline performance here
+# -> Save ckpt from baseline, then adapt it with SoRL for a try?
+# -> We could also include 'context compression' trick along the line? 
 # ======================
-# ALPHA_MARG_ENT=1.0
-# DECAY=0.8
-# TARGET_VOCAB_UTIL=0.8
-# K=4
-# ABSTRACT_VOCAB_SIZE=16
-# torchrun \
-#   --nproc_per_node=$N_GPUS \
-#   --master_addr=$MASTER_ADDR \
-#   --master_port=$MASTER_PORT \
-#   train_sorl_v3.py \
-#   --batch_size $BATCH_SIZE \
-#   --train_seq_len $TRAIN_SEQ_LEN \
-#   --val_seq_len $VAL_SEQ_LEN \
-#   --num_iterations 5000 \
-#   --num_rollouts $NUM_ROLLOUTS \
-#   --K $K \
-#   --abstract_vocab_size $ABSTRACT_VOCAB_SIZE \
-#   --save_checkpoint \
-#   --max_iterations $MAX_ITERATIONS \
-#   --min_temperature 0.0 \
-#   --temperature 5.0 \
-#   --alpha_loss $ALPHA_LOSS \
-#   --alpha_marg_ent $ALPHA_MARG_ENT \
-#   --decay $DECAY \
-#   --target_vocab_util $TARGET_VOCAB_UTIL \
-#   --use_orthogonal_init \
-#   --utility_scaling \
-#   --use_static_memory_span \
-#   --use_gapt \
-#   --traj_perplexity_patience 40 \
-#   --run_info "Exp2.1 TinyStories Dataset (K=$K, abstract_vocab_size=$ABSTRACT_VOCAB_SIZE, static memory span)"
+ALPHA_MARG_ENT=1.0
+DECAY=0.8
+TARGET_VOCAB_UTIL=0.8
+K=4
+ABSTRACT_VOCAB_SIZE=16
+torchrun \
+  --nproc_per_node=$N_GPUS \
+  --master_addr=$MASTER_ADDR \
+  --master_port=$MASTER_PORT \
+  train_sorl_v3.py \
+  --batch_size $BATCH_SIZE \
+  --train_seq_len $TRAIN_SEQ_LEN \
+  --val_seq_len $VAL_SEQ_LEN \
+  --num_iterations 5000 \
+  --num_rollouts $NUM_ROLLOUTS \
+  --K $K \
+  --abstract_vocab_size $ABSTRACT_VOCAB_SIZE \
+  --save_checkpoint \
+  --max_iterations $MAX_ITERATIONS \
+  --min_temperature 0.0 \
+  --temperature 5.0 \
+  --alpha_loss $ALPHA_LOSS \
+  --alpha_marg_ent $ALPHA_MARG_ENT \
+  --decay $DECAY \
+  --target_vocab_util $TARGET_VOCAB_UTIL \
+  --use_orthogonal_init \
+  --utility_scaling \
+  --use_static_memory_span \
+  --run_info "Exp2.1 TinyStories Dataset (K=$K, abstract_vocab_size=$ABSTRACT_VOCAB_SIZE, static memory span)"
 
-# # Basline on TinyStories
-# torchrun \
-#   --nproc_per_node=$N_GPUS \
-#   --master_addr=$MASTER_ADDR \
-#   --master_port=$MASTER_PORT \
-#   train_base.py \
-#   --batch_size $BATCH_SIZE \
-#   --train_seq_len $TRAIN_SEQ_LEN \
-#   --val_seq_len $VAL_SEQ_LEN \
-#   --num_iterations $NUM_ITERATIONS \
-#   --train_files "data/tinystories/tinystory_train_*.bin" \
-#   --val_files "data/tinystories/tinystory_val_*.bin" \
-#   --run_info "Baseline on TinyStories Dataset"
+# Basline on TinyStories
+torchrun \
+  --nproc_per_node=$N_GPUS \
+  --master_addr=$MASTER_ADDR \
+  --master_port=$MASTER_PORT \
+  train_base.py \
+  --batch_size $BATCH_SIZE \
+  --train_seq_len $TRAIN_SEQ_LEN \
+  --val_seq_len $VAL_SEQ_LEN \
+  --num_iterations $NUM_ITERATIONS \
+  --save_checkpoint \
+  --train_files "data/tinystories/tinystory_train_*.bin" \
+  --val_files "data/tinystories/tinystory_val_*.bin" \
+  --run_info "Baseline on TinyStories Dataset (save ckpt)"

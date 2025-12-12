@@ -37,6 +37,8 @@ def parse_args():
     parser.add_argument("--num_iterations", type=int, default=1750)
     parser.add_argument("--use_prior_weights", action="store_true")
     parser.add_argument("--prior_weight", type=str, default="natural")
+    parser.add_argument("--save_checkpoint", action="store_true", default=False)
+    parser.add_argument("--run_info", type=str, default="")
     return parser.parse_args()
 
 # -----------------------------------------------------------------------------
@@ -416,6 +418,7 @@ print0(f"peak memory allocated: {torch.cuda.max_memory_allocated() // 1024 // 10
        f"reserved: {torch.cuda.max_memory_reserved() // 1024 // 1024} MiB", console=True)
 
 print0("Experiment configuration: \n", console=True)
+print0(f"-- run_info: {args.run_info}", console=True)
 print0(f"-- batch_size: {args.batch_size}", console=True)
 print0(f"-- train_seq_len: {args.train_seq_len}", console=True)
 print0(f"-- val_seq_len: {args.val_seq_len}", console=True)
