@@ -12,6 +12,12 @@ import torch.nn as nn
 BOS_TOKEN_ID = 50256
 # BOS_TOKEN_ID = 20 # for arithmetic dataset
 
+# GPT-2 small: num_layers=12, num_heads=6, model_dim=768
+# GPT-2 medium: num_layers=16, num_heads=8, model_dim=1024
+# GPT-2 large: num_layers=24, num_heads=16, model_dim=1536
+# GPT-2 xl: num_layers=32, num_heads=24, model_dim=2048
+
+
 @dataclass
 class GATConfig:
     vocab_sizes : list
@@ -21,6 +27,19 @@ class GATConfig:
     flex_kernel_options: Optional[dict] = None
     device: str = "cuda" if torch.cuda.is_available() else "cpu"
     _compile: bool = True if device == "cuda" else False
+
+    @classmethod
+    def gpt_size(cls, size: str, vocab_sizes: List[int], flex_kernel_options: Optional[dict] = None):
+        if size == "small": 
+            return cls(n_layer=12, n_head=6, n_embd=768, vocab_sizes=vocab_sizes, flex_kernel_options=flex_kernel_options)
+        elif size == "medium":
+            return cls(n_layer=16, n_head=8, n_embd=1024, vocab_sizes=vocab_sizes, flex_kernel_options=flex_kernel_options)
+        elif size == "large":
+            return cls(n_layer=24, n_head=16, n_embd=1536, vocab_sizes=vocab_sizes, flex_kernel_options=flex_kernel_options)
+        elif size == "xl":
+            return cls(n_layer=32, n_head=24, n_embd=2048, vocab_sizes=vocab_sizes, flex_kernel_options=flex_kernel_options)
+        else:
+            raise ValueError(f"Invalid GPT size: {size}")
 
 get_level_mask_tokens = lambda vocab_sizes: torch.cat(
     (

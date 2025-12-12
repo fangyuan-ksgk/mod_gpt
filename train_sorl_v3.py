@@ -35,6 +35,9 @@ def parse_args():
     parser.add_argument("--num_iterations", type=int, default=1750)
     parser.add_argument("--save_checkpoint", action="store_true", default=False)
     parser.add_argument("--log_grad_info", action="store_true")
+
+    # Model
+    parser.add_argument("--model_size", type=str, default="small") # model size
     
     # SoRL / Search
     parser.add_argument("--num_rollouts", type=int, default=2)
@@ -261,7 +264,8 @@ for k, v in vars(cli_args).items():
 
 # check SRAM
 if "40" in torch.cuda.get_device_properties("cuda").name: 
-    model_config = GATConfig(
+    model_config = GATConfig.gpt_size(
+        args.model_size,
         vocab_sizes=[args.vocab_size, args.abstract_vocab_size],
         flex_kernel_options={
             "BLOCK_M": 32, "BLOCK_N": 32,
@@ -269,7 +273,8 @@ if "40" in torch.cuda.get_device_properties("cuda").name:
         }
     )
 else: 
-    model_config = GATConfig(
+    model_config = GATConfig.gpt_size(
+        args.model_size,
         vocab_sizes=[args.vocab_size, args.abstract_vocab_size],
         flex_kernel_options={
             "BLOCK_M": 64, "BLOCK_N": 64,
