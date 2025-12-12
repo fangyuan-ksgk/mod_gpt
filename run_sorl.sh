@@ -131,6 +131,21 @@ for MODEL_SIZE in "medium" "large" "xl"; do
 done
 
 
+for MODEL_SIZE in "medium" "large" "xl"; do
+  torchrun \
+    --nproc_per_node=$N_GPUS \
+    --master_addr=$MASTER_ADDR \
+    --master_port=$MASTER_PORT \
+    train_base.py \
+    --batch_size $BATCH_SIZE \
+    --train_seq_len $TRAIN_SEQ_LEN \
+    --val_seq_len $VAL_SEQ_LEN \
+    --num_iterations $NUM_ITERATIONS \
+    --model_size $MODEL_SIZE \
+    --run_info "Exp 13.0: Sweep on model size (Fineweb 0.8B - Baseline GPT-2 $MODEL_SIZE)"
+done
+
+
 
 # ===============================================
 # Exp 12.6: 
