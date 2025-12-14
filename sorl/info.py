@@ -311,7 +311,6 @@ class SoRLLoss_v4(nn.Module):
 
         ppt, logits = model.forward(data, memory_span, attn_blocksize)
         ppt = ppt.reshape(data.shape[0], -1)
-        ppt = ppt * utility_reward
         logits = logits.reshape(data.shape[0], -1, logits.size(-1))
 
         levels = (data >= model.vocab_sizes[0]).long()[:, 1:]
@@ -327,7 +326,7 @@ class SoRLLoss_v4(nn.Module):
         valid_abs_mask = bos_pos_mask * abs_mask
 
         traj_loss = (ppt * valid_traj_mask).sum() / valid_traj_mask.sum().clamp(min=1)
-        abs_loss = (ppt * valid_abs_mask).sum() / valid_abs_mask.sum().clamp(min=1)
+        abs_loss = (ppt * utility_reward * valid_abs_mask).sum() / valid_abs_mask.sum().clamp(min=1)
 
         abs_positions = abs_mask.bool()
         abs_logits = logits[:, :-1][:, abs_positions, model.vocab_sizes[0]:]
@@ -398,3 +397,51 @@ class SoRLLoss_v5(nn.Module):
 
         # --- Return: p(s | a), p(a | s), KL(p(a_t, a_t+1), soft_zipf_prior) ---
         return traj_loss, abs_loss, soft_zipf_kl, topo_loss
+
+
+class SoRLLoss_v6(nn.Module): 
+    """
+    SoRL loss: p(s | a) - p(s), p(a | s), KL(p(a_t, a_t+1), soft_zipf_prior), corr(d(a), d(r))
+    """
+
+    def __init__(self, abs_vocab_size, decay=0.8, target_vocab_util=0.8):
+        super().__init__()
+        self.decay = decay
+        self.zipf_loss = Zipfian2gramLoss(abs_vocab_size, decay, target_vocab_util)
+
+    def forward(self, data, model, base_traj_ppt, memory_span: int, attn_blocksize: int, 
+                      utility_reward: torch.Tensor):
+ 
+        # topo distance on hidden states instead of logits 
+
+        ppt, logits, hidden_states = model.forward_with_hidden_states(data, memory_span, attn_blocksize)
+        ppt = ppt.reshape(data.shape[0], -1)
+        logits = logits.reshape(data.shape[0], -1, logits.size(-1))
+        hidden_states = hidden_states.reshape(data.shape[0], -1, hidden_states.size(-1))
+
+        traj_mask = (data[:, 1:] < model.vocab_sizes[0])
+        traj_ppt = ppt[traj_mask]
+        info_loss = (traj_ppt - base_traj_ppt[..., :traj_ppt.shape[-1]]).mean() # traj ppt might be truncated
+        
+        abs_loss = (ppt * utility_reward)[~traj_mask].mean() # scale on policy gradient only
+
+        # --- KL(p(a_t, a_t+1), soft_zipf_prior) --- 
+        abs_logits = logits[:, :-1][:, ~traj_mask.squeeze(0), model.vocab_sizes[0]:]
+        soft_zipf_kl = self.zipf_loss(abs_logits)
+
+        # --- topo similarity loss --- 
+        levels = (data >= model.vocab_sizes[0])
+        abs_data = data[levels].reshape((data == BOS_TOKEN_ID).sum(), -1)
+        abs_dist = pairwise_hamming_dist(abs_data)
+
+        eos_mask = torch.cat([(data[0, 1:] == BOS_TOKEN_ID), torch.tensor([True], device=data.device)])
+        eos_reps = hidden_states[:, eos_mask, :]
+
+        eos_rep_norm = F.normalize(eos_reps, p=2, dim=-1)
+        cosine_sim = torch.bmm(eos_rep_norm, eos_rep_norm.transpose(1, 2))
+        eos_dist = 1 - cosine_sim
+
+        topo_loss = compute_topo_loss(abs_dist, eos_dist, mode=1)
+
+        # --- Return: p(s | a), p(a | s), KL(p(a_t, a_t+1), soft_zipf_prior) ---
+        return info_loss, abs_loss, soft_zipf_kl, topo_loss

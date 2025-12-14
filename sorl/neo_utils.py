@@ -166,6 +166,40 @@ def select_best_per_doc_v2(search_data, ppt, levels, r_min: float = 1.0, reward_
 
     return best_seq.unsqueeze(0), best_ppt, best_ppt_advantage.mean(), utility_reward
 
+def select_best_info_gain(tokens, base_traj_ppt, search_data, ppt, levels): 
+    """Information Gain SoRL"""
+    # --- abstraction conditioned perplexity ---
+    trajectory_mask = (levels[:, 1:] == 0).float()
+    trajectory_ppt = ppt * trajectory_mask
+    abs_ppt = ppt * (1 - trajectory_mask)
+
+    doc_idx = (search_data == BOS_TOKEN_ID).cumsum(dim=1)
+    doc_idx = doc_idx - doc_idx.min(dim=1, keepdim=True).values # idx starts from 0  
+    doc_ppt = avg_ppt_per_sample(trajectory_ppt, doc_idx[:,1:])
+
+    # --- base modeling perplexity ---
+    base_doc_idx = (tokens == BOS_TOKEN_ID).cumsum(dim=1)
+    base_doc_idx = base_doc_idx - base_doc_idx.min()
+    base_doc_ppt = avg_ppt_per_sample(base_traj_ppt[None, :], base_doc_idx[:, 1:])
+
+    # --- info-gain --- 
+    doc_info_gain = base_doc_ppt - doc_ppt
+
+    max_doc_info_gain, best_rollout_per_doc = doc_info_gain.max(dim=0) # argmax
+    rollout_for_each_pos = best_rollout_per_doc[doc_idx[0]]
+
+    best_seq = search_data[rollout_for_each_pos, torch.arange(search_data.shape[1], device=search_data.device)]
+    best_ppt = ppt[rollout_for_each_pos[1:], torch.arange(ppt.shape[1], device=ppt.device)]
+
+    max_doc_ppt, min_doc_ppt = doc_ppt.max(dim=0).values, doc_ppt.min(dim=0).values
+    best_ppt_advantage = (max_doc_ppt - min_doc_ppt) / max_doc_ppt.clamp(min=1e-8)
+
+    # --- info-gain reward --- 
+    info_gain_reward_doc = torch.exp(max_doc_info_gain)
+    info_gain_reward = info_gain_reward_doc[doc_idx[0, 1:]]
+
+    return best_seq.unsqueeze(0), best_ppt, best_ppt_advantage, info_gain_reward
+
 def compute_abs_util(trajectory_ppt, abs_ppt, K): 
     chunk_means = F.avg_pool1d(F.pad(trajectory_ppt.float()[:, 1:], (0, K)), kernel_size=K, stride=1)
     abs_util = chunk_means[abs_ppt > 0].reshape(abs_ppt.shape[0], -1)
@@ -485,7 +519,30 @@ def sorl_search_v6(tokens, model, n=3, K=3, max_iterations=1,
 
     best_data, _, _, utility_reward = select_best_per_doc_v2(search_data, search_ppt, levels, r_min=r_min, reward_mode=reward_mode)
     return best_data, utility_reward
+
+def sorl_search_v7(tokens, model, ema_model, n=3, K=3, max_iterations=1,
+                memory_span=1792, attn_blocksize=1792, temperature: Union[float, torch.Tensor] = 1.0, truncate_seq_len: bool = True, r_min: float = 1.0, reward_mode: int = 0): 
+    """
+    InfoGain reward SoRL
+    """
+    # --- compute base trajectory perplexity ---
+    base_traj_ppt, _ = ema_model.forward(tokens, memory_span, attn_blocksize)
     
+    # --- generate & evaluate rollouts ---
+    search_data, search_ppt = sorl_rollout_v2(tokens, model, n=n, K=K, 
+                               max_iterations=max_iterations,
+                               memory_span=memory_span,
+                               attn_blocksize=attn_blocksize,
+                               temperature=temperature,
+                               truncate_seq_len=truncate_seq_len)
+    search_ppt = search_ppt.reshape(search_data.shape[0], -1)
+
+    # --- select best rollouts ---
+    levels = (search_data >= model.vocab_sizes[0]).long()
+    best_data, _, _, info_gain_reward = select_best_info_gain(tokens, base_traj_ppt, search_data, search_ppt, levels)
+    
+    return best_data, info_gain_reward, base_traj_ppt
+
 
 def sorl_evaluate(tokens, model, n=2, K=4, max_iterations=1, memory_span=1792, attn_blocksize=1792, temperature: Union[float, torch.Tensor] = 1.0,
                   loss_mask: Optional[torch.Tensor] = None, truncate_seq_len: bool = True):
