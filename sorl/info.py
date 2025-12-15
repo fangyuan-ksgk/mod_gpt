@@ -427,21 +427,7 @@ class SoRLLoss_v6(nn.Module):
         abs_logits = logits[:, :-1][:, ~traj_mask.squeeze(0), model.vocab_sizes[0]:]
         soft_zipf_kl = self.zipf_loss(abs_logits)
 
-        # --- topo similarity loss --- 
-        levels = (data >= model.vocab_sizes[0])
-        abs_data = data[levels].reshape((data == BOS_TOKEN_ID).sum(), -1)
-        abs_dist = pairwise_hamming_dist(abs_data)
-
-        eos_mask = torch.cat([(data[0, 1:] == BOS_TOKEN_ID), torch.tensor([True], device=data.device)])
-        eos_reps = hidden_states[:, eos_mask, :]
-
-        eos_rep_norm = F.normalize(eos_reps, p=2, dim=-1)
-        cosine_sim = torch.bmm(eos_rep_norm, eos_rep_norm.transpose(1, 2))
-        eos_dist = 1 - cosine_sim
-
-        topo_loss = compute_topo_loss(abs_dist, eos_dist, mode=1)
-
         base_traj_loss = model.forward(data, memory_span, attn_blocksize)[0].mean()
 
         # --- Return: p(s), p(s | a)/p(s), p(a | s), KL(p(a_t, a_t+1), soft_zipf_prior) ---
-        return base_traj_loss, info_loss, abs_loss, soft_zipf_kl, topo_loss 
+        return base_traj_loss, info_loss, abs_loss, soft_zipf_kl 
