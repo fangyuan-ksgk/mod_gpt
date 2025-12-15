@@ -394,7 +394,7 @@ for i in range(warmup_steps):
     search_end = time.time()
     print(f" :: Sorl search takes {search_end - search_start} second")
     # --- compute loss --- 
-    base_loss, info_loss, abs_loss, zipf_loss, topo_loss = loss_fn(search_tokens, model, base_traj_ppt, memory_span, attn_blocksize, rew[1:])
+    base_loss, info_loss, abs_loss, zipf_loss, topo_loss = loss_fn(search_tokens, model, base_traj_ppt, memory_span, attn_blocksize, rew)
     forward_end = time.time()
     print(f" :: Loss computation takes {forward_end - search_end} second")
     # --- backward --- 
@@ -514,7 +514,7 @@ for step in range(train_steps + 1):
                                                                 )
 
         # --- compute loss --- 
-        base_loss, info_loss, abs_loss, zipf_loss, topo_loss = loss_fn(search_tokens, model, base_traj_ppt, memory_span, attn_blocksize, rew[1:])
+        base_loss, info_loss, abs_loss, zipf_loss, topo_loss = loss_fn(search_tokens, model, base_traj_ppt, memory_span, attn_blocksize, rew)
         loss = base_loss + args.alpha_info_gain * info_loss + args.alpha_loss * abs_loss + args.alpha_marg_ent * zipf_loss
         
         loss.backward()
