@@ -1,11 +1,13 @@
 # Catastrophic Forgetting probes 
 # -------------------------------
 import torch
+from data.tinystory_local import fig_to_pil
 from sorl.neo_utils import sorl_rollout_v2, select_best_per_doc_v2, sorl_evaluate_v2, sorl_rollout_v3, avg_ppt_per_sample
 from sorl.gat_act import BOS_TOKEN_ID
 import scipy.stats
 import matplotlib.pyplot as plt
 import numpy as np
+from sorl.neo_utils import select_best_info_gain
 
 def compute_abs_stats(tokens, model, n, K, max_iterations, memory_span, attn_blocksize, temperature, truncate_seq_len):
         
@@ -28,7 +30,7 @@ def compute_abs_stats(tokens, model, n, K, max_iterations, memory_span, attn_blo
     # --- greedy rollout's advantage ---
     valid_traj_mask = bos_pos_mask * traj_mask
     raw_ppt_adv = (search_ppt[1:].mean(dim=0) - search_ppt[0]) / (search_ppt[1:].mean(dim=0) + 1e-8)
-    search_adv = (raw_ppt_adv * valid_traj_mask[0]).sum() / valid_traj_mask[0].sum().clamp(min=1)
+    greedy_adv = (raw_ppt_adv * valid_traj_mask[0]).sum() / valid_traj_mask[0].sum().clamp(min=1)
 
     # --- losses ---
     greedy_ppt = search_ppt[0]
@@ -43,7 +45,25 @@ def compute_abs_stats(tokens, model, n, K, max_iterations, memory_span, attn_blo
     greedy_abs_logits = abs_logits[0, abs_mask.bool(), :]
     greedy_abs_tokens = search_data[0, 1:][abs_mask.bool()]
 
-    return doc_ppt, greedy_abs_logits, greedy_abs_tokens
+    # --- base traj loss ---
+    base_traj_ppt, _  = model.forward(tokens, memory_span, attn_blocksize)
+    levels = (search_data >= model.vocab_sizes[0]).long()
+    best_data, best_ppt, _, info_gain_reward = select_best_info_gain(tokens, base_traj_ppt, search_data, search_ppt, levels)
+    best_traj_ppt = best_ppt[best_data[0, 1:] < model.vocab_sizes[0]]
+    info_gain = (base_traj_ppt[..., :best_traj_ppt.shape[-1]] - best_traj_ppt) # traj ppt might be truncated
+    
+    
+    rel_info_gain = info_gain.mean() / base_traj_ppt[..., :best_traj_ppt.shape[-1]].mean() # focus on hard case
+
+    rel_info_gain_v2 = (info_gain / base_traj_ppt[..., :best_traj_ppt.shape[-1]].clamp(min=1e-8)).mean() # focus on simple case
+
+    traj_mask = best_data[0, 1:] < model.vocab_sizes[0]
+    traj_doc_idx = doc_idx[0, 1:][traj_mask]
+    doc_info_gain = avg_ppt_per_sample(info_gain.unsqueeze(0), traj_doc_idx.unsqueeze(0)).squeeze(0)
+    doc_base_traj_ppt = avg_ppt_per_sample(base_traj_ppt.unsqueeze(0), traj_doc_idx.unsqueeze(0)).squeeze(0)
+    doc_rel_info_gain = doc_info_gain / doc_base_traj_ppt
+
+    return doc_ppt, greedy_abs_logits, greedy_abs_tokens, doc_rel_info_gain, rel_info_gain, greedy_adv, base_traj_ppt.mean() 
 
 
 def train_forget_vec(train_idx, loader, model, abs_stats, abs_stats_post, optimizer, num_steps,
@@ -254,3 +274,34 @@ def plot_normalized_correlation_lines(correlation_data, correlations,
     
     plt.tight_layout()
     plt.show()
+
+
+def plot_rel_info_gain_vs_step(record):
+    
+    steps = range(len(record['rel_search_info_gain']))
+
+    fig, ax1 = plt.subplots(figsize=(8,5))
+
+    color1 = 'tab:blue'
+    ax1.set_xlabel('Step')
+    ax1.set_ylabel('Rel Search Info Gain', color=color1)
+    line1, = ax1.plot(steps, record['rel_search_info_gain'], label='Rel Search Info Gain', color=color1)
+    ax1.tick_params(axis='y', labelcolor=color1)
+
+    # Draw rel search info gain = 0 line as a dotted line
+    ax1.axhline(0, color=color1, linestyle=':', linewidth=1, label='Info Gain = 0')
+
+    ax2 = ax1.twinx()  # instantiate a second axes that shares the same x-axis
+
+    color2 = 'tab:orange'
+    ax2.set_ylabel('Search Adv', color=color2)  
+    line2, = ax2.plot(steps, record['greedy_adv'], label='Search Adv', color=color2)
+    ax2.tick_params(axis='y', labelcolor=color2)
+
+    plt.title('SoRL -> SoRL (abs re-init)\nRel Search Info Gain & Search Adv vs. Step')
+
+    lines = [line1, line2]
+    labels = [line.get_label() for line in lines]
+    plt.legend(lines, labels, loc='best')
+
+    return fig_to_pil(fig)

@@ -412,8 +412,6 @@ class SoRLLoss_v6(nn.Module):
     def forward(self, data, model, base_traj_ppt, memory_span: int, attn_blocksize: int, 
                       utility_reward: torch.Tensor):
  
-        # topo distance on hidden states instead of logits 
-
         ppt, logits, hidden_states = model.forward_with_hidden_states(data, memory_span, attn_blocksize)
         ppt = ppt.reshape(data.shape[0], -1)
         logits = logits.reshape(data.shape[0], -1, logits.size(-1))
@@ -421,7 +419,7 @@ class SoRLLoss_v6(nn.Module):
 
         traj_mask = (data[:, 1:] < model.vocab_sizes[0])
         traj_ppt = ppt[traj_mask]
-        info_loss = (traj_ppt - base_traj_ppt[..., :traj_ppt.shape[-1]]).mean() # traj ppt might be truncated
+        info_loss = (traj_ppt - base_traj_ppt.detach()[..., :traj_ppt.shape[-1]]).mean() # traj ppt might be truncated
         
         abs_loss = (ppt * utility_reward)[~traj_mask].mean() # scale on policy gradient only
 
@@ -444,4 +442,4 @@ class SoRLLoss_v6(nn.Module):
         topo_loss = compute_topo_loss(abs_dist, eos_dist, mode=1)
 
         # --- Return: p(s | a), p(a | s), KL(p(a_t, a_t+1), soft_zipf_prior) ---
-        return info_loss, abs_loss, soft_zipf_kl, topo_loss
+        return info_loss, abs_loss, soft_zipf_kl, topo_loss 

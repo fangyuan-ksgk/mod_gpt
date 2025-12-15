@@ -199,13 +199,15 @@ class AbstractionStatistics:
         self.abs_logits = torch.zeros(self.n_doc, self.n_abs, self.abs_vocab_size, dtype=torch.float32, device=self.device)
         self.docs_updated = torch.zeros(self.n_doc, dtype=torch.bool, device=self.device)
         self.traj_perplexity = torch.zeros(self.n_doc, dtype=torch.float32, device=self.device) # - log p(s | a) for each document
+        self.info_gain_reward = torch.zeros(self.n_doc, dtype=torch.float32, device=self.device) # info gain reward for each document
 
-    def update(self, abs_logits, traj_loss, abs_tokens, doc_ids):
+    def update(self, abs_logits, traj_loss, info_gain_reward, abs_tokens, doc_ids):
         """Store raw data only. Handles duplicate doc_ids by taking the first occurrence."""
         
         batch_size = doc_ids.shape[0]
         reshaped_logits = abs_logits.reshape(batch_size, self.n_abs, self.abs_vocab_size)
         reshaped_tokens = abs_tokens.reshape(batch_size, self.n_abs)
+        reshaped_info_gain_reward = info_gain_reward.reshape(batch_size)
 
         batch_doc_indices, inverse_indices = torch.unique(doc_ids, return_inverse=True)
 
@@ -216,11 +218,14 @@ class AbstractionStatistics:
 
         selected_logits = reshaped_logits[unique_indices]
         selected_tokens = reshaped_tokens[unique_indices]
+        selected_info_gain_reward = reshaped_info_gain_reward[unique_indices]
+        selected_traj_loss = traj_loss[unique_indices]
         
         self.abs_seqs[batch_doc_indices] = selected_tokens
         self.abs_logits[batch_doc_indices] = selected_logits
-        self.traj_perplexity[batch_doc_indices] = traj_loss
+        self.traj_perplexity[batch_doc_indices] = selected_traj_loss
         self.docs_updated[batch_doc_indices] = True
+        self.info_gain_reward[batch_doc_indices] = selected_info_gain_reward
 
     @property 
     def valid_docs(self): 

@@ -520,14 +520,13 @@ def sorl_search_v6(tokens, model, n=3, K=3, max_iterations=1,
     best_data, _, _, utility_reward = select_best_per_doc_v2(search_data, search_ppt, levels, r_min=r_min, reward_mode=reward_mode)
     return best_data, utility_reward
 
-def sorl_search_v7(tokens, model, ema_model, n=3, K=3, max_iterations=1,
+def sorl_search_v7(tokens, model, n=3, K=3, max_iterations=1,
                 memory_span=1792, attn_blocksize=1792, temperature: Union[float, torch.Tensor] = 1.0, truncate_seq_len: bool = True, r_min: float = 1.0, reward_mode: int = 0): 
     """
     InfoGain reward SoRL
     """
-    # --- compute base trajectory perplexity ---
-    base_traj_ppt, _ = ema_model.forward(tokens, memory_span, attn_blocksize)
-    
+    base_traj_ppt, _ = model.forward(tokens, memory_span, attn_blocksize)
+
     # --- generate & evaluate rollouts ---
     search_data, search_ppt = sorl_rollout_v2(tokens, model, n=n, K=K, 
                                max_iterations=max_iterations,
