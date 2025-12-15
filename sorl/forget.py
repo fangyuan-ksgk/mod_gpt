@@ -298,7 +298,7 @@ def plot_rel_info_gain_vs_step(record):
     line2, = ax2.plot(steps, record['greedy_adv'], label='Search Adv', color=color2)
     ax2.tick_params(axis='y', labelcolor=color2)
 
-    plt.title('SoRL -> SoRL (abs re-init)\nRel Search Info Gain & Search Adv vs. Step')
+    plt.title('SoRL Search Info Gain & Search Adv vs. Step')
 
     lines = [line1, line2]
     labels = [line.get_label() for line in lines]

@@ -610,18 +610,22 @@ def sorl_evaluate_v2(tokens, model, n=2, K=4, max_iterations=1, memory_span=1792
 
     # --- losses ---
     greedy_ppt = search_ppt[0]
-    abs_mask = 1 - traj_mask[0]
+    valid_traj_mask = valid_traj_mask[0].bool()
+    abs_mask = (1 - traj_mask[0]).bool()
+    traj_mask = traj_mask[0].bool()
     
-    valid_traj = valid_traj_mask[0]
-    valid_abs = bos_pos_mask[0] * abs_mask
+    traj_loss = greedy_ppt[valid_traj_mask] 
+    abs_loss = greedy_ppt[abs_mask]
     
-    traj_loss = (greedy_ppt * valid_traj).sum() / valid_traj.sum().clamp(min=1)
-    abs_loss = (greedy_ppt * valid_abs).sum() / valid_abs.sum().clamp(min=1)
+    greedy_abs_logits = abs_logits[0, abs_mask, :]
+    greedy_abs_tokens = search_data[0, 1:][abs_mask]
 
-    greedy_abs_logits = abs_logits[0, abs_mask.bool(), :]
-    greedy_abs_tokens = search_data[0, 1:][abs_mask.bool()]
+    normed = F.normalize(greedy_abs_logits, dim=-1)
+    sim_matrix = normed @ normed.T  # shape: [num_abs, num_abs]
+    avg_logit_sim = (sim_matrix.sum() - sim_matrix.trace()) / (sim_matrix.numel() - sim_matrix.shape[0])  # exclude diagonal
 
-    return search_data[:1], search_adv, traj_loss, abs_loss, greedy_abs_logits, greedy_abs_tokens
+
+    return search_data[:1], search_adv, traj_loss, abs_loss, greedy_abs_logits, greedy_abs_tokens, avg_logit_sim
 
 def compute_loss(best_data, model, memory_span: int, attn_blocksize: int,
                  loss_mask: Optional[torch.Tensor] = None):

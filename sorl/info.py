@@ -401,7 +401,7 @@ class SoRLLoss_v5(nn.Module):
 
 class SoRLLoss_v6(nn.Module): 
     """
-    SoRL loss: p(s | a) - p(s), p(a | s), KL(p(a_t, a_t+1), soft_zipf_prior), corr(d(a), d(r))
+    SoRL loss: p(s), p(s | a)/p(s), p(a | s), KL(p(a_t, a_t+1), soft_zipf_prior), corr(d(a), d(r))
     """
 
     def __init__(self, abs_vocab_size, decay=0.8, target_vocab_util=0.8):
@@ -441,5 +441,7 @@ class SoRLLoss_v6(nn.Module):
 
         topo_loss = compute_topo_loss(abs_dist, eos_dist, mode=1)
 
-        # --- Return: p(s | a), p(a | s), KL(p(a_t, a_t+1), soft_zipf_prior) ---
-        return info_loss, abs_loss, soft_zipf_kl, topo_loss 
+        base_traj_loss = model.forward(data, memory_span, attn_blocksize)[0].mean()
+
+        # --- Return: p(s), p(s | a)/p(s), p(a | s), KL(p(a_t, a_t+1), soft_zipf_prior) ---
+        return base_traj_loss, info_loss, abs_loss, soft_zipf_kl, topo_loss 

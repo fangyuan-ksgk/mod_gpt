@@ -1,4 +1,4 @@
-# SoRL on TinyStories ... (in fact it's complete reusable for all dataset)
+# SoRL on TinyStories ... (info gain reward SoRL)
 # -------------------------------------------------------------------------------------
 # Modded gpt speedrun (GPU poor ver. minus Hopper optimization tricks such as FP8 matmul etc.)
 # Heavily borrow code from @KellerJordan
@@ -59,9 +59,7 @@ def parse_args():
     parser.add_argument("--alpha_marg_ent", type=float, default=1.0) # marginal entropy weight
     parser.add_argument("--decay", type=float, default=0.8) # decay for mutual information loss
     parser.add_argument("--target_vocab_util", type=float, default=0.9) # target vocabulary utilization
-    parser.add_argument("--reg_abs_marg_ent", action="store_true", default=False) # regularize on marginal entropy of abstract tokens
-    parser.add_argument("--reg_abs_zipf", action="store_true", default=False) # regularize on zipf distribution of abstract tokens
-    parser.add_argument("--utility_scaling", action="store_true", default=False) # scale utility by document perplexity
+    parser.add_argument("--alpha_info_gain", type=float, default=1.0) # info gain loss weight
 
     # GAPT
     parser.add_argument("--use_gapt", action="store_true", default=False) # use GAPT to balance objectives
@@ -312,7 +310,7 @@ print0(nvidia_smi())
 print0("="*100)
 
 # --- sorl search ---
-from sorl.neo_utils import sorl_search_v6 as sorl_search
+from sorl.neo_utils import sorl_search_v7 as sorl_search
 
 ########################################
 #    Construct model and optimizer     #
@@ -356,18 +354,9 @@ def get_lr(step: int):
         w = (1 - x) / args.cooldown_frac
         return w * 1.0 + (1 - w) * 0.1
 
-# SoRL loss function
-assert args.reg_abs_marg_ent or args.reg_abs_zipf or args.utility_scaling, "Either reg_abs_marg_ent or reg_abs_zipf or utility_scaling must be True"
-if args.reg_abs_marg_ent: 
-    from sorl.info import SoRLLoss
-    loss_fn = SoRLLoss(model.vocab_sizes[1], decay=args.decay, target_vocab_util=args.target_vocab_util)
-    args.alpha_marg_ent *= -1.0
-elif args.reg_abs_zipf: 
-    from sorl.info import SoRLLoss_v3
-    loss_fn = SoRLLoss_v3(model.vocab_sizes[1], decay=args.decay, target_vocab_util=args.target_vocab_util)
-if args.utility_scaling:
-    from sorl.info import SoRLLoss_v4
-    loss_fn = SoRLLoss_v4(model.vocab_sizes[1], decay=args.decay, target_vocab_util=args.target_vocab_util)
+# SoRL loss function (info gain loss)
+from sorl.info import SoRLLoss_v6
+loss_fn = SoRLLoss_v6(model.vocab_sizes[1], decay=args.decay, target_vocab_util=args.target_vocab_util)
 loss_fn = loss_fn.to(device)
 
 # compile model
@@ -398,19 +387,16 @@ for i in range(warmup_steps):
     # --- sorl search --- 
     search_start = time.time()
     with torch.no_grad():
-        search_tokens, rew = sorl_search(tokens, model, n=args.num_rollouts, K=args.K, max_iterations=args.max_iterations, memory_span=memory_span, attn_blocksize=attn_blocksize, 
+        search_tokens, rew, base_traj_ppt = sorl_search(tokens, model, n=args.num_rollouts, K=args.K, max_iterations=args.max_iterations, memory_span=memory_span, attn_blocksize=attn_blocksize, 
                                                                           temperature=temperature_warmup)
     search_end = time.time()
     print(f" :: Sorl search takes {search_end - search_start} second")
     # --- compute loss --- 
-    if args.utility_scaling:
-        traj_loss, abs_loss, marg_ent = loss_fn(search_tokens, model, memory_span=memory_span, attn_blocksize=attn_blocksize, utility_reward=rew[1:])
-    else:
-        traj_loss, abs_loss, marg_ent = loss_fn(search_tokens, model, memory_span=memory_span, attn_blocksize=attn_blocksize)
+    base_loss, info_loss, abs_loss, zipf_loss, topo_loss = loss_fn(search_tokens, model, base_traj_ppt, memory_span, attn_blocksize, rew[1:])
     forward_end = time.time()
     print(f" :: Loss computation takes {forward_end - search_end} second")
     # --- backward --- 
-    loss = traj_loss + args.alpha_loss * abs_loss + args.alpha_marg_ent * marg_ent
+    loss = base_loss + args.alpha_info_gain * info_loss + args.alpha_loss * abs_loss + args.alpha_marg_ent * zipf_loss
     loss.backward() 
     backward_end = time.time()
     print(f" :: Backward takes {backward_end - forward_end} second")
@@ -520,25 +506,17 @@ for step in range(train_steps + 1):
     for accum_step in range(train_accumulation_steps): 
         tokens = next(train_loader)
         with torch.no_grad(): 
-            search_tokens, rew = sorl_search(tokens, model, n=args.num_rollouts, K=args.K, max_iterations=args.max_iterations, 
+            search_tokens, rew, base_traj_ppt = sorl_search(tokens, model, n=args.num_rollouts, K=args.K, max_iterations=args.max_iterations, 
                                                                 memory_span=memory_span, attn_blocksize=attn_blocksize, 
                                                                 temperature=temperature_train,
                                                                 )
 
         # --- compute loss --- 
-        if args.utility_scaling:
-            traj_loss, abs_loss, marg_ent = loss_fn(search_tokens, model, memory_span=memory_span, attn_blocksize=attn_blocksize, utility_reward=rew[1:])
-        else:
-            traj_loss, abs_loss, marg_ent = loss_fn(search_tokens, model, memory_span=memory_span, attn_blocksize=attn_blocksize)
-        
-        # --- GAPT: balance objectives ---
-        if args.use_gapt: 
-            loss = gapt.step(traj_loss, args.alpha_loss * abs_loss + args.alpha_marg_ent * marg_ent, verbose=False)
-        else: 
-            loss = traj_loss + args.alpha_loss * abs_loss + args.alpha_marg_ent * marg_ent
+        base_loss, info_loss, abs_loss, zipf_loss, topo_loss = loss_fn(search_tokens, model, base_traj_ppt, memory_span, attn_blocksize, rew[1:])
+        loss = base_loss + args.alpha_info_gain * info_loss + args.alpha_loss * abs_loss + args.alpha_marg_ent * zipf_loss
         
         loss.backward()
-        print0(f" - step: {step} | accum step: {accum_step} | traj_loss: {traj_loss.item()} | abs_loss: {abs_loss.item()} | marg_entropy: {marg_ent.item()}")
+        print0(f" - step: {step} | accum step: {accum_step} | base loss: {base_loss.item()} | info loss: {info_loss.item()} | abs loss: {abs_loss.item()} | zipf loss: {zipf_loss.item()}")
         
     for param in model.parameters():
         param.grad /= train_accumulation_steps
@@ -581,14 +559,7 @@ print0(f"-- alpha_loss: {args.alpha_loss}", console=True)
 print0(f"-- alpha_marg_ent: {args.alpha_marg_ent}", console=True)
 print0(f"-- decay: {args.decay}", console=True)
 print0(f"-- target_vocab_util: {args.target_vocab_util}", console=True)
-print0(f"-- reg_abs_marg_ent: {args.reg_abs_marg_ent}", console=True)
-print0(f"-- reg_abs_zipf: {args.reg_abs_zipf}", console=True)
-print0(f"-- utility_scaling: {args.utility_scaling}", console=True)
-print0(f"-- use_gapt: {args.use_gapt}", console=True)
-print0(f"-- traj_perplexity_patience: {args.traj_perplexity_patience}", console=True)
-print0(f"-- abs_perplexity_patience: {args.abs_perplexity_patience}", console=True)
-print0(f"-- tau_plateau: {args.tau_plateau}", console=True)
-print0(f"-- tau_spike: {args.tau_spike}", console=True)
+print0(f"-- alpha_info_gain: {args.alpha_info_gain}", console=True)
 print0(f"loss record:\n{loss_record}", console=True)
 
 dist.destroy_process_group()

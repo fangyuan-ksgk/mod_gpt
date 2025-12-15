@@ -201,12 +201,15 @@ class AbstractionStatistics:
         self.traj_perplexity = torch.zeros(self.n_doc, dtype=torch.float32, device=self.device) # - log p(s | a) for each document
         self.info_gain_reward = torch.zeros(self.n_doc, dtype=torch.float32, device=self.device) # info gain reward for each document
 
-    def update(self, abs_logits, traj_loss, info_gain_reward, abs_tokens, doc_ids):
+    def update(self, abs_logits, traj_loss, info_gain_reward, abs_tokens, doc_ids, ):
         """Store raw data only. Handles duplicate doc_ids by taking the first occurrence."""
         
         batch_size = doc_ids.shape[0]
         reshaped_logits = abs_logits.reshape(batch_size, self.n_abs, self.abs_vocab_size)
         reshaped_tokens = abs_tokens.reshape(batch_size, self.n_abs)
+        if info_gain_reward.numel() == 1:
+            info_gain_reward = info_gain_reward.repeat(batch_size)
+
         reshaped_info_gain_reward = info_gain_reward.reshape(batch_size)
 
         batch_doc_indices, inverse_indices = torch.unique(doc_ids, return_inverse=True)
