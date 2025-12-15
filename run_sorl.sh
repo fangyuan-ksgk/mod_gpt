@@ -42,20 +42,10 @@ ABSTRACT_VOCAB_SIZE=256
 #   --val_seq_len $VAL_SEQ_LEN \
 #   --num_iterations $NUM_ITERATIONS
 
+# Exp 13.0 -> scaling up model size doesn't improve greedy adv. 
 # ================================================
-# Experiment 13.0 
-# - Scaling up model scale improves its abstraction ability
-# - With stronger abstraction ability, model can achieve better greedy advantage
-# - for instance, TinyStories reaches 22% greedy advantage with abstract vocab size of 16 
-# - therefore, we should (a). test out smaller abstract vocab size at 16 on FineWeb
-#   (b). sweep on larger parameter sized model instead
+# Experiment 13.1: Info Gain Reward SoRL
 # ================================================
-
-# Obs 
-# 1. GPT2-medium has better perplexity but on-par (slightly worse) greedy advatantage compared to GPT2-small 
-# Hyp
-# 1. We need bigger subset on FineWeb to include more repetition for abstraction to form (?)
-# 2. We need more epochs to let greedy adv to form for GPT2-medium (?)
 
 # torchrun \
 #   --nproc_per_node=$N_GPUS \
@@ -150,102 +140,41 @@ ABSTRACT_VOCAB_SIZE=256
 #     --run_info "Exp 13.0: Sweep on model size (Fineweb 0.8B - GPT-2 $MODEL_SIZE, train_seq_len=$LOCAL_TRAIN_SEQ_LEN, abstract_vocab_size=16, static memory span)"
 # done
 
-
-# for MODEL_SIZE in "medium" "large" "xl"; do
-#   LOCAL_TRAIN_SEQ_LEN=$TRAIN_SEQ_LEN
-#   LOCAL_VAL_SEQ_LEN=$VAL_SEQ_LEN
-#   case "$MODEL_SIZE" in
-#     medium) LOCAL_TRAIN_SEQ_LEN=$((16 * 1024)); LOCAL_VAL_SEQ_LEN=$((16 * 1024)) ;;
-#     large)  LOCAL_TRAIN_SEQ_LEN=$(( 8 * 1024)); LOCAL_VAL_SEQ_LEN=$(( 8 * 1024)) ;;
-#     xl)     LOCAL_TRAIN_SEQ_LEN=$(( 4 * 1024)); LOCAL_VAL_SEQ_LEN=$(( 4 * 1024)) ;;
-#   esac
-
-#   torchrun \
-#     --nproc_per_node=$N_GPUS \
-#     --master_addr=$MASTER_ADDR \
-#     --master_port=$MASTER_PORT \
-#     train_base.py \
-#     --batch_size $BATCH_SIZE \
-#     --train_seq_len $LOCAL_TRAIN_SEQ_LEN \
-#     --val_seq_len $LOCAL_VAL_SEQ_LEN \
-#     --num_iterations $NUM_ITERATIONS \
-#     --model_size $MODEL_SIZE \
-#     --run_info "Exp 13.0: Sweep on model size (Fineweb 0.8B - Baseline GPT-2 $MODEL_SIZE, train_seq_len=$LOCAL_TRAIN_SEQ_LEN)"
-# done
-
-
-
-# ===============================================
-# Exp 12.6: 
-# - hypothesis: utility scaling helps avoid vocabulary collapse, whilst retaining search adv for select-best SoRL
-# - we'll sweep on different choices on alpha_marg_ent, alpha_cond_ent, decay and target_vocab_util, starting with the first 2
-# ===============================================
-# ALPHA_MARG_ENT=1.0
-# DECAY=0.8
-# TARGET_VOCAB_UTIL=0.8
-# K=8
-# torchrun \
-#   --nproc_per_node=$N_GPUS \
-#   --master_addr=$MASTER_ADDR \
-#   --master_port=$MASTER_PORT \
-#   train_sorl_v5.py \
-#   --batch_size $BATCH_SIZE \
-#   --train_seq_len $TRAIN_SEQ_LEN \
-#   --val_seq_len $VAL_SEQ_LEN \
-#   --num_iterations $NUM_ITERATIONS \
-#   --num_rollouts $NUM_ROLLOUTS \
-#   --K $K \
-#   --max_iterations $MAX_ITERATIONS \
-#   --min_temperature 0.0 \
-#   --temperature 5.0 \
-#   --alpha_loss $ALPHA_LOSS \
-#   --alpha_marg_ent $ALPHA_MARG_ENT \
-#   --decay $DECAY \
-#   --target_vocab_util $TARGET_VOCAB_UTIL \
-#   --use_orthogonal_init \
-#   --utility_scaling \
-#   --run_info "Exp12.6: SoRL with Utility Scaling (alpha_marg_ent=$ALPHA_MARG_ENT, decay=$DECAY, target_vocab_util=$TARGET_VOCAB_UTIL)"
-
-
 # ======================
 # TinyStories Dataset 
-# - well-trained ckpt
-# -> full tinystories dataset got about 1GB tokens
-# -> SORL + GAPT doesn't match baseline performance here
-# -> Save ckpt from baseline, then adapt it with SoRL for a try?
-# -> We could also include 'context compression' trick along the line? 
+# -> Info Gain Reward SoRL
 # ======================
 ALPHA_MARG_ENT=1.0
 DECAY=0.8
 TARGET_VOCAB_UTIL=0.8
 ABSTRACT_VOCAB_SIZE=16
-for K in 2 4 8 16; do
-torchrun \
-  --nproc_per_node=$N_GPUS \
-  --master_addr=$MASTER_ADDR \
-  --master_port=$MASTER_PORT \
-  train_sorl_v3.py \
-  --batch_size $BATCH_SIZE \
-  --train_seq_len $TRAIN_SEQ_LEN \
-  --val_seq_len $VAL_SEQ_LEN \
-  --num_iterations 2000 \
-  --num_rollouts $NUM_ROLLOUTS \
-  --K $K \
-  --abstract_vocab_size $ABSTRACT_VOCAB_SIZE \
-  --save_checkpoint \
-  --max_iterations $MAX_ITERATIONS \
-  --min_temperature 0.0 \
-  --temperature 5.0 \
-  --alpha_loss $ALPHA_LOSS \
-  --alpha_marg_ent $ALPHA_MARG_ENT \
-  --decay $DECAY \
-  --target_vocab_util $TARGET_VOCAB_UTIL \
-  --use_orthogonal_init \
-  --utility_scaling \
-  --use_static_memory_span \
-  --run_info "TinyStories Dataset with utility scaling on policy gradient only (K=$K, abstract_vocab_size=$ABSTRACT_VOCAB_SIZE, static memory span)"
-done
 
+for ALPHA_INFO_GAIN in 1.0 2.0 4.0 5.0 6.0 8.0 10.0; do
+  torchrun \
+    --nproc_per_node=$N_GPUS \
+    --master_addr=$MASTER_ADDR \
+    --master_port=$MASTER_PORT \
+    train_sorl_v3.py \
+    --batch_size $BATCH_SIZE \
+    --train_seq_len $TRAIN_SEQ_LEN \
+    --val_seq_len $VAL_SEQ_LEN \
+    --num_iterations 6000 \
+    --num_rollouts $NUM_ROLLOUTS \
+    --K $K \
+    --abstract_vocab_size $ABSTRACT_VOCAB_SIZE \
+    --save_checkpoint \
+    --max_iterations $MAX_ITERATIONS \
+    --min_temperature 0.0 \
+    --temperature 5.0 \
+    --alpha_loss $ALPHA_LOSS \
+    --alpha_marg_ent $ALPHA_MARG_ENT \
+    --decay $DECAY \
+    --target_vocab_util $TARGET_VOCAB_UTIL \
+    --use_orthogonal_init \
+    --use_static_memory_span \
+    --alpha_info_gain $ALPHA_INFO_GAIN \
+    --run_info "TinyStories Dataset info-gain reward SoRL (K=$K, abstract_vocab_size=$ABSTRACT_VOCAB_SIZE, static memory span, alpha_info_gain=$ALPHA_INFO_GAIN)"
+done
 
 # # Basline on TinyStories
 # torchrun \

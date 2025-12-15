@@ -317,6 +317,8 @@ from sorl.neo_utils import sorl_search_v7 as sorl_search
 ########################################
 
 model: nn.Module = GAT(model_config).cuda()
+ema_model = copy.deepcopy(model)
+ema_model.eval()
     
 if args.use_orthogonal_init:
     from sorl.topo import orthogonalize_abs_param
@@ -506,7 +508,7 @@ for step in range(train_steps + 1):
     for accum_step in range(train_accumulation_steps): 
         tokens = next(train_loader)
         with torch.no_grad(): 
-            search_tokens, rew, base_traj_ppt = sorl_search(tokens, model, n=args.num_rollouts, K=args.K, max_iterations=args.max_iterations, 
+            search_tokens, rew, base_traj_ppt = sorl_search(tokens, model, ema_model, n=args.num_rollouts, K=args.K, max_iterations=args.max_iterations, 
                                                                 memory_span=memory_span, attn_blocksize=attn_blocksize, 
                                                                 temperature=temperature_train,
                                                                 )
@@ -533,6 +535,12 @@ for step in range(train_steps + 1):
         opt.step()
     # null the gradients
     model.zero_grad(set_to_none=True)
+    
+    # Update EMA model
+    with torch.no_grad():
+        for param, ema_param in zip(model.parameters(), ema_model.parameters()):
+            ema_param.data.mul_(0.99).add_(param.data, alpha=0.01)
+            
     # ----------------------------------------------------
     # logging
     approx_training_time_ms = training_time_ms + 1000 * (time.perf_counter() - t0)
