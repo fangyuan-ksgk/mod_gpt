@@ -26,7 +26,7 @@ class TinyStoriesDataLoader:
         
         # Tokenizer
         self.enc = tiktoken.get_encoding("gpt2")
-        self.eot = self.enc._special_tokens['<|endoftext|>']
+        self.eot = self.enc._special_tokens['<|endoftext|>'] - 1
         
         # Load and tokenize
         print(f"Loading {num_stories} stories from TinyStories {split}...")
@@ -77,7 +77,9 @@ class TinyStoriesDataLoader:
         samples = []
         for idx in indices:
             tokens = self.stories[idx]
+            tokens = tokens[:self.max_len - 1]
             # Pad or truncate to max_len - 1 (leave room for BOS)
+            
             if len(tokens) < self.max_len - 1:
                 tokens = tokens + [self.eot] * (self.max_len - 1 - len(tokens))
             else:
