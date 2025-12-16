@@ -164,7 +164,6 @@ for ALPHA_INFO_GAIN in 12.0 10.0 8.0 6.0; do
     --num_rollouts $NUM_ROLLOUTS \
     --K $K \
     --abstract_vocab_size $ABSTRACT_VOCAB_SIZE \
-    --save_checkpoint \
     --max_iterations $MAX_ITERATIONS \
     --min_temperature 0.0 \
     --temperature 5.0 \
@@ -190,7 +189,6 @@ for ALPHA_INFO_GAIN in 12.0 10.0 8.0 6.0; do
     --num_rollouts $NUM_ROLLOUTS \
     --K $K \
     --abstract_vocab_size $ABSTRACT_VOCAB_SIZE \
-    --save_checkpoint \
     --max_iterations $MAX_ITERATIONS \
     --min_temperature 0.0 \
     --temperature 5.0 \
