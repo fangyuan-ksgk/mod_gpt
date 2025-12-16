@@ -481,7 +481,11 @@ for step in range(train_steps + 1):
 
                 util_rate = compute_vocab_utilization_rate(val_tokens, model)
                 base_loss = model.forward(tokens, memory_span, attn_blocksize)[0].mean()
-                info_loss, abs_loss, zipf_loss = loss_fn(val_tokens, model, base_loss.detach(), memory_span, attn_blocksize)
+                
+                if args.utility_scaling: 
+                    info_loss, abs_loss, zipf_loss = loss_fn(val_tokens, model, base_loss.detach(), val_rew, memory_span, attn_blocksize)
+                else:
+                    info_loss, abs_loss, zipf_loss = loss_fn(val_tokens, model, base_loss.detach(), memory_span, attn_blocksize)
                 
                 val_traj_loss = info_loss + base_loss 
                 rel_info_gain = -info_loss / base_loss

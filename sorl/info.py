@@ -441,7 +441,7 @@ class SoRLLoss_v7(nn.Module):
         self.decay = decay
         self.zipf_loss = Zipfian2gramLoss(abs_vocab_size, decay, target_vocab_util)
 
-    def forward(self, data, model, base_traj_loss, utility_reward, memory_span: int, attn_blocksize: int):
+    def forward(self, data, model, base_traj_loss, memory_span: int, attn_blocksize: int):
  
         ppt, logits = model.forward(data, memory_span, attn_blocksize)
         ppt = ppt.reshape(data.shape[0], -1)
@@ -460,7 +460,7 @@ class SoRLLoss_v7(nn.Module):
         valid_abs_mask = bos_pos_mask * abs_mask
 
         traj_loss = (ppt * valid_traj_mask).sum() / valid_traj_mask.sum().clamp(min=1)
-        abs_loss = (ppt * utility_reward * valid_abs_mask).sum() / valid_abs_mask.sum().clamp(min=1)
+        abs_loss = (ppt * valid_abs_mask).sum() / valid_abs_mask.sum().clamp(min=1)
         info_loss = traj_loss - base_traj_loss
 
         # --- KL(p(a_t, a_t+1), soft_zipf_prior) --- 
