@@ -401,7 +401,7 @@ class SoRLLoss_v5(nn.Module):
 
 class SoRLLoss_v6(nn.Module): 
     """
-    SoRL loss: p(s), p(s | a)/p(s), p(a | s), KL(p(a_t, a_t+1), soft_zipf_prior), corr(d(a), d(r))
+    SoRL loss: p(s | a)/p(s), p(a | s), KL(p(a_t, a_t+1), soft_zipf_prior), corr(d(a), d(r))
     """
 
     def __init__(self, abs_vocab_size, decay=0.8, target_vocab_util=0.8):
@@ -412,10 +412,9 @@ class SoRLLoss_v6(nn.Module):
     def forward(self, data, model, base_traj_ppt, memory_span: int, attn_blocksize: int, 
                       utility_reward: torch.Tensor):
  
-        ppt, logits, hidden_states = model.forward_with_hidden_states(data, memory_span, attn_blocksize)
+        ppt, logits = model.forward(data, memory_span, attn_blocksize)
         ppt = ppt.reshape(data.shape[0], -1)
         logits = logits.reshape(data.shape[0], -1, logits.size(-1))
-        hidden_states = hidden_states.reshape(data.shape[0], -1, hidden_states.size(-1))
 
         traj_mask = (data[:, 1:] < model.vocab_sizes[0])
         traj_ppt = ppt[traj_mask]
@@ -427,7 +426,5 @@ class SoRLLoss_v6(nn.Module):
         abs_logits = logits[:, :-1][:, ~traj_mask.squeeze(0), model.vocab_sizes[0]:]
         soft_zipf_kl = self.zipf_loss(abs_logits)
 
-        base_traj_loss = model.forward(data, memory_span, attn_blocksize)[0].mean()
-
-        # --- Return: p(s), p(s | a)/p(s), p(a | s), KL(p(a_t, a_t+1), soft_zipf_prior) ---
-        return base_traj_loss, info_loss, abs_loss, soft_zipf_kl 
+        # --- Return: p(s | a)/p(s), p(a | s), KL(p(a_t, a_t+1), soft_zipf_prior) ---
+        return info_loss, abs_loss, soft_zipf_kl 
