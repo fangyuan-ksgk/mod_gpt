@@ -516,6 +516,7 @@ for step in range(train_steps + 1):
                                                                 )
 
         # --- compute loss --- 
+        print(f" --- length of search tokens: {search_tokens.shape[1]} | length of tokens: {tokens.shape[1]}")
         info_loss, abs_loss, zipf_loss = loss_fn(search_tokens, model, base_traj_ppt, memory_span, attn_blocksize, rew)
         base_loss = model.forward(tokens, memory_span, attn_blocksize)[0].mean()
         loss = base_loss + args.alpha_info_gain * info_loss + args.alpha_loss * abs_loss + args.alpha_marg_ent * zipf_loss
