@@ -181,6 +181,7 @@ def select_best_info_gain(tokens, base_traj_ppt, search_data, ppt, levels):
     base_doc_idx = (tokens == BOS_TOKEN_ID).cumsum(dim=1)
     base_doc_idx = base_doc_idx - base_doc_idx.min()
     base_doc_ppt = avg_ppt_per_sample(base_traj_ppt[None, :], base_doc_idx[:, 1:])
+    print(f" ---- base doc count: {base_doc_ppt.shape[1]} | doc count: {doc_ppt.shape[1]}")
     base_doc_ppt = base_doc_ppt[:, :doc_ppt.shape[1]]
 
     # --- info-gain --- 
