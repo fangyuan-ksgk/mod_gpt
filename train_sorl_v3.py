@@ -509,7 +509,7 @@ for step in range(train_steps + 1):
     for accum_step in range(train_accumulation_steps): 
         tokens = next(train_loader)
         with torch.no_grad(): 
-            search_tokens, rew, base_traj_ppt = sorl_search(tokens, model, ema_model, n=args.num_rollouts, K=args.K, max_iterations=args.max_iterations, 
+            search_tokens, rew, base_traj_ppt = sorl_search(tokens, model, n=args.num_rollouts, K=args.K, max_iterations=args.max_iterations, 
                                                                 memory_span=memory_span, attn_blocksize=attn_blocksize, 
                                                                 temperature=temperature_train,
                                                                 )
