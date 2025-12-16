@@ -474,11 +474,14 @@ for step in range(train_steps + 1):
                 val_tokens, val_adv, val_traj_loss, val_abs_loss = sorl_evaluate(tokens, model, n=args.num_rollouts_val, K=args.K, max_iterations=args.max_iterations, 
                                                                     memory_span=memory_span, attn_blocksize=attn_blocksize, temperature=temperature_val)
                 util_rate = compute_vocab_utilization_rate(val_tokens, model)
-                # _, _, marg_ent = loss_fn(val_tokens, model, memory_span=memory_span, attn_blocksize=attn_blocksize)
-                val_loss["traj_loss"] += val_traj_loss
+                base_loss = model.forward(tokens, memory_span, attn_blocksize)[0].mean()
+                rel_info_gain = (base_loss - val_traj_loss) / base_loss
+
+                val_loss["base_traj_loss"] += base_loss
+                val_loss["cond_traj_loss"] += val_traj_loss
                 val_loss["abs_loss"] += val_abs_loss
-                val_loss["search_advantage"] += val_adv.mean()
-                # val_loss["marg_kl_divergence"] += marg_ent
+                val_loss["greedy_adv"] += val_adv.mean()
+                val_loss["rel_info_gain"] += rel_info_gain
                 val_loss["util_rate"] += torch.tensor(util_rate, device=val_traj_loss.device)
             
         for name in val_loss: 

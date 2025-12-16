@@ -143,15 +143,15 @@ class GPTConfig:
     _compile: bool = True if device == "cuda" else False
 
     @classmethod
-    def gpt_size(cls, size: str):
+    def gpt_size(cls, size: str, vocab_size: int = 50304, flex_kernel_options: Optional[dict] = None):
         if size == "small":
-            return cls(n_layer=12, n_head=6, n_embd=768)
+            return cls(n_layer=12, n_head=6, n_embd=768, vocab_size=vocab_size, flex_kernel_options=flex_kernel_options)
         elif size == "medium":
-            return cls(n_layer=16, n_head=8, n_embd=1024)
+            return cls(n_layer=16, n_head=8, n_embd=1024, vocab_size=vocab_size, flex_kernel_options=flex_kernel_options)
         elif size == "large":
-            return cls(n_layer=24, n_head=16, n_embd=1536)
+            return cls(n_layer=24, n_head=16, n_embd=1536, vocab_size=vocab_size, flex_kernel_options=flex_kernel_options)
         elif size == "xl":
-            return cls(n_layer=32, n_head=24, n_embd=2048)
+            return cls(n_layer=32, n_head=24, n_embd=2048, vocab_size=vocab_size, flex_kernel_options=flex_kernel_options)
         else:
             raise ValueError(f"Invalid GPT size: {size}")
 

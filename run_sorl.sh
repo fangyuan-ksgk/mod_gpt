@@ -149,7 +149,7 @@ DECAY=0.8
 TARGET_VOCAB_UTIL=0.8
 ABSTRACT_VOCAB_SIZE=16
 
-for ALPHA_INFO_GAIN in 1.0 2.0 4.0 5.0 6.0 8.0 10.0; do
+for ALPHA_INFO_GAIN in 10.0 5.0 2.0 1.0; do
   torchrun \
     --nproc_per_node=$N_GPUS \
     --master_addr=$MASTER_ADDR \
@@ -158,7 +158,7 @@ for ALPHA_INFO_GAIN in 1.0 2.0 4.0 5.0 6.0 8.0 10.0; do
     --batch_size $BATCH_SIZE \
     --train_seq_len $TRAIN_SEQ_LEN \
     --val_seq_len $VAL_SEQ_LEN \
-    --num_iterations 6000 \
+    --num_iterations 2000 \
     --num_rollouts $NUM_ROLLOUTS \
     --K $K \
     --abstract_vocab_size $ABSTRACT_VOCAB_SIZE \
@@ -177,16 +177,16 @@ for ALPHA_INFO_GAIN in 1.0 2.0 4.0 5.0 6.0 8.0 10.0; do
 done
 
 # # Basline on TinyStories
-# torchrun \
-#   --nproc_per_node=$N_GPUS \
-#   --master_addr=$MASTER_ADDR \
-#   --master_port=$MASTER_PORT \
-#   train_base.py \
-#   --batch_size $BATCH_SIZE \
-#   --train_seq_len $TRAIN_SEQ_LEN \
-#   --val_seq_len $VAL_SEQ_LEN \
-#   --num_iterations $NUM_ITERATIONS \
-#   --save_checkpoint \
-#   --train_files "data/tinystories/tinystory_train_*.bin" \
-#   --val_files "data/tinystories/tinystory_val_*.bin" \
-#   --run_info "Baseline on TinyStories Dataset (save ckpt)"
+torchrun \
+  --nproc_per_node=$N_GPUS \
+  --master_addr=$MASTER_ADDR \
+  --master_port=$MASTER_PORT \
+  train_base.py \
+  --batch_size $BATCH_SIZE \
+  --train_seq_len $TRAIN_SEQ_LEN \
+  --val_seq_len $VAL_SEQ_LEN \
+  --num_iterations $NUM_ITERATIONS \
+  --save_checkpoint \
+  --train_files "data/tinystories/tinystory_train_*.bin" \
+  --val_files "data/tinystories/tinystory_val_*.bin" \
+  --run_info "Baseline on TinyStories Dataset (save ckpt)"
