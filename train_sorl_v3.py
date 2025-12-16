@@ -382,7 +382,7 @@ temperature_warmup = torch.cat([
 ])
 
 for i in range(warmup_steps):
-    tokens = torch.randint(0, args.vocab_size, size=(1, args.train_seq_len,), device="cuda")
+    tokens = torch.randint(0, args.vocab_size - 1, size=(1, args.train_seq_len,), device="cuda")
     tokens[0,0] = 50256 # BOS token
     print(f" :: Sorl search propagation starts with tokens of length {tokens.shape[1]}")
     forward_start = time.time() 
