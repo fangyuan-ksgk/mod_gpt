@@ -151,7 +151,7 @@ TARGET_VOCAB_UTIL=0.8
 ABSTRACT_VOCAB_SIZE=16
 K=4
 
-for ALPHA_INFO_GAIN in 10.0 20.0; do
+for ALPHA_INFO_GAIN in 12.0 10.0 8.0 6.0; do
   torchrun \
     --nproc_per_node=$N_GPUS \
     --master_addr=$MASTER_ADDR \
@@ -177,6 +177,31 @@ for ALPHA_INFO_GAIN in 10.0 20.0; do
     --alpha_info_gain $ALPHA_INFO_GAIN \
     --utility_scaling \
     --run_info "TinyStories Dataset info-gain reward SoRL & utility reward scaling (K=$K, abstract_vocab_size=$ABSTRACT_VOCAB_SIZE, static memory span, alpha_info_gain=$ALPHA_INFO_GAIN)"
+
+  torchrun \
+    --nproc_per_node=$N_GPUS \
+    --master_addr=$MASTER_ADDR \
+    --master_port=$MASTER_PORT \
+    train_sorl_v3.py \
+    --batch_size $BATCH_SIZE \
+    --train_seq_len $TRAIN_SEQ_LEN \
+    --val_seq_len $VAL_SEQ_LEN \
+    --num_iterations 2000 \
+    --num_rollouts $NUM_ROLLOUTS \
+    --K $K \
+    --abstract_vocab_size $ABSTRACT_VOCAB_SIZE \
+    --save_checkpoint \
+    --max_iterations $MAX_ITERATIONS \
+    --min_temperature 0.0 \
+    --temperature 5.0 \
+    --alpha_loss $ALPHA_LOSS \
+    --alpha_marg_ent $ALPHA_MARG_ENT \
+    --decay $DECAY \
+    --target_vocab_util $TARGET_VOCAB_UTIL \
+    --use_orthogonal_init \
+    --use_static_memory_span \
+    --alpha_info_gain $ALPHA_INFO_GAIN \
+    --run_info "TinyStories Dataset info-gain reward SoRL (K=$K, abstract_vocab_size=$ABSTRACT_VOCAB_SIZE, static memory span, alpha_info_gain=$ALPHA_INFO_GAIN)"
 done
 
 # # Basline on TinyStories
