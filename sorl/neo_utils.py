@@ -595,9 +595,9 @@ def sorl_search_v8(tokens, model, n=3, K=3, max_iterations=1,
 
     # --- select best rollouts ---
     levels = (search_data >= model.vocab_sizes[0]).long()
-    best_data, best_ppt, best_ppt_advantage = select_best_per_doc(search_data, search_ppt, levels, model)  # stay with default for select mode (for now)
+    best_data, best_ppt, best_ppt_advantage, utility_reward = select_best_per_doc_v2(search_data, search_ppt, levels)  # stay with default for select mode (for now)
 
-    return best_data, best_ppt, best_ppt_advantage
+    return best_data, best_ppt, best_ppt_advantage, utility_reward[1:]
 
 
 def sorl_evaluate(tokens, model, n=2, K=4, max_iterations=1, memory_span=1792, attn_blocksize=1792, temperature: Union[float, torch.Tensor] = 1.0,

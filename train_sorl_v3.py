@@ -357,8 +357,12 @@ def get_lr(step: int):
         return w * 1.0 + (1 - w) * 0.1
 
 # SoRL loss function (info gain loss)
-from sorl.info import SoRLLoss_v7
-loss_fn = SoRLLoss_v7(model.vocab_sizes[1], decay=args.decay, target_vocab_util=args.target_vocab_util)
+if args.utility_scaling: 
+    from sorl.info import SoRLLoss_v8
+    loss_fn = SoRLLoss_v8(model.vocab_sizes[1], decay=args.decay, target_vocab_util=args.target_vocab_util)
+else:
+    from sorl.info import SoRLLoss_v7
+    loss_fn = SoRLLoss_v7(model.vocab_sizes[1], decay=args.decay, target_vocab_util=args.target_vocab_util)
 loss_fn = loss_fn.to(device)
 
 # compile model
@@ -389,13 +393,16 @@ for i in range(warmup_steps):
     # --- sorl search --- 
     search_start = time.time()
     with torch.no_grad():
-        search_tokens, search_ppt, search_adv = sorl_search(tokens, model, n=args.num_rollouts, K=args.K, max_iterations=args.max_iterations, memory_span=memory_span, attn_blocksize=attn_blocksize, 
+        search_tokens, search_ppt, search_adv, rew = sorl_search(tokens, model, n=args.num_rollouts, K=args.K, max_iterations=args.max_iterations, memory_span=memory_span, attn_blocksize=attn_blocksize, 
                                                                           temperature=temperature_warmup)
     search_end = time.time()
     print(f" :: Sorl search takes {search_end - search_start} second")
     # --- compute loss --- 
     base_loss = model.forward(tokens, memory_span, attn_blocksize)[0].mean()
-    info_loss, abs_loss, zipf_loss = loss_fn(search_tokens, model, base_loss.detach(), memory_span, attn_blocksize)
+    if args.utility_scaling: 
+        info_loss, abs_loss, zipf_loss = loss_fn(search_tokens, model, base_loss.detach(), rew, memory_span, attn_blocksize)
+    else:
+        info_loss, abs_loss, zipf_loss = loss_fn(search_tokens, model, base_loss.detach(), memory_span, attn_blocksize)
     forward_end = time.time()
     print(f" :: Loss computation takes {forward_end - search_end} second")
     # --- backward --- 
@@ -512,14 +519,17 @@ for step in range(train_steps + 1):
     for accum_step in range(train_accumulation_steps): 
         tokens = next(train_loader)
         with torch.no_grad(): 
-            search_tokens, search_ppt, search_adv = sorl_search(tokens, model, n=args.num_rollouts, K=args.K, max_iterations=args.max_iterations, 
+            search_tokens, search_ppt, search_adv, rew = sorl_search(tokens, model, n=args.num_rollouts, K=args.K, max_iterations=args.max_iterations, 
                                                                 memory_span=memory_span, attn_blocksize=attn_blocksize, 
                                                                 temperature=temperature_train,
                                                                 )
 
         # --- compute loss --- 
         base_loss = model.forward(tokens, memory_span, attn_blocksize)[0].mean()
-        info_loss, abs_loss, zipf_loss = loss_fn(search_tokens, model, base_loss.detach(), memory_span, attn_blocksize)
+        if args.utility_scaling: 
+            info_loss, abs_loss, zipf_loss = loss_fn(search_tokens, model, base_loss.detach(), rew, memory_span, attn_blocksize)
+        else:
+            info_loss, abs_loss, zipf_loss = loss_fn(search_tokens, model, base_loss.detach(), memory_span, attn_blocksize)
         loss = base_loss + args.alpha_info_gain * info_loss + args.alpha_loss * abs_loss + args.alpha_marg_ent * zipf_loss
         
         loss.backward()
@@ -573,6 +583,7 @@ print0(f"-- alpha_marg_ent: {args.alpha_marg_ent}", console=True)
 print0(f"-- decay: {args.decay}", console=True)
 print0(f"-- target_vocab_util: {args.target_vocab_util}", console=True)
 print0(f"-- alpha_info_gain: {args.alpha_info_gain}", console=True)
+print0(f"-- utility_scaling: {args.utility_scaling}", console=True)
 print0(f"loss record:\n{loss_record}", console=True)
 
 dist.destroy_process_group()

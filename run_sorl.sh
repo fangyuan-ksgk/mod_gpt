@@ -143,6 +143,7 @@ ABSTRACT_VOCAB_SIZE=256
 # ======================
 # TinyStories Dataset 
 # -> Info Gain Reward SoRL
+# -> Utility scaling reward SoRL (also crisp performance)
 # ======================
 ALPHA_MARG_ENT=1.0
 DECAY=0.8
