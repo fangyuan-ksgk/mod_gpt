@@ -60,6 +60,7 @@ def parse_args():
     parser.add_argument("--decay", type=float, default=0.8) # decay for mutual information loss
     parser.add_argument("--target_vocab_util", type=float, default=0.9) # target vocabulary utilization
     parser.add_argument("--alpha_info_gain", type=float, default=1.0) # info gain loss weight
+    parser.add_argument("--utility_scaling", action="store_true", default=False) # utility reward scaling
 
     # GAPT
     parser.add_argument("--use_gapt", action="store_true", default=False) # use GAPT to balance objectives
@@ -243,8 +244,6 @@ class Hyperparameters:
     decay: float = 0.8
     target_vocab_util: float = 0.8
     utility_scaling: bool = False
-    reg_abs_marg_ent: bool = False
-    reg_abs_zipf: bool = False
 
     use_gapt: bool = False
     traj_perplexity_patience: int = 5
@@ -317,8 +316,6 @@ from sorl.neo_utils import sorl_search_v8 as sorl_search
 ########################################
 
 model: nn.Module = GAT(model_config).cuda()
-ema_model = copy.deepcopy(model)
-ema_model.eval()
     
 if args.use_orthogonal_init:
     from sorl.topo import orthogonalize_abs_param
@@ -438,12 +435,12 @@ gapt = GatedPhaseTransition(p_m=args.traj_perplexity_patience, p_a=args.abs_perp
                             tau_plateau=args.tau_plateau, tau_spike=args.tau_spike)
 # -------------
 temperature_val = torch.cat([
-    torch.tensor([0.0], device="cuda"),  # Greedy for first rollout
-    torch.full((args.num_rollouts_val - 1,), 10.0, device="cuda")  # High temp for diversity
+    torch.tensor([args.min_temperature], device="cuda"),
+    torch.full((args.num_rollouts - 1,), args.temperature, device="cuda")
 ])
 temperature_train = torch.cat([
     torch.tensor([args.min_temperature], device="cuda"),
-    torch.full((args.num_rollouts - 1,), args.temperature, device="cuda")  # High temp for diversity
+    torch.full((args.num_rollouts - 1,), args.temperature, device="cuda")
 ])
 
 training_time_ms = 0
@@ -478,17 +475,22 @@ for step in range(train_steps + 1):
         with torch.no_grad():
             for i in range(val_steps):
                 tokens = next(val_loader)
-                val_tokens, val_adv, val_traj_loss, val_abs_loss = sorl_evaluate(tokens, model, n=args.num_rollouts_val, K=args.K, max_iterations=args.max_iterations, 
-                                                                    memory_span=memory_span, attn_blocksize=attn_blocksize, temperature=temperature_val)
+                val_tokens, val_ppt, val_adv, val_rew = sorl_search(tokens, model, n=args.num_rollouts_val, K=args.K, max_iterations=args.max_iterations, 
+                                                                    memory_span=memory_span, attn_blocksize=attn_blocksize, 
+                                                                    temperature=temperature_val)
+
                 util_rate = compute_vocab_utilization_rate(val_tokens, model)
                 base_loss = model.forward(tokens, memory_span, attn_blocksize)[0].mean()
-                rel_info_gain = (base_loss - val_traj_loss) / base_loss
+                info_loss, abs_loss, zipf_loss = loss_fn(val_tokens, model, base_loss.detach(), memory_span, attn_blocksize)
+                
+                val_traj_loss = info_loss + base_loss 
+                rel_info_gain = -info_loss / base_loss
 
                 val_loss["base_traj_loss"] += base_loss
-                val_loss["cond_traj_loss"] += val_traj_loss
-                val_loss["abs_loss"] += val_abs_loss
-                val_loss["greedy_adv"] += val_adv.mean()
-                val_loss["rel_info_gain"] += rel_info_gain
+                val_loss["cond_traj_loss (search)"] += val_traj_loss
+                val_loss["abs_loss (search)"] += abs_loss
+                val_loss["search_adv"] += val_adv.mean()
+                val_loss["search_info_gain"] += rel_info_gain
                 val_loss["util_rate"] += torch.tensor(util_rate, device=val_traj_loss.device)
             
         for name in val_loss: 
@@ -551,10 +553,7 @@ for step in range(train_steps + 1):
     # null the gradients
     model.zero_grad(set_to_none=True)
     
-    # Update EMA model
-    with torch.no_grad():
-        for param, ema_param in zip(model.parameters(), ema_model.parameters()):
-            ema_param.data.mul_(0.99).add_(param.data, alpha=0.01)
+
             
     # ----------------------------------------------------
     # logging
