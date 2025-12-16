@@ -310,7 +310,7 @@ print0(nvidia_smi())
 print0("="*100)
 
 # --- sorl search ---
-from sorl.neo_utils import sorl_search_v7 as sorl_search
+from sorl.neo_utils import sorl_search_v8 as sorl_search
 
 ########################################
 #    Construct model and optimizer     #
@@ -357,8 +357,8 @@ def get_lr(step: int):
         return w * 1.0 + (1 - w) * 0.1
 
 # SoRL loss function (info gain loss)
-from sorl.info import SoRLLoss_v6
-loss_fn = SoRLLoss_v6(model.vocab_sizes[1], decay=args.decay, target_vocab_util=args.target_vocab_util)
+from sorl.info import SoRLLoss_v7
+loss_fn = SoRLLoss_v7(model.vocab_sizes[1], decay=args.decay, target_vocab_util=args.target_vocab_util)
 loss_fn = loss_fn.to(device)
 
 # compile model
@@ -382,21 +382,20 @@ temperature_warmup = torch.cat([
 ])
 
 for i in range(warmup_steps):
-    tokens = torch.randint(0, args.vocab_size - 1, size=(1, args.train_seq_len,), device="cuda")
-    tokens[0,0] = 50256 # BOS token
+    tokens = torch.randint(0, args.vocab_size, size=(1, args.train_seq_len,), device="cuda")
     print(f" :: Sorl search propagation starts with tokens of length {tokens.shape[1]}")
     forward_start = time.time() 
     # GAT specific function 
     # --- sorl search --- 
     search_start = time.time()
     with torch.no_grad():
-        search_tokens, rew, base_traj_ppt = sorl_search(tokens, model, n=args.num_rollouts, K=args.K, max_iterations=args.max_iterations, memory_span=memory_span, attn_blocksize=attn_blocksize, 
+        search_tokens, search_ppt, search_adv = sorl_search(tokens, model, n=args.num_rollouts, K=args.K, max_iterations=args.max_iterations, memory_span=memory_span, attn_blocksize=attn_blocksize, 
                                                                           temperature=temperature_warmup)
     search_end = time.time()
     print(f" :: Sorl search takes {search_end - search_start} second")
     # --- compute loss --- 
-    info_loss, abs_loss, zipf_loss = loss_fn(search_tokens, model, base_traj_ppt, memory_span, attn_blocksize, rew)
     base_loss = model.forward(tokens, memory_span, attn_blocksize)[0].mean()
+    info_loss, abs_loss, zipf_loss = loss_fn(search_tokens, model, base_loss.detach(), memory_span, attn_blocksize)
     forward_end = time.time()
     print(f" :: Loss computation takes {forward_end - search_end} second")
     # --- backward --- 
@@ -510,15 +509,14 @@ for step in range(train_steps + 1):
     for accum_step in range(train_accumulation_steps): 
         tokens = next(train_loader)
         with torch.no_grad(): 
-            search_tokens, rew, base_traj_ppt = sorl_search(tokens, model, n=args.num_rollouts, K=args.K, max_iterations=args.max_iterations, 
+            search_tokens, search_ppt, search_adv = sorl_search(tokens, model, n=args.num_rollouts, K=args.K, max_iterations=args.max_iterations, 
                                                                 memory_span=memory_span, attn_blocksize=attn_blocksize, 
                                                                 temperature=temperature_train,
                                                                 )
 
         # --- compute loss --- 
-        print(f" --- length of search tokens: {search_tokens.shape[1]} | length of tokens: {tokens.shape[1]}")
-        info_loss, abs_loss, zipf_loss = loss_fn(search_tokens, model, base_traj_ppt, memory_span, attn_blocksize, rew)
         base_loss = model.forward(tokens, memory_span, attn_blocksize)[0].mean()
+        info_loss, abs_loss, zipf_loss = loss_fn(search_tokens, model, base_loss.detach(), memory_span, attn_blocksize)
         loss = base_loss + args.alpha_info_gain * info_loss + args.alpha_loss * abs_loss + args.alpha_marg_ent * zipf_loss
         
         loss.backward()

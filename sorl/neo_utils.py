@@ -110,7 +110,7 @@ def normalize_advantage(raw_adv: torch.Tensor):
     norm_raw_adv = raw_adv / raw_adv.max(dim=0, keepdim=True).values
     return norm_raw_adv
 
-def select_best_per_doc(search_data, ppt, levels, model, alpha_select: float = 0.0, select_mode: str = "abs_ppt"):
+def select_best_per_doc(search_data, ppt, levels, model):
     trajectory_mask = (levels[:, 1:] == 0).float()
     trajectory_ppt = ppt * trajectory_mask
     abs_ppt = ppt * (1 - trajectory_mask)
@@ -119,16 +119,7 @@ def select_best_per_doc(search_data, ppt, levels, model, alpha_select: float = 0
     doc_idx = doc_idx - doc_idx.min(dim=1, keepdim=True).values # idx starts from 0  
     doc_ppt = avg_ppt_per_sample(trajectory_ppt, doc_idx[:,1:])
 
-    if select_mode == "abs_ppt": # linear combo of curiosity force
-        doc_abs_ppt = avg_ppt_per_sample(abs_ppt, doc_idx[:,1:])
-        regularized_ppt = doc_ppt - alpha_select * doc_abs_ppt # ver. 1 
-    else: 
-        z = (search_data * levels - model.vocab_sizes[0]).clamp_min(0)
-        pres = torch.zeros(z.size(0), model.vocab_sizes[1] + 1, device=z.device, dtype=torch.bool).scatter_(1, z, True)
-        vocab_util = pres[:, 1:].sum(1).float() / model.vocab_sizes[1]
-        regularized_ppt = doc_ppt - alpha_select * vocab_util.unsqueeze(1)
-
-    min_doc_ppt, best_rollout_per_doc = regularized_ppt.min(dim=0) # argmin
+    min_doc_ppt, best_rollout_per_doc = doc_ppt.min(dim=0) # argmin
     rollout_for_each_pos = best_rollout_per_doc[doc_idx[0]]
 
     best_seq = search_data[rollout_for_each_pos, torch.arange(search_data.shape[1], device=search_data.device)]
@@ -181,7 +172,6 @@ def select_best_info_gain(tokens, base_traj_ppt, search_data, ppt, levels):
     base_doc_idx = (tokens == BOS_TOKEN_ID).cumsum(dim=1)
     base_doc_idx = base_doc_idx - base_doc_idx.min()
     base_doc_ppt = avg_ppt_per_sample(base_traj_ppt[None, :], base_doc_idx[:, 1:])
-    print(f" ---- base doc count: {base_doc_ppt.shape[1]} | doc count: {doc_ppt.shape[1]}")
     base_doc_ppt = base_doc_ppt[:, :doc_ppt.shape[1]]
 
     # --- info-gain --- 
@@ -201,6 +191,50 @@ def select_best_info_gain(tokens, base_traj_ppt, search_data, ppt, levels):
     info_gain_reward = info_gain_reward_doc[doc_idx[0, 1:]]
 
     return best_seq.unsqueeze(0), best_ppt, best_ppt_advantage, info_gain_reward
+
+
+def select_best_info_gain_v2(tokens, base_traj_ppt, search_data, ppt, levels):
+    """
+    Selects best rollout per document based on Information Gain (Base PPT - Rollout PPT).
+    Optimized to avoid CPU-GPU sync by using fixed-size scatter operations.
+    """
+    traj_ppt = ppt * (levels[:, 1:] == 0).float()
+    
+    doc_idx = (search_data == BOS_TOKEN_ID).cumsum(dim=1)
+    base_doc_idx = (tokens == BOS_TOKEN_ID).cumsum(dim=1)
+    
+    doc_idx -= doc_idx.min(dim=1, keepdim=True).values
+    base_doc_idx -= base_doc_idx.min()
+
+    max_docs = tokens.shape[1] # Safe upper bound
+    
+    def scatter_avg(vals, idx):
+        B = vals.shape[0]
+        out = torch.zeros(B, max_docs, device=vals.device)
+        counts = torch.zeros(B, max_docs, device=vals.device)
+        out.scatter_add_(1, idx, vals)
+        counts.scatter_add_(1, idx, (vals != 0).float())
+        return out / counts.clamp(min=1)
+
+    base_doc_ppt = scatter_avg(base_traj_ppt[None, :], base_doc_idx[:, 1:])
+    doc_ppt = scatter_avg(traj_ppt, doc_idx[:, 1:])
+
+    valid_mask = (torch.arange(max_docs, device=tokens.device) < (doc_idx.max(dim=1).values.unsqueeze(1) + 1))
+    info_gain = (base_doc_ppt - doc_ppt) * valid_mask.float()
+    
+    max_gain, best_rollout_idx = info_gain.max(dim=0) # [max_docs]
+    
+    token_doc_ids = doc_idx[0].clamp(max=max_docs-1) # [L]
+    chosen_rollout = best_rollout_idx[token_doc_ids] # [L]
+    
+    row_idx = torch.arange(search_data.shape[1], device=search_data.device)
+    best_seq = search_data[chosen_rollout, row_idx]
+    best_ppt = ppt[chosen_rollout[1:], row_idx[:-1]] # Align with logits
+    
+    reward = torch.exp(max_gain)[token_doc_ids]
+    
+    return best_seq.unsqueeze(0), best_ppt, 0.0, reward
+
 
 def compute_abs_util(trajectory_ppt, abs_ppt, K): 
     chunk_means = F.avg_pool1d(F.pad(trajectory_ppt.float()[:, 1:], (0, K)), kernel_size=K, stride=1)
@@ -540,9 +574,30 @@ def sorl_search_v7(tokens, model, n=3, K=3, max_iterations=1,
 
     # --- select best rollouts ---
     levels = (search_data >= model.vocab_sizes[0]).long()
-    best_data, _, _, info_gain_reward = select_best_info_gain(tokens, base_traj_ppt, search_data, search_ppt, levels)
-    
+
+    best_data, best_ppt, best_ppt_advantage, info_gain_reward = select_best_info_gain(tokens, base_traj_ppt, search_data, search_ppt, levels)
+
     return best_data, info_gain_reward, base_traj_ppt
+
+def sorl_search_v8(tokens, model, n=3, K=3, max_iterations=1,
+                memory_span=1792, attn_blocksize=1792, temperature: Union[float, torch.Tensor] = 1.0, truncate_seq_len: bool = True, use_per_abs_selection: bool = False): 
+    """
+    Hopefully the last ver |:->))
+    """
+    # --- generate & evaluate rollouts ---
+    search_data, search_ppt = sorl_rollout_v2(tokens, model, n=n, K=K, 
+                               max_iterations=max_iterations,
+                               memory_span=memory_span,
+                               attn_blocksize=attn_blocksize,
+                               temperature=temperature,
+                               truncate_seq_len=truncate_seq_len)
+    search_ppt = search_ppt.reshape(search_data.shape[0], -1)
+
+    # --- select best rollouts ---
+    levels = (search_data >= model.vocab_sizes[0]).long()
+    best_data, best_ppt, best_ppt_advantage = select_best_per_doc(search_data, search_ppt, levels, model)  # stay with default for select mode (for now)
+
+    return best_data, best_ppt, best_ppt_advantage
 
 
 def sorl_evaluate(tokens, model, n=2, K=4, max_iterations=1, memory_span=1792, attn_blocksize=1792, temperature: Union[float, torch.Tensor] = 1.0,
