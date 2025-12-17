@@ -29,16 +29,16 @@ MASTER_PORT=29500
 echo "========================================="
 echo "Baseline: Training WITHOUT GAPT"
 echo "========================================="
-torchrun \
-  --nproc_per_node=$N_GPUS \
-  --master_addr=$MASTER_ADDR \
-  --master_port=$((MASTER_PORT++)) \
-  train_iblm.py \
-  --batch_size $BATCH_SIZE \
-  --train_seq_len $TRAIN_SEQ_LEN \
-  --val_seq_len $VAL_SEQ_LEN \
-  --num_iterations $NUM_ITERATIONS \
-  --patch_size 8
+# torchrun \
+#   --nproc_per_node=$N_GPUS \
+#   --master_addr=$MASTER_ADDR \
+#   --master_port=$((MASTER_PORT++)) \
+#   train_iblm.py \
+#   --batch_size $BATCH_SIZE \
+#   --train_seq_len $TRAIN_SEQ_LEN \
+#   --val_seq_len $VAL_SEQ_LEN \
+#   --num_iterations $NUM_ITERATIONS \
+#   --patch_size 8
 
 
 # echo "========================================="
