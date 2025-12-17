@@ -40,6 +40,7 @@ def parse_args():
     parser.add_argument("--patch_size", type=int, default=8)
     parser.add_argument("--mbe_weight", type=float, default=1.0)
     parser.add_argument("--use_gapt", action="store_true")
+    parser.add_argument("--run_info", type=str, default="")
     
     return parser.parse_args()
 
@@ -205,6 +206,7 @@ class Hyperparameters:
 
     use_prior_weights: bool = False
     prior_weight: str = "natural"
+    run_info: str = ""
 
 cli_args = parse_args()
 args = Hyperparameters()
@@ -465,6 +467,7 @@ for step in range(train_steps + 1):
 print0(f"peak memory allocated: {torch.cuda.max_memory_allocated() // 1024 // 1024} MiB "
        f"reserved: {torch.cuda.max_memory_reserved() // 1024 // 1024} MiB", console=True)
 
+print0(f"Experiment configuration: {args.run_info}\n", console=True)
 print0(f"loss record:\n{loss_record}", console=True)
 print0(f"IBLM Configuration:\n{args}", console=True)
 print0(f"-- use_gapt: {args.use_gapt}", console=True)
