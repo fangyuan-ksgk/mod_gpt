@@ -24,6 +24,19 @@ class GPTConfig:
     device: str = "cuda" if torch.cuda.is_available() else "cpu"
     _compile: bool = True if device == "cuda" else False
 
+    @classmethod
+    def prior(cls, name: str, vocab_size: int = 50304, flex_kernel_options: Optional[dict] = None):
+        if name == "small": 
+            return cls(n_layer=12, n_head=6, n_embd=768, vocab_size=vocab_size, flex_kernel_options=flex_kernel_options)
+        elif name == "medium":
+            return cls(n_layer=24, n_head=16, n_embd=1024, vocab_size=vocab_size, flex_kernel_options=flex_kernel_options)
+        elif name == "large":
+            return cls(n_layer=36, n_head=20, n_embd=1280, vocab_size=vocab_size, flex_kernel_options=flex_kernel_options)
+        elif name == "xl":
+            return cls(n_layer=48, n_head=25, n_embd=1600, vocab_size=vocab_size, flex_kernel_options=flex_kernel_options)
+        else:
+            raise ValueError(f"Invalid GPT size: {name}")
+
 
 # GPT with MBE regularization
 # ---------------------------------------------------------------------------------------

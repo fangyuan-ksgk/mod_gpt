@@ -40,6 +40,7 @@ def parse_args():
     parser.add_argument("--patch_size", type=int, default=8)
     parser.add_argument("--mbe_weight", type=float, default=1.0)
     parser.add_argument("--use_gapt", action="store_true")
+    parser.add_argument("--model_size", type=str, default="small")
     parser.add_argument("--run_info", type=str, default="")
     
     return parser.parse_args()
@@ -214,7 +215,8 @@ for k, v in vars(cli_args).items():
     if v is not None:
         setattr(args, k, v)
 
-model_config = GPTConfig(
+model_config = GPTConfig.prior(
+    name=args.model_size,
     flex_kernel_options={
         "BLOCK_M": 64, "BLOCK_N": 64, # forward
         "BLOCK_M1": 32, "BLOCK_N1": 64, "BLOCK_M2": 64, "BLOCK_N2": 32 # backwards 
@@ -471,6 +473,7 @@ print0(f"Experiment configuration: {args.run_info}\n", console=True)
 print0(f"loss record:\n{loss_record}", console=True)
 print0(f"IBLM Configuration:\n{args}", console=True)
 print0(f"-- use_gapt: {args.use_gapt}", console=True)
+print0(f"-- model_size: {args.model_size}", console=True)
 print0(f"-- entropy_patience: {args.entropy_patience}", console=True)
 print0(f"-- entropy_min_delta: {args.entropy_min_delta}", console=True)
 print0(f"-- mbe_patience: {args.mbe_patience}", console=True)

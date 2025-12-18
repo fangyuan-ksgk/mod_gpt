@@ -33,11 +33,11 @@ class GATConfig:
         if size == "small": 
             return cls(n_layer=12, n_head=6, n_embd=768, vocab_sizes=vocab_sizes, flex_kernel_options=flex_kernel_options)
         elif size == "medium":
-            return cls(n_layer=16, n_head=8, n_embd=1024, vocab_sizes=vocab_sizes, flex_kernel_options=flex_kernel_options)
+            return cls(n_layer=24, n_head=16, n_embd=1024, vocab_sizes=vocab_sizes, flex_kernel_options=flex_kernel_options)
         elif size == "large":
-            return cls(n_layer=24, n_head=16, n_embd=1536, vocab_sizes=vocab_sizes, flex_kernel_options=flex_kernel_options)
+            return cls(n_layer=36, n_head=20, n_embd=1280, vocab_sizes=vocab_sizes, flex_kernel_options=flex_kernel_options)
         elif size == "xl":
-            return cls(n_layer=32, n_head=24, n_embd=2048, vocab_sizes=vocab_sizes, flex_kernel_options=flex_kernel_options)
+            return cls(n_layer=48, n_head=25, n_embd=1600, vocab_sizes=vocab_sizes, flex_kernel_options=flex_kernel_options)
         else:
             raise ValueError(f"Invalid GPT size: {size}")
 
