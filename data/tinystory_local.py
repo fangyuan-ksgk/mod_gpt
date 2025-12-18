@@ -744,7 +744,7 @@ def visualize_dynamics(abs_stats, loader, model, enc, K, step=0, doc_ids=torch.a
     abs_tokens = abs_stats.abs_seqs[doc_ids]
     abs_tokens[abs_tokens == 0] += BOS_TOKEN_ID
     valid_ids = torch.arange(0, doc_ids.shape[0]).tolist()
-    img_align = visualize_alignment_compact(tokens, abs_tokens, doc_ids, model, enc, K=4, doc_idx=valid_ids, max_chunks=8)
+    img_align = visualize_alignment_compact(tokens, abs_tokens, doc_ids, model, enc, K=K, doc_idx=valid_ids, max_chunks=8)
 
     doc_ids = abs_stats.valid_docs
     cs_sim = abs_stats.compute_cross_doc_logit_sim()
