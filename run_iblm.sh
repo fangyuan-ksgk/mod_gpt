@@ -14,8 +14,8 @@ export NCCL_DEBUG=WARN
 # Configuration
 # ============================================================================
 BATCH_SIZE=32  # Closer to benchmark batch_size=32
-TRAIN_SEQ_LEN=$((64 * 1024))
-VAL_SEQ_LEN=$((64 * 1024))
+TRAIN_SEQ_LEN=$((32 * 1024))
+VAL_SEQ_LEN=$((32 * 1024))
 NUM_ITERATIONS=1750
 N_GPUS=4
 MASTER_ADDR=127.0.0.1
