@@ -406,7 +406,7 @@ for i in range(warmup_steps):
     tokens = torch.randint(0, args.vocab_size, size=(1, args.train_seq_len,), device="cuda")
     print(f" :: Sorl search propagation starts with tokens of length {tokens.shape[1]}")
     forward_start = time.time() 
-    K = get_current_K(i, warmup_steps)
+    K = args.K  # Use fixed K for warmup (kernel compilation only)
     # GAT specific function 
     # --- sorl search --- 
     search_start = time.time()
@@ -520,7 +520,7 @@ for step in range(train_steps + 1):
                 val_loss["search_adv"] += val_adv.mean()
                 val_loss["search_info_gain"] += rel_info_gain
                 val_loss["util_rate"] += torch.tensor(util_rate, device=val_traj_loss.device)
-                val_loss["K"] += K
+                val_loss["K"] = torch.tensor(float(K), device="cuda")  # Set (not +=), K is same for all val steps
             
         for name in val_loss: 
             val_loss[name] /= val_steps
