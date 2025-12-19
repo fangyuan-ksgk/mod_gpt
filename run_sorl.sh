@@ -113,6 +113,7 @@ for MAX_K in 512 256 128 64; do
       --use_static_memory_span \
       --alpha_info_gain $ALPHA_INFO_GAIN \
       --run_info "TinyStories coarse-to-fine curriculum (max_K=$MAX_K, num_c2f_phases=$NUM_C2F_PHASES)"
+  done
 done
 
 
