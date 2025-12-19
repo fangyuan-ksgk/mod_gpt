@@ -334,3 +334,105 @@ class GatedPhaseTransition:
             print(f"         main_loss={main_val:.4f}, aux_loss={aux_val:.4f}")
 
         return self._weight_loss(main_loss, auxiliary_loss)
+
+
+# ---- mbe layer mask ablation ---- 
+import torch
+
+def get_mbe_layer_mask(
+    step: int,
+    accum_step: int,
+    total_num_accum_steps: int,
+    n_layer: int,
+    mode: str = "rotate",
+    skip_first: int = 1,
+    skip_last: int = 1,
+    device: str = "cuda"
+) -> torch.Tensor:
+    """    
+    mode: masking strategy
+        - "all_middle": Regularize all middle layers (skip first/last N)
+        - "rotate": Rotate through one middle layer at a time per step
+        - "rotate_accum": Rotate through one layer per accumulation step (faster)
+        - "progressive": Start from center, expand outward over training
+        - "weighted_valley": Valley-shaped weights (high middle, low edges)
+        - "weighted_mountain": Mountain-shaped weights (low middle, high edges for compression)
+    skip_first: Number of early layers to always skip (default 1)
+    skip_last: Number of late layers to always skip (default 1)
+    """
+    mask = torch.zeros(n_layer, device=device)
+    
+    start_layer = skip_first
+    end_layer = n_layer - skip_last
+    n_active = end_layer - start_layer
+    
+    if mode == "all_middle":
+        # Regularize all middle layers equally
+        mask[start_layer:end_layer] = 1.0
+        
+    elif mode == "rotate":
+        # Rotate through one layer at a time per training step
+        active_idx = start_layer + (step % n_active)
+        mask[active_idx] = 1.0
+        
+    elif mode == "rotate_accum":
+        # Rotate through layers per accumulation step (faster cycling)
+        # Combine step and accum_step for finer granularity
+        combined_step = step * total_num_accum_steps + accum_step  # Assuming typical accum_steps <= 8
+        active_idx = start_layer + (combined_step % n_active)
+        mask[active_idx] = 1.0
+        
+    elif mode == "progressive":
+        # Start from center, expand outward over training
+        # Assumes training progresses from step 0 to max_steps
+        center = (start_layer + end_layer) // 2
+        # Expand radius based on step (needs max_steps to be meaningful)
+        # For now, use step modulo to cycle through expansion
+        radius = (step % (n_active // 2 + 1))
+        for i in range(center - radius, center + radius + 1):
+            if start_layer <= i < end_layer:
+                mask[i] = 1.0
+                
+    elif mode == "weighted_valley":
+        # Valley shape: strongest regularization in the middle
+        # Use smooth weighting based on distance from center
+        center = (start_layer + end_layer) / 2
+        for i in range(start_layer, end_layer):
+            # Gaussian-like weight centered at middle
+            dist_from_center = abs(i - center)
+            max_dist = (end_layer - start_layer) / 2
+            # Weight peaks at center (1.0), falls off toward edges (0.3)
+            mask[i] = 0.3 + 0.7 * (1 - (dist_from_center / max_dist) ** 2)
+            
+    elif mode == "weighted_mountain":
+        # Mountain shape: strongest regularization at edges of active zone
+        # Forces bottleneck at layer boundaries
+        center = (start_layer + end_layer) / 2
+        for i in range(start_layer, end_layer):
+            dist_from_center = abs(i - center)
+            max_dist = (end_layer - start_layer) / 2
+            # Weight low at center (0.3), high at edges (1.0)
+            mask[i] = 0.3 + 0.7 * (dist_from_center / max_dist) ** 2
+            
+    elif mode == "alternating":
+        # Alternate between even/odd layers each step
+        # Useful for creating compression-expansion cycles
+        parity = step % 2
+        for i in range(start_layer, end_layer):
+            if i % 2 == parity:
+                mask[i] = 1.0
+                
+    elif mode == "block":
+        # Divide active layers into blocks, rotate through blocks
+        n_blocks = 3  # Early-middle, middle, middle-late
+        block_size = n_active // n_blocks
+        block_idx = step % n_blocks
+        block_start = start_layer + block_idx * block_size
+        block_end = block_start + block_size if block_idx < n_blocks - 1 else end_layer
+        mask[block_start:block_end] = 1.0
+        
+    else:
+        raise ValueError(f"Unknown mode: {mode}. Choose from: all_middle, rotate, rotate_accum, "
+                        "progressive, weighted_valley, weighted_mountain, alternating, block")
+    
+    return mask

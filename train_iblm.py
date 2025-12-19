@@ -298,7 +298,7 @@ def get_lr(step: int):
 ################################################
 
 from src.gradtracker import GradientTracker
-from src.gapt import GatedPhaseTransition
+from src.gapt import GatedPhaseTransition, get_mbe_layer_mask
 
 grad_tracker = GradientTracker(model)
 gapt = GatedPhaseTransition(p_m = args.entropy_patience, p_a = args.mbe_patience, 
@@ -418,9 +418,13 @@ for step in range(train_steps + 1):
         compute_loss(loss_dict)  
 
         # --- aggregate loss ---
+        # Idea #1. per_layer_mbe_mask used to slice mbe loss per layer
+        #          we should adapt this mask across steps, too
+        per_layer_mbe_mask = get_mbe_layer_mask(step, accum_step, train_accumulation_steps, model.num_encoder_layers + model.num_decoder_layers, mode="rotate")
+        mbe_loss_per_layer = torch.stack([loss_dict[k] for k in loss_dict.keys() if k.startswith("mbe_")])
+        mbe_loss = (mbe_loss_per_layer * per_layer_mbe_mask).mean()
         loss_dict = {
-            "entropy": loss_dict["entropy"],
-            "mbe": sum(v for k, v in loss_dict.items() if k.startswith("mbe_"))
+            "entropy": loss_dict["entropy"], "mbe": mbe_loss
         }
         if args.no_reg: 
             loss_dict = {"entropy": loss_dict["entropy"]}

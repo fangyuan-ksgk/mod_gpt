@@ -86,6 +86,29 @@ for MODEL_SIZE in "medium" "large" "xl"; do
       --run_info "GAPT Sweep: ModelSize=$MODEL_SIZE | CEPat=250 | MBEPat=50" 
 done
 
+# Sweep on MBE schedule across layers (which one gets regularized when)
+# ---------------------------------------------------------------------
+for MBE_SCHEDULE in "rotate" "rotate_accum" "progressive" "weighted_valley" "weighted_mountain"; do
+  torchrun \
+      --nproc_per_node=$N_GPUS \
+      --master_addr=$MASTER_ADDR \
+      --master_port=$((MASTER_PORT++)) \
+      train_iblm.py \
+      --batch_size $BATCH_SIZE \
+      --train_seq_len $TRAIN_SEQ_LEN \
+      --val_seq_len $VAL_SEQ_LEN \
+      --num_iterations 1750 \
+      --use_gapt \
+      --entropy_patience 250 \
+      --entropy_min_delta 0.01 \
+      --mbe_patience 50 \
+      --mbe_min_delta 0.01 \
+      --patch_size 8 \
+      --model_size "small" \
+      --run_info "GAPT Sweep: MBEschedule=$MBE_SCHEDULE | CEPat=250 | MBEPat=50 | Model=GPT2-small" 
+done
+
+
 # # Sweep on entropy min delta (allow more oscillation)
 # for ENTROPY_MIN_DELTA in 0.005 0.02 0.03 0.04 0.05 0.06 0.07 0.08 0.09 0.10 0.20 0.30; do
 #   torchrun \
