@@ -87,6 +87,7 @@ for MODEL_SIZE in "medium" "large" "xl"; do
 done
 
 # Sweep on MBE schedule across layers (which one gets regularized when)
+# -> rotate is better than global sum already, so which layer's reg is better here? 
 # ---------------------------------------------------------------------
 for MBE_SCHEDULE in "rotate" "rotate_accum" "progressive" "weighted_valley" "weighted_mountain"; do
   torchrun \
@@ -107,7 +108,6 @@ for MBE_SCHEDULE in "rotate" "rotate_accum" "progressive" "weighted_valley" "wei
       --model_size "small" \
       --run_info "GAPT Sweep: MBEschedule=$MBE_SCHEDULE | CEPat=250 | MBEPat=50 | Model=GPT2-small" 
 done
-
 
 # # Sweep on entropy min delta (allow more oscillation)
 # for ENTROPY_MIN_DELTA in 0.005 0.02 0.03 0.04 0.05 0.06 0.07 0.08 0.09 0.10 0.20 0.30; do
