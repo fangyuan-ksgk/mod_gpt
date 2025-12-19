@@ -61,6 +61,9 @@ def parse_args():
     parser.add_argument("--target_vocab_util", type=float, default=0.9) # target vocabulary utilization
     parser.add_argument("--alpha_info_gain", type=float, default=1.0) # info gain loss weight
     parser.add_argument("--utility_scaling", action="store_true", default=False) # utility reward scaling
+    parser.add_argument("--coarse_to_fine_search", action="store_true", default=False) # coarse to fine search (curriculum on K ratio)
+    parser.add_argument("--max_K", type=int, default=512) # initial K ratio (max K ratio)
+    parser.add_argument("--num_c2f_phases", type=int, default=4) # number of coarse to fine phases
 
     # GAPT
     parser.add_argument("--use_gapt", action="store_true", default=False) # use GAPT to balance objectives
@@ -244,6 +247,9 @@ class Hyperparameters:
     decay: float = 0.8
     target_vocab_util: float = 0.8
     utility_scaling: bool = False
+    coarse_to_fine_search: bool = False
+    max_K: int = 512
+    num_c2f_phases: int = 4
 
     use_gapt: bool = False
     traj_perplexity_patience: int = 5
@@ -362,6 +368,20 @@ else:
     loss_fn = SoRLLoss_v7(model.vocab_sizes[1], decay=args.decay, target_vocab_util=args.target_vocab_util)
 loss_fn = loss_fn.to(device)
 
+# --- coarse to fine search ---
+def get_current_K(step: int, total_steps: int) -> int:
+    if not args.coarse_to_fine_search:
+        return args.K
+    steps_per_phase = total_steps // args.num_c2f_phases
+    current_phase = min(step // steps_per_phase, args.num_c2f_phases - 1)
+    log2_max_K = np.log2(args.max_K) 
+    log2_min_K = np.log2(args.K)   
+    if args.num_c2f_phases == 1:
+        return args.K
+    exponent = log2_max_K - current_phase * (log2_max_K - log2_min_K) / (args.num_c2f_phases - 1)
+    current_K = int(2 ** round(exponent))
+    return current_K
+
 # compile model
 model: nn.Module = torch.compile(model, dynamic=True)
 
@@ -386,11 +406,12 @@ for i in range(warmup_steps):
     tokens = torch.randint(0, args.vocab_size, size=(1, args.train_seq_len,), device="cuda")
     print(f" :: Sorl search propagation starts with tokens of length {tokens.shape[1]}")
     forward_start = time.time() 
+    K = get_current_K(i, warmup_steps)
     # GAT specific function 
     # --- sorl search --- 
     search_start = time.time()
     with torch.no_grad():
-        search_tokens, search_ppt, search_adv, rew = sorl_search(tokens, model, n=args.num_rollouts, K=args.K, max_iterations=args.max_iterations, memory_span=memory_span, attn_blocksize=attn_blocksize, 
+        search_tokens, search_ppt, search_adv, rew = sorl_search(tokens, model, n=args.num_rollouts, K=K, max_iterations=args.max_iterations, memory_span=memory_span, attn_blocksize=attn_blocksize, 
                                                                           temperature=temperature_warmup)
     search_end = time.time()
     print(f" :: Sorl search takes {search_end - search_start} second")
@@ -460,6 +481,9 @@ for step in range(train_steps + 1):
         memory_span = torch.tensor(1792, dtype=torch.int, device='cuda') # keep static
     else:
         memory_span = torch.tensor(64*(((1 - step/train_steps) * (1792 - args.min_memory_span) + args.min_memory_span)//64), dtype=torch.int, device='cuda')
+    
+    # --- coarse to fine search ---
+    K = get_current_K(step, train_steps)
 
     # --------------- VALIDATION SECTION -----------------
     if last_step or (args.val_loss_every > 0 and step % args.val_loss_every == 0):
@@ -475,7 +499,7 @@ for step in range(train_steps + 1):
         with torch.no_grad():
             for i in range(val_steps):
                 tokens = next(val_loader)
-                val_tokens, val_ppt, val_adv, val_rew = sorl_search(tokens, model, n=args.num_rollouts_val, K=args.K, max_iterations=args.max_iterations, 
+                val_tokens, val_ppt, val_adv, val_rew = sorl_search(tokens, model, n=args.num_rollouts_val, K=K, max_iterations=args.max_iterations, 
                                                                     memory_span=memory_span, attn_blocksize=attn_blocksize, 
                                                                     temperature=temperature_val)
 
@@ -496,6 +520,7 @@ for step in range(train_steps + 1):
                 val_loss["search_adv"] += val_adv.mean()
                 val_loss["search_info_gain"] += rel_info_gain
                 val_loss["util_rate"] += torch.tensor(util_rate, device=val_traj_loss.device)
+                val_loss["K"] += K
             
         for name in val_loss: 
             val_loss[name] /= val_steps
@@ -525,7 +550,7 @@ for step in range(train_steps + 1):
     for accum_step in range(train_accumulation_steps): 
         tokens = next(train_loader)
         with torch.no_grad(): 
-            search_tokens, search_ppt, search_adv, rew = sorl_search(tokens, model, n=args.num_rollouts, K=args.K, max_iterations=args.max_iterations, 
+            search_tokens, search_ppt, search_adv, rew = sorl_search(tokens, model, n=args.num_rollouts, K=K, max_iterations=args.max_iterations, 
                                                                 memory_span=memory_span, attn_blocksize=attn_blocksize, 
                                                                 temperature=temperature_train,
                                                                 )
@@ -587,6 +612,9 @@ print0(f"-- decay: {args.decay}", console=True)
 print0(f"-- target_vocab_util: {args.target_vocab_util}", console=True)
 print0(f"-- alpha_info_gain: {args.alpha_info_gain}", console=True)
 print0(f"-- utility_scaling: {args.utility_scaling}", console=True)
+print0(f"-- coarse_to_fine_search: {args.coarse_to_fine_search}", console=True)
+print0(f"-- max_K: {args.max_K}", console=True)
+print0(f"-- num_c2f_phases: {args.num_c2f_phases}", console=True)
 print0(f"loss record:\n{loss_record}", console=True)
 
 dist.destroy_process_group()
