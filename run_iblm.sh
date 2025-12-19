@@ -66,7 +66,7 @@ echo "========================================="
 # Large scale model sweep (10B fineweb)
 
 NUM_ITERATIONS=8000
-for MODEL_SIZE in "small" "medium" "large" "xl"; do
+for MODEL_SIZE in "medium" "large" "xl"; do
   torchrun \
       --nproc_per_node=$N_GPUS \
       --master_addr=$MASTER_ADDR \
@@ -82,6 +82,7 @@ for MODEL_SIZE in "small" "medium" "large" "xl"; do
       --mbe_patience 50 \
       --mbe_min_delta 0.01 \
       --patch_size 8 \
+      --model_size $MODEL_SIZE \
       --run_info "GAPT Sweep: ModelSize=$MODEL_SIZE | CEPat=250 | MBEPat=50" 
 done
 

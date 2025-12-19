@@ -6,6 +6,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 from collections import defaultdict
 from matplotlib.animation import FuncAnimation
+import torch
+from PIL import Image
+from matplotlib.patches import Patch
+import io
 
 # -----------------------------------------------------------------------------
 # distributed data loader
@@ -54,8 +58,6 @@ def distributed_data_generator_sorl(filename_pattern: str, sequence_length: int,
 # TBD. optionally include 'loss_mask' in the data generator
 
 # -------------------------------------------------------------------------------
-
-
 def plot_training_losses(loss_record, save_path="loss_curves.png"):
     """
     Plot entropy loss and rank loss curves on the same figure with different y-axes.
@@ -115,7 +117,7 @@ def plot_training_losses(loss_record, save_path="loss_curves.png"):
 
 def plot_mbe(mbe_values):
     """
-    Plot Model Binding Energy (MBE) loss per layer.
+    Plot MBE loss per layer.
     
     Args:
         mbe_values: List of MBE loss values per layer
@@ -738,102 +740,176 @@ def plot_avg_consistency_across_layers(avg_consistency_df, title="Average Gradie
     plt.show()
     
 
-# Extract MBE values from experiment data
-def extract_mbe_values1(exp_data):
-    mbe_values = []
-    for iteration_num in sorted(exp_data['progress'].keys()):
-        iteration_data = exp_data['progress'][iteration_num]
-        iteration_mbes = []
-        for key, value in iteration_data.items():
-            if key.startswith('mbe_') and key[-1].isdigit():
-                layer_idx = int(key.split('_')[1])
-                # Ensure the list is long enough
-                while len(iteration_mbes) <= layer_idx:
-                    iteration_mbes.append(None)
-                iteration_mbes[layer_idx] = value
-        mbe_values.append(iteration_mbes)
-    return mbe_values[1:], exp_data["label"]
+def get_layer_colors(n_layer):
+    """Returns colors for 3 layer groups (Early, Middle, Late) using a modern palette."""
+    # "High-end" Palette (Flat UI / Modern Tech style)
+    # Group 1: Slate Blue (Cool, steady)
+    # Group 2: Mint/Teal (Fresh, bridge)
+    # Group 3: Soft Coral (Warm, output focused)
+    group_colors = ['#AED7F4', '#C8F7DC', '#FFF9C4']  # light blue, light green, light yellow
+    
+    # Calculate group sizes
+    group_size = n_layer // 3
+    remainder = n_layer % 3
+    
+    colors = []
+    # Assign colors
+    for i in range(n_layer):
+        if i < group_size + (1 if remainder > 0 else 0):
+            colors.append(group_colors[0]) # Early
+        elif i < 2 * group_size + (2 if remainder > 0 else 0):
+            colors.append(group_colors[1]) # Middle
+        else:
+            colors.append(group_colors[2]) # Late
+    return colors, group_colors
 
-def extract_mbe_values2(exp_data): 
-    n_ckpt = len(exp_data["record"]["entropy"])
-    mbe_record = [] 
-    for i in range(1, n_ckpt):
-        ckpt_record = []
-        for layer_idx in range(12): 
-            ckpt_record.append(exp_data["record"][f"mbe_{layer_idx}"][i])
-        mbe_record.append(ckpt_record)
-    return mbe_record, exp_data["label"]
+def create_training_frame(step_idx, loss_record, run_info="", n_layer=12, val_interval=125):
+    """
+    Generates a single frame for the animation at a specific validation step.
+    """
+    # 1. Setup Data
+    mbe_values = [loss_record[f"mbe_{l}"][step_idx] for l in range(n_layer)]
+    layers = np.arange(n_layer)
+    
+    full_mbe_history = np.array([loss_record[f"mbe_{l}"] for l in range(n_layer)])
+    avg_mbe_history = full_mbe_history.mean(axis=0)[:step_idx+1]
+    entropy_history = loss_record["entropy"][:step_idx+1]
+    
+    total_points = len(loss_record["entropy"])
+    real_steps = np.arange(total_points) * val_interval
+    current_step_val = step_idx * val_interval
+    
+    max_mbe_bar = full_mbe_history.max()
+    max_entropy = max(loss_record["entropy"])
+    min_entropy = min(loss_record["entropy"])
+    max_avg_mbe = full_mbe_history.mean(axis=0).max()
+    min_avg_mbe = full_mbe_history.mean(axis=0).min()
 
-def extract_mbe_values(exp_data): 
-    if "progress" in exp_data: 
-        return extract_mbe_values1(exp_data)
-    else: 
-        return extract_mbe_values2(exp_data)
+    # 2. Plotting
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6), dpi=100)
     
-def create_mbe_animation(mbe_data_list, labels_list, output_file='mbe_animation.gif', iteration_multiplier=125):
+    # --- LHS: Per-Layer MBE Loss ---
+    colors, palette = get_layer_colors(n_layer)
+    # Alpha 0.85 for "translucent but solid" look, no harsh black edges
+    ax1.bar(layers, mbe_values, color=colors, alpha=0.95, edgecolor='gray', linewidth=0.5)
     
-    # Determine number of layers and iterations
-    num_layers = max(max(len(mbe) for mbe in data) for data in mbe_data_list if data)
-    num_iterations = max(len(data) for data in mbe_data_list if data)
+    legend_elements = [
+        Patch(facecolor=palette[0], label='Early Layers', alpha=0.85),
+        Patch(facecolor=palette[1], label='Middle Layers', alpha=0.85),
+        Patch(facecolor=palette[2], label='Late Layers', alpha=0.85)
+    ]
+    # Remove frame from legend for cleaner look
+    ax1.legend(handles=legend_elements, loc='upper right', frameon=False, fontsize=15)
+
+    ax1.set_xlabel("Layer Index", fontsize=15, fontweight='medium', color='#444444')
+    ax1.set_ylabel("MBE Loss", fontsize=15, fontweight='medium', color='#444444')
+    ax1.set_title(f"Per-Layer MBE Loss @ Step {current_step_val}", fontsize=15, pad=10)
+    ax1.set_ylim(0, max_mbe_bar * 1.1)
+    ax1.set_xticks(layers)
+    # Lighter grid
+    ax1.grid(axis='y', alpha=0.15, linestyle='-', color='#000000')
+    ax1.spines['top'].set_visible(False)
+    ax1.spines['right'].set_visible(False)
+
+    # --- RHS: Dual Axis Line Chart ---
+    ax2.set_xlabel("Training Steps", fontsize=15, fontweight='medium', color='#444444')
     
-    # Calculate global min and max for consistent y-axis limits
-    all_values = []
-    for mbe_data in mbe_data_list:
-        for mbe_list in mbe_data:
-            for mbe in mbe_list:
-                if mbe is not None:
-                    if isinstance(mbe, (list, tuple)):  # Check if mbe is an iterable
-                        all_values.extend([v for v in mbe if v is not None])
-                    else:  # Handle the case where mbe is a single value (float)
-                        all_values.append(mbe)
+    # Use matching colors for lines: Coral for Entropy (loss), Teal for MBE (structure)
+    line1, = ax2.plot(real_steps[:step_idx+1], entropy_history, color='#FB6E52', linewidth=2.5, label='Entropy')
+    ax2.set_ylabel("Entropy Loss", color='#FB6E52', fontsize=15, fontweight='medium')
+    ax2.tick_params(axis='y', labelcolor='#FB6E52')
+    ax2.set_xlim(0, real_steps[-1] if real_steps[-1] > 0 else 1)
+    ax2.set_ylim(min_entropy * 0.95, max_entropy * 1.05)
+    ax2.spines['top'].set_visible(False)
     
-    global_y_min = min(all_values) if all_values else 0
-    global_y_max = max(all_values) if all_values else 1
-    margin = (global_y_max - global_y_min) * 0.1
+    ax2_r = ax2.twinx()
+    # Use the "Early" blue or "Middle" teal for Avg MBE line to contrast with Entropy red
+    line2, = ax2_r.plot(real_steps[:step_idx+1], avg_mbe_history, color='#5D9CEC', linewidth=2, linestyle='--', label='Avg MBE')
+    ax2_r.set_ylabel("Avg MBE Loss", color='#5D9CEC', fontsize=15, fontweight='medium')
+    ax2_r.tick_params(axis='y', labelcolor='#5D9CEC')
+    ax2_r.set_ylim(min_avg_mbe * 0.9, max_avg_mbe * 1.1)
+    ax2_r.spines['top'].set_visible(False)
     
-    # Color cycle for different experiments
-    colors = ['b', 'r', 'g', 'm', 'c', 'y', 'k', 'orange', 'purple', 'brown', 'pink', 'gray']
+    ax2.set_title(f"{run_info}:\n Entropy vs MBE", fontsize=15, pad=10)
+    ax2.grid(True, alpha=0.15, linestyle='-', color='#000000')
     
-    # Create animation
-    fig, ax = plt.subplots(figsize=(12, 6))
+    lines = [line1, line2]
+    labels = [l.get_label() for l in lines]
+    ax2.legend(lines, labels, loc='upper right', frameon=False, fontsize=15)
+
+    ax2.scatter([current_step_val], [entropy_history[-1]], color='#FB6E52', s=50, zorder=5, edgecolor='white')
+    ax2_r.scatter([current_step_val], [avg_mbe_history[-1]], color='#5D9CEC', s=50, zorder=5, edgecolor='white')
+
+    plt.tight_layout()
+    buf = io.BytesIO()
+    plt.savefig(buf, format='png', dpi=120) # Slightly higher DPI for crispness
+    plt.close(fig)
+    buf.seek(0)
+    return Image.open(buf)
+
+def fig_to_pil(fig):
+    import io
+    from PIL import Image
+    buf = io.BytesIO()
+    fig.savefig(buf, format='png', dpi=120, 
+                bbox_inches='tight', 
+                pad_inches=0.2,
+                facecolor='white')
+    buf.seek(0)
+    img = Image.open(buf).copy()
+    buf.close()
+    plt.close(fig)
+    return img
+
+
+def visualize_final_losses(loss_record, n_layer=12, run_info=""):
+    final_mbe = [loss_record[f"mbe_{l}"][-1] for l in range(n_layer)]
+    final_entropy = loss_record["entropy"][-1]
+    avg_mbe = np.mean(final_mbe)
+    layers = np.arange(n_layer)
+
+    fig, ax = plt.subplots(figsize=(10, 6), dpi=120)
     
-    def animate(i):
-        # Adjust i to handle the extended final frame
-        actual_i = min(i, num_iterations - 1)
-        
-        ax.clear()
-        
-        # Plot each experiment's data
-        for idx, (mbe_data, label) in enumerate(zip(mbe_data_list, labels_list)):
-            if len(mbe_data) > 0:  # Make sure we have data
-                # If actual_i exceeds available data, use the last available data point
-                data_i = min(actual_i, len(mbe_data) - 1)
-                vals = mbe_data[data_i]
-                x_vals = list(range(len(vals)))
-                color = colors[idx % len(colors)]
-                ax.plot(x_vals, vals, f'{color}-o', label=label)
-        
-        ax.set_xlabel('Layer')
-        ax.set_ylabel('MBE Value')
-        ax.set_title(f'MBE Values Across Layers (Iteration {iteration_multiplier*actual_i})')
-        ax.legend()
-        ax.grid(True)
-        
-        # Use the global y-axis limits for all frames
-        ax.set_ylim(global_y_min - margin, global_y_max + margin)
-        
-        # Set x-axis limits
-        ax.set_xlim(-0.5, num_layers - 0.5)
+    # Get modern palette
+    colors, palette = get_layer_colors(n_layer)
     
-    # Add extra frames for the last frame (5 seconds at 2fps = 10 extra frames)
-    extended_frames = num_iterations + 10
+    # Bars with transparency and soft edges
+    bars = ax.bar(layers, final_mbe, color=colors, alpha=0.95, edgecolor='gray', linewidth=0.8, width=0.75)
     
-    ani = FuncAnimation(fig, animate, frames=extended_frames, interval=500, repeat=True)
+    # Clean Legend
+    legend_elements = [
+        Patch(facecolor=palette[0], label='Early Layers', alpha=0.85),
+        Patch(facecolor=palette[1], label='Middle Layers', alpha=0.85),
+        Patch(facecolor=palette[2], label='Late Layers', alpha=0.85)
+    ]
     
-    # save to gif
-    ani.save(output_file, writer='pillow', fps=2)
+    # Add Mean MBE line
+    ax.axhline(y=avg_mbe, color='#888888', linestyle='--', linewidth=1.5, alpha=0.7)
+    legend_elements.append(plt.Line2D([0], [0], color='#888888', linestyle='--', linewidth=1.5, label=f'Avg MBE ({avg_mbe:.4f})'))
     
-    return ani
+    ax.legend(handles=legend_elements, loc='upper right', frameon=False, fontsize=15)
+    
+    ax.set_xlabel('Layer Index', fontsize=15, color='#444444')
+    ax.set_ylabel('MBE Loss', fontsize=15, color='#444444')
+    ax.set_title(f'{run_info}\nFinal Entropy: {final_entropy:.4f}', fontsize=15, pad=15)
+    ax.set_xticks(layers)
+    
+    # Clean up grid and spines
+    ax.grid(axis='y', alpha=0.15, linestyle='-', color='#000000')
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.spines['left'].set_color('#888888')
+    ax.spines['bottom'].set_color('#888888')
+    
+    # Add value labels
+    for bar in bars:
+        height = bar.get_height()
+        ax.text(bar.get_x() + bar.get_width()/2., height + (max(final_mbe)*0.01),
+                f'{height:.4f}',
+                ha='center', va='bottom', fontsize=9, color='#555555')
+
+    plt.tight_layout()
+    return fig_to_pil(fig)
 
 
 def plot_dual_metrics(loss_record, names=('l1_positive', 'mbe'), save_path="metrics_curves.png", 
@@ -1257,3 +1333,40 @@ def compute_loss(loss_dict: dict, mask: Optional[torch.Tensor] = None) -> torch.
         loss_dict['entropy'] = (loss_dict['entropy'] * mask).sum() / (mask.sum())
     else:
         loss_dict['entropy'] = loss_dict['entropy'].mean()
+
+import ast 
+
+def extract_log_data(log_path):
+    """
+    Extract experiment configuration and loss records from IBLM log file.
+    
+    Returns:
+        config (str): Experiment configuration string
+        loss_record (dict): Dictionary of loss curves
+    """
+    with open(log_path, 'r') as f:
+        lines = f.readlines()
+    
+    config = None
+    loss_record = None
+    
+    for i in range(len(lines) - 1, -1, -1):
+        if 'Experiment configuration:' in lines[i]:
+            config = lines[i].split('Experiment configuration:')[-1].strip()
+        
+        if 'loss record:' in lines[i]:
+            dict_str = lines[i+1].strip()
+            dict_str = re.sub(r"defaultdict\(<class 'list'>, ", "", dict_str)
+            if dict_str.endswith(')'):
+                dict_str = dict_str[:-1]  # Remove trailing )
+    
+            try:
+                loss_record = ast.literal_eval(dict_str)
+            except:
+                print(f"Failed to parse loss record from line {i+1}")
+                print(f"Dict string: {dict_str[:200]}...")
+        
+        if config is not None and loss_record is not None:
+            break
+    
+    return config, loss_record
