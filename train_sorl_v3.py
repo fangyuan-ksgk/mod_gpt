@@ -520,7 +520,7 @@ for step in range(train_steps + 1):
                 val_loss["search_adv"] += val_adv.mean()
                 val_loss["search_info_gain"] += rel_info_gain
                 val_loss["util_rate"] += torch.tensor(util_rate, device=val_traj_loss.device)
-                val_loss["K"] = torch.tensor(float(K), device="cuda")  # Set (not +=), K is same for all val steps
+                val_loss["K"] += torch.tensor(float(K), device="cuda")  # Set (not +=), K is same for all val steps
             
         for name in val_loss: 
             val_loss[name] /= val_steps
