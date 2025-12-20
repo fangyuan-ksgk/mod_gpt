@@ -64,7 +64,8 @@ def parse_args():
     parser.add_argument("--coarse_to_fine_search", action="store_true", default=False) # coarse to fine search (curriculum on K ratio)
     parser.add_argument("--max_K", type=int, default=512) # initial K ratio (max K ratio)
     parser.add_argument("--num_c2f_phases", type=int, default=4) # number of coarse to fine phases
-
+    parser.add_argument("--no_attn_sweep", action="store_true", default=False) # no attention sweep (use static attention blocksize)
+    
     # GAPT
     parser.add_argument("--use_gapt", action="store_true", default=False) # use GAPT to balance objectives
     parser.add_argument("--traj_perplexity_patience", type=int, default=5) # patience for traj perplexity
@@ -250,6 +251,7 @@ class Hyperparameters:
     coarse_to_fine_search: bool = False
     max_K: int = 512
     num_c2f_phases: int = 4
+    no_attn_sweep: bool = False
 
     use_gapt: bool = False
     traj_perplexity_patience: int = 5
@@ -476,7 +478,10 @@ early_stop = False
 
 for step in range(train_steps + 1):
     last_step = (step == train_steps) or early_stop
-    attn_blocksize = torch.tensor(64*((step/train_steps * (1792 - 64) + 64)//64), dtype=torch.int, device='cuda')    
+    if args.no_attn_sweep: 
+        attn_blocksize = torch.tensor(1792, dtype=torch.int, device='cuda')
+    else: 
+        attn_blocksize = torch.tensor(64*((step/train_steps * (1792 - 64) + 64)//64), dtype=torch.int, device='cuda')    
     if args.use_static_memory_span:
         memory_span = torch.tensor(1792, dtype=torch.int, device='cuda') # keep static
     else:
@@ -615,6 +620,7 @@ print0(f"-- utility_scaling: {args.utility_scaling}", console=True)
 print0(f"-- coarse_to_fine_search: {args.coarse_to_fine_search}", console=True)
 print0(f"-- max_K: {args.max_K}", console=True)
 print0(f"-- num_c2f_phases: {args.num_c2f_phases}", console=True)
+print0(f"-- no_attn_sweep: {args.no_attn_sweep}", console=True)
 print0(f"loss record:\n{loss_record}", console=True)
 
 dist.destroy_process_group()
