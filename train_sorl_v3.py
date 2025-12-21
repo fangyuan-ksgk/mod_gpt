@@ -371,9 +371,12 @@ else:
 loss_fn = loss_fn.to(device)
 
 # --- coarse to fine search ---
-def get_current_K(step: int, total_steps: int) -> int:
+def get_current_K(step: int, total_steps: int, current_vocab_util: float, curr_K: int) -> int:
     if not args.coarse_to_fine_search:
         return args.K
+    if current_vocab_util >= args.vocab_util_halt_threshold and step >= 200: 
+        return curr_K
+
     steps_per_phase = total_steps // args.num_c2f_phases
     current_phase = min(step // steps_per_phase, args.num_c2f_phases - 1)
     log2_max_K = np.log2(args.max_K) 
@@ -475,6 +478,8 @@ train_steps = args.num_iterations
 loss_record = defaultdict(list)
 test_loss_record = defaultdict(list)
 early_stop = False
+train_vocab_util = 1.0
+curr_K = args.max_K if args.coarse_to_fine_search else args.K
 
 for step in range(train_steps + 1):
     last_step = (step == train_steps) or early_stop
@@ -488,7 +493,7 @@ for step in range(train_steps + 1):
         memory_span = torch.tensor(64*(((1 - step/train_steps) * (1792 - args.min_memory_span) + args.min_memory_span)//64), dtype=torch.int, device='cuda')
     
     # --- coarse to fine search ---
-    K = get_current_K(step, train_steps)
+    K = get_current_K(step, train_steps, train_vocab_util, curr_K)
 
     # --------------- VALIDATION SECTION -----------------
     if last_step or (args.val_loss_every > 0 and step % args.val_loss_every == 0):
@@ -586,8 +591,9 @@ for step in range(train_steps + 1):
         opt.step()
     # null the gradients
     model.zero_grad(set_to_none=True)
-    
 
+    # log train vocab util (for dynamic K curriculum halting)
+    train_vocab_util = compute_vocab_utilization_rate(search_tokens, model)
             
     # ----------------------------------------------------
     # logging
