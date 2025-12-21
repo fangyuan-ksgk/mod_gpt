@@ -64,27 +64,29 @@ echo "========================================="
 
 
 # Large scale model sweep (10B fineweb)
+# Issue #1. MBE collapse to nan value for 'large' GPT model training
+#           better set a lower-bound on mbe values during optimization
 
-NUM_ITERATIONS=8000
-for MODEL_SIZE in "medium" "large" "xl"; do
-  torchrun \
-      --nproc_per_node=$N_GPUS \
-      --master_addr=$MASTER_ADDR \
-      --master_port=$((MASTER_PORT++)) \
-      train_iblm.py \
-      --batch_size $BATCH_SIZE \
-      --train_seq_len $TRAIN_SEQ_LEN \
-      --val_seq_len $VAL_SEQ_LEN \
-      --num_iterations $NUM_ITERATIONS \
-      --use_gapt \
-      --entropy_patience 250 \
-      --entropy_min_delta 0.01 \
-      --mbe_patience 50 \
-      --mbe_min_delta 0.01 \
-      --patch_size 8 \
-      --model_size $MODEL_SIZE \
-      --run_info "GAPT Sweep: ModelSize=$MODEL_SIZE | CEPat=250 | MBEPat=50" 
-done
+# NUM_ITERATIONS=8000
+# for MODEL_SIZE in "medium" "large" "xl"; do
+#   torchrun \
+#       --nproc_per_node=$N_GPUS \
+#       --master_addr=$MASTER_ADDR \
+#       --master_port=$((MASTER_PORT++)) \
+#       train_iblm.py \
+#       --batch_size $BATCH_SIZE \
+#       --train_seq_len $TRAIN_SEQ_LEN \
+#       --val_seq_len $VAL_SEQ_LEN \
+#       --num_iterations $NUM_ITERATIONS \
+#       --use_gapt \
+#       --entropy_patience 250 \
+#       --entropy_min_delta 0.01 \
+#       --mbe_patience 50 \
+#       --mbe_min_delta 0.01 \
+#       --patch_size 8 \
+#       --model_size $MODEL_SIZE \
+#       --run_info "GAPT Sweep: ModelSize=$MODEL_SIZE | CEPat=250 | MBEPat=50" 
+# done
 
 # Sweep on MBE schedule across layers (which one gets regularized when)
 # -> rotate is better than global sum already, so which layer's reg is better here? 
@@ -106,7 +108,55 @@ for MBE_SCHEDULE in "rotate" "rotate_accum" "progressive" "weighted_valley" "wei
       --mbe_min_delta 0.01 \
       --patch_size 8 \
       --model_size "small" \
+      --mbe_schedule $MBE_SCHEDULE \
+      --skip_last 1 \
       --run_info "GAPT Sweep: MBEschedule=$MBE_SCHEDULE | CEPat=250 | MBEPat=50 | Model=GPT2-small" 
+done
+
+# Skip last effect sweep 
+for SKIP_LAST in 2 3 4; do
+  torchrun \
+    --nproc_per_node=$N_GPUS \
+    --master_addr=$MASTER_ADDR \
+    --master_port=$((MASTER_PORT++)) \
+    train_iblm.py \
+    --batch_size $BATCH_SIZE \
+    --train_seq_len $TRAIN_SEQ_LEN \
+    --val_seq_len $VAL_SEQ_LEN \
+    --num_iterations 1750 \
+    --use_gapt \
+    --entropy_patience 250 \
+    --entropy_min_delta 0.01 \
+    --mbe_patience 50 \
+    --mbe_min_delta 0.01 \
+    --patch_size 8 \
+    --model_size "small" \
+    --mbe_schedule "rotate" \
+    --skip_last $SKIP_LAST \
+    --run_info "GAPT Sweep: MBEschedule=rotate | CEPat=250 | MBEPat=50 | Model=GPT2-small | SkipLast=$SKIP_LAST" 
+done
+
+# Skip first effect sweep
+for SKIP_FIRST in 0 2 3 4; do
+  torchrun \
+    --nproc_per_node=$N_GPUS \
+    --master_addr=$MASTER_ADDR \
+    --master_port=$((MASTER_PORT++)) \
+    train_iblm.py \
+    --batch_size $BATCH_SIZE \
+    --train_seq_len $TRAIN_SEQ_LEN \
+    --val_seq_len $VAL_SEQ_LEN \
+    --num_iterations 1750 \
+    --use_gapt \
+    --entropy_patience 250 \
+    --entropy_min_delta 0.01 \
+    --mbe_patience 50 \
+    --mbe_min_delta 0.01 \
+    --patch_size 8 \
+    --model_size "small" \
+    --mbe_schedule "rotate" \
+    --skip_first $SKIP_FIRST \
+    --run_info "GAPT Sweep: MBEschedule=rotate | CEPat=250 | MBEPat=50 | Model=GPT2-small | SkipFirst=$SKIP_FIRST" 
 done
 
 # # Sweep on entropy min delta (allow more oscillation)

@@ -40,6 +40,9 @@ def parse_args():
     parser.add_argument("--patch_size", type=int, default=8)
     parser.add_argument("--mbe_weight", type=float, default=1.0)
     parser.add_argument("--use_gapt", action="store_true")
+    parser.add_argument("--skip_first", type=int, default=1)
+    parser.add_argument("--skip_last", type=int, default=1)
+    parser.add_argument("--mbe_schedule", type=str, default="rotate")
     parser.add_argument("--model_size", type=str, default="small")
     parser.add_argument("--run_info", type=str, default="")
     
@@ -195,7 +198,9 @@ class Hyperparameters:
     switch_phase: bool = False # use gapt
     mbe_weight: float = 1.0
     use_gapt: bool = False
-
+    skip_first: int = 1
+    skip_last: int = 1
+    mbe_schedule: str = "rotate"
     log_grad_info: bool = False
     entropy_patience: int = 125
     entropy_min_delta: float = 0.01
@@ -420,7 +425,7 @@ for step in range(train_steps + 1):
         # --- aggregate loss ---
         # Idea #1. per_layer_mbe_mask used to slice mbe loss per layer
         #          we should adapt this mask across steps, too
-        per_layer_mbe_mask = get_mbe_layer_mask(step, accum_step, train_accumulation_steps, model.num_encoder_layers + model.num_decoder_layers, mode="rotate")
+        per_layer_mbe_mask = get_mbe_layer_mask(step, accum_step, train_accumulation_steps, model.num_encoder_layers + model.num_decoder_layers, mode=args.mbe_schedule, skip_first=args.skip_first, skip_last=args.skip_last)
         mbe_loss_per_layer = torch.stack([loss_dict[k] for k in loss_dict.keys() if k.startswith("mbe_")])
         mbe_loss = (mbe_loss_per_layer * per_layer_mbe_mask).mean()
         loss_dict = {
@@ -485,5 +490,7 @@ print0(f"-- mbe_min_delta: {args.mbe_min_delta}", console=True)
 print0(f"-- patch_size: {args.patch_size}", console=True)
 print0(f"-- mbe_weight: {args.mbe_weight}", console=True)
 print0(f"-- entropy_spike_tolerance: {args.entropy_spike_tolerance}", console=True)
-
+print0(f"-- skip_first: {args.skip_first}", console=True)
+print0(f"-- skip_last: {args.skip_last}", console=True)
+print0(f"-- mbe_schedule: {args.mbe_schedule}", console=True)
 dist.destroy_process_group()
