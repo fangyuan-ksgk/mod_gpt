@@ -122,6 +122,41 @@ for ABSTRACT_VOCAB_SIZE in 128 512 1024; do
 done
 
 
+MAX_K=512
+NUM_C2F_PHASES=4
+for ABSTRACT_VOCAB_SIZE in 128 512 1024; do
+  for K in 8 16; do
+    torchrun \
+      --nproc_per_node=$N_GPUS \
+      --master_addr=$MASTER_ADDR \
+      --master_port=$MASTER_PORT \
+      train_sorl_v3.py \
+      --batch_size $BATCH_SIZE \
+      --train_seq_len $TRAIN_SEQ_LEN \
+      --val_seq_len $VAL_SEQ_LEN \
+      --num_iterations 3500 \
+      --num_rollouts $NUM_ROLLOUTS \
+      --K 8 \
+      --max_K $MAX_K \
+      --num_c2f_phases $NUM_C2F_PHASES \
+      --coarse_to_fine_search \
+      --abstract_vocab_size $ABSTRACT_VOCAB_SIZE \
+      --max_iterations $MAX_ITERATIONS \
+      --min_temperature 0.0 \
+      --temperature 5.0 \
+      --alpha_loss $ALPHA_LOSS \
+      --alpha_marg_ent $ALPHA_MARG_ENT \
+      --decay $DECAY \
+      --target_vocab_util $TARGET_VOCAB_UTIL \
+      --use_orthogonal_init \
+      --use_static_memory_span \
+      --alpha_info_gain $ALPHA_INFO_GAIN \
+      --no_attn_sweep \
+      --run_info "TinyStories c2f (max_K=$MAX_K, K=$K, abs_vocab=$ABSTRACT_VOCAB_SIZE)"
+  done
+done
+
+
 # =======================
 # -> Effect on 'alpha info gain' 
 # -> Effect on 'utility scaling'
