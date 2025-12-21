@@ -711,3 +711,233 @@ def save_training_dynamics(loss_record, save_path, run_info=""):
     plt.savefig(save_path, dpi=300, bbox_inches='tight')
     print(f"Training dynamics saved to: {save_path}")
     plt.close(fig)  # Close to free memory
+
+
+import ast, re
+
+def extract_log_data(log_path):
+    """
+    Extract experiment configuration and loss records from log file.
+    
+    Handles two formats:
+    1. Plain dict with floats: {'key': [1.0, 2.0, ...]}
+    2. Tensor format: {'key': [tensor(1.0, device='cuda:0'), ...]}
+    
+    Returns:
+        config (str): Experiment configuration string
+        loss_record (dict): Dictionary of loss curves (values as floats)
+    """
+    with open(log_path, 'r') as f:
+        lines = f.readlines()
+    
+    config = None
+    loss_record = None
+    
+    for i in range(len(lines) - 1, -1, -1):
+        if 'Experiment configuration:' in lines[i]:
+            config = lines[i].split('Experiment configuration:')[-1].strip()
+        
+        if 'loss record:' in lines[i]:
+            dict_str = lines[i+1].strip()
+            
+            # Remove defaultdict wrapper if present
+            dict_str = re.sub(r"defaultdict\(<class 'list'>, ", "", dict_str)
+            if dict_str.endswith(')') and 'defaultdict' not in dict_str:
+                dict_str = dict_str[:-1]
+            
+            # Check if it contains tensor() format
+            if 'tensor(' in dict_str:
+                loss_record = _parse_tensor_dict(dict_str)
+            else:
+                try:
+                    loss_record = ast.literal_eval(dict_str)
+                except:
+                    print(f"Failed to parse loss record from line {i+1}")
+                    print(f"Dict string: {dict_str[:200]}...")
+        
+        if config is not None and loss_record is not None:
+            break
+    
+    return config, loss_record
+
+
+def _parse_tensor_dict(dict_str):
+    """
+    Parse a dictionary string containing tensor(...) values.
+    Converts tensor(X.XXXX, device='cuda:0') to float X.XXXX
+    
+    Example input:
+        {'key': [tensor(1.5, device='cuda:0'), tensor(2.3, device='cuda:0')]}
+    Returns:
+        {'key': [1.5, 2.3]}
+    """
+    result = {}
+    
+    # Find all keys and their list contents
+    # Pattern: 'key_name': [list_content]
+    key_pattern = r"'([^']+)':\s*\[([^\]]+)\]"
+    
+    for match in re.finditer(key_pattern, dict_str):
+        key = match.group(1)
+        list_content = match.group(2)
+        
+        # Extract all tensor values: tensor(VALUE, device='...')
+        # Handles: tensor(1.5, device='cuda:0'), tensor(-0.0091, device='cuda:0')
+        tensor_pattern = r"tensor\(([-\d.e]+)"
+        values = [float(v) for v in re.findall(tensor_pattern, list_content)]
+        
+        result[key] = values
+    
+    return result
+
+import io 
+from PIL import Image
+import numpy as np
+import matplotlib.pyplot as plt
+
+def create_sorl_training_frame(step_idx, loss_record, run_info, val_interval=125, axis_limits=None):
+    """
+    Creates a single frame for SoRL training dynamics animation.
+    
+    Args:
+        step_idx: Current index in the loss arrays
+        loss_record: Dictionary with keys like 'base_traj_loss', 'cond_traj_loss (search)', etc.
+        val_interval: Training steps between validations
+        axis_limits: Dict with precomputed axis limits for stable visualization
+    """
+    n_total = len(loss_record.get('base_traj_loss', []))
+    all_steps = np.arange(n_total) * val_interval
+    steps = np.arange(step_idx + 1) * val_interval
+    
+    base_loss = loss_record.get('base_traj_loss', [])[:step_idx + 1]
+    cond_loss = loss_record.get('cond_traj_loss (search)', [])[:step_idx + 1]
+    search_adv = loss_record.get('search_adv', [])[:step_idx + 1]
+    search_info_gain = loss_record.get('search_info_gain', [])[:step_idx + 1]
+    util_rate = loss_record.get('util_rate', [])[:step_idx + 1]
+    K_values = loss_record.get('K', [])[:step_idx + 1]
+    
+    # Colors (light mode friendly)
+    c_base = '#2E86AB'      # Deep blue
+    c_cond = '#E94F37'      # Red-orange
+    c_adv = '#1B998B'       # Teal
+    c_info = '#7B68EE'      # Medium slate blue
+    c_util = '#F39C12'      # Orange
+    
+    fig, axes = plt.subplots(3, 1, figsize=(10, 8), sharex=True)
+    fig.patch.set_facecolor('white')
+    
+    for ax in axes:
+        ax.set_facecolor('white')
+        ax.grid(True, alpha=0.3, color='#cccccc')
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+    
+    # Fixed x-axis limits
+    x_min, x_max = 0, all_steps[-1]
+    
+    # Row 1: Trajectory Losses
+    axes[0].plot(steps, base_loss, color=c_base, linewidth=2, label='Base Traj Loss', alpha=0.9)
+    axes[0].plot(steps, cond_loss, color=c_cond, linewidth=2, label='Cond Traj Loss (Search)', alpha=0.9)
+    axes[0].set_ylabel('Loss', fontsize=10)
+    axes[0].legend(loc='upper right', fontsize=8)
+    axes[0].set_title('Trajectory Losses', fontsize=11, fontweight='bold')
+    axes[0].set_xlim(x_min, x_max)
+    axes[0].set_ylim(axis_limits['loss_min'], axis_limits['loss_max'])  # No if check
+    
+
+    # Row 2: Search Metrics (dual y-axis)
+    ax2_twin = axes[1].twinx()
+    l1, = axes[1].plot(steps, search_adv, color=c_adv, linewidth=2, label='Search Adv', alpha=0.9)
+    l2, = ax2_twin.plot(steps, search_info_gain, color=c_info, linewidth=2, label='Search Info Gain', alpha=0.9)
+    axes[1].set_ylabel('Advantage', color=c_adv, fontsize=10)
+    ax2_twin.set_ylabel('Info Gain', color=c_info, fontsize=10)
+    ax2_twin.spines['right'].set_color(c_info)
+    ax2_twin.spines['top'].set_visible(False)
+    ax2_twin.tick_params(colors=c_info)
+    axes[1].tick_params(axis='y', colors=c_adv)
+    axes[1].axhline(0, color='gray', linestyle='--', alpha=0.5)
+    ax2_twin.axhline(0, color='gray', linestyle='--', alpha=0.5)
+    axes[1].legend([l1, l2], ['Search Adv', 'Search Info Gain'], loc='upper right', fontsize=8)
+    axes[1].set_title('Search Metrics', fontsize=11, fontweight='bold')
+    axes[1].set_xlim(x_min, x_max)
+    axes[1].set_ylim(axis_limits['adv_min'], axis_limits['adv_max'])
+    ax2_twin.set_ylim(axis_limits['info_min'], axis_limits['info_max'])
+    
+    # Row 3: Util Rate + K indicator
+    axes[2].plot(steps, util_rate, color=c_util, linewidth=2, label='Util Rate', alpha=0.9)
+    axes[2].set_ylabel('Util Rate', color=c_util, fontsize=10)
+    axes[2].set_xlabel('Training Step', fontsize=10)
+    axes[2].set_xlim(x_min, x_max)
+    axes[2].set_ylim(0, 1.05)
+    axes[2].tick_params(axis='y', colors=c_util)
+    
+    # Add K value as text annotation
+    if K_values:
+        current_K = K_values[-1]
+        axes[2].text(0.98, 0.95, f'K = {int(current_K)}', transform=axes[2].transAxes,
+                     fontsize=12, fontweight='bold',
+                     ha='right', va='top', bbox=dict(boxstyle='round', facecolor='#f0f0f0', edgecolor='#cccccc'))
+    axes[2].set_title('Vocab Utilization', fontsize=11, fontweight='bold')
+    
+    # Overall title
+    fig.suptitle(f'SoRL Training Dynamics (Step {steps[-1]}) {run_info}', fontsize=14, fontweight='bold', y=0.98)
+    
+    plt.tight_layout(rect=[0, 0, 1, 0.96])
+    
+    # Convert to PIL Image
+    buf = io.BytesIO()
+    plt.savefig(buf, format='png', dpi=100, facecolor='white')
+    buf.seek(0)
+    img = Image.open(buf).copy()
+    buf.close()
+    plt.close(fig)
+    
+    return img
+
+
+def generate_sorl_dynamics_gif(loss_record, save_path, run_info, val_interval=125, fps=5):
+    """
+    Generate a GIF animation of the SoRL training dynamics.
+    """
+    n_steps = len(loss_record.get('base_traj_loss', []))
+    
+    if n_steps == 0:
+        print("No data found in loss_record")
+        return
+    
+    # Precompute axis limits from ALL data (include everything)
+    all_base = loss_record.get('base_traj_loss', [])
+    all_cond = loss_record.get('cond_traj_loss (search)', [])
+    all_adv = loss_record.get('search_adv', [])
+    all_info = loss_record.get('search_info_gain', [])
+    
+    # Compute fixed limits from full data
+    loss_all = all_base + all_cond
+    axis_limits = {
+        'loss_min': min(loss_all) * 0.95,
+        'loss_max': max(loss_all) * 1.05,
+        'adv_min': min(all_adv) - 0.005,
+        'adv_max': max(all_adv) + 0.005,
+        'info_min': min(all_info) - 0.01,
+        'info_max': max(all_info) + 0.01,
+    }
+    
+    print(f"Fixed axis limits: {axis_limits}")
+    
+    frames = []
+    for i in range(n_steps):
+        frame = create_sorl_training_frame(i, loss_record, run_info, val_interval, axis_limits)
+        frames.append(frame)
+        if (i + 1) % 10 == 0:
+            print(f"Generated frame {i + 1}/{n_steps}")
+    
+    # Save as GIF
+    duration = int(1000 / fps)
+    frames[0].save(
+        save_path,
+        save_all=True,
+        append_images=frames[1:],
+        duration=duration,
+        loop=0
+    )
+    print(f"GIF saved to: {save_path}")
