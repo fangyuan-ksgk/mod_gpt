@@ -241,13 +241,14 @@ class GatedPhaseTransition:
     with percentage-based thresholds.
     """
     def __init__(self, tau_plateau_m: float = 0.01, tau_plateau_a: float = 0.01, tau_spike: float = 0.1, 
-                 p_m: int = 5, p_a: int = 5):
+                 p_m: int = 5, p_a: int = 5, min_a: float = 1e-5):
         """
         Args:
             tau_plateau: Relative threshold for detecting plateau (e.g., 0.01 = 1% improvement)
             tau_spike: Relative threshold for detecting spike (e.g., 0.1 = 10% degradation)
             p_m: Patience for main objective (steps without improvement)
             p_c: Patience for auxiliary objective (steps without improvement)
+            min_a: Minimum value for auxiliary loss (to avoid division by zero)
         """
         self.tau_plateau_m = tau_plateau_m  # % improvement needed to avoid plateau
         self.tau_plateau_a = tau_plateau_a # % improvement needed to avoid plateau
@@ -274,7 +275,7 @@ class GatedPhaseTransition:
         if self.phi == 1:
             return main_loss
         elif self.phi == 2:
-            return main_loss + auxiliary_loss
+            return main_loss + auxiliary_loss.clamp(min=self.min_a)
         return main_loss # fallback
     
     def step(self, main_loss: torch.Tensor, auxiliary_loss: torch.Tensor, 

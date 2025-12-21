@@ -43,6 +43,8 @@ def parse_args():
     parser.add_argument("--skip_first", type=int, default=1)
     parser.add_argument("--skip_last", type=int, default=1)
     parser.add_argument("--mbe_schedule", type=str, default="rotate")
+    parser.add_argument("--min_a", type=float, default=1e-5)
+
     parser.add_argument("--model_size", type=str, default="small")
     parser.add_argument("--run_info", type=str, default="")
     
@@ -201,6 +203,7 @@ class Hyperparameters:
     skip_first: int = 1
     skip_last: int = 1
     mbe_schedule: str = "rotate"
+    min_a: float = 1e-5
     log_grad_info: bool = False
     entropy_patience: int = 125
     entropy_min_delta: float = 0.01
@@ -308,7 +311,7 @@ from src.gapt import GatedPhaseTransition, get_mbe_layer_mask
 grad_tracker = GradientTracker(model)
 gapt = GatedPhaseTransition(p_m = args.entropy_patience, p_a = args.mbe_patience, 
                             tau_plateau_m = args.entropy_min_delta, tau_plateau_a = args.mbe_min_delta, 
-                            tau_spike = args.entropy_spike_tolerance)
+                            tau_spike = args.entropy_spike_tolerance, min_a = args.min_a)
 
 # ---------------------------------------------------------
 
@@ -493,4 +496,5 @@ print0(f"-- entropy_spike_tolerance: {args.entropy_spike_tolerance}", console=Tr
 print0(f"-- skip_first: {args.skip_first}", console=True)
 print0(f"-- skip_last: {args.skip_last}", console=True)
 print0(f"-- mbe_schedule: {args.mbe_schedule}", console=True)
+print0(f"-- min_a: {args.min_a}", console=True)
 dist.destroy_process_group()
