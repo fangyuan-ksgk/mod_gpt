@@ -21,7 +21,7 @@ VAL_SEQ_LEN=$((16 * 1024))
 NUM_ITERATIONS=1750
 NUM_ROLLOUTS=2
 MAX_ITERATIONS=2
-N_GPUS=1
+N_GPUS=4
 MASTER_ADDR=127.0.0.1
 MASTER_PORT=29500
 ALPHA_LOSS=0.1
@@ -70,24 +70,18 @@ ABSTRACT_VOCAB_SIZE=256
 #   --run_info "Exp 13.0: Smaller vocab size improves greedy advantage? (Fineweb 0.8B - GPT-2 small, abstract vocab size=16)"
 # done
 
-# ======================
-# TinyStories 
-# -> Info Gain Reward SoRL
-# -> Utility scaling reward SoRL (also crisp performance)
-# -> Info Gain reward alone yields better p(s | a), utility scaling help improve search_adv slightly 
-# ======================
 
-# Sweep on "Coarse to Fine" K curriculum
-export CUDA_VISIBLE_DEVICES=1
+# =======================
+# -> Effect on 'alpha info gain' 
+# -> Effect on 'utility scaling'
+# =======================
 ALPHA_MARG_ENT=1.0
 DECAY=0.8
 TARGET_VOCAB_UTIL=0.8
-ABSTRACT_VOCAB_SIZE=16
-ALPHA_INFO_GAIN=10.0
+ABSTRACT_VOCAB_SIZE=256
 
-for MAX_K in 512; do
-  for NUM_C2F_PHASES in 2 4 8 10; do
-    torchrun \
+for ALPHA_INFO_GAIN in 20.0 50.0 100.0; do
+  torchrun \
       --nproc_per_node=$N_GPUS \
       --master_addr=$MASTER_ADDR \
       --master_port=$MASTER_PORT \
@@ -95,12 +89,9 @@ for MAX_K in 512; do
       --batch_size $BATCH_SIZE \
       --train_seq_len $TRAIN_SEQ_LEN \
       --val_seq_len $VAL_SEQ_LEN \
-      --num_iterations 3500 \
+      --num_iterations 1750 \
       --num_rollouts $NUM_ROLLOUTS \
       --K 8 \
-      --max_K $MAX_K \
-      --num_c2f_phases $NUM_C2F_PHASES \
-      --coarse_to_fine_search \
       --abstract_vocab_size $ABSTRACT_VOCAB_SIZE \
       --max_iterations $MAX_ITERATIONS \
       --min_temperature 0.0 \
@@ -113,9 +104,50 @@ for MAX_K in 512; do
       --use_static_memory_span \
       --alpha_info_gain $ALPHA_INFO_GAIN \
       --no_attn_sweep \
-      --run_info "TinyStories coarse-to-fine curriculum (max_K=$MAX_K, num_c2f_phases=$NUM_C2F_PHASES, no attn sweep)"
-  done
+      --run_info "Effect on 'alpha info gain' (alpha_info_gain=$ALPHA_INFO_GAIN)"
 done
+
+
+# ======================
+# TinyStories 
+# -> Info Gain Reward SoRL
+# -> Utility scaling reward SoRL (also crisp performance)
+# -> Info Gain reward alone yields better p(s | a), utility scaling help improve search_adv slightly 
+# ======================
+
+# Sweep on "Coarse to Fine" K curriculum | no improvement observed ...
+# ALPHA_INFO_GAIN=10.0
+# for MAX_K in 512; do
+#   for NUM_C2F_PHASES in 2 4 8 10; do
+#     torchrun \
+#       --nproc_per_node=$N_GPUS \
+#       --master_addr=$MASTER_ADDR \
+#       --master_port=$MASTER_PORT \
+#       train_sorl_v3.py \
+#       --batch_size $BATCH_SIZE \
+#       --train_seq_len $TRAIN_SEQ_LEN \
+#       --val_seq_len $VAL_SEQ_LEN \
+#       --num_iterations 3500 \
+#       --num_rollouts $NUM_ROLLOUTS \
+#       --K 8 \
+#       --max_K $MAX_K \
+#       --num_c2f_phases $NUM_C2F_PHASES \
+#       --coarse_to_fine_search \
+#       --abstract_vocab_size $ABSTRACT_VOCAB_SIZE \
+#       --max_iterations $MAX_ITERATIONS \
+#       --min_temperature 0.0 \
+#       --temperature 5.0 \
+#       --alpha_loss $ALPHA_LOSS \
+#       --alpha_marg_ent $ALPHA_MARG_ENT \
+#       --decay $DECAY \
+#       --target_vocab_util $TARGET_VOCAB_UTIL \
+#       --use_orthogonal_init \
+#       --use_static_memory_span \
+#       --alpha_info_gain $ALPHA_INFO_GAIN \
+#       --no_attn_sweep \
+#       --run_info "TinyStories coarse-to-fine curriculum (max_K=$MAX_K, num_c2f_phases=$NUM_C2F_PHASES, no attn sweep)"
+#   done
+# done
 
 
 # Hypothesis 1. |V|**(L/K) search complexity determines search performance
@@ -127,63 +159,67 @@ done
 
 
 # Test on effect of 'L'  
-for SEQ_LEN_K in 8 4 1; do
-  CURRENT_SEQ_LEN=$((SEQ_LEN_K * 1024))
-  echo "----------------------------------------------------------------"
-  echo "Running Experiment: Seq Len = ${SEQ_LEN_K}k ($CURRENT_SEQ_LEN)"
-  echo "----------------------------------------------------------------"
-  torchrun \
-    --nproc_per_node=$N_GPUS \
-    --master_addr=$MASTER_ADDR \
-    --master_port=$((MASTER_PORT++)) \
-    train_sorl_v3.py \
-    --batch_size $BATCH_SIZE \
-    --train_seq_len $CURRENT_SEQ_LEN \
-    --val_seq_len $CURRENT_SEQ_LEN \
-    --num_iterations $NUM_ITERATIONS \
-    --num_rollouts $NUM_ROLLOUTS \
-    --K $K \
-    --abstract_vocab_size $ABSTRACT_VOCAB_SIZE \
-    --max_iterations $MAX_ITERATIONS \
-    --min_temperature 0.0 \
-    --temperature 5.0 \
-    --alpha_loss $ALPHA_LOSS \
-    --alpha_marg_ent $ALPHA_MARG_ENT \
-    --decay $DECAY \
-    --target_vocab_util $TARGET_VOCAB_UTIL \
-    --use_orthogonal_init \
-    --use_static_memory_span \
-    --alpha_info_gain $ALPHA_INFO_GAIN \
-    --run_info "Ablation: SeqLen=${SEQ_LEN_K}k, Iter=$NUM_ITERATIONS, AlphaInfo=$ALPHA_INFO_GAIN (TinyStories)"
-done
+# Obs #2. smaller L degrades p(s) and p(s | a), impact on 'info gain' is negligible
+#         it degrades 'greedy advantage', too
+
+# for SEQ_LEN_K in 8 4 1; do
+#   CURRENT_SEQ_LEN=$((SEQ_LEN_K * 1024))
+#   echo "----------------------------------------------------------------"
+#   echo "Running Experiment: Seq Len = ${SEQ_LEN_K}k ($CURRENT_SEQ_LEN)"
+#   echo "----------------------------------------------------------------"
+#   torchrun \
+#     --nproc_per_node=$N_GPUS \
+#     --master_addr=$MASTER_ADDR \
+#     --master_port=$((MASTER_PORT++)) \
+#     train_sorl_v3.py \
+#     --batch_size $BATCH_SIZE \
+#     --train_seq_len $CURRENT_SEQ_LEN \
+#     --val_seq_len $CURRENT_SEQ_LEN \
+#     --num_iterations $NUM_ITERATIONS \
+#     --num_rollouts $NUM_ROLLOUTS \
+#     --K $K \
+#     --abstract_vocab_size $ABSTRACT_VOCAB_SIZE \
+#     --max_iterations $MAX_ITERATIONS \
+#     --min_temperature 0.0 \
+#     --temperature 5.0 \
+#     --alpha_loss $ALPHA_LOSS \
+#     --alpha_marg_ent $ALPHA_MARG_ENT \
+#     --decay $DECAY \
+#     --target_vocab_util $TARGET_VOCAB_UTIL \
+#     --use_orthogonal_init \
+#     --use_static_memory_span \
+#     --alpha_info_gain $ALPHA_INFO_GAIN \
+#     --run_info "Ablation: SeqLen=${SEQ_LEN_K}k, Iter=$NUM_ITERATIONS, AlphaInfo=$ALPHA_INFO_GAIN (TinyStories)"
+# done
 
 # Test on effect of |A|
-for ABSTRACT_VOCAB_SIZE in 64 128 512; do
-  torchrun \
-    --nproc_per_node=$N_GPUS \
-    --master_addr=$MASTER_ADDR \
-    --master_port=$((MASTER_PORT++)) \
-    train_sorl_v3.py \
-    --batch_size $BATCH_SIZE \
-    --train_seq_len $TRAIN_SEQ_LEN \
-    --val_seq_len $VAL_SEQ_LEN \
-    --num_iterations $NUM_ITERATIONS \
-    --num_rollouts $NUM_ROLLOUTS \
-    --K $K \
-    --abstract_vocab_size $ABSTRACT_VOCAB_SIZE \
-    --max_iterations $MAX_ITERATIONS \
-    --min_temperature 0.0 \
-    --temperature 5.0 \
-    --alpha_loss $ALPHA_LOSS \
-    --alpha_marg_ent $ALPHA_MARG_ENT \
-    --decay $DECAY \
-    --target_vocab_util $TARGET_VOCAB_UTIL \
-    --use_orthogonal_init \
-    --use_static_memory_span \
-    --alpha_info_gain $ALPHA_INFO_GAIN \
-    --no_attn_sweep \
-    --run_info "Ablation: Abstract Vocab Size=${ABSTRACT_VOCAB_SIZE}, Iter=$NUM_ITERATIONS, AlphaInfo=$ALPHA_INFO_GAIN (TinyStories)"
-done
+# Obs #3. greedy adv improves with larger |A|, but 'info gain' remains unchanged. 
+# for ABSTRACT_VOCAB_SIZE in 64 128 512; do
+#   torchrun \
+#     --nproc_per_node=$N_GPUS \
+#     --master_addr=$MASTER_ADDR \
+#     --master_port=$((MASTER_PORT++)) \
+#     train_sorl_v3.py \
+#     --batch_size $BATCH_SIZE \
+#     --train_seq_len $TRAIN_SEQ_LEN \
+#     --val_seq_len $VAL_SEQ_LEN \
+#     --num_iterations $NUM_ITERATIONS \
+#     --num_rollouts $NUM_ROLLOUTS \
+#     --K $K \
+#     --abstract_vocab_size $ABSTRACT_VOCAB_SIZE \
+#     --max_iterations $MAX_ITERATIONS \
+#     --min_temperature 0.0 \
+#     --temperature 5.0 \
+#     --alpha_loss $ALPHA_LOSS \
+#     --alpha_marg_ent $ALPHA_MARG_ENT \
+#     --decay $DECAY \
+#     --target_vocab_util $TARGET_VOCAB_UTIL \
+#     --use_orthogonal_init \
+#     --use_static_memory_span \
+#     --alpha_info_gain $ALPHA_INFO_GAIN \
+#     --no_attn_sweep \
+#     --run_info "Ablation: Abstract Vocab Size=${ABSTRACT_VOCAB_SIZE}, Iter=$NUM_ITERATIONS, AlphaInfo=$ALPHA_INFO_GAIN (TinyStories)"
+# done
 
 # # Basline on TinyStories
 # torchrun \
