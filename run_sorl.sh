@@ -117,7 +117,7 @@ for ABSTRACT_VOCAB_SIZE in 128 512 1024; do
       --use_static_memory_span \
       --alpha_info_gain $ALPHA_INFO_GAIN \
       --no_attn_sweep \
-      --run_info "TinyStories c2f (max_K=$MAX_K, K=$K, abs_vocab=$ABSTRACT_VOCAB_SIZE)"
+      --run_info "TinyStories c2f (max_K=$MAX_K, K=$K, num_c2f_phases=$NUM_C2F_PHASES, abs_vocab=$ABSTRACT_VOCAB_SIZE)"
   done
 done
 
@@ -152,7 +152,7 @@ for ABSTRACT_VOCAB_SIZE in 128 512 1024; do
       --use_static_memory_span \
       --alpha_info_gain $ALPHA_INFO_GAIN \
       --no_attn_sweep \
-      --run_info "TinyStories c2f (max_K=$MAX_K, K=$K, abs_vocab=$ABSTRACT_VOCAB_SIZE)"
+      --run_info "TinyStories c2f (max_K=$MAX_K, K=$K, num_c2f_phases=$NUM_C2F_PHASES, abs_vocab=$ABSTRACT_VOCAB_SIZE)"
   done
 done
 
