@@ -69,27 +69,47 @@ echo "========================================="
 # Fix #1.   Added MBE clamping gadget to avoid 'over-optimization' of mbe loss
 #           it's worth sweeping through different 'minMBE' effect on things
 
-# NUM_ITERATIONS=2000
-# for MODEL_SIZE in "large" "xl"; do
-#   torchrun \
-#       --nproc_per_node=$N_GPUS \
-#       --master_addr=$MASTER_ADDR \
-#       --master_port=$((MASTER_PORT++)) \
-#       train_iblm.py \
-#       --batch_size $BATCH_SIZE \
-#       --train_seq_len $TRAIN_SEQ_LEN \
-#       --val_seq_len $VAL_SEQ_LEN \
-#       --num_iterations $NUM_ITERATIONS \
-#       --use_gapt \
-#       --entropy_patience 250 \
-#       --entropy_min_delta 0.01 \
-#       --mbe_patience 50 \
-#       --mbe_min_delta 0.01 \
-#       --patch_size 8 \
-#       --model_size $MODEL_SIZE \
-#       --min_a 1e-5 \
-#       --run_info "GAPT Sweep: ModelSize=$MODEL_SIZE | CEPat=250 | MBEPat=50 | ClampMinMBE=1e-5" 
-# done
+# Scaling experiment (10B fineweb dataset)
+# -----------------------------------------
+NUM_ITERATIONS=8000
+for MODEL_SIZE in "small" "medium" "large" "xl"; do
+  torchrun \
+      --nproc_per_node=$N_GPUS \
+      --master_addr=$MASTER_ADDR \
+      --master_port=$((MASTER_PORT++)) \
+      train_iblm.py \
+      --batch_size $BATCH_SIZE \
+      --train_seq_len $TRAIN_SEQ_LEN \
+      --val_seq_len $VAL_SEQ_LEN \
+      --num_iterations $NUM_ITERATIONS \
+      --use_gapt \
+      --entropy_patience 250 \
+      --entropy_min_delta 0.01 \
+      --mbe_patience 50 \
+      --mbe_min_delta 0.01 \
+      --patch_size 8 \
+      --model_size $MODEL_SIZE \
+      --min_a 1e-5 \
+      --run_info "GAPT Sweep: ModelSize=$MODEL_SIZE | CEPat=250 | MBEPat=50 | ClampMinMBE=1e-5" 
+done
+
+# Baseline experiment (10B fineweb dataset)
+# -----------------------------------------
+for MODEL_SIZE in "small" "medium" "large" "xl"; do
+  torchrun \
+    --nproc_per_node=$N_GPUS \
+    --master_addr=$MASTER_ADDR \
+    --master_port=$((MASTER_PORT++)) \
+    train_iblm.py \
+    --batch_size $BATCH_SIZE \
+    --train_seq_len $TRAIN_SEQ_LEN \
+    --val_seq_len $VAL_SEQ_LEN \
+    --num_iterations $NUM_ITERATIONS \
+    --patch_size 8
+    --model_size $MODEL_SIZE \
+    --run_info "Baseline: ModelSize=$MODEL_SIZE" 
+done 
+
 
 
 # Sweep on MBE schedule across layers (which one gets regularized when)
@@ -117,116 +137,70 @@ for MBE_SCHEDULE in "rotate" "rotate_accum" "progressive" "weighted_valley" "wei
       --run_info "GAPT Sweep: MBEschedule=$MBE_SCHEDULE | CEPat=250 | MBEPat=50 | Model=GPT2-small" 
 done
 
-# Skip last effect sweep 
-for SKIP_LAST in 2 3 4; do
+# Sweep on patch size (for MBE)
+# -----------------------------------------
+for PATCH_SIZE in 16 64 128; do
   torchrun \
-    --nproc_per_node=$N_GPUS \
-    --master_addr=$MASTER_ADDR \
-    --master_port=$((MASTER_PORT++)) \
-    train_iblm.py \
-    --batch_size $BATCH_SIZE \
-    --train_seq_len $TRAIN_SEQ_LEN \
-    --val_seq_len $VAL_SEQ_LEN \
-    --num_iterations 1750 \
-    --use_gapt \
-    --entropy_patience 250 \
-    --entropy_min_delta 0.01 \
-    --mbe_patience 50 \
-    --mbe_min_delta 0.01 \
-    --patch_size 8 \
-    --model_size "small" \
-    --mbe_schedule "rotate" \
-    --skip_last $SKIP_LAST \
-    --run_info "GAPT Sweep: MBEschedule=rotate | CEPat=250 | MBEPat=50 | Model=GPT2-small | SkipLast=$SKIP_LAST" 
+      --nproc_per_node=$N_GPUS \
+      --master_addr=$MASTER_ADDR \
+      --master_port=$((MASTER_PORT++)) \
+      train_iblm.py \
+      --batch_size $BATCH_SIZE \
+      --train_seq_len $TRAIN_SEQ_LEN \
+      --val_seq_len $VAL_SEQ_LEN \
+      --num_iterations 1750 \
+      --use_gapt \
+      --entropy_patience 250 \
+      --entropy_min_delta 0.01 \
+      --mbe_patience 50 \
+      --mbe_min_delta 0.01 \
+      --patch_size $PATCH_SIZE \
+      --model_size "small" \
+      --mbe_schedule "rotate" \
+      --skip_last 1 \
+      --run_info "GAPT Sweep: PatchSize=$PATCH_SIZE | CEPat=250 | MBEPat=50 | Model=GPT2-small" 
 done
-
-# Skip first effect sweep
-for SKIP_FIRST in 0 2 3 4; do
-  torchrun \
-    --nproc_per_node=$N_GPUS \
-    --master_addr=$MASTER_ADDR \
-    --master_port=$((MASTER_PORT++)) \
-    train_iblm.py \
-    --batch_size $BATCH_SIZE \
-    --train_seq_len $TRAIN_SEQ_LEN \
-    --val_seq_len $VAL_SEQ_LEN \
-    --num_iterations 1750 \
-    --use_gapt \
-    --entropy_patience 250 \
-    --entropy_min_delta 0.01 \
-    --mbe_patience 50 \
-    --mbe_min_delta 0.01 \
-    --patch_size 8 \
-    --model_size "small" \
-    --mbe_schedule "rotate" \
-    --skip_first $SKIP_FIRST \
-    --run_info "GAPT Sweep: MBEschedule=rotate | CEPat=250 | MBEPat=50 | Model=GPT2-small | SkipFirst=$SKIP_FIRST" 
-done
-
-# Sweep on min_a (clamp MBE loss to avoid over-optimization)
-for MIN_A in 1e-5 1e-3 0.01 0.05 0.1 0.2; do
-  torchrun \
-    --nproc_per_node=$N_GPUS \
-    --master_addr=$MASTER_ADDR \
-    --master_port=$((MASTER_PORT++)) \
-    train_iblm.py \
-    --batch_size $BATCH_SIZE \
-    --train_seq_len $TRAIN_SEQ_LEN \
-    --val_seq_len $VAL_SEQ_LEN \
-    --num_iterations 1750 \
-    --use_gapt \
-    --entropy_patience 250 \
-    --entropy_min_delta 0.01 \
-    --mbe_patience 50 \
-    --mbe_min_delta 0.01 \
-    --patch_size 8 \
-    --model_size "small" \
-    --mbe_schedule "rotate" \
-    --min_a $MIN_A \
-    --run_info "GAPT Sweep: MBEschedule=rotate | CEPat=250 | MBEPat=50 | Model=GPT2-small | RotateMBE schedule | ClampMinMBE=$MIN_A" 
-done
-
 
 
 # # Sweep on entropy min delta (allow more oscillation)
-# for ENTROPY_MIN_DELTA in 0.005 0.02 0.03 0.04 0.05 0.06 0.07 0.08 0.09 0.10 0.20 0.30; do
-#   torchrun \
-#       --nproc_per_node=$N_GPUS \
-#       --master_addr=$MASTER_ADDR \
-#       --master_port=$((MASTER_PORT++)) \
-#       train_iblm.py \
-#       --batch_size $BATCH_SIZE \
-#       --train_seq_len $TRAIN_SEQ_LEN \
-#       --val_seq_len $VAL_SEQ_LEN \
-#       --num_iterations $NUM_ITERATIONS \
-#       --use_gapt \
-#       --entropy_patience 250 \
-#       --entropy_min_delta $ENTROPY_MIN_DELTA \
-#       --mbe_patience 50 \
-#       --mbe_min_delta 0.01 \
-#       --patch_size 8 \
-#       --run_info "GAPT Sweep: EntMinDelta=$ENTROPY_MIN_DELTA | CEPat=250 | MBEPat=50" 
-# done 
+for ENTROPY_MIN_DELTA in 0.005 0.05; do
+  torchrun \
+      --nproc_per_node=$N_GPUS \
+      --master_addr=$MASTER_ADDR \
+      --master_port=$((MASTER_PORT++)) \
+      train_iblm.py \
+      --batch_size $BATCH_SIZE \
+      --train_seq_len $TRAIN_SEQ_LEN \
+      --val_seq_len $VAL_SEQ_LEN \
+      --num_iterations 1750 \
+      --use_gapt \
+      --entropy_patience 250 \
+      --entropy_min_delta $ENTROPY_MIN_DELTA \
+      --mbe_patience 50 \
+      --mbe_min_delta 0.01 \
+      --patch_size 8 \
+      --run_info "GAPT Sweep: EntMinDelta=$ENTROPY_MIN_DELTA | CEPat=250 | MBEPat=50" 
+done 
 
-# # Sweep on mbe min delta (allow more oscillation)
-# for MBE_MIN_DELTA in 0.005 0.02 0.03 0.04 0.05 0.06 0.07 0.08 0.09 0.10 0.20 0.30; do
-#   torchrun \
-#       --nproc_per_node=$N_GPUS \
-#       --master_addr=$MASTER_ADDR \
-#       --master_port=$((MASTER_PORT++)) \
-#       train_iblm.py \
-#       --batch_size $BATCH_SIZE \
-#       --train_seq_len $TRAIN_SEQ_LEN \
-#       --val_seq_len $VAL_SEQ_LEN \
-#       --num_iterations $NUM_ITERATIONS \
-#       --use_gapt \
-#       --entropy_patience 250 \
-#       --entropy_min_delta 0.01 \
-#       --mbe_patience 50 \
-#       --mbe_min_delta $MBE_MIN_DELTA \
-#       --patch_size 8 \
-#       --run_info "GAPT Sweep: MBEMinDelta=$MBE_MIN_DELTA | CEPat=250 | MBEPat=50" 
-# done
+# Sweep on mbe min delta (allow more oscillation)
+for MBE_MIN_DELTA in 0.005 0.05; do
+  torchrun \
+      --nproc_per_node=$N_GPUS \
+      --master_addr=$MASTER_ADDR \
+      --master_port=$((MASTER_PORT++)) \
+      train_iblm.py \
+      --batch_size $BATCH_SIZE \
+      --train_seq_len $TRAIN_SEQ_LEN \
+      --val_seq_len $VAL_SEQ_LEN \
+      --num_iterations 1750 \
+      --use_gapt \
+      --entropy_patience 250 \
+      --entropy_min_delta 0.01 \
+      --mbe_patience 50 \
+      --mbe_min_delta $MBE_MIN_DELTA \
+      --patch_size 8 \
+      --run_info "GAPT Sweep: MBEMinDelta=$MBE_MIN_DELTA | CEPat=250 | MBEPat=50" 
+done
 
 
 
