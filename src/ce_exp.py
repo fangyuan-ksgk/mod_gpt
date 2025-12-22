@@ -9,9 +9,7 @@ import matplotlib.pyplot as plt
 from collections import defaultdict
 from torch.utils.data import DataLoader, TensorDataset
 
-from src.rank_regularizer import patch_mbe3
-from src.pcgrad import YetAnotherMixer2
-
+from src.gapt import patch_mbe as patch_mbe3
 
 # utils function
 # ------------------------------------------------------------

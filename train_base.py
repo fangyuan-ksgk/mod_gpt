@@ -344,7 +344,7 @@ early_stop = False
 for step in range(train_steps + 1):
     last_step = (step == train_steps) or early_stop
 
-    attn_blocksize = torch.tensor(64*((step/train_steps * (1792 - 64) + 64)//64), dtype=torch.int, device='cuda')
+    attn_blocksize = torch.tensor(1792, dtype=torch.int, device='cuda')
 
     # --------------- VALIDATION SECTION -----------------
     if last_step or (args.val_loss_every > 0 and step % args.val_loss_every == 0):

@@ -33,19 +33,24 @@ K=128
 ABSTRACT_VOCAB_SIZE=256
 
 # echo "========================================="
-# echo "BASELINE: No Abstraction (Standard GPT)"
+# echo "BASELINE: No Abstraction (Standard GPT)" || No attention sweep ver.
 # echo "========================================="
 
-# torchrun --standalone --nproc_per_node=$N_GPUS train_base.py \
-#   --batch_size $BATCH_SIZE \
-#   --train_seq_len $TRAIN_SEQ_LEN \
-#   --val_seq_len $VAL_SEQ_LEN \
-#   --num_iterations $NUM_ITERATIONS
+# for MODEL_SIZE in "small" "medium" "large" "xl"; do
+#   torchrun --standalone --nproc_per_node=$N_GPUS train_base.py \
+#     --batch_size $BATCH_SIZE \
+#     --train_seq_len $TRAIN_SEQ_LEN \
+#     --val_seq_len $VAL_SEQ_LEN \
+#     --num_iterations $NUM_ITERATIONS \
+#     --model_size $MODEL_SIZE \
+#     --save_checkpoint \
+#     --run_info "GPT (no attn sweep): ModelSize=$MODEL_SIZE"
+# done
+
 
 # ================================================
 # FineWeb & Info Gain SoRL
 # ================================================
-
 # torchrun \
 #   --nproc_per_node=$N_GPUS \
 #   --master_addr=$MASTER_ADDR \
@@ -69,9 +74,6 @@ ABSTRACT_VOCAB_SIZE=256
 #   --utility_scaling \
 #   --run_info "Exp 13.0: Smaller vocab size improves greedy advantage? (Fineweb 0.8B - GPT-2 small, abstract vocab size=16)"
 # done
-
-
-
 
 
 # ======================
