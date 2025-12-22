@@ -83,9 +83,8 @@ ABSTRACT_VOCAB_SIZE=256
 
 # Sweep on "Coarse to Fine" K curriculum | no improvement observed ...
 # Hyp #1 & #2. is invalidated
+# Hyp #3 is valid, however it doesn't lead to beter p(s | a) compared to other K values
 
-# Hyp #3 believed K=128 is a better abstraction ratio given search complexity on full TinyStoires dataset
-#        we just need a sweep on K, combined with some abstract vocab sweep
 
 # Sweep on ""
 ALPHA_MARG_ENT=1.0
@@ -93,8 +92,8 @@ DECAY=0.8
 TARGET_VOCAB_UTIL=0.8
 ALPHA_INFO_GAIN=10.0
 
-for ABSTRACT_VOCAB_SIZE in 16 128 1024; do
-  for K in 128 256 16; do
+for ABSTRACT_VOCAB_SIZE in 128; do
+  for K in 4 8 32; do
     torchrun \
       --nproc_per_node=$N_GPUS \
       --master_addr=$MASTER_ADDR \
@@ -118,6 +117,7 @@ for ABSTRACT_VOCAB_SIZE in 16 128 1024; do
       --use_static_memory_span \
       --alpha_info_gain $ALPHA_INFO_GAIN \
       --no_attn_sweep \
+      --save_checkpoint \
       --run_info "TinyStories K=$K, abs_vocab=$ABSTRACT_VOCAB_SIZE)"
   done
 done
@@ -127,34 +127,34 @@ done
 # -> Effect on 'utility scaling'
 # =======================
 
-ABSTRACT_VOCAB_SIZE=128
+# ABSTRACT_VOCAB_SIZE=128
 
-for ALPHA_INFO_GAIN in 10.0 20.0 50.0; do
-  torchrun \
-      --nproc_per_node=$N_GPUS \
-      --master_addr=$MASTER_ADDR \
-      --master_port=$MASTER_PORT \
-      train_sorl_v3.py \
-      --batch_size $BATCH_SIZE \
-      --train_seq_len $TRAIN_SEQ_LEN \
-      --val_seq_len $VAL_SEQ_LEN \
-      --num_iterations 1750 \
-      --num_rollouts $NUM_ROLLOUTS \
-      --K 128 \
-      --abstract_vocab_size $ABSTRACT_VOCAB_SIZE \
-      --max_iterations $MAX_ITERATIONS \
-      --min_temperature 0.0 \
-      --temperature 5.0 \
-      --alpha_loss $ALPHA_LOSS \
-      --alpha_marg_ent $ALPHA_MARG_ENT \
-      --decay $DECAY \
-      --target_vocab_util $TARGET_VOCAB_UTIL \
-      --use_orthogonal_init \
-      --use_static_memory_span \
-      --alpha_info_gain $ALPHA_INFO_GAIN \
-      --no_attn_sweep \
-      --run_info "Effect on 'alpha info gain' (alpha_info_gain=$ALPHA_INFO_GAIN)"
-done
+# for ALPHA_INFO_GAIN in 10.0 20.0 50.0; do
+#   torchrun \
+#       --nproc_per_node=$N_GPUS \
+#       --master_addr=$MASTER_ADDR \
+#       --master_port=$MASTER_PORT \
+#       train_sorl_v3.py \
+#       --batch_size $BATCH_SIZE \
+#       --train_seq_len $TRAIN_SEQ_LEN \
+#       --val_seq_len $VAL_SEQ_LEN \
+#       --num_iterations 1750 \
+#       --num_rollouts $NUM_ROLLOUTS \
+#       --K 128 \
+#       --abstract_vocab_size $ABSTRACT_VOCAB_SIZE \
+#       --max_iterations $MAX_ITERATIONS \
+#       --min_temperature 0.0 \
+#       --temperature 5.0 \
+#       --alpha_loss $ALPHA_LOSS \
+#       --alpha_marg_ent $ALPHA_MARG_ENT \
+#       --decay $DECAY \
+#       --target_vocab_util $TARGET_VOCAB_UTIL \
+#       --use_orthogonal_init \
+#       --use_static_memory_span \
+#       --alpha_info_gain $ALPHA_INFO_GAIN \
+#       --no_attn_sweep \
+#       --run_info "Effect on 'alpha info gain' (alpha_info_gain=$ALPHA_INFO_GAIN)"
+# done
 
 
 # Hypothesis 1. |V|**(L/K) search complexity determines search performance
