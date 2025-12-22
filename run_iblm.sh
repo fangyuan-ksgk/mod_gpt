@@ -90,6 +90,7 @@ for MODEL_SIZE in "small" "medium" "large" "xl"; do
       --patch_size 8 \
       --model_size $MODEL_SIZE \
       --min_a 1e-5 \
+      --save_checkpoint \
       --run_info "GAPT Sweep: ModelSize=$MODEL_SIZE | CEPat=250 | MBEPat=50 | ClampMinMBE=1e-5" 
 done
 
@@ -107,6 +108,7 @@ for MODEL_SIZE in "small" "medium" "large" "xl"; do
     --num_iterations $NUM_ITERATIONS \
     --patch_size 8
     --model_size $MODEL_SIZE \
+    --save_checkpoint \
     --run_info "Baseline: ModelSize=$MODEL_SIZE" 
 done 
 

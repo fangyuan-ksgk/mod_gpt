@@ -44,6 +44,7 @@ def parse_args():
     parser.add_argument("--skip_last", type=int, default=1)
     parser.add_argument("--mbe_schedule", type=str, default="rotate")
     parser.add_argument("--min_a", type=float, default=1e-5)
+    parser.add_argument("--save_checkpoint", action="store_true")
 
     parser.add_argument("--model_size", type=str, default="small")
     parser.add_argument("--run_info", type=str, default="")
