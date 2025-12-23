@@ -542,8 +542,8 @@ for step in range(train_steps + 1):
             dist.all_reduce(val_loss[name], op=dist.ReduceOp.AVG)            
             loss_record[name].append(val_loss[name])
 
-        del val_loader           
-        val_info = " ".join([f"{item} loss: {value:.4f}" for (item, value) in val_loss.items()])
+        del val_loader       
+        val_info = " ".join([f"{item} loss: {value.item():.4f}" for (item, value) in val_loss.items()])    
         print0(f"step:{step}/{train_steps} {val_info} train_time:{training_time_ms:.0f}ms step_avg:{training_time_ms/max(step, 1):.2f}ms", console=True)
         model.train()
         # start the clock again
