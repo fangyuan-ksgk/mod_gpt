@@ -67,7 +67,7 @@ def distributed_data_generator_sorl_v2(filename_pattern: str, sequence_length: i
 
         matches = (tokens[start:] == 50256).nonzero() if start < len(tokens) else []
         if len(matches) == 0 or start + matches[0] + local_len + 1 > len(tokens):
-            tokens, pos = _load_data_shard(next(files)), 0
+            tokens, pos = _load_data_shard(next(file_iter)), 0
             continue
 
         real_start = start + matches[0].item()
