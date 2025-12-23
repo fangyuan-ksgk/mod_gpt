@@ -88,8 +88,8 @@ DECAY=0.8
 TARGET_VOCAB_UTIL=0.8
 ALPHA_INFO_GAIN=10.0
 
-for ABSTRACT_VOCAB_SIZE in 128; do
-  for K in 8 4 32; do
+for ABSTRACT_VOCAB_SIZE in 256; do
+  for K in 8 4 32 64; do
     torchrun \
       --nproc_per_node=$N_GPUS \
       --master_addr=$MASTER_ADDR \
@@ -115,6 +115,36 @@ for ABSTRACT_VOCAB_SIZE in 128; do
       --no_attn_sweep \
       --avoid_prefix_truncation \
       --run_info "TinyStories no prefix truncation, K=$K, abs_vocab=$ABSTRACT_VOCAB_SIZE)"
+  done
+done
+
+
+for ABSTRACT_VOCAB_SIZE in 256; do
+  for K in 8 4 32 64; do
+    torchrun \
+      --nproc_per_node=$N_GPUS \
+      --master_addr=$MASTER_ADDR \
+      --master_port=$MASTER_PORT \
+      train_sorl_v3.py \
+      --batch_size $BATCH_SIZE \
+      --train_seq_len $TRAIN_SEQ_LEN \
+      --val_seq_len $VAL_SEQ_LEN \
+      --num_iterations 1750 \
+      --num_rollouts $NUM_ROLLOUTS \
+      --K $K \
+      --abstract_vocab_size $ABSTRACT_VOCAB_SIZE \
+      --max_iterations $MAX_ITERATIONS \
+      --min_temperature 0.0 \
+      --temperature 5.0 \
+      --alpha_loss $ALPHA_LOSS \
+      --alpha_marg_ent $ALPHA_MARG_ENT \
+      --decay $DECAY \
+      --target_vocab_util $TARGET_VOCAB_UTIL \
+      --use_orthogonal_init \
+      --use_static_memory_span \
+      --alpha_info_gain $ALPHA_INFO_GAIN \
+      --no_attn_sweep \
+      --run_info "TinyStories with prefix truncation, K=$K, abs_vocab=$ABSTRACT_VOCAB_SIZE)"
   done
 done
 
