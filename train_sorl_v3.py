@@ -35,6 +35,7 @@ def parse_args():
     parser.add_argument("--num_iterations", type=int, default=1750)
     parser.add_argument("--save_checkpoint", action="store_true", default=False)
     parser.add_argument("--log_grad_info", action="store_true")
+    parser.add_argument("--avoid_prefix_truncation", action="store_true", default=False)
 
     # Model
     parser.add_argument("--model_size", type=str, default="small") # model size
@@ -60,7 +61,6 @@ def parse_args():
     parser.add_argument("--decay", type=float, default=0.8) # decay for mutual information loss
     parser.add_argument("--target_vocab_util", type=float, default=0.9) # target vocabulary utilization
     parser.add_argument("--alpha_info_gain", type=float, default=1.0) # info gain loss weight
-    parser.add_argument("--utility_scaling", action="store_true", default=False) # utility reward scaling
     parser.add_argument("--coarse_to_fine_search", action="store_true", default=False) # coarse to fine search (curriculum on K ratio)
     parser.add_argument("--max_K", type=int, default=512) # initial K ratio (max K ratio)
     parser.add_argument("--num_c2f_phases", type=int, default=4) # number of coarse to fine phases
@@ -192,10 +192,6 @@ from sorl.neo_utils import sorl_evaluate
 from sorl.eval import compute_vocab_utilization_rate
 
 # -----------------------------------------------------------------------------
-
-from src.utils import distributed_data_generator_sorl as distributed_data_generator
-
-# -----------------------------------------------------------------------------
 # int main
 
 # torchrun sets these env variables
@@ -247,7 +243,6 @@ class Hyperparameters:
     alpha_marg_ent: float = 1.0
     decay: float = 0.8
     target_vocab_util: float = 0.8
-    utility_scaling: bool = False
     coarse_to_fine_search: bool = False
     max_K: int = 512
     num_c2f_phases: int = 4
@@ -316,7 +311,13 @@ def nvidia_smi():
 print0(nvidia_smi())
 print0("="*100)
 
-# --- sorl search ---
+# -------------------------- data loader -------------------------------------
+if args.avoid_prefix_truncation:
+    from src.utils import distributed_data_generator_sorl_v2 as distributed_data_generator
+else:
+    from src.utils import distributed_data_generator_sorl as distributed_data_generator
+
+# ------------------------- sorl search ---------------------------------------
 from sorl.neo_utils import sorl_search_v8 as sorl_search
 
 ########################################
@@ -362,12 +363,8 @@ def get_lr(step: int):
         return w * 1.0 + (1 - w) * 0.1
 
 # SoRL loss function (info gain loss)
-if args.utility_scaling: 
-    from sorl.info import SoRLLoss_v8
-    loss_fn = SoRLLoss_v8(model.vocab_sizes[1], decay=args.decay, target_vocab_util=args.target_vocab_util)
-else:
-    from sorl.info import SoRLLoss_v7
-    loss_fn = SoRLLoss_v7(model.vocab_sizes[1], decay=args.decay, target_vocab_util=args.target_vocab_util)
+from sorl.info import SoRLLoss_v7
+loss_fn = SoRLLoss_v7(model.vocab_sizes[1], decay=args.decay, target_vocab_util=args.target_vocab_util)
 loss_fn = loss_fn.to(device)
 
 # --- coarse to fine search ---
@@ -422,10 +419,7 @@ for i in range(warmup_steps):
     print(f" :: Sorl search takes {search_end - search_start} second")
     # --- compute loss --- 
     base_loss = model.forward(tokens, memory_span, attn_blocksize)[0].mean()
-    if args.utility_scaling: 
-        info_loss, abs_loss, zipf_loss = loss_fn(search_tokens, model, base_loss.detach(), rew, memory_span, attn_blocksize)
-    else:
-        info_loss, abs_loss, zipf_loss = loss_fn(search_tokens, model, base_loss.detach(), memory_span, attn_blocksize)
+    info_loss, abs_loss, zipf_loss = loss_fn(search_tokens, model, base_loss.detach(), memory_span, attn_blocksize)
     forward_end = time.time()
     print(f" :: Loss computation takes {forward_end - search_end} second")
     # --- backward --- 
@@ -509,26 +503,24 @@ for step in range(train_steps + 1):
         with torch.no_grad():
             for i in range(val_steps):
                 tokens = next(val_loader)
-                val_tokens, val_ppt, val_adv, val_rew = sorl_search(tokens, model, n=args.num_rollouts_val, K=K, max_iterations=args.max_iterations, 
+
+                val_tokens, greedy_adv, greedy_ppt, greedy_abs_ppt = sorl_evaluate(tokens, model, n=args.num_rollouts_val, K=K, max_iterations=args.max_iterations, 
                                                                     memory_span=memory_span, attn_blocksize=attn_blocksize, 
                                                                     temperature=temperature_val)
 
                 util_rate = compute_vocab_utilization_rate(val_tokens, model)
                 base_loss = model.forward(tokens, memory_span, attn_blocksize)[0].mean()
-                
-                if args.utility_scaling: 
-                    info_loss, abs_loss, zipf_loss = loss_fn(val_tokens, model, base_loss.detach(), val_rew, memory_span, attn_blocksize)
-                else:
-                    info_loss, abs_loss, zipf_loss = loss_fn(val_tokens, model, base_loss.detach(), memory_span, attn_blocksize)
+
+                info_loss, abs_loss, zipf_loss = loss_fn(val_tokens, model, base_loss.detach(), memory_span, attn_blocksize)
                 
                 val_traj_loss = info_loss + base_loss 
                 rel_info_gain = -info_loss / base_loss
 
                 val_loss["base_traj_loss"] += base_loss
-                val_loss["cond_traj_loss (search)"] += val_traj_loss
-                val_loss["abs_loss (search)"] += abs_loss
-                val_loss["search_adv"] += val_adv.mean()
-                val_loss["search_info_gain"] += rel_info_gain
+                val_loss["cond_traj_loss (greedy)"] += greedy_ppt
+                val_loss["abs_loss (greedy)"] += greedy_abs_ppt
+                val_loss["greedy_adv"] += greedy_adv.mean()
+                val_loss["info_gain (greedy)"] += rel_info_gain
                 val_loss["util_rate"] += torch.tensor(util_rate, device=val_traj_loss.device)
                 val_loss["K"] += torch.tensor(float(K), device="cuda")  # Set (not +=), K is same for all val steps
             
@@ -567,10 +559,7 @@ for step in range(train_steps + 1):
 
         # --- compute loss --- 
         base_loss = model.forward(tokens, memory_span, attn_blocksize)[0].mean()
-        if args.utility_scaling: 
-            info_loss, abs_loss, zipf_loss = loss_fn(search_tokens, model, base_loss.detach(), rew, memory_span, attn_blocksize)
-        else:
-            info_loss, abs_loss, zipf_loss = loss_fn(search_tokens, model, base_loss.detach(), memory_span, attn_blocksize)
+        info_loss, abs_loss, zipf_loss = loss_fn(search_tokens, model, base_loss.detach(), memory_span, attn_blocksize)
         loss = base_loss + args.alpha_info_gain * info_loss + args.alpha_loss * abs_loss + args.alpha_marg_ent * zipf_loss
         
         loss.backward()
@@ -622,7 +611,6 @@ print0(f"-- alpha_marg_ent: {args.alpha_marg_ent}", console=True)
 print0(f"-- decay: {args.decay}", console=True)
 print0(f"-- target_vocab_util: {args.target_vocab_util}", console=True)
 print0(f"-- alpha_info_gain: {args.alpha_info_gain}", console=True)
-print0(f"-- utility_scaling: {args.utility_scaling}", console=True)
 print0(f"-- coarse_to_fine_search: {args.coarse_to_fine_search}", console=True)
 print0(f"-- max_K: {args.max_K}", console=True)
 print0(f"-- num_c2f_phases: {args.num_c2f_phases}", console=True)
