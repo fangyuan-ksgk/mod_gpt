@@ -102,6 +102,7 @@ def load_model(hf_repo_id, hf_filename, model_size, abstract_vocab_size, device,
 def load_base_model(hf_repo_id, hf_filename, model_size, device, use_compile=True):
     gpt_config = GPTConfig.gpt_size(
         model_size, 
+        vocab_size=50257,
         flex_kernel_options={
             "BLOCK_M": 64, "BLOCK_N": 64,
             "BLOCK_M1": 32, "BLOCK_N1": 64, "BLOCK_M2": 64, "BLOCK_N2": 32
