@@ -510,6 +510,8 @@ for step in range(train_steps + 1):
 
                 greedy_util_rate = compute_vocab_utilization_rate(val_tokens, model)
                 search_util_rate = compute_vocab_utilization_rate(search_tokens, model)
+
+                # --- this base loss unfairly includes many zero ppt on BOS token position ---
                 base_loss = model.forward(tokens, memory_span, attn_blocksize)[0].mean()
 
                 greedy_info_loss, greedy_abs_loss, greedy_zipf_loss = loss_fn(val_tokens, model, base_loss.detach(), memory_span, attn_blocksize)

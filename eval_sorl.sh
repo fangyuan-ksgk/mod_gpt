@@ -1,5 +1,6 @@
+#!/bin/bash
 
-python eval_sorl.py \
+python eval_sorl_slow.py \
     --hf_repo_id "Ksgk-fy/sorl" \
     --hf_filename "ts-k4-v128.pt" \
     --model_size "small" \
@@ -12,5 +13,5 @@ python eval_sorl.py \
     --save_path "eval_sorl.csv" \
     --split "validation" \
     --num_stories 1000 \
-    --max_len 32 \
-    --batch_size 8
+    --max_len 1024 \
+    --batch_size 4
