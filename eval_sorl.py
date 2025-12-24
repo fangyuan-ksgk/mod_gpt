@@ -1,9 +1,11 @@
 """
 Fast evaluation script for SORL on TinyStories validation set
 Uses compiled model + binary data generator for speed
+Supports distributed runs: torchrun --nproc_per_node=N eval_sorl.py ...
 """
 
 import torch
+import torch.distributed as dist
 import argparse
 import os
 import time
@@ -18,10 +20,35 @@ from sorl.gat_sim import GAT, GATConfig, BOS_TOKEN_ID
 from sorl.neo_utils import sorl_search_v8 as sorl_search, sorl_evaluate
 from sorl.eval import compute_vocab_utilization_rate
 from sorl.info import SoRLLoss_v7
+from src.utils import distributed_data_generator_sorl, distributed_data_generator_sorl_v3
 
-# Login to HF
-if "HF_TOKEN" in os.environ:
-    login(token=os.environ["HF_TOKEN"])
+
+# --- Distributed utilities ---
+def setup_distributed():
+    """Initialize distributed training if available"""
+    if 'RANK' in os.environ:
+        dist.init_process_group(backend='nccl')
+        rank = dist.get_rank()
+        world_size = dist.get_world_size()
+        local_rank = int(os.environ['LOCAL_RANK'])
+        device = f"cuda:{local_rank}"
+        torch.cuda.set_device(device)
+    else:
+        rank, world_size = 0, 1
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+    return rank, world_size, device
+
+
+def cleanup_distributed():
+    """Cleanup distributed process group"""
+    if dist.is_initialized():
+        dist.destroy_process_group()
+
+
+def print0(*args, **kwargs):
+    """Print only from rank 0"""
+    if not dist.is_initialized() or dist.get_rank() == 0:
+        print(*args, **kwargs)
 
 
 def parse_args():
@@ -55,9 +82,8 @@ def parse_args():
     
     return parser.parse_args()
 
-from src.utils import distributed_data_generator_sorl, distributed_data_generator_sorl_v3
 
-def load_model(hf_repo_id, hf_filename, model_size, abstract_vocab_size, use_compile=True):
+def load_model(hf_repo_id, hf_filename, model_size, abstract_vocab_size, device, use_compile=True):
     """Load model from checkpoint"""
     gat_config = GATConfig.gpt_size(
         model_size,
@@ -67,7 +93,6 @@ def load_model(hf_repo_id, hf_filename, model_size, abstract_vocab_size, use_com
             "BLOCK_M1": 32, "BLOCK_N1": 64, "BLOCK_M2": 64, "BLOCK_N2": 32
         }
     )
-    device = "cuda" if torch.cuda.is_available() else "cpu"
     model = GAT(gat_config).to(device)
     
     ckpt_path = hf_hub_download(repo_id=hf_repo_id, filename=hf_filename)
@@ -77,7 +102,7 @@ def load_model(hf_repo_id, hf_filename, model_size, abstract_vocab_size, use_com
     clean_state_dict = {k.replace("_orig_mod.", ""): v for k, v in state_dict.items()}
     model.load_state_dict(clean_state_dict)
     
-    if device == "cuda" and use_compile:
+    if "cuda" in device and use_compile:
         model = torch.compile(model, dynamic=True)
     
     model.eval()
@@ -86,27 +111,29 @@ def load_model(hf_repo_id, hf_filename, model_size, abstract_vocab_size, use_com
 
 def main():
     args = parse_args()
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    rank, world_size, device = setup_distributed()
     use_compile = args.use_compile and not args.no_compile
     
-    # Single GPU mode
-    rank, world_size = 0, 1
+    # Login from rank 0 only
+    if rank == 0 and "HF_TOKEN" in os.environ:
+        login(token=os.environ["HF_TOKEN"])
+    if dist.is_initialized():
+        dist.barrier()
     
-    print("=" * 70)
-    print(f"Fast SORL Evaluation")
-    print(f"Model: {args.model_size}, Checkpoint: {args.hf_repo_id}/{args.hf_filename}")
-    print(f"K={args.K}, n={args.num_rollouts}, max_iter={args.max_iterations}")
-    print(f"Val tokens: {args.val_tokens:,}, Seq len: {args.val_seq_len:,}")
-    print(f"Compiled: {use_compile}, Avoid prefix truncation: {args.avoid_prefix_truncation}")
-    print(f"Device: {device}")
-    print("=" * 70)
+    print0("=" * 70)
+    print0(f"Fast SORL Evaluation ({world_size} GPU{'s' if world_size > 1 else ''})")
+    print0(f"Model: {args.model_size}, Checkpoint: {args.hf_repo_id}/{args.hf_filename}")
+    print0(f"K={args.K}, n={args.num_rollouts}, max_iter={args.max_iterations}")
+    print0(f"Val tokens: {args.val_tokens:,}, Seq len: {args.val_seq_len:,}")
+    print0(f"Compiled: {use_compile}, Avoid prefix truncation: {args.avoid_prefix_truncation}")
+    print0("=" * 70)
     
     # Set precision
     torch.set_float32_matmul_precision('high')
     
     # Load model
     model = load_model(args.hf_repo_id, args.hf_filename, args.model_size, 
-                       args.abstract_vocab_size, use_compile=use_compile)
+                       args.abstract_vocab_size, device, use_compile=use_compile)
     
     # Loss function (expects tensor for vocab_size to infer device)
     loss_fn = SoRLLoss_v7(torch.tensor(args.abstract_vocab_size, device=device), decay=0.8, target_vocab_util=0.8)
@@ -119,31 +146,35 @@ def main():
         device=device
     )
     
-    # Data generator (rank=0, world_size=1 for single GPU)
+    # Data generator - each rank gets different shard
     if args.avoid_prefix_truncation: 
         val_loader = distributed_data_generator_sorl_v3(args.val_files, args.val_seq_len, rank, world_size)
     else: 
         val_loader = distributed_data_generator_sorl(args.val_files, args.val_seq_len, rank, world_size)
 
-    val_steps = args.val_tokens // args.val_seq_len
+    # Each rank processes its share of steps
+    total_steps = args.val_tokens // args.val_seq_len
+    local_steps = total_steps // world_size
     
-    print(f"\nEvaluating {val_steps} batches...")
+    print0(f"\nTotal steps: {total_steps}, per rank: {local_steps}")
     
     # Warmup (for compiled model)
     if use_compile:
-        print("Warming up compiled model...")
+        print0("Warming up compiled model...")
         warmup_tokens = torch.randint(0, BOS_TOKEN_ID, (1, args.val_seq_len), device=device, dtype=torch.int32)
         with torch.no_grad():
             for _ in range(3):
                 _ = model.forward(warmup_tokens, memory_span, attn_blocksize)
-        print("Warmup complete.")
+        if dist.is_initialized():
+            dist.barrier()
+        print0("Warmup complete.")
     
-    # Evaluation
-    val_loss = defaultdict(float)
+    # Local evaluation
+    local_loss = defaultdict(float)
     start_time = time.time()
     
     with torch.no_grad():
-        for i in range(val_steps):
+        for i in range(local_steps):
             tokens = next(val_loader)
             
             # Greedy evaluation
@@ -178,62 +209,73 @@ def main():
             greedy_rel_info_gain = -greedy_info_loss / base_loss
             search_rel_info_gain = -search_info_loss / base_loss
             
-            # Accumulate
-            val_loss["base_traj_loss"] += base_loss.item()
-            val_loss["cond_traj_loss (greedy)"] += greedy_traj_loss.item()
-            val_loss["cond_traj_loss (search)"] += search_traj_loss.item()
-            val_loss["abs_loss (greedy)"] += greedy_abs_loss.item()
-            val_loss["abs_loss (search)"] += search_abs_loss.item()
-            val_loss["greedy_adv"] += greedy_adv.mean().item()
-            val_loss["search_adv"] += search_adv.mean().item()
-            val_loss["info_gain (greedy)"] += greedy_rel_info_gain.item()
-            val_loss["info_gain (search)"] += search_rel_info_gain.item()
-            val_loss["util_rate (greedy)"] += greedy_util_rate
-            val_loss["util_rate (search)"] += search_util_rate
+            # Accumulate locally
+            local_loss["base_traj_loss"] += base_loss.item()
+            local_loss["cond_traj_loss (greedy)"] += greedy_traj_loss.item()
+            local_loss["cond_traj_loss (search)"] += search_traj_loss.item()
+            local_loss["abs_loss (greedy)"] += greedy_abs_loss.item()
+            local_loss["abs_loss (search)"] += search_abs_loss.item()
+            local_loss["greedy_adv"] += greedy_adv.mean().item()
+            local_loss["search_adv"] += search_adv.mean().item()
+            local_loss["info_gain (greedy)"] += greedy_rel_info_gain.item()
+            local_loss["info_gain (search)"] += search_rel_info_gain.item()
+            local_loss["util_rate (greedy)"] += greedy_util_rate
+            local_loss["util_rate (search)"] += search_util_rate
             
-            # Progress
-            if (i + 1) % 10 == 0 or i == 0:
+            # Progress (rank 0 only)
+            if rank == 0 and ((i + 1) % 10 == 0 or i == 0):
                 elapsed = time.time() - start_time
-                eta = elapsed / (i + 1) * (val_steps - i - 1)
-                print(f"  Step {i+1}/{val_steps} | Elapsed: {elapsed:.1f}s | ETA: {eta:.1f}s")
+                eta = elapsed / (i + 1) * (local_steps - i - 1)
+                print(f"  Step {i+1}/{local_steps} | Elapsed: {elapsed:.1f}s | ETA: {eta:.1f}s")
     
-    # Average
-    for name in val_loss:
-        val_loss[name] /= val_steps
+    # --- All-reduce results across ranks ---
+    if dist.is_initialized():
+        dist.barrier()
+    
+    summary = {}
+    for key, val in local_loss.items():
+        local_sum = torch.tensor(val, device=device, dtype=torch.float64)
+        local_count = torch.tensor(local_steps, device=device, dtype=torch.float64)
+        
+        if dist.is_initialized():
+            dist.all_reduce(local_sum, op=dist.ReduceOp.SUM)
+            dist.all_reduce(local_count, op=dist.ReduceOp.SUM)
+        
+        summary[key] = (local_sum / local_count).item()
     
     total_time = time.time() - start_time
     
-    # Results
-    print("\n" + "=" * 70)
-    print("RESULTS")
-    print("=" * 70)
+    # Results (rank 0 only)
+    print0("\n" + "=" * 70)
+    print0("RESULTS")
+    print0("=" * 70)
     
-    for key, val in val_loss.items():
-        print(f"{key}: {val:.6f}")
+    for key, val in summary.items():
+        print0(f"{key}: {val:.6f}")
     
-    print("\n" + "-" * 70)
-    print("KEY INSIGHTS:")
-    print(f"  Base PPL:           {val_loss['base_traj_loss']:.4f}")
-    print(f"  Greedy PPL:         {val_loss['cond_traj_loss (greedy)']:.4f}")
-    print(f"  Search PPL:         {val_loss['cond_traj_loss (search)']:.4f}")
-    print(f"  Greedy Info Gain:   {val_loss['info_gain (greedy)']*100:.2f}%")
-    print(f"  Search Info Gain:   {val_loss['info_gain (search)']*100:.2f}%")
-    print(f"  Greedy vs Random:   {val_loss['greedy_adv']*100:.2f}%")
-    print(f"  Search vs Random:   {val_loss['search_adv']*100:.2f}%")
-    print("-" * 70)
-    print(f"Total time: {total_time:.1f}s ({total_time/60:.1f} min)")
-    print(f"Tokens/sec: {args.val_tokens / total_time:,.0f}")
+    print0("\n" + "-" * 70)
+    print0("KEY INSIGHTS:")
+    print0(f"  Base PPL:           {summary['base_traj_loss']:.4f}")
+    print0(f"  Greedy PPL:         {summary['cond_traj_loss (greedy)']:.4f}")
+    print0(f"  Search PPL:         {summary['cond_traj_loss (search)']:.4f}")
+    print0(f"  Greedy Info Gain:   {summary['info_gain (greedy)']*100:.2f}%")
+    print0(f"  Search Info Gain:   {summary['info_gain (search)']*100:.2f}%")
+    print0(f"  Greedy vs Random:   {summary['greedy_adv']*100:.2f}%")
+    print0(f"  Search vs Random:   {summary['search_adv']*100:.2f}%")
+    print0("-" * 70)
+    print0(f"Total time: {total_time:.1f}s ({total_time/60:.1f} min)")
+    print0(f"Tokens/sec: {args.val_tokens / total_time:,.0f}")
     
-    # Save
-    if args.save_path:
+    # Save (rank 0 only)
+    if rank == 0 and args.save_path:
         import pandas as pd
-        df = pd.DataFrame([val_loss])
+        df = pd.DataFrame([summary])
         df.to_csv(args.save_path, index=False)
-        print(f"\nResults saved to: {args.save_path}")
+        print0(f"\nResults saved to: {args.save_path}")
     
-    return val_loss
+    cleanup_distributed()
+    return summary
 
 
 if __name__ == "__main__":
     main()
-
