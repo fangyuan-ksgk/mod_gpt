@@ -35,7 +35,6 @@ def parse_args():
     parser.add_argument("--num_iterations", type=int, default=1750)
     parser.add_argument("--save_checkpoint", action="store_true", default=False)
     parser.add_argument("--log_grad_info", action="store_true")
-    parser.add_argument("--avoid_prefix_truncation", action="store_true", default=False)
 
     # Model
     parser.add_argument("--model_size", type=str, default="small") # model size
@@ -312,10 +311,7 @@ print0(nvidia_smi())
 print0("="*100)
 
 # -------------------------- data loader -------------------------------------
-if args.avoid_prefix_truncation:
-    from src.utils import distributed_data_generator_sorl_v2 as distributed_data_generator
-else:
-    from src.utils import distributed_data_generator_sorl as distributed_data_generator
+from src.utils import distributed_data_generator_sorl as distributed_data_generator
 
 # ------------------------- sorl search ---------------------------------------
 from sorl.neo_utils import sorl_search_v8 as sorl_search
