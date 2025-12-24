@@ -67,8 +67,8 @@ for ABSTRACT_VOCAB_SIZE in 256; do
       --master_port=$MASTER_PORT \
       train_sorl_v3.py \
       --batch_size $BATCH_SIZE \
-      --train_files $TRAIN_FILES \
-      --val_files $VAL_FILES \
+      --train_files "$TRAIN_FILES" \
+      --val_files "$VAL_FILES" \
       --train_seq_len $TRAIN_SEQ_LEN \
       --val_seq_len $VAL_SEQ_LEN \
       --num_iterations 1750 \
@@ -98,8 +98,8 @@ torchrun \
   --master_port=$MASTER_PORT \
   train_base.py \
   --batch_size $BATCH_SIZE \
-  --train_files $TRAIN_FILES \
-  --val_files $VAL_FILES \
+  --train_files "$TRAIN_FILES" \
+  --val_files "$VAL_FILES" \
   --train_seq_len $TRAIN_SEQ_LEN \
   --val_seq_len $VAL_SEQ_LEN \
   --num_iterations $NUM_ITERATIONS \
