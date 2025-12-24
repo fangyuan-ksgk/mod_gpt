@@ -55,7 +55,7 @@ def parse_args():
     
     return parser.parse_args()
 
-from sorl.neo_utils import distributed_data_generator_sorl, distributed_data_generator_sorl_v3
+from src.utils import distributed_data_generator_sorl, distributed_data_generator_sorl_v3
 
 def load_model(hf_repo_id, hf_filename, model_size, abstract_vocab_size, use_compile=True):
     """Load model from checkpoint"""
