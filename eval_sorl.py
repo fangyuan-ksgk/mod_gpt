@@ -17,6 +17,7 @@ import itertools
 from huggingface_hub import login, hf_hub_download
 
 from sorl.gat_sim import GAT, GATConfig, BOS_TOKEN_ID
+from src.model import GPTConfig, GPT
 from sorl.neo_utils import sorl_search_v8 as sorl_search, sorl_evaluate
 from sorl.eval import compute_vocab_utilization_rate
 from sorl.info import SoRLLoss_v7
@@ -58,7 +59,8 @@ def parse_args():
     parser.add_argument("--model_size", type=str, default="small")
     parser.add_argument("--abstract_vocab_size", type=int, default=128)
     parser.add_argument("--hf_repo_id", type=str, required=True)
-    parser.add_argument("--hf_filename", type=str, required=True)
+    parser.add_argument("--hf_filename", type=str, required=True, help="Hugging Face filename (sorl model)")
+    parser.add_argument("--hf_filename_base", type=str, required=True, help="Hugging Face filename (base GPT-2 model)")
     
     # Data
     parser.add_argument("--val_files", type=str, default="data/tinystories/tinystory_val_*.bin")
@@ -106,8 +108,30 @@ def load_model(hf_repo_id, hf_filename, model_size, abstract_vocab_size, device,
         model = torch.compile(model, dynamic=True)
     
     model.eval()
-    return model
+    return model 
 
+def load_base_model(hf_repo_id, hf_filename, model_size, device, use_compile=True):
+    gpt_config = GPTConfig.gpt_size(
+        model_size, 
+        flex_kernel_options={
+            "BLOCK_M": 64, "BLOCK_N": 64,
+            "BLOCK_M1": 32, "BLOCK_N1": 64, "BLOCK_M2": 64, "BLOCK_N2": 32
+        }
+    )
+    model = GPT(gpt_config).to(device)
+
+    ckpt_path = hf_hub_download(repo_id=hf_repo_id, filename=hf_filename)
+    ckpt = torch.load(ckpt_path, map_location=device)
+    state_dict = ckpt['model'] if 'model' in ckpt else ckpt
+    
+    clean_state_dict = {k.replace("_orig_mod.", ""): v for k, v in state_dict.items()}
+    model.load_state_dict(clean_state_dict)
+    
+    if "cuda" in device and use_compile:
+        model = torch.compile(model, dynamic=True)
+    
+    model.eval()
+    return model
 
 def main():
     args = parse_args()
@@ -134,7 +158,10 @@ def main():
     # Load model
     model = load_model(args.hf_repo_id, args.hf_filename, args.model_size, 
                        args.abstract_vocab_size, device, use_compile=use_compile)
-    
+
+    base_model = load_base_model(args.hf_repo_id_base, args.hf_filename_base, 
+                                 args.model_size, device, use_compile=use_compile)
+
     # Loss function (expects tensor for vocab_size to infer device)
     loss_fn = SoRLLoss_v7(torch.tensor(args.abstract_vocab_size, device=device), decay=0.8, target_vocab_util=0.8)
     
@@ -165,6 +192,7 @@ def main():
         with torch.no_grad():
             for _ in range(3):
                 _ = model.forward(warmup_tokens, memory_span, attn_blocksize)
+                _ = base_model.forward(warmup_tokens, memory_span, attn_blocksize)
         if dist.is_initialized():
             dist.barrier()
         print0("Warmup complete.")
@@ -198,7 +226,8 @@ def main():
             search_util_rate = compute_vocab_utilization_rate(search_tokens, model)
             
             # Base loss
-            base_loss = model.forward(tokens, memory_span, attn_blocksize)[0].mean()
+            # base_loss = model.forward(tokens, memory_span, attn_blocksize)[0].mean()
+            base_loss = base_model.forward(tokens, memory_span, attn_blocksize)[0].mean()
             
             # Info gain losses
             greedy_info_loss, greedy_abs_loss, _ = loss_fn(val_tokens, model, base_loss.detach(), memory_span, attn_blocksize)
