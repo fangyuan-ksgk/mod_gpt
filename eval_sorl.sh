@@ -5,7 +5,7 @@
 #   Single GPU:  bash eval_sorl.sh
 #   Multi-GPU:   bash eval_sorl.sh 4   (for 4 GPUs)
 
-NUM_GPUS=${1:-1}
+NUM_GPUS=${1:-2}
 
 COMMON_ARGS=(
     --hf_repo_id "Ksgk-fy/sorl"
