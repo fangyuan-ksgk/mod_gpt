@@ -57,8 +57,8 @@ def parse_args():
     parser.add_argument("--model_size", type=str, default="small")
     parser.add_argument("--abstract_vocab_size", type=int, default=128)
     parser.add_argument("--hf_repo_id", type=str, required=True, help="Hugging Face repo ID")
-    parser.add_argument("--hf_filename", type=str, required=True, help="Hugging Face filename")
-    parser.add_argument("--use_compile", action="store_true", default=True)
+    parser.add_argument("--hf_filename", type=str, required=True, help="Hugging Face filename (sorl model)")
+\    parser.add_argument("--use_compile", action="store_true", default=True)
     
     # Data
     parser.add_argument("--split", type=str, default="validation", choices=["train", "validation"])
@@ -96,6 +96,7 @@ def load_model(hf_repo_id, hf_filename, model_size, abstract_vocab_size, device,
         model = torch.compile(model, dynamic=True)
     model.eval()
     return model
+
 
 
 def compute_abs_stats_v2(tokens, model, n, K, max_iterations, memory_span, attn_blocksize, temperature, truncate_seq_len):
