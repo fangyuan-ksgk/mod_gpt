@@ -106,7 +106,8 @@ for MODEL_SIZE in "small" "medium" "large" "xl"; do
     --train_seq_len $TRAIN_SEQ_LEN \
     --val_seq_len $VAL_SEQ_LEN \
     --num_iterations $NUM_ITERATIONS \
-    --patch_size 8
+    --patch_size 8 \
+    --no_reg \
     --model_size $MODEL_SIZE \
     --save_checkpoint \
     --run_info "Baseline: ModelSize=$MODEL_SIZE" 
