@@ -26,6 +26,7 @@ MASTER_PORT=29503
 COMMON_ARGS=(
     --hf_repo_id "Ksgk-fy/sorl"
     --hf_filename "ts-k4-v128.pt"
+    --hf_filename_base "gpt2-small-ts.pt"
     --model_size "small"
     --abstract_vocab_size 128
     --num_rollouts 5
