@@ -88,7 +88,7 @@ DECAY=0.8
 TARGET_VOCAB_UTIL=0.8
 ALPHA_INFO_GAIN=10.0
 
-for ABSTRACT_VOCAB_SIZE in 256; do
+for ABSTRACT_VOCAB_SIZE in 16; do
   for K in 8 4 32 64; do
     torchrun \
       --nproc_per_node=$N_GPUS \
@@ -118,7 +118,7 @@ for ABSTRACT_VOCAB_SIZE in 256; do
   done
 done
 
-for ABSTRACT_VOCAB_SIZE in 256; do
+for ABSTRACT_VOCAB_SIZE in 16; do
   for K in 8 4 32 64; do
     torchrun \
       --nproc_per_node=$N_GPUS \
@@ -148,7 +148,7 @@ for ABSTRACT_VOCAB_SIZE in 256; do
 done
 
 
-for ABSTRACT_VOCAB_SIZE in 256; do
+for ABSTRACT_VOCAB_SIZE in 16; do
   for K in 8 4 32 64; do
     torchrun \
       --nproc_per_node=$N_GPUS \
