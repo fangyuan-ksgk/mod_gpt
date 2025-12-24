@@ -89,6 +89,9 @@ def main():
     device = "cuda" if torch.cuda.is_available() else "cpu"
     use_compile = args.use_compile and not args.no_compile
     
+    # Single GPU mode
+    rank, world_size = 0, 1
+    
     print("=" * 70)
     print(f"Fast SORL Evaluation")
     print(f"Model: {args.model_size}, Checkpoint: {args.hf_repo_id}/{args.hf_filename}")
@@ -105,8 +108,8 @@ def main():
     model = load_model(args.hf_repo_id, args.hf_filename, args.model_size, 
                        args.abstract_vocab_size, use_compile=use_compile)
     
-    # Loss function
-    loss_fn = SoRLLoss_v7(args.abstract_vocab_size, decay=0.8, target_vocab_util=0.8).to(device)
+    # Loss function (expects tensor for vocab_size to infer device)
+    loss_fn = SoRLLoss_v7(torch.tensor(args.abstract_vocab_size, device=device), decay=0.8, target_vocab_util=0.8)
     
     # Setup - memory_span should accommodate sequence length
     memory_span = torch.tensor(2 * args.val_seq_len + 2, dtype=torch.int, device=device)
@@ -116,11 +119,11 @@ def main():
         device=device
     )
     
-    # Data generator
+    # Data generator (rank=0, world_size=1 for single GPU)
     if args.avoid_prefix_truncation: 
-        val_loader = distributed_data_generator_sorl_v3(args.val_files, args.val_seq_len)
+        val_loader = distributed_data_generator_sorl_v3(args.val_files, args.val_seq_len, rank, world_size)
     else: 
-        val_loader = distributed_data_generator_sorl(args.val_files, args.val_seq_len)
+        val_loader = distributed_data_generator_sorl(args.val_files, args.val_seq_len, rank, world_size)
 
     val_steps = args.val_tokens // args.val_seq_len
     
