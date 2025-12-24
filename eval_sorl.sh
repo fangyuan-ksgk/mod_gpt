@@ -5,6 +5,19 @@
 #   Single GPU:  bash eval_sorl.sh
 #   Multi-GPU:   bash eval_sorl.sh 4   (for 4 GPUs)
 
+# --- nvidia pod specifics ------
+DUMMY_CONFIG_PATH="/workspace/mod_gpt/dummy_tuner_config.txt"
+rm -f "$DUMMY_CONFIG_PATH"
+touch "$DUMMY_CONFIG_PATH"
+
+export NCCL_TUNER_CONFIG_PATH="$DUMMY_CONFIG_PATH"
+export NCCL_TUNER_PLUGIN=""
+export NCCL_NET_PLUGIN=""
+export NCCL_SOCKET_IFNAME=lo
+export NCCL_IB_DISABLE=1
+export NCCL_DEBUG=WARN
+
+
 NUM_GPUS=${1:-2}
 MASTER_ADDR=127.0.0.2
 MASTER_PORT=29503
