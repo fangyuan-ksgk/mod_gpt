@@ -104,6 +104,44 @@ def compute_abs_stats_v2(tokens, model, n, K, max_iterations, memory_span, attn_
 
     return base_traj_loss, greedy_traj_loss, search_traj_loss, greedy_adv, greedy_abs_adv, search_adv, search_abs_adv, greedy_info_gain, search_info_gain
     
+def compute_abs_stats_v3(tokens, model, base_model, n, K, max_iterations, memory_span, attn_blocksize, temperature, truncate_seq_len):
+
+    search_data, search_ppt, abs_logits = sorl_rollout_v3(tokens, model, n=n, K=K, 
+                                                                max_iterations=max_iterations,
+                                                            memory_span=memory_span,
+                                                            attn_blocksize=attn_blocksize,
+                                                            temperature=temperature,
+                                                            truncate_seq_len=truncate_seq_len)
+    search_ppt = search_ppt.reshape(search_data.shape[0], -1)
+
+    # --- greedy & random rollout ppt ---
+    cond_traj_mask = (search_data[0, 1:] < model.vocab_sizes[0])
+    greedy_traj_ppt = search_ppt[0][cond_traj_mask]
+    random_traj_ppt = search_ppt[1:].mean(dim=0)[cond_traj_mask]
+
+    # --- base traj loss ---
+    base_traj_ppt = base_model.forward(tokens[:, :-1].long(), tokens[:, 1:].long(), attn_blocksize)
+    base_traj_mask = (tokens[:, 1:] != BOS_TOKEN_ID).float()
+    base_traj_loss = (base_traj_ppt * base_traj_mask[0]).sum() / base_traj_mask.sum().clamp(min=1)
+
+    # --- search (per-doc-best rollout) info gain ---
+    levels = (search_data >= model.vocab_sizes[0]).long()
+    best_data, best_ppt, _, _ = select_best_info_gain(tokens, base_traj_ppt, search_data, search_ppt, levels)
+    best_traj_ppt = best_ppt[cond_traj_mask]
+
+    # --- information gain, search advantage (relative & absolute) ---
+    greedy_adv = ((random_traj_ppt - greedy_traj_ppt) / (random_traj_ppt + 1e-8)).mean()
+    greedy_abs_adv = (random_traj_ppt - greedy_traj_ppt).mean()
+    search_adv = ((random_traj_ppt - best_traj_ppt) / (random_traj_ppt + 1e-8)).mean()
+    search_abs_adv = (random_traj_ppt - best_traj_ppt).mean()
+    greedy_info_gain = (base_traj_ppt - greedy_traj_ppt).mean()
+    search_info_gain = (base_traj_ppt - best_traj_ppt).mean()
+
+    greedy_traj_loss = greedy_traj_ppt.mean()
+    search_traj_loss = best_traj_ppt.mean()
+
+    return base_traj_loss, greedy_traj_loss, search_traj_loss, greedy_adv, greedy_abs_adv, search_adv, search_abs_adv, greedy_info_gain, search_info_gain
+    
 
 def train_forget_vec(train_idx, loader, model, abs_stats, abs_stats_post, optimizer, num_steps,
                      max_iterations, memory_span, attn_blocksize, temperature, K, r_min, reward_mode, loss_fn, alpha_abs, alpha_soft_zipf, alpha_topo,
