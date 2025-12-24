@@ -18,7 +18,7 @@ import os
 from huggingface_hub import login, hf_hub_download
 
 from sorl.gat_sim import GAT, GATConfig, BOS_TOKEN_ID
-from src.model import GPTConfig, GPT
+from src.model import GPTConfig, GPT_base
 from sorl.neo_utils import sorl_rollout_v3, select_best_info_gain
 from sorl.eval import compute_vocab_utilization_rate
 from data.tinystory_local import TinyStoriesDataLoader
@@ -61,6 +61,7 @@ def parse_args():
     parser.add_argument("--hf_filename", type=str, required=True, help="Hugging Face filename (sorl model)")
     parser.add_argument("--hf_filename_base", type=str, required=True, help="Hugging Face filename (base model)")
     parser.add_argument("--use_compile", action="store_true", default=True)
+    parser.add_argument("--compare_against_base", action="store_true", default=False)
     
     # Data
     parser.add_argument("--split", type=str, default="validation", choices=["train", "validation"])
@@ -108,7 +109,7 @@ def load_base_model(hf_repo_id, hf_filename, model_size, device, use_compile=Tru
             "BLOCK_M1": 32, "BLOCK_N1": 64, "BLOCK_M2": 64, "BLOCK_N2": 32
         }
     )
-    model = GPT(gpt_config).to(device)
+    model = GPT_base(gpt_config).to(device)
 
     ckpt_path = hf_hub_download(repo_id=hf_repo_id, filename=hf_filename)
     ckpt = torch.load(ckpt_path, map_location=device)
@@ -123,7 +124,7 @@ def load_base_model(hf_repo_id, hf_filename, model_size, device, use_compile=Tru
     model.eval()
     return model
 
-def compute_abs_stats_v2(tokens, model, base_model, n, K, max_iterations, memory_span, attn_blocksize, temperature, truncate_seq_len):
+def compute_abs_stats_v2(tokens, model, n, K, max_iterations, memory_span, attn_blocksize, temperature, truncate_seq_len):
     """Compute comprehensive abstraction statistics"""
     
     search_data, search_ppt, abs_logits = sorl_rollout_v3(
@@ -142,7 +143,7 @@ def compute_abs_stats_v2(tokens, model, base_model, n, K, max_iterations, memory
     random_traj_ppt = search_ppt[1:].mean(dim=0)[cond_traj_mask]
 
     # --- base traj loss ---
-    base_traj_ppt, _ = base_model.forward(tokens, memory_span, attn_blocksize)
+    base_traj_ppt, _ = model.forward(tokens, memory_span, attn_blocksize)
     base_traj_mask = (tokens[:, 1:] != BOS_TOKEN_ID).float()
     base_traj_loss = (base_traj_ppt * base_traj_mask[0]).sum() / base_traj_mask[0].sum().clamp(min=1)
 
@@ -187,6 +188,70 @@ def compute_abs_stats_v2(tokens, model, base_model, n, K, max_iterations, memory
         'search_util': search_util,
     }
 
+def compute_abs_stats_v3(tokens, model, base_model, n, K, max_iterations, memory_span, attn_blocksize, temperature, truncate_seq_len):
+    """Compute comprehensive abstraction statistics"""
+    
+    search_data, search_ppt, abs_logits = sorl_rollout_v3(
+        tokens, model, n=n, K=K,
+        max_iterations=max_iterations,
+        memory_span=memory_span,
+        attn_blocksize=attn_blocksize,
+        temperature=temperature,
+        truncate_seq_len=truncate_seq_len
+    )
+    search_ppt = search_ppt.reshape(search_data.shape[0], -1)
+
+    # --- greedy & random rollout ppt ---
+    cond_traj_mask = (search_data[0, 1:] < model.vocab_sizes[0])
+    greedy_traj_ppt = search_ppt[0][cond_traj_mask]
+    random_traj_ppt = search_ppt[1:].mean(dim=0)[cond_traj_mask]
+
+    # --- base traj loss ---
+    base_traj_ppt = base_model.forward(tokens[:, :-1].long(), tokens[:, 1:].long(), attn_blocksize)
+
+    base_traj_mask = (tokens[:, 1:] != BOS_TOKEN_ID).float()
+    base_traj_loss = (base_traj_ppt * base_traj_mask[0]).sum() / base_traj_mask[0].sum().clamp(min=1)
+
+    # --- search (per-doc-best rollout) info gain ---
+    levels = (search_data >= model.vocab_sizes[0]).long()
+    best_data, best_ppt, _, _ = select_best_info_gain(tokens, base_traj_ppt, search_data, search_ppt, levels)
+    best_traj_ppt = best_ppt[cond_traj_mask]
+
+    # --- information gain, search advantage (relative & absolute) ---
+    # Align lengths for info gain calculation
+    min_len = min(len(base_traj_ppt), len(greedy_traj_ppt), len(best_traj_ppt))
+    base_aligned = base_traj_ppt[:min_len]
+    greedy_aligned = greedy_traj_ppt[:min_len]
+    best_aligned = best_traj_ppt[:min_len]
+    random_aligned = random_traj_ppt[:min_len]
+
+    greedy_adv = ((random_aligned - greedy_aligned) / (random_aligned + 1e-8)).mean()
+    greedy_abs_adv = (random_aligned - greedy_aligned).mean()
+    search_adv = ((random_aligned - best_aligned) / (random_aligned + 1e-8)).mean()
+    search_abs_adv = (random_aligned - best_aligned).mean()
+    greedy_info_gain = (base_aligned - greedy_aligned).mean()
+    search_info_gain = (base_aligned - best_aligned).mean()
+
+    greedy_traj_loss = greedy_traj_ppt.mean()
+    search_traj_loss = best_traj_ppt.mean()
+    
+    # Vocab utilization
+    greedy_util = compute_vocab_utilization_rate(search_data[:1], model)
+    search_util = compute_vocab_utilization_rate(best_data, model)
+
+    return {
+        'base_traj_loss': base_traj_loss,
+        'greedy_traj_loss': greedy_traj_loss,
+        'search_traj_loss': search_traj_loss,
+        'greedy_adv': greedy_adv,
+        'greedy_abs_adv': greedy_abs_adv,
+        'search_adv': search_adv,
+        'search_abs_adv': search_abs_adv,
+        'greedy_info_gain': greedy_info_gain,
+        'search_info_gain': search_info_gain,
+        'greedy_util': greedy_util,
+        'search_util': search_util,
+    }
 
 def main():
     args = parse_args()
@@ -256,16 +321,28 @@ def main():
             
             tokens, doc_ids = loader.get_specific(batch_indices)
             
-            stats = compute_abs_stats_v2(
-                tokens, model, base_model,
-                n=args.num_rollouts,
-                K=args.K,
-                max_iterations=args.max_iterations,
-                memory_span=memory_span,
-                attn_blocksize=attn_blocksize,
-                temperature=temperature,
-                truncate_seq_len=truncate_seq_len
-            )
+            if args.compare_against_base:
+                stats = compute_abs_stats_v3(
+                    tokens, model, base_model,
+                    n=args.num_rollouts,
+                    K=args.K,
+                    max_iterations=args.max_iterations,
+                    memory_span=memory_span,
+                    attn_blocksize=attn_blocksize,
+                    temperature=temperature,
+                    truncate_seq_len=truncate_seq_len
+                )
+            else: 
+                stats = compute_abs_stats_v2(
+                    tokens, model,
+                    n=args.num_rollouts,
+                    K=args.K,
+                    max_iterations=args.max_iterations,
+                    memory_span=memory_span,
+                    attn_blocksize=attn_blocksize,
+                    temperature=temperature,
+                    truncate_seq_len=truncate_seq_len
+                )
             
             for key, val in stats.items():
                 v = val.item() if torch.is_tensor(val) else val

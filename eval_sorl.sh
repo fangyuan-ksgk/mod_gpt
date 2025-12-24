@@ -40,6 +40,7 @@ COMMON_ARGS=(
     --max_len 1024
     --batch_size 4
     --use_compile
+    --compare_against_base
 )
 
 if [ "$NUM_GPUS" -eq 1 ]; then
