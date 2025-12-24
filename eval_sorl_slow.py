@@ -18,6 +18,7 @@ import os
 from huggingface_hub import login, hf_hub_download
 
 from sorl.gat_sim import GAT, GATConfig, BOS_TOKEN_ID
+from src.model import GPTConfig, GPT
 from sorl.neo_utils import sorl_rollout_v3, select_best_info_gain
 from sorl.eval import compute_vocab_utilization_rate
 from data.tinystory_local import TinyStoriesDataLoader
@@ -58,7 +59,8 @@ def parse_args():
     parser.add_argument("--abstract_vocab_size", type=int, default=128)
     parser.add_argument("--hf_repo_id", type=str, required=True, help="Hugging Face repo ID")
     parser.add_argument("--hf_filename", type=str, required=True, help="Hugging Face filename (sorl model)")
-\    parser.add_argument("--use_compile", action="store_true", default=True)
+    parser.add_argument("--hf_filename_base", type=str, required=True, help="Hugging Face filename (base model)")
+    parser.add_argument("--use_compile", action="store_true", default=True)
     
     # Data
     parser.add_argument("--split", type=str, default="validation", choices=["train", "validation"])
@@ -97,9 +99,30 @@ def load_model(hf_repo_id, hf_filename, model_size, abstract_vocab_size, device,
     model.eval()
     return model
 
+def load_base_model(hf_repo_id, hf_filename, model_size, device, use_compile=True):
+    gpt_config = GPTConfig.gpt_size(
+        model_size, 
+        flex_kernel_options={
+            "BLOCK_M": 64, "BLOCK_N": 64,
+            "BLOCK_M1": 32, "BLOCK_N1": 64, "BLOCK_M2": 64, "BLOCK_N2": 32
+        }
+    )
+    model = GPT(gpt_config).to(device)
 
+    ckpt_path = hf_hub_download(repo_id=hf_repo_id, filename=hf_filename)
+    ckpt = torch.load(ckpt_path, map_location=device)
+    state_dict = ckpt['model'] if 'model' in ckpt else ckpt
+    
+    clean_state_dict = {k.replace("_orig_mod.", ""): v for k, v in state_dict.items()}
+    model.load_state_dict(clean_state_dict)
+    
+    if "cuda" in device and use_compile:
+        model = torch.compile(model, dynamic=True)
+    
+    model.eval()
+    return model
 
-def compute_abs_stats_v2(tokens, model, n, K, max_iterations, memory_span, attn_blocksize, temperature, truncate_seq_len):
+def compute_abs_stats_v2(tokens, model, base_model, n, K, max_iterations, memory_span, attn_blocksize, temperature, truncate_seq_len):
     """Compute comprehensive abstraction statistics"""
     
     search_data, search_ppt, abs_logits = sorl_rollout_v3(
@@ -118,7 +141,7 @@ def compute_abs_stats_v2(tokens, model, n, K, max_iterations, memory_span, attn_
     random_traj_ppt = search_ppt[1:].mean(dim=0)[cond_traj_mask]
 
     # --- base traj loss ---
-    base_traj_ppt, _ = model.forward(tokens, memory_span, attn_blocksize)
+    base_traj_ppt, _ = base_model.forward(tokens, memory_span, attn_blocksize)
     base_traj_mask = (tokens[:, 1:] != BOS_TOKEN_ID).float()
     base_traj_loss = (base_traj_ppt * base_traj_mask[0]).sum() / base_traj_mask[0].sum().clamp(min=1)
 
@@ -187,8 +210,10 @@ def main():
     # Load model on each rank
     model = load_model(args.hf_repo_id, args.hf_filename, args.model_size, 
                        args.abstract_vocab_size, device, args.use_compile)
-    
-    # Suffix truncation if compilation is required
+
+    base_model = load_base_model(args.hf_repo_id, args.hf_filename_base, 
+                                 args.model_size, device, use_compile=args.use_compile)
+                                 
     truncate_seq_len = not args.use_compile
 
     # Load data (each rank loads full dataset, but processes different shards)
@@ -231,7 +256,7 @@ def main():
             tokens, doc_ids = loader.get_specific(batch_indices)
             
             stats = compute_abs_stats_v2(
-                tokens, model,
+                tokens, model, base_model,
                 n=args.num_rollouts,
                 K=args.K,
                 max_iterations=args.max_iterations,
