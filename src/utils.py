@@ -55,26 +55,54 @@ def distributed_data_generator_sorl(filename_pattern: str, sequence_length: int,
         pos += sequence_length
         yield idx
 
-def distributed_data_generator_sorl_v2(filename_pattern: str, sequence_length: int, rank: int, world_size: int):
-    files = [Path(file) for file in sorted(glob.glob(filename_pattern))]
-    assert sequence_length % world_size == 0
+# v2 is 2x slower, discarded for now
+# def distributed_data_generator_sorl_v2(filename_pattern: str, sequence_length: int, rank: int, world_size: int):
+#     files = [Path(file) for file in sorted(glob.glob(filename_pattern))]
+#     assert sequence_length % world_size == 0
+#     local_len = sequence_length // world_size
+#     file_iter = itertools.cycle(files) # iter(files) instead if you want to do 1-epoch training
+#     tokens, pos = _load_data_shard(next(file_iter)), 0
+
+#     while True:
+#         start = pos + rank * local_len
+
+#         matches = (tokens[start:] == 50256).nonzero() if start < len(tokens) else []
+#         if len(matches) == 0 or start + matches[0] + local_len + 1 > len(tokens):
+#             tokens, pos = _load_data_shard(next(file_iter)), 0
+#             continue
+
+#         real_start = start + matches[0].item()
+#         buf = tokens[real_start : real_start + local_len + 1]
+#         idx = buf[None, :-1].to(device="cuda", dtype=torch.int32, non_blocking=True)
+#         pos += sequence_length
+#         yield idx
+
+
+def distributed_data_generator_sorl_v3(filename_pattern: str, sequence_length: int, rank: int, world_size: int):
+    files = itertools.cycle(sorted(glob.glob(filename_pattern)))
     local_len = sequence_length // world_size
-    file_iter = itertools.cycle(files) # iter(files) instead if you want to do 1-epoch training
-    tokens, pos = _load_data_shard(next(file_iter)), 0
+    tokens, pos = _load_data_shard(next(files)), 0
+    bos_locs = (tokens == 50256).nonzero(as_tuple=True)[0]
 
     while True:
         start = pos + rank * local_len
-
-        matches = (tokens[start:] == 50256).nonzero() if start < len(tokens) else []
-        if len(matches) == 0 or start + matches[0] + local_len + 1 > len(tokens):
-            tokens, pos = _load_data_shard(next(file_iter)), 0
+        idx_in_bos = torch.searchsorted(bos_locs, start)
+        if idx_in_bos >= len(bos_locs):
+            tokens, _ = _load_data_shard(next(files)), 0
+            bos_locs = (tokens == 50256).nonzero(as_tuple=True)[0]
+            pos = 0
             continue
+            
+        real_start = bos_locs[idx_in_bos].item()
+        
+        if real_start + local_len + 1 > len(tokens):
+             tokens, _ = _load_data_shard(next(files)), 0
+             bos_locs = (tokens == 50256).nonzero(as_tuple=True)[0]
+             pos = 0
+             continue
 
-        real_start = start + matches[0].item()
-        buf = tokens[real_start : real_start + local_len + 1]
-        idx = buf[None, :-1].to(device="cuda", dtype=torch.int32, non_blocking=True)
+        yield tokens[real_start : real_start + local_len + 1][None, :-1].to(device="cuda", dtype=torch.int32, non_blocking=True)
         pos += sequence_length
-        yield idx
 
 # TBD. optionally include 'loss_mask' in the data generator
 

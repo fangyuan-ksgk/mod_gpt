@@ -526,7 +526,6 @@ for step in range(train_steps + 1):
                 val_loss["abs_loss (greedy)"] += greedy_abs_loss.mean()
                 val_loss["abs_loss (search)"] += search_abs_loss.mean()
                 val_loss["greedy_adv"] += greedy_adv.mean()
-                val_loss["search_adv"] += search_adv.mean()
                 val_loss["info_gain (greedy)"] += greedy_rel_info_gain.mean()
                 val_loss["info_gain (search)"] += search_rel_info_gain.mean()
                 val_loss["util_rate (greedy)"] += torch.tensor(greedy_util_rate, device=greedy_traj_loss.device)
