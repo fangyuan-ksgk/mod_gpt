@@ -9,12 +9,15 @@ import argparse
 from pathlib import Path
 from collections import defaultdict
 from tqdm import tqdm
+import os
+from huggingface_hub import login, hf_hub_download
 
 from sorl.gat_sim import GAT, GATConfig, BOS_TOKEN_ID
 from sorl.neo_utils import sorl_rollout_v3, select_best_info_gain
 from sorl.eval import compute_vocab_utilization_rate
 from data.tinystory_local import TinyStoriesDataLoader
 
+login(token=os.environ["HF_TOKEN"])
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Evaluate SORL on TinyStories Validation")
@@ -22,7 +25,8 @@ def parse_args():
     # Model
     parser.add_argument("--model_size", type=str, default="small")
     parser.add_argument("--abstract_vocab_size", type=int, default=128)
-    parser.add_argument("--ckpt_path", type=str, required=True, help="Path to model checkpoint")
+    parser.add_argument("--hf_repo_id", type=str, required=True, help="Hugging Face repo ID")
+    parser.add_argument("--hf_filename", type=str, required=True, help="Hugging Face filename")
     
     # Data
     parser.add_argument("--split", type=str, default="validation", choices=["train", "validation"])
@@ -43,11 +47,12 @@ def parse_args():
     return parser.parse_args()
 
 
-def load_model(ckpt_path, model_size, abstract_vocab_size, device):
+def load_model(hf_repo_id, hf_filename, model_size, abstract_vocab_size, device):
     """Load model from checkpoint (handles torch.compile prefix)"""
     gat_config = GATConfig.gpt_size(model_size, vocab_sizes=[BOS_TOKEN_ID + 1, abstract_vocab_size])
     model = GAT(gat_config).to(device)
     
+    ckpt_path = hf_hub_download(repo_id=hf_repo_id, filename=hf_filename)
     ckpt = torch.load(ckpt_path, map_location=device)
     state_dict = ckpt['model'] if 'model' in ckpt else ckpt
     
@@ -129,13 +134,13 @@ def main():
     
     print("=" * 70)
     print(f"SORL Evaluation on TinyStories {args.split}")
-    print(f"Model: {args.model_size}, Checkpoint: {args.ckpt_path}")
+    print(f"Model: {args.model_size}, Checkpoint: {args.hf_repo_id}/{args.hf_filename}")
     print(f"K={args.K}, n={args.num_rollouts}, max_iter={args.max_iterations}")
     print(f"Device: {device}")
     print("=" * 70)
     
     # Load model (no torch.compile!)
-    model = load_model(args.ckpt_path, args.model_size, args.abstract_vocab_size, device)
+    model = load_model(args.hf_repo_id, args.hf_filename, args.model_size, args.abstract_vocab_size, device)
     
     # Load data
     loader = TinyStoriesDataLoader(
