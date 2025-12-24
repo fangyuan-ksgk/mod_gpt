@@ -6,6 +6,8 @@
 #   Multi-GPU:   bash eval_sorl.sh 4   (for 4 GPUs)
 
 NUM_GPUS=${1:-2}
+MASTER_ADDR=127.0.0.2
+MASTER_PORT=29503
 
 COMMON_ARGS=(
     --hf_repo_id "Ksgk-fy/sorl"
@@ -30,5 +32,9 @@ if [ "$NUM_GPUS" -eq 1 ]; then
     python eval_sorl_slow.py "${COMMON_ARGS[@]}"
 else
     echo "Running distributed evaluation on $NUM_GPUS GPUs..."
-    torchrun --nproc_per_node=$NUM_GPUS eval_sorl_slow.py "${COMMON_ARGS[@]}"
+    torchrun \
+      --nproc_per_node=$NUM_GPUS \
+      --master_addr=$MASTER_ADDR \
+      --master_port=$MASTER_PORT \
+      eval_sorl_slow.py "${COMMON_ARGS[@]}"
 fi
