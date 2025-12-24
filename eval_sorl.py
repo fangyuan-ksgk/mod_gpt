@@ -55,12 +55,10 @@ def parse_args():
     
     return parser.parse_args()
 
-from sorl.neo_utils import distributed_data_generator_sorl_v3 as data_generator
+from sorl.neo_utils import distributed_data_generator_sorl, distributed_data_generator_sorl_v3
 
-def load_model(hf_repo_id, hf_filename, model_size, abstract_vocab_size):
+def load_model(hf_repo_id, hf_filename, model_size, abstract_vocab_size, use_compile=True):
     """Load model from checkpoint"""
-    # Check GPU type for kernel options
-
     gat_config = GATConfig.gpt_size(
         model_size,
         vocab_sizes=[BOS_TOKEN_ID + 1, abstract_vocab_size],
@@ -79,7 +77,7 @@ def load_model(hf_repo_id, hf_filename, model_size, abstract_vocab_size):
     clean_state_dict = {k.replace("_orig_mod.", ""): v for k, v in state_dict.items()}
     model.load_state_dict(clean_state_dict)
     
-    if device == "cuda":
+    if device == "cuda" and use_compile:
         model = torch.compile(model, dynamic=True)
     
     model.eval()
@@ -105,13 +103,13 @@ def main():
     
     # Load model
     model = load_model(args.hf_repo_id, args.hf_filename, args.model_size, 
-                       args.abstract_vocab_size)
+                       args.abstract_vocab_size, use_compile=use_compile)
     
     # Loss function
     loss_fn = SoRLLoss_v7(args.abstract_vocab_size, decay=0.8, target_vocab_util=0.8).to(device)
     
-    # Setup
-    memory_span = torch.tensor(1792, dtype=torch.int, device=device)
+    # Setup - memory_span should accommodate sequence length
+    memory_span = torch.tensor(2 * args.val_seq_len + 2, dtype=torch.int, device=device)
     attn_blocksize = torch.tensor(1792, dtype=torch.int, device=device)
     temperature = torch.tensor(
         [args.min_temperature] + [args.max_temperature] * (args.num_rollouts - 1),
@@ -119,7 +117,11 @@ def main():
     )
     
     # Data generator
-    val_loader = data_generator(args.val_files, args.val_seq_len, args.avoid_prefix_truncation)
+    if args.avoid_prefix_truncation: 
+        val_loader = distributed_data_generator_sorl_v3(args.val_files, args.val_seq_len)
+    else: 
+        val_loader = distributed_data_generator_sorl(args.val_files, args.val_seq_len)
+
     val_steps = args.val_tokens // args.val_seq_len
     
     print(f"\nEvaluating {val_steps} batches...")

@@ -22,6 +22,7 @@ NUM_GPUS=${1:-2}
 MASTER_ADDR=127.0.0.2
 MASTER_PORT=29503
 
+# -------------------- "slow" script (fair evaluation) --------------------
 COMMON_ARGS=(
     --hf_repo_id "Ksgk-fy/sorl"
     --hf_filename "ts-k4-v128.pt"
@@ -51,3 +52,5 @@ else
       --master_port=$MASTER_PORT \
       eval_sorl_slow.py "${COMMON_ARGS[@]}"
 fi
+
+# -------------------- "fast" script (less fair, but closer to training logs) --------------------
