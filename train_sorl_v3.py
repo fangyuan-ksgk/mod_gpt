@@ -53,12 +53,14 @@ def parse_args():
     parser.add_argument("--min_memory_span", type=int, default=64)
     
     # Loss / Regularization
-    parser.add_argument("--alpha_select", type=float, default=0.0)  # selection regularization strength
+    parser.add_argument("--alpha_base", type=float, default=1.0)  # base loss weight
     parser.add_argument("--alpha_loss", type=float, default=0.0)  # abs loss weight
     parser.add_argument("--use_orthogonal_init", action="store_true", default=False)
     parser.add_argument("--alpha_marg_ent", type=float, default=1.0) # marginal entropy weight
+    parser.add_argument("--use_marg_entropy_regularization", action="store_true", default=False) # use marginal entropy regularization
     parser.add_argument("--decay", type=float, default=0.8) # decay for mutual information loss
     parser.add_argument("--target_vocab_util", type=float, default=0.9) # target vocabulary utilization
+    parser.add_argument("--min_abs_ppl", type=float, default=0.0) # minimum absolute perplexity for policy loss
     parser.add_argument("--alpha_info_gain", type=float, default=1.0) # info gain loss weight
     parser.add_argument("--coarse_to_fine_search", action="store_true", default=False) # coarse to fine search (curriculum on K ratio)
     parser.add_argument("--max_K", type=int, default=512) # initial K ratio (max K ratio)
@@ -237,11 +239,13 @@ class Hyperparameters:
     use_static_memory_span: bool = False
     min_memory_span: int = 64
     
-    alpha_select: float = 0.0
+    alpha_base: float = 1.0
     alpha_loss: float = 0.0
     alpha_marg_ent: float = 1.0
+    use_marg_entropy_regularization: bool = False
     decay: float = 0.8
     target_vocab_util: float = 0.8
+    min_abs_ppl: float = 0.0
     coarse_to_fine_search: bool = False
     max_K: int = 512
     num_c2f_phases: int = 4
@@ -359,8 +363,12 @@ def get_lr(step: int):
         return w * 1.0 + (1 - w) * 0.1
 
 # SoRL loss function (info gain loss)
-from sorl.info import SoRLLoss_v7
-loss_fn = SoRLLoss_v7(model.vocab_sizes[1], decay=args.decay, target_vocab_util=args.target_vocab_util)
+if args.use_marg_entropy_regularization:
+    from sorl.info import SoRLLoss_v8 as SoRLLoss 
+else: 
+    from sorl.info import SoRLLoss_v7 as SoRLLoss
+
+loss_fn = SoRLLoss(model.vocab_sizes[1], decay=args.decay, target_vocab_util=args.target_vocab_util, min_abs_ppl=args.min_abs_ppl)
 loss_fn = loss_fn.to(device)
 
 # --- coarse to fine search ---
@@ -419,7 +427,7 @@ for i in range(warmup_steps):
     forward_end = time.time()
     print(f" :: Loss computation takes {forward_end - search_end} second")
     # --- backward --- 
-    loss = base_loss + args.alpha_info_gain * info_loss + args.alpha_loss * abs_loss + args.alpha_marg_ent * zipf_loss
+    loss = args.alpha_base * base_loss + args.alpha_info_gain * info_loss + args.alpha_loss * abs_loss + args.alpha_marg_ent * zipf_loss
     loss.backward() 
     backward_end = time.time()
     print(f" :: Backward takes {backward_end - forward_end} second")
@@ -570,7 +578,7 @@ for step in range(train_steps + 1):
         # --- compute loss --- 
         base_loss = model.forward(tokens, memory_span, attn_blocksize)[0].mean()
         info_loss, abs_loss, zipf_loss = loss_fn(search_tokens, model, base_loss.detach(), memory_span, attn_blocksize)
-        loss = base_loss + args.alpha_info_gain * info_loss + args.alpha_loss * abs_loss + args.alpha_marg_ent * zipf_loss
+        loss = args.alpha_base * base_loss + args.alpha_info_gain * info_loss + args.alpha_loss * abs_loss + args.alpha_marg_ent * zipf_loss
         
         loss.backward()
         print0(f" - step: {step} | accum step: {accum_step} | base loss: {base_loss.item()} | info loss: {info_loss.item()} | abs loss: {abs_loss.item()} | zipf loss: {zipf_loss.item()}")
@@ -615,11 +623,13 @@ print0(f"-- min_temperature: {args.min_temperature}", console=True)
 print0(f"-- use_static_memory_span: {args.use_static_memory_span}", console=True)
 print0(f"-- min_memory_span: {args.min_memory_span}", console=True)
 print0(f"-- abstract_vocab_size: {args.abstract_vocab_size}", console=True)
-print0(f"-- alpha_select: {args.alpha_select}", console=True)
+print0(f"-- alpha_base: {args.alpha_base}", console=True)
 print0(f"-- alpha_loss: {args.alpha_loss}", console=True)
 print0(f"-- alpha_marg_ent: {args.alpha_marg_ent}", console=True)
+print0(f"-- use_marg_entropy_regularization: {args.use_marg_entropy_regularization}", console=True)
 print0(f"-- decay: {args.decay}", console=True)
 print0(f"-- target_vocab_util: {args.target_vocab_util}", console=True)
+print0(f"-- min_abs_ppl: {args.min_abs_ppl}", console=True)
 print0(f"-- alpha_info_gain: {args.alpha_info_gain}", console=True)
 print0(f"-- coarse_to_fine_search: {args.coarse_to_fine_search}", console=True)
 print0(f"-- max_K: {args.max_K}", console=True)
