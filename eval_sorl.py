@@ -60,7 +60,7 @@ def parse_args():
     parser.add_argument("--abstract_vocab_size", type=int, default=128)
     parser.add_argument("--hf_repo_id", type=str, required=True)
     parser.add_argument("--hf_filename", type=str, required=True, help="Hugging Face filename (sorl model)")
-    parser.add_argument("--hf_filename_base", type=str, required=True, help="Hugging Face filename (base GPT-2 model)")
+    # parser.add_argument("--hf_filename_base", type=str, required=True, help="Hugging Face filename (base GPT-2 model)")
     
     # Data
     parser.add_argument("--val_files", type=str, default="data/tinystories/tinystory_val_*.bin")
@@ -159,8 +159,8 @@ def main():
     model = load_model(args.hf_repo_id, args.hf_filename, args.model_size, 
                        args.abstract_vocab_size, device, use_compile=use_compile)
 
-    base_model = load_base_model(args.hf_repo_id_base, args.hf_filename_base, 
-                                 args.model_size, device, use_compile=use_compile)
+    # base_model = load_base_model(args.hf_repo_id_base, args.hf_filename_base, 
+    #                              args.model_size, device, use_compile=use_compile)
 
     # Loss function (expects tensor for vocab_size to infer device)
     loss_fn = SoRLLoss_v7(torch.tensor(args.abstract_vocab_size, device=device), decay=0.8, target_vocab_util=0.8)
@@ -192,7 +192,7 @@ def main():
         with torch.no_grad():
             for _ in range(3):
                 _ = model.forward(warmup_tokens, memory_span, attn_blocksize)
-                _ = base_model.forward(warmup_tokens, memory_span, attn_blocksize)
+                # _ = base_model.forward(warmup_tokens, memory_span, attn_blocksize)
         if dist.is_initialized():
             dist.barrier()
         print0("Warmup complete.")
@@ -226,8 +226,8 @@ def main():
             search_util_rate = compute_vocab_utilization_rate(search_tokens, model)
             
             # Base loss
-            # base_loss = model.forward(tokens, memory_span, attn_blocksize)[0].mean()
-            base_loss = base_model.forward(tokens, memory_span, attn_blocksize)[0].mean()
+            base_loss = model.forward(tokens, memory_span, attn_blocksize)[0].mean()
+            # base_loss = base_model.forward(tokens, memory_span, attn_blocksize)[0].mean()
             
             # Info gain losses
             greedy_info_loss, greedy_abs_loss, _ = loss_fn(val_tokens, model, base_loss.detach(), memory_span, attn_blocksize)
