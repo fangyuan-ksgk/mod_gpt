@@ -97,25 +97,7 @@ echo "========================================="
 NUM_ITERATIONS=8000
 # Baseline experiment (10B fineweb dataset)
 # -----------------------------------------
-for MODEL_SIZE in "small"; do
-  torchrun \
-    --nproc_per_node=$N_GPUS \
-    --master_addr=$MASTER_ADDR \
-    --master_port=$((MASTER_PORT++)) \
-    train_iblm.py \
-    --batch_size $BATCH_SIZE \
-    --train_seq_len $TRAIN_SEQ_LEN \
-    --val_seq_len $VAL_SEQ_LEN \
-    --num_iterations $NUM_ITERATIONS \
-    --patch_size 8 \
-    --no_reg \
-    --model_size $MODEL_SIZE \
-    --save_checkpoint \
-    --run_info "Baseline: ModelSize=$MODEL_SIZE" 
-done 
-
-NUM_ITERATIONS=10000
-for MODEL_SIZE in "medium" "large"; do
+for MODEL_SIZE in "small" "medium" "large"; do
   torchrun \
     --nproc_per_node=$N_GPUS \
     --master_addr=$MASTER_ADDR \
