@@ -79,7 +79,7 @@ def distributed_data_generator_sorl(filename_pattern: str, sequence_length: int,
 
 
 def distributed_data_generator_sorl_v3(filename_pattern: str, sequence_length: int, rank: int, world_size: int):
-    files = itertools.cycle(sorted(glob.glob(filename_pattern)))
+    files = itertools.cycle([Path(f) for f in sorted(glob.glob(filename_pattern))])
     local_len = sequence_length // world_size
     tokens, pos = _load_data_shard(next(files)), 0
     bos_locs = (tokens == 50256).nonzero(as_tuple=True)[0]
