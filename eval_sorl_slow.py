@@ -21,6 +21,7 @@ from sorl.gat_sim import GAT, GATConfig, BOS_TOKEN_ID
 from src.model import GPTConfig, GPT_base
 from sorl.neo_utils import sorl_rollout_v3, select_best_info_gain
 from sorl.eval import compute_vocab_utilization_rate
+from sorl.forget import compute_abs_stats_v4
 from data.tinystory_local import TinyStoriesDataLoader
 
 
@@ -68,6 +69,7 @@ def parse_args():
     parser.add_argument("--num_stories", type=int, default=None, help="Number of stories to evaluate (None=all)")
     parser.add_argument("--max_len", type=int, default=1792, help="Max tokens per story")
     parser.add_argument("--batch_size", type=int, default=8)
+    parser.add_argument("--pad_shift", type=int, default=1)
     
     # SORL config
     parser.add_argument("--num_rollouts", type=int, default=5)
@@ -271,6 +273,8 @@ def main():
     print0(f"Model: {args.model_size}, Checkpoint: {args.hf_repo_id}/{args.hf_filename}")
     print0(f"K={args.K}, n={args.num_rollouts}, max_iter={args.max_iterations}")
     print0(f"Compile: {args.use_compile}")
+    if args.compare_against_base:
+        print0(f"Alien Suffix Analysis: pad_shift={args.pad_shift}")
     print0("=" * 70)
     
     # Load model on each rank
@@ -288,7 +292,8 @@ def main():
         max_len=args.max_len,
         chunk_size=args.K,
         device=device,
-        split=args.split
+        split=args.split,
+        pad_shift=args.pad_shift
     )
     
     # Shard indices across ranks (interleaved for load balance)
@@ -322,7 +327,7 @@ def main():
             tokens, doc_ids = loader.get_specific(batch_indices)
             
             if args.compare_against_base:
-                stats = compute_abs_stats_v3(
+                stats = compute_abs_stats_v4(
                     tokens, model, base_model,
                     n=args.num_rollouts,
                     K=args.K,
@@ -330,7 +335,8 @@ def main():
                     memory_span=memory_span,
                     attn_blocksize=attn_blocksize,
                     temperature=temperature,
-                    truncate_seq_len=truncate_seq_len
+                    truncate_seq_len=truncate_seq_len,
+                    pad_token=loader.pad_token
                 )
             else: 
                 stats = compute_abs_stats_v2(
@@ -374,18 +380,40 @@ def main():
     # Key insights
     print0("\n" + "-" * 70)
     print0("KEY INSIGHTS:")
-    print0(f"  Base PPL:           {summary['base_traj_loss']:.4f}")
-    print0(f"  Greedy PPL:         {summary['greedy_traj_loss']:.4f} (Δ = {(summary['base_traj_loss'] - summary['greedy_traj_loss']):.4f})")
-    print0(f"  Search PPL:         {summary['search_traj_loss']:.4f} (Δ = {(summary['base_traj_loss'] - summary['search_traj_loss']):.4f})")
-    print0(f"  Greedy Info Gain:   {summary['greedy_info_gain']*100:.2f}%")
-    print0(f"  Search Info Gain:   {summary['search_info_gain']*100:.2f}%")
-    print0(f"  Greedy vs Random:   {summary['greedy_adv']*100:.2f}% (relative)")
-    print0(f"  Search vs Random:   {summary['search_adv']*100:.2f}% (relative)")
+    
+    if args.compare_against_base:
+        # Alien suffix analysis (v4 metrics)
+        print0(f"  [ID Tokens] Base PPL:        {summary['id_base_traj_loss']:.4f}")
+        print0(f"  [ID Tokens] Greedy PPL:      {summary['id_greedy_traj_loss']:.4f}")
+        print0(f"  [ID Tokens] Greedy Info Gain:{summary['id_greedy_info_gain']:.4f}")
+        print0(f"  [ID Tokens] Search Info Gain:{summary['id_search_info_gain']:.4f}")
+        print0(f"  [ID Tokens] Greedy Adv:      {summary['id_greedy_adv']*100:.2f}%")
+        print0("")
+        print0(f"  [Alien Suffix] Base PPL:        {summary['alien_base_traj_loss']:.4f}")
+        print0(f"  [Alien Suffix] Greedy PPL:      {summary['alien_greedy_traj_loss']:.4f}")
+        print0(f"  [Alien Suffix] Greedy Info Gain:{summary['alien_greedy_info_gain']:.4f}")
+        print0(f"  [Alien Suffix] Search Info Gain:{summary['alien_search_info_gain']:.4f}")
+        print0(f"  [Alien Suffix] Greedy Adv:      {summary['alien_greedy_adv']*100:.2f}%")
+        print0(f"\n  pad_shift={args.pad_shift} (pad_token={loader.pad_token})")
+    else:
+        # Standard metrics (v2)
+        print0(f"  Base PPL:           {summary['base_traj_loss']:.4f}")
+        print0(f"  Greedy PPL:         {summary['greedy_traj_loss']:.4f} (Δ = {(summary['base_traj_loss'] - summary['greedy_traj_loss']):.4f})")
+        print0(f"  Search PPL:         {summary['search_traj_loss']:.4f} (Δ = {(summary['base_traj_loss'] - summary['search_traj_loss']):.4f})")
+        print0(f"  Greedy Info Gain:   {summary['greedy_info_gain']*100:.2f}%")
+        print0(f"  Search Info Gain:   {summary['search_info_gain']*100:.2f}%")
+        print0(f"  Greedy vs Random:   {summary['greedy_adv']*100:.2f}% (relative)")
+        print0(f"  Search vs Random:   {summary['search_adv']*100:.2f}% (relative)")
     print0("-" * 70)
     
     # Save results from rank 0 only
     if rank == 0 and args.save_path:
         import pandas as pd
+        
+        # Add metadata to summary
+        summary['pad_shift'] = args.pad_shift
+        summary['K'] = args.K
+        summary['model_size'] = args.model_size
         
         # For distributed, we only have aggregated summary, not per-story results
         # Save summary as CSV
@@ -402,9 +430,15 @@ def main():
             f.write(f"Stories: {len(loader.stories)}\n")
             f.write(f"GPUs: {world_size}\n")
             f.write(f"Model: {args.hf_repo_id}/{args.hf_filename}\n")
+            f.write(f"pad_shift: {args.pad_shift}\n")
+            if args.compare_against_base:
+                f.write(f"pad_token: {loader.pad_token}\n")
             f.write(f"=" * 50 + "\n\n")
             for key, val in summary.items():
-                f.write(f"{key}: {val:.6f}\n")
+                if isinstance(val, float):
+                    f.write(f"{key}: {val:.6f}\n")
+                else:
+                    f.write(f"{key}: {val}\n")
         print0(f"Summary saved to: {summary_path}")
     
     cleanup_distributed()

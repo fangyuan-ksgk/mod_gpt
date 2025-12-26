@@ -19,14 +19,14 @@ class TinyStoriesDataLoader:
     """Lightweight TinyStories loader with n-chunk statistics."""
     # <== this class is actually quite general and doesn't depend on specific dataset
     
-    def __init__(self, num_stories=1000, max_len=128, chunk_size=8, device='cpu', split='train'):
+    def __init__(self, num_stories=1000, max_len=128, chunk_size=8, device='cpu', split='train', pad_shift=1):
         self.max_len = max_len
         self.chunk_size = chunk_size
         self.device = device
         
         # Tokenizer
         self.enc = tiktoken.get_encoding("gpt2")
-        self.eot = self.enc._special_tokens['<|endoftext|>'] - 1
+        self.pad_token = self.enc._special_tokens['<|endoftext|>'] - pad_shift
         
         # Load and tokenize
         print(f"Loading {num_stories} stories from TinyStories {split}...")
@@ -81,7 +81,7 @@ class TinyStoriesDataLoader:
             # Pad or truncate to max_len - 1 (leave room for BOS)
             
             if len(tokens) < self.max_len - 1:
-                tokens = tokens + [self.eot] * (self.max_len - 1 - len(tokens))
+                tokens = tokens + [self.pad_token] * (self.max_len - 1 - len(tokens))
             else:
                 tokens = tokens[:self.max_len - 1]
             
@@ -114,7 +114,7 @@ class TinyStoriesDataLoader:
             tokens = self.stories[idx]
             # Pad or truncate to max_len - 1 (leave room for BOS)
             if len(tokens) < self.max_len - 1:
-                tokens = tokens + [self.eot] * (self.max_len - 1 - len(tokens))
+                tokens = tokens + [self.pad_token] * (self.max_len - 1 - len(tokens))
             else:
                 tokens = tokens[:self.max_len - 1]
             
@@ -126,6 +126,66 @@ class TinyStoriesDataLoader:
         
         return flat, indices.detach().clone().to(dtype=torch.long, device=flat.device)
 
+
+class TinyStoriesDataLoader_v2:
+    """Lightweight TinyStories loader with n-chunk statistics (v2) | no [PAD] tokens"""
+    # <== this class is actually quite general and doesn't depend on specific dataset
+    
+    def __init__(self, num_stories=1000, max_len=128, chunk_size=8, device='cpu', split='train'):
+        self.max_len = max_len
+        self.chunk_size = chunk_size
+        self.device = device
+        
+        # Tokenizer
+        self.enc = tiktoken.get_encoding("gpt2")
+        self.eot = self.enc._special_tokens['<|endoftext|>'] - 1
+        
+        # Load and tokenize
+        print(f"Loading {num_stories} stories from TinyStories {split}...")
+        dataset = load_dataset("roneneldan/TinyStories", split=split, streaming=True)
+        
+        self.stories = []
+        for i, sample in enumerate(dataset):
+            if i >= num_stories:
+                break
+            tokens = self.enc.encode_ordinary(sample['text'])
+            self.stories.append(tokens)
+        
+        total_tokens = sum(len(s) for s in self.stories)
+        total_bytes = total_tokens * 4
+        total_mb = total_bytes / (1024 ** 2)
+
+        print(f"Loaded {len(self.stories)} stories, {total_tokens} tokens total, {total_mb:.2f} MB")
+        
+    
+    def get_batch(self, batch_size):
+        """Get a random batch of stories, flattened for SoRL format."""
+        indices = np.random.choice(len(self.stories), size=batch_size, replace=True)
+
+        samples = []
+        for idx in indices:
+            tokens = self.stories[idx]
+            sample = [BOS_TOKEN_ID] + tokens            
+            samples.append(sample)
+
+        batch = torch.tensor([item for sublist in samples for item in sublist], dtype=torch.long)
+        return batch.unsqueeze(0), torch.tensor(indices, dtype=torch.long, device=self.device)
+    
+    def decode(self, tokens):
+        """Decode token ids to text."""
+        if isinstance(tokens, torch.Tensor):
+            tokens = tokens.tolist()
+        return self.enc.decode(tokens)
+
+    def get_specific(self, indices):
+        samples = []
+        for idx in indices:
+            tokens = self.stories[idx]            
+            sample = [BOS_TOKEN_ID] + tokens
+            samples.append(sample)
+        
+        batch = torch.tensor([item for sublist in samples for item in sublist], dtype=torch.long)        
+        return batch.unsqueeze(0), indices.detach().clone().to(dtype=torch.long, device=batch.device)
 
 
 

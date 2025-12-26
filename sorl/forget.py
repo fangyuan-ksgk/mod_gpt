@@ -143,6 +143,129 @@ def compute_abs_stats_v3(tokens, model, base_model, n, K, max_iterations, memory
     return base_traj_loss, greedy_traj_loss, search_traj_loss, greedy_adv, greedy_abs_adv, search_adv, search_abs_adv, greedy_info_gain, search_info_gain
     
 
+def compute_abs_stats_v4(tokens, model, base_model, n, K, max_iterations, memory_span, attn_blocksize, temperature, truncate_seq_len, pad_token):
+
+    search_data, search_ppt, abs_logits = sorl_rollout_v3(tokens, model, n=n, K=K, 
+                                                                max_iterations=max_iterations,
+                                                            memory_span=memory_span,
+                                                            attn_blocksize=attn_blocksize,
+                                                            temperature=temperature,
+                                                            truncate_seq_len=truncate_seq_len)
+    search_ppt = search_ppt.reshape(search_data.shape[0], -1)
+
+    # --- greedy & random rollout ppt ---
+    cond_traj_mask = (search_data[0, 1:] < model.vocab_sizes[0])
+    greedy_traj_ppt = search_ppt[0][cond_traj_mask]
+    random_traj_ppt = search_ppt[1:].mean(dim=0)[cond_traj_mask]
+
+    # --- base traj loss ---
+    base_traj_ppt = base_model.forward(tokens[:, :-1].long(), tokens[:, 1:].long(), attn_blocksize)
+    base_traj_mask = (tokens[:, 1:] != BOS_TOKEN_ID).float()
+    base_traj_loss = (base_traj_ppt * base_traj_mask[0]).sum() / base_traj_mask.sum().clamp(min=1)
+
+    # --- search (per-doc-best rollout) info gain ---
+    levels = (search_data >= model.vocab_sizes[0]).long()
+    best_data, best_ppt, _, _ = select_best_info_gain(tokens, base_traj_ppt, search_data, search_ppt, levels)
+    best_traj_ppt = best_ppt[cond_traj_mask]
+
+    # --- information gain, search advantage (relative & absolute) ---
+    greedy_adv = ((random_traj_ppt - greedy_traj_ppt) / (random_traj_ppt + 1e-8))
+    greedy_abs_adv = (random_traj_ppt - greedy_traj_ppt)
+    search_adv = ((random_traj_ppt - best_traj_ppt) / (random_traj_ppt + 1e-8))
+    search_abs_adv = (random_traj_ppt - best_traj_ppt)
+    greedy_info_gain = (base_traj_ppt - greedy_traj_ppt)
+    search_info_gain = (base_traj_ppt - best_traj_ppt)
+
+    greedy_traj_loss = greedy_traj_ppt.mean()
+    search_traj_loss = best_traj_ppt.mean()
+
+    # --- alien mask ---
+    pad_mask = (tokens[:, 1:] == pad_token).float()
+    alien_greedy_adv = ((greedy_adv * pad_mask).sum() / (pad_mask.sum() + 1e-8)) 
+    # alien_search_adv = ((search_adv * pad_mask).sum() / pad_mask.sum()) 
+    alien_greedy_info_gain = ((greedy_info_gain * pad_mask).sum() / (pad_mask.sum() + 1e-8)) 
+    alien_search_info_gain = ((search_info_gain * pad_mask).sum() / (pad_mask.sum() + 1e-8)) 
+    id_greedy_info_gain = ((greedy_info_gain * (1 - pad_mask)).sum() / (1 - pad_mask).sum()) 
+    id_search_info_gain = ((search_info_gain * (1 - pad_mask)).sum() / (1 - pad_mask).sum()) 
+ 
+    alien_greedy_traj_loss = ((greedy_traj_ppt * pad_mask).sum() / (pad_mask.sum() + 1e-8)) 
+    id_greedy_traj_loss = ((greedy_traj_ppt * (1 - pad_mask)).sum() / (1 - pad_mask).sum()) 
+    alien_base_traj_loss = ((base_traj_ppt * pad_mask).sum() / (pad_mask.sum() + 1e-8)) 
+    id_base_traj_loss = ((base_traj_ppt * (1 - pad_mask)).sum() / (1 - pad_mask).sum()) 
+
+    id_greedy_adv = ((greedy_adv * (1 - pad_mask)).sum() / (1 - pad_mask).sum()) 
+
+    return {"id_base_traj_loss": id_base_traj_loss, 
+            "id_greedy_traj_loss": id_greedy_traj_loss, 
+            "id_greedy_info_gain": id_greedy_info_gain, 
+            "id_search_info_gain": id_search_info_gain, 
+            "id_greedy_adv": id_greedy_adv,
+            "alien_base_traj_loss": alien_base_traj_loss, 
+            "alien_greedy_traj_loss": alien_greedy_traj_loss, 
+            "alien_greedy_info_gain": alien_greedy_info_gain, 
+            "alien_search_info_gain": alien_search_info_gain,
+            "alien_greedy_adv": alien_greedy_adv}    
+
+
+def visualize_info_gain(tokens, model, base_model, K, max_iterations, memory_span, attn_blocksize, 
+                        n=5, temperature=None, figsize=(14, 8)):
+    """Visualize per-token perplexity comparison between base and greedy (abstraction) model."""
+    
+    if temperature is None:
+        temperature = torch.tensor([0.0] + [5.0] * (n - 1), device=tokens.device)
+    
+    with torch.no_grad():
+        # Greedy rollout perplexity
+        search_data, search_ppt, _ = sorl_rollout_v3(
+            tokens, model, n=n, K=K, max_iterations=max_iterations,
+            memory_span=memory_span, attn_blocksize=attn_blocksize,
+            temperature=temperature, truncate_seq_len=False
+        )
+        search_ppt = search_ppt.reshape(search_data.shape[0], -1)
+        cond_traj_mask = (search_data[0, 1:] < model.vocab_sizes[0])
+        greedy_ppt = search_ppt[0][cond_traj_mask].cpu()
+        
+        # Base model perplexity
+        base_ppt = base_model.forward(
+            tokens[:, :-1].long(), tokens[:, 1:].long(), attn_blocksize
+        ).cpu().squeeze()
+    
+    # Align lengths
+    min_len = min(len(base_ppt), len(greedy_ppt))
+    base_ppt, greedy_ppt = base_ppt[:min_len], greedy_ppt[:min_len]
+    info_gain = (base_ppt - greedy_ppt).numpy()
+    
+    # Plot
+    fig, axes = plt.subplots(3, 1, figsize=figsize, sharex=True)
+    
+    axes[0].plot(base_ppt.numpy(), alpha=0.7, label='Base Model', linewidth=0.8)
+    axes[0].plot(greedy_ppt.numpy(), alpha=0.7, label='Greedy (with abstraction)', linewidth=0.8)
+    axes[0].set_ylabel('Per-token PPT')
+    axes[0].legend()
+    axes[0].set_title('Per-Token Perplexity: Base vs Greedy')
+    
+    colors = ['green' if g > 0 else 'red' for g in info_gain]
+    axes[1].bar(range(len(info_gain)), info_gain, color=colors, alpha=0.6, width=1.0)
+    axes[1].axhline(0, color='black', linewidth=0.5)
+    axes[1].set_ylabel('Info Gain')
+    axes[1].set_title(f'Per-Token Info Gain (mean={info_gain.mean():.4f})')
+    
+    cumsum = info_gain.cumsum()
+    axes[2].plot(cumsum, color='blue', linewidth=1.0)
+    axes[2].fill_between(range(len(cumsum)), cumsum, alpha=0.3)
+    axes[2].axhline(0, color='black', linewidth=0.5)
+    axes[2].set_xlabel('Token Position')
+    axes[2].set_ylabel('Cumulative Info Gain')
+    axes[2].set_title('Cumulative Information Gain Over Sequence')
+    
+    plt.tight_layout()
+    plt.show()
+    
+    print(f"Mean base PPT: {base_ppt.mean():.4f} | Mean greedy PPT: {greedy_ppt.mean():.4f} | Mean info gain: {info_gain.mean():.4f}")
+    
+    return {"base_ppt": base_ppt, "greedy_ppt": greedy_ppt, "info_gain": info_gain}
+
+    
 def train_forget_vec(train_idx, loader, model, abs_stats, abs_stats_post, optimizer, num_steps,
                      max_iterations, memory_span, attn_blocksize, temperature, K, r_min, reward_mode, loss_fn, alpha_abs, alpha_soft_zipf, alpha_topo,
                      ckpt_path="sorl_tinystories.pt"): 
