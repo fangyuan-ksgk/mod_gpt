@@ -29,38 +29,40 @@ MASTER_PORT=29500
 echo "========================================="
 echo "Baseline: Training WITHOUT GAPT"
 echo "========================================="
-# torchrun \
-#   --nproc_per_node=$N_GPUS \
-#   --master_addr=$MASTER_ADDR \
-#   --master_port=$((MASTER_PORT++)) \
-#   train_iblm.py \
-#   --batch_size $BATCH_SIZE \
-#   --train_seq_len $TRAIN_SEQ_LEN \
-#   --val_seq_len $VAL_SEQ_LEN \
-#   --num_iterations $NUM_ITERATIONS \
-#   --patch_size 8
+torchrun \
+  --nproc_per_node=$N_GPUS \
+  --master_addr=$MASTER_ADDR \
+  --master_port=$((MASTER_PORT++)) \
+  train_iblm.py \
+  --batch_size $BATCH_SIZE \
+  --train_seq_len $TRAIN_SEQ_LEN \
+  --val_seq_len $VAL_SEQ_LEN \
+  --num_iterations $NUM_ITERATIONS \
+  --patch_size 8
+  --no_reg
 
 
-# echo "========================================="
-# echo "GAPT: Gated Phase Transition Training"
-# echo "========================================="
+echo "========================================="
+echo "GAPT: Gated Phase Transition Training"
+echo "========================================="
 
-#   torchrun \
-#     --nproc_per_node=$N_GPUS \
-#     --master_addr=$MASTER_ADDR \
-#     --master_port=$((MASTER_PORT++)) \
-#     train_iblm.py \
-#   --batch_size $BATCH_SIZE \
-#   --train_seq_len $TRAIN_SEQ_LEN \
-#   --val_seq_len $VAL_SEQ_LEN \
-#   --num_iterations $NUM_ITERATIONS \
-#   --use_gapt \
-#   --entropy_patience 250 \
-#   --entropy_min_delta 0.01 \
-#   --mbe_patience 50 \
-#   --mbe_min_delta 0.01 \
-#   --patch_size 8
-
+torchrun \
+  --nproc_per_node=$N_GPUS \
+  --master_addr=$MASTER_ADDR \
+  --master_port=$((MASTER_PORT++)) \
+  train_iblm.py \
+--batch_size $BATCH_SIZE \
+--train_seq_len $TRAIN_SEQ_LEN \
+--val_seq_len $VAL_SEQ_LEN \
+--num_iterations $NUM_ITERATIONS \
+--use_gapt \
+--entropy_patience 250 \
+--entropy_min_delta 0.01 \
+--mbe_patience 50 \
+--mbe_min_delta 0.01 \
+--min_a 1e-5 \
+--patch_size 8 \
+--run_info "IBLM (ClampMinMBE=1e-5)"
 
 
 # Large scale model sweep (10B fineweb)
@@ -94,25 +96,25 @@ echo "========================================="
 #       --run_info "GAPT Sweep: ModelSize=$MODEL_SIZE | CEPat=250 | MBEPat=50 | ClampMinMBE=1e-5" 
 # done
 
-NUM_ITERATIONS=8000
-# Baseline experiment (10B fineweb dataset)
-# -----------------------------------------
-for MODEL_SIZE in "small" "medium" "large"; do
-  torchrun \
-    --nproc_per_node=$N_GPUS \
-    --master_addr=$MASTER_ADDR \
-    --master_port=$((MASTER_PORT++)) \
-    train_iblm.py \
-    --batch_size $BATCH_SIZE \
-    --train_seq_len $TRAIN_SEQ_LEN \
-    --val_seq_len $VAL_SEQ_LEN \
-    --num_iterations $NUM_ITERATIONS \
-    --patch_size 8 \
-    --no_reg \
-    --model_size $MODEL_SIZE \
-    --save_checkpoint \
-    --run_info "Baseline: ModelSize=$MODEL_SIZE" 
-done 
+# NUM_ITERATIONS=8000
+# # Baseline experiment (10B fineweb dataset)
+# # -----------------------------------------
+# for MODEL_SIZE in "small" "medium" "large"; do
+#   torchrun \
+#     --nproc_per_node=$N_GPUS \
+#     --master_addr=$MASTER_ADDR \
+#     --master_port=$((MASTER_PORT++)) \
+#     train_iblm.py \
+#     --batch_size $BATCH_SIZE \
+#     --train_seq_len $TRAIN_SEQ_LEN \
+#     --val_seq_len $VAL_SEQ_LEN \
+#     --num_iterations $NUM_ITERATIONS \
+#     --patch_size 8 \
+#     --no_reg \
+#     --model_size $MODEL_SIZE \
+#     --save_checkpoint \
+#     --run_info "Baseline: ModelSize=$MODEL_SIZE" 
+# done 
 
 
 
