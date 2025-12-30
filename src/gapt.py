@@ -275,7 +275,14 @@ class GatedPhaseTransition:
         if self.phi == 1:
             return main_loss
         elif self.phi == 2:
-            return main_loss + auxiliary_loss.clamp(min=self.min_a)
+            # return main_loss + auxiliary_loss.clamp(min=self.min_a)
+
+            softness = 0.1  # controls sharpness
+            soft_aux = self.min_a + softness * torch.nn.functional.softplus(
+                (auxiliary_loss - self.min_a) / softness
+            )
+            return main_loss + soft_aux
+
         return main_loss # fallback
     
     def step(self, main_loss: torch.Tensor, auxiliary_loss: torch.Tensor, 

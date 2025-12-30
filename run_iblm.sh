@@ -13,7 +13,7 @@ export NCCL_DEBUG=WARN
 # ============================================================================
 # Configuration
 # ============================================================================
-BATCH_SIZE=32  # Closer to benchmark batch_size=32
+BATCH_SIZE=16  # Closer to benchmark batch_size=32
 TRAIN_SEQ_LEN=$((32 * 1024))
 VAL_SEQ_LEN=$((32 * 1024))
 NUM_ITERATIONS=1750
@@ -25,44 +25,74 @@ MASTER_PORT=29500
 # BASELINE EXPERIMENTS
 # ============================================================================
 
+# torchrun \
+#   --nproc_per_node=$N_GPUS \
+#   --master_addr=$MASTER_ADDR \
+#   --master_port=$((MASTER_PORT++)) \
+#   train_base.py
+#   --batch_size $BATCH_SIZE \
+#   --train_seq_len $TRAIN_SEQ_LEN \
+#   --val_seq_len $VAL_SEQ_LEN \
+#   --num_iterations $NUM_ITERATIONS \
+#   --run_info "Sanity-checking baseline"
+
+
 # Baseline: No GAPT (for comparison)
 echo "========================================="
 echo "Baseline: Training WITHOUT GAPT"
 echo "========================================="
-torchrun \
-  --nproc_per_node=$N_GPUS \
-  --master_addr=$MASTER_ADDR \
-  --master_port=$((MASTER_PORT++)) \
-  train_iblm.py \
-  --batch_size $BATCH_SIZE \
-  --train_seq_len $TRAIN_SEQ_LEN \
-  --val_seq_len $VAL_SEQ_LEN \
-  --num_iterations $NUM_ITERATIONS \
-  --patch_size 8
-  --no_reg
+# torchrun \
+#   --nproc_per_node=$N_GPUS \
+#   --master_addr=$MASTER_ADDR \
+#   --master_port=$((MASTER_PORT++)) \
+#   train_iblm.py \
+#   --batch_size $BATCH_SIZE \
+#   --train_seq_len $TRAIN_SEQ_LEN \
+#   --val_seq_len $VAL_SEQ_LEN \
+#   --num_iterations $NUM_ITERATIONS \
+#   --patch_size 8 \
+#   --no_reg \
+#   --run_info "Baseline (no reg)"
 
+# (a.1) Sweep on MBE weight (for soft-add MBE reg)
+for MBE_WEIGHT in 0.1 0.5 1.0; do
+  torchrun \
+    --nproc_per_node=$N_GPUS \
+    --master_addr=$MASTER_ADDR \
+    --master_port=$((MASTER_PORT++)) \
+    train_iblm.py \
+    --batch_size $BATCH_SIZE \
+    --train_seq_len $TRAIN_SEQ_LEN \
+    --val_seq_len $VAL_SEQ_LEN \
+    --num_iterations $NUM_ITERATIONS \
+    --patch_size 8 \
+    --run_info "Baseline (with soft-add MBE reg, MBE_WEIGHT=$MBE_WEIGHT)"
+done 
 
 echo "========================================="
 echo "GAPT: Gated Phase Transition Training"
 echo "========================================="
 
-torchrun \
-  --nproc_per_node=$N_GPUS \
-  --master_addr=$MASTER_ADDR \
-  --master_port=$((MASTER_PORT++)) \
-  train_iblm.py \
---batch_size $BATCH_SIZE \
---train_seq_len $TRAIN_SEQ_LEN \
---val_seq_len $VAL_SEQ_LEN \
---num_iterations $NUM_ITERATIONS \
---use_gapt \
---entropy_patience 250 \
---entropy_min_delta 0.01 \
---mbe_patience 50 \
---mbe_min_delta 0.01 \
---min_a 1e-5 \
---patch_size 8 \
---run_info "IBLM (ClampMinMBE=1e-5)"
+# (a.2) Sweep on Patch size (for soft-add MBE reg)
+for PATCH_SIZE in 8 32 64; do
+  torchrun \
+    --nproc_per_node=$N_GPUS \
+    --master_addr=$MASTER_ADDR \
+    --master_port=$((MASTER_PORT++)) \
+    train_iblm.py \
+    --batch_size $BATCH_SIZE \
+    --train_seq_len $TRAIN_SEQ_LEN \
+    --val_seq_len $VAL_SEQ_LEN \
+    --num_iterations $NUM_ITERATIONS \
+    --use_gapt \
+    --entropy_patience 250 \
+    --entropy_min_delta 0.01 \
+    --mbe_patience 50 \
+    --mbe_min_delta 0.01 \
+    --min_a 1e-5 \
+    --patch_size $PATCH_SIZE \
+    --run_info "IBLM (soft-add MBE, MBE_WEIGHT=1.0, PATCH_SIZE=$PATCH_SIZE)"
+done
 
 
 # Large scale model sweep (10B fineweb)
