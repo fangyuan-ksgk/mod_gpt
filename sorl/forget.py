@@ -167,19 +167,20 @@ from sorl.dream_utils import sorl_rollout_v3 as dream_rollout
 from sorl.dream_utils import select_best_per_doc
 def compute_abs_stats_v5(tokens, model, n, K, max_iterations, memory_span_abs, memory_span_traj, attn_blocksize, temperature, truncate_seq_len, pad_token):
 
-    search_data, search_ppt, abs_logits = dream_rollout(tokens, model, n=n, K=K, 
+    search_data, search_traj_ppt, search_abs_ppt, abs_logits = dream_rollout(tokens, model, n=n, K=K, 
                                                         max_iterations=max_iterations,
                                                         memory_span_abs=memory_span_abs,
                                                         memory_span_traj=memory_span_traj,
                                                         attn_blocksize=attn_blocksize,
                                                         temperature=temperature,
                                                         truncate_seq_len=truncate_seq_len)
-    search_ppt = search_ppt.reshape(search_data.shape[0], -1)
+    search_traj_ppt = search_traj_ppt.reshape(search_data.shape[0], -1)
+    search_abs_ppt = search_abs_ppt.reshape(search_data.shape[0], -1)
 
     # --- greedy & random rollout ppt ---
     cond_traj_mask = (search_data[0, 1:] < model.vocab_sizes[0])
-    greedy_traj_ppt = search_ppt[0][cond_traj_mask]
-    random_traj_ppt = search_ppt[1:].mean(dim=0)[cond_traj_mask]
+    greedy_traj_ppt = search_traj_ppt[0][cond_traj_mask]
+    random_traj_ppt = search_traj_ppt[1:].mean(dim=0)[cond_traj_mask]
 
     # --- base traj loss ---
     base_traj_ppt = model.forward(tokens, memory_span_abs, memory_span_traj, attn_blocksize)[0]
@@ -188,8 +189,8 @@ def compute_abs_stats_v5(tokens, model, n, K, max_iterations, memory_span_abs, m
 
     # --- search (per-doc-best rollout) info gain ---
     levels = (search_data >= model.vocab_sizes[0]).long()
-    best_data, best_ppt, _ = select_best_per_doc(search_data, search_ppt, levels, model)
-    best_traj_ppt = best_ppt[cond_traj_mask]
+    best_data, best_traj_ppt, best_abs_ppt, _ = select_best_per_doc(search_data, search_traj_ppt, search_abs_ppt, levels, model)
+    best_traj_ppt = best_traj_ppt[cond_traj_mask]
 
     # --- information gain, search advantage (relative & absolute) ---
     greedy_adv = ((random_traj_ppt - greedy_traj_ppt) / (random_traj_ppt + 1e-8))

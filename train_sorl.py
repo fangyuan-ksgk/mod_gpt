@@ -1,11 +1,10 @@
-# Info Gain SoRL
-# - base:  p(s)
-# - info gain:  p(a | s)/p(s)
-# - policy: p(a | s)
-# - marginal entropy regularization: KL(p(a), soft_zipf_prior)
+# SoRL w. 2-stage
+# prior stage with 'memory compression' mask to build up dependency
+# then adopt info gain formulation as usual
 # -------------------------------------------------------------------------------------
 # Modded gpt speedrun (GPU poor ver. minus Hopper optimization tricks such as FP8 matmul etc.)
 # Heavily borrow code from @KellerJordan
+
 
 import os
 import sys
@@ -53,8 +52,7 @@ def parse_args():
     
     # Architecture / Vocab
     parser.add_argument("--abstract_vocab_size", type=int, default=256)
-    parser.add_argument("--use_static_memory_span", action="store_true", default=False)
-    parser.add_argument("--min_memory_span", type=int, default=64)
+    parser.add_argument("--compression_frac", type=float, default=0.5)
     
     # Loss / Regularization
     parser.add_argument("--alpha_base", type=float, default=1.0)  # base loss weight
@@ -192,8 +190,8 @@ class Muon(torch.optim.Optimizer):
 # from src.model import GPT, GPTConfig
 
 # GAT model
-from sorl.gat_sim import GAT, GATConfig
-from sorl.neo_utils import sorl_evaluate
+from sorl.gat_dream import GAT, GATConfig
+from sorl.dream_utils import sorl_evaluate
 from sorl.eval import compute_vocab_utilization_rate
 
 # -----------------------------------------------------------------------------
@@ -240,8 +238,7 @@ class Hyperparameters:
     temperature: float = 5.0
     min_temperature: float = 0.5
     
-    use_static_memory_span: bool = False
-    min_memory_span: int = 64
+    compression_frac: float = 0.5
     
     alpha_base: float = 1.0
     alpha_loss: float = 0.0
@@ -322,7 +319,7 @@ print0("="*100)
 from src.utils import distributed_data_generator_sorl as distributed_data_generator
 
 # ------------------------- sorl search ---------------------------------------
-from sorl.neo_utils import sorl_search_v8 as sorl_search
+from sorl.dream_utils import sorl_search
 
 ########################################
 #    Construct model and optimizer     #
@@ -367,13 +364,13 @@ def get_lr(step: int):
         return w * 1.0 + (1 - w) * 0.1
 
 # SoRL loss function (info gain loss)
-if args.use_marg_entropy_regularization:
-    from sorl.info import SoRLLoss_v8 as SoRLLoss 
-else: 
-    from sorl.info import SoRLLoss_v7 as SoRLLoss
+from sorl.info import SoRLLoss_v9, SoRLLoss_v10
 
-loss_fn = SoRLLoss(model.vocab_sizes[1], decay=args.decay, target_vocab_util=args.target_vocab_util, min_abs_ppl=args.min_abs_ppl)
-loss_fn = loss_fn.to(device)
+mem_loss_fn = SoRLLoss_v9(model.vocab_sizes[1], decay=args.decay, target_vocab_util=args.target_vocab_util, min_abs_ppl=args.min_abs_ppl)
+comp_loss_fn = SoRLLoss_v10(model.vocab_sizes[1], decay=args.decay, target_vocab_util=args.target_vocab_util)
+
+mem_loss_fn = mem_loss_fn.to(device)
+comp_loss_fn = comp_loss_fn.to(device)
 
 # --- coarse to fine search ---
 def get_current_K(step: int, total_steps: int, current_vocab_util: float, curr_K: int) -> int:
@@ -406,13 +403,15 @@ initial_state = dict(model=copy.deepcopy(model.state_dict()),
                      optimizers=[copy.deepcopy(opt.state_dict()) for opt in optimizers]) # save the initial state
 
 attn_blocksize = torch.tensor(64, dtype=torch.int, device="cuda")
-memory_span = torch.tensor(1792, dtype=torch.int, device="cuda")
+memory_span_abs = torch.tensor(1792, dtype=torch.int, device="cuda")
+memory_span_traj = torch.tensor(1792, dtype=torch.int, device="cuda")
 temperature_warmup = torch.cat([
     torch.tensor([args.min_temperature], device="cuda"),  # Low temp for first rollout
     torch.full((args.num_rollouts - 1,), args.temperature, device="cuda")  # Low temp for diversity
 ])
 
 for i in range(warmup_steps):
+    phase = "compression" if i < warmup_steps * 0.5 else "memorization"
     tokens = torch.randint(0, args.vocab_size, size=(1, args.train_seq_len,), device="cuda")
     print(f" :: Sorl search propagation starts with tokens of length {tokens.shape[1]}")
     forward_start = time.time() 
@@ -421,17 +420,24 @@ for i in range(warmup_steps):
     # --- sorl search --- 
     search_start = time.time()
     with torch.no_grad():
-        search_tokens, search_ppt, search_adv, rew = sorl_search(tokens, model, n=args.num_rollouts, K=K, max_iterations=args.max_iterations, memory_span=memory_span, attn_blocksize=attn_blocksize, 
+        search_tokens, search_traj_ppt, search_abs_ppt, search_adv = sorl_search(tokens, model, n=args.num_rollouts, K=K, max_iterations=args.max_iterations, memory_span_abs=memory_span_abs, memory_span_traj=memory_span_traj, attn_blocksize=attn_blocksize, 
                                                                           temperature=temperature_warmup)
     search_end = time.time()
     print(f" :: Sorl search takes {search_end - search_start} second")
-    # --- compute loss --- 
-    base_loss = model.forward(tokens, memory_span, attn_blocksize)[0].mean()
-    info_loss, abs_loss, zipf_loss = loss_fn(search_tokens, model, base_loss.detach(), memory_span, attn_blocksize)
+    
+    if phase == "memorization": 
+        # --- compute memorization loss --- 
+        base_loss = model.forward(tokens, memory_span_abs, memory_span_traj, attn_blocksize)[0].mean()
+        info_loss, abs_loss, zipf_loss = mem_loss_fn(search_tokens, model, base_loss.detach(), memory_span_abs, memory_span_traj, attn_blocksize)
+        loss = args.alpha_base * base_loss + args.alpha_info_gain * info_loss + args.alpha_loss * abs_loss + args.alpha_marg_ent * zipf_loss
+    else: 
+        # --- compute compression loss --- 
+        cond_traj_loss, abs_loss, zipf_bigram_loss = comp_loss_fn(search_tokens, model, memory_span_abs, memory_span_traj, attn_blocksize)
+        loss = cond_traj_loss + args.alpha_loss * abs_loss + args.alpha_marg_ent * zipf_bigram_loss
+
     forward_end = time.time()
     print(f" :: Loss computation takes {forward_end - search_end} second")
     # --- backward --- 
-    loss = args.alpha_base * base_loss + args.alpha_info_gain * info_loss + args.alpha_loss * abs_loss + args.alpha_marg_ent * zipf_loss
     loss.backward() 
     backward_end = time.time()
     print(f" :: Backward takes {backward_end - forward_end} second")
@@ -482,6 +488,7 @@ test_loss_record = defaultdict(list)
 early_stop = False
 train_vocab_util = 1.0
 curr_K = args.max_K if args.coarse_to_fine_search else args.K
+phase = "compression"
 
 for step in range(train_steps + 1):
     last_step = (step == train_steps) or early_stop
@@ -489,11 +496,16 @@ for step in range(train_steps + 1):
         attn_blocksize = torch.tensor(1792, dtype=torch.int, device='cuda')
     else: 
         attn_blocksize = torch.tensor(64*((step/train_steps * (1792 - 64) + 64)//64), dtype=torch.int, device='cuda')    
-    if args.use_static_memory_span:
-        memory_span = torch.tensor(1792, dtype=torch.int, device='cuda') # keep static
-    else:
-        memory_span = torch.tensor(64*(((1 - step/train_steps) * (1792 - args.min_memory_span) + args.min_memory_span)//64), dtype=torch.int, device='cuda')
     
+    if step < train_steps * args.compression_frac: 
+        phase = "compression"
+        memory_span_abs = torch.tensor(curr_K, dtype=torch.int, device='cuda')
+        memory_span_traj = torch.tensor(curr_K, dtype=torch.int, device='cuda')
+    else: 
+        phase = "memorization"
+        memory_span_abs = torch.tensor(1792, dtype=torch.int, device='cuda')
+        memory_span_traj = torch.tensor(1792, dtype=torch.int, device='cuda')
+
     # --- coarse to fine search ---
     K = get_current_K(step, train_steps, train_vocab_util, curr_K)
 
@@ -512,22 +524,22 @@ for step in range(train_steps + 1):
             for i in range(val_steps):
                 tokens = next(val_loader)
 
-                val_tokens, greedy_adv, greedy_ppt, greedy_abs_ppt = sorl_evaluate(tokens, model, n=args.num_rollouts_val, K=K, max_iterations=args.max_iterations, 
-                                                                    memory_span=memory_span, attn_blocksize=attn_blocksize, 
+                val_tokens, greedy_adv, greedy_traj_loss, greedy_abs_loss = sorl_evaluate(tokens, model, n=args.num_rollouts_val, K=K, max_iterations=args.max_iterations, 
+                                                                    memory_span_abs=memory_span_abs, memory_span_traj=memory_span_traj, attn_blocksize=attn_blocksize, 
                                                                     temperature=temperature_val)
 
-                search_tokens, search_ppt, search_adv, _ = sorl_search(tokens, model, n=args.num_rollouts_val, K=K, max_iterations=args.max_iterations, 
-                                                                memory_span=memory_span, attn_blocksize=attn_blocksize, 
+                search_tokens, search_traj_ppt, search_abs_ppt, search_adv = sorl_search(tokens, model, n=args.num_rollouts_val, K=K, max_iterations=args.max_iterations, 
+                                                                memory_span_abs=memory_span_abs, memory_span_traj=memory_span_traj, attn_blocksize=attn_blocksize, 
                                                                 temperature=temperature_val)
 
                 greedy_util_rate = compute_vocab_utilization_rate(val_tokens, model)
                 search_util_rate = compute_vocab_utilization_rate(search_tokens, model)
 
                 # --- this base loss unfairly includes many zero ppt on BOS token position ---
-                base_loss = model.forward(tokens, memory_span, attn_blocksize)[0].mean()
+                base_loss = model.forward(tokens, memory_span_abs, memory_span_traj, attn_blocksize)[0].mean()
 
-                greedy_info_loss, greedy_abs_loss, greedy_zipf_loss = loss_fn(val_tokens, model, base_loss.detach(), memory_span, attn_blocksize)
-                search_info_loss, search_abs_loss, search_zipf_loss = loss_fn(search_tokens, model, base_loss.detach(), memory_span, attn_blocksize)
+                greedy_info_loss, greedy_abs_loss, greedy_zipf_loss = mem_loss_fn(val_tokens, model, base_loss.detach(), memory_span_abs, memory_span_traj, attn_blocksize)
+                search_info_loss, search_abs_loss, search_zipf_loss = mem_loss_fn(search_tokens, model, base_loss.detach(), memory_span_abs, memory_span_traj, attn_blocksize)
                 
                 greedy_traj_loss = greedy_info_loss + base_loss 
                 search_traj_loss = search_info_loss + base_loss 
@@ -553,7 +565,7 @@ for step in range(train_steps + 1):
 
         del val_loader       
         val_info = " ".join([f"{item} loss: {value.item():.4f}" for (item, value) in val_loss.items()])    
-        print0(f"step:{step}/{train_steps} {val_info} train_time:{training_time_ms:.0f}ms step_avg:{training_time_ms/max(step, 1):.2f}ms", console=True)
+        print0(f"{phase} | step:{step}/{train_steps} {val_info} train_time:{training_time_ms:.0f}ms step_avg:{training_time_ms/max(step, 1):.2f}ms", console=True)
         model.train()
         # start the clock again
         torch.cuda.synchronize()
@@ -574,18 +586,21 @@ for step in range(train_steps + 1):
     for accum_step in range(train_accumulation_steps): 
         tokens = next(train_loader)
         with torch.no_grad(): 
-            search_tokens, search_ppt, search_adv, rew = sorl_search(tokens, model, n=args.num_rollouts, K=K, max_iterations=args.max_iterations, 
-                                                                memory_span=memory_span, attn_blocksize=attn_blocksize, 
+            search_tokens, search_traj_ppt, search_abs_ppt, search_adv = sorl_search(tokens, model, n=args.num_rollouts, K=K, max_iterations=args.max_iterations, 
+                                                                memory_span_abs=memory_span_abs, memory_span_traj=memory_span_traj, attn_blocksize=attn_blocksize, 
                                                                 temperature=temperature_train,
                                                                 )
 
         # --- compute loss --- 
-        base_loss = model.forward(tokens, memory_span, attn_blocksize)[0].mean()
-        info_loss, abs_loss, zipf_loss = loss_fn(search_tokens, model, base_loss.detach(), memory_span, attn_blocksize)
-        loss = args.alpha_base * base_loss + args.alpha_info_gain * info_loss + args.alpha_loss * abs_loss + args.alpha_marg_ent * zipf_loss
-        
+        if phase == "compression": 
+            cond_traj_loss, abs_loss, zipf_bigram_loss = comp_loss_fn(search_tokens, model, memory_span_abs, memory_span_traj, attn_blocksize)
+            loss = cond_traj_loss + args.alpha_loss * abs_loss + args.alpha_marg_ent * zipf_bigram_loss
+        else: 
+            base_loss = model.forward(tokens, memory_span_abs, memory_span_traj, attn_blocksize)[0].mean()
+            info_loss, abs_loss, zipf_loss = mem_loss_fn(search_tokens, model, base_loss.detach(), memory_span_abs, memory_span_traj, attn_blocksize)
+            loss = args.alpha_base * base_loss + args.alpha_info_gain * info_loss + args.alpha_loss * abs_loss + args.alpha_marg_ent * zipf_loss
+            
         loss.backward()
-        print0(f" - step: {step} | accum step: {accum_step} | base loss: {base_loss.item()} | info loss: {info_loss.item()} | abs loss: {abs_loss.item()} | zipf loss: {zipf_loss.item()}")
         
     for param in model.parameters():
         param.grad /= train_accumulation_steps
@@ -624,8 +639,7 @@ print0(f"-- K: {args.K}", console=True)
 print0(f"-- max_iterations: {args.max_iterations}", console=True)
 print0(f"-- temperature: {args.temperature}", console=True)
 print0(f"-- min_temperature: {args.min_temperature}", console=True)
-print0(f"-- use_static_memory_span: {args.use_static_memory_span}", console=True)
-print0(f"-- min_memory_span: {args.min_memory_span}", console=True)
+print0(f"-- compression_frac: {args.compression_frac}", console=True)
 print0(f"-- abstract_vocab_size: {args.abstract_vocab_size}", console=True)
 print0(f"-- alpha_base: {args.alpha_base}", console=True)
 print0(f"-- alpha_loss: {args.alpha_loss}", console=True)
