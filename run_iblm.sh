@@ -75,27 +75,7 @@ echo "========================================="
 # echo "========================================="
 # (a.2) Sweep on Patch size (for soft-add MBE reg) | no difference
 # (a.2.1) Patch Size currculum (8 -> 1024)
-torchrun \
-  --nproc_per_node=$N_GPUS \
-  --master_addr=$MASTER_ADDR \
-  --master_port=$((MASTER_PORT++)) \
-  train_iblm.py \
-  --batch_size $BATCH_SIZE \
-  --train_seq_len $TRAIN_SEQ_LEN \
-  --val_seq_len $VAL_SEQ_LEN \
-  --num_iterations $NUM_ITERATIONS \
-  --use_gapt \
-  --entropy_patience 125 \
-  --entropy_min_delta 0.01 \
-  --mbe_patience 75 \
-  --mbe_min_delta 0.01 \
-  --run_info "IBLM (soft-add GAPT, entropy_patience=125, mbe_patience=75, patch size 8 -> 1024)"
-
-
-# The real problem, is GAPT doesn't shrink MBE 
-
-# (a.3) Sweep on mbe patience and entropy_min_delta
-for MBE_PATIENCE in 10 20 30 40 50; do
+for MBE_WEIGHT in 1.0 2.0 3.0 5.0 10.0; do
   torchrun \
     --nproc_per_node=$N_GPUS \
     --master_addr=$MASTER_ADDR \
@@ -106,14 +86,37 @@ for MBE_PATIENCE in 10 20 30 40 50; do
     --val_seq_len $VAL_SEQ_LEN \
     --num_iterations $NUM_ITERATIONS \
     --use_gapt \
-    --entropy_patience $MBE_PATIENCE \
+    --entropy_patience 125 \
     --entropy_min_delta 0.01 \
-    --mbe_patience $MBE_PATIENCE \
+    --mbe_patience 75 \
     --mbe_min_delta 0.01 \
-    --min_a 1e-5 \
-    --patch_size 8 \
-    --run_info "IBLM (soft-add GAPT, MBE_PATIENCE=$MBE_PATIENCE, ENTROPY_PATIENCE=$MBE_PATIENCE)"
+    --mbe_weight $MBE_WEIGHT \
+    --run_info "IBLM (soft-add GAPT, entropy_patience=125, mbe_patience=75, patch size 8 -> 1024, MBE_WEIGHT=$MBE_WEIGHT)"
 done
+
+
+# The real problem, is GAPT doesn't shrink MBE 
+
+# (a.3) Sweep on mbe patience and entropy_min_delta
+# for MBE_PATIENCE in 10 20 30 40 50; do
+#   torchrun \
+#     --nproc_per_node=$N_GPUS \
+#     --master_addr=$MASTER_ADDR \
+#     --master_port=$((MASTER_PORT++)) \
+#     train_iblm.py \
+#     --batch_size $BATCH_SIZE \
+#     --train_seq_len $TRAIN_SEQ_LEN \
+#     --val_seq_len $VAL_SEQ_LEN \
+#     --num_iterations $NUM_ITERATIONS \
+#     --use_gapt \
+#     --entropy_patience $MBE_PATIENCE \
+#     --entropy_min_delta 0.01 \
+#     --mbe_patience $MBE_PATIENCE \
+#     --mbe_min_delta 0.01 \
+#     --min_a 1e-5 \
+#     --patch_size 8 \
+#     --run_info "IBLM (soft-add GAPT, MBE_PATIENCE=$MBE_PATIENCE, ENTROPY_PATIENCE=$MBE_PATIENCE)"
+# done
 
 # # (a.4) Sweep on entropy min_delta (for soft-add GAPT)
 # for ENTROPY_DELTA in 0.02 0.05 0.1; do
