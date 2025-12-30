@@ -379,8 +379,6 @@ loss_fn = loss_fn.to(device)
 def get_current_K(step: int, total_steps: int, current_vocab_util: float, curr_K: int) -> int:
     if not args.coarse_to_fine_search:
         return args.K
-    if current_vocab_util >= args.vocab_util_halt_threshold and step >= 200: 
-        return curr_K
 
     steps_per_phase = total_steps // args.num_c2f_phases
     current_phase = min(step // steps_per_phase, args.num_c2f_phases - 1)

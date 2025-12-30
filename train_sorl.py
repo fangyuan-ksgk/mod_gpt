@@ -52,18 +52,26 @@ def parse_args():
     
     # Architecture / Vocab
     parser.add_argument("--abstract_vocab_size", type=int, default=256)
+
+    # 2-stage training
     parser.add_argument("--compression_frac", type=float, default=0.5)
-    
+    parser.add_argument("--comp_span_abs", type=int, default=8)
+    parser.add_argument("--comp_span_traj", type=int, default=8)
+    parser.add_argument("--mem_span_abs", type=int, default=1792)
+    parser.add_argument("--mem_span_traj", type=int, default=1792)
+
     # Loss / Regularization
     parser.add_argument("--alpha_base", type=float, default=1.0)  # base loss weight
-    parser.add_argument("--alpha_loss", type=float, default=0.0)  # abs loss weight
-    parser.add_argument("--use_orthogonal_init", action="store_true", default=False)
+    parser.add_argument("--alpha_loss", type=float, default=0.1)  # abs loss weight
     parser.add_argument("--alpha_marg_ent", type=float, default=1.0) # marginal entropy weight
-    parser.add_argument("--use_marg_entropy_regularization", action="store_true", default=False) # use marginal entropy regularization
+    parser.add_argument("--alpha_info_gain", type=float, default=10.0) # info gain loss weight
+
+    parser.add_argument("--use_orthogonal_init", action="store_true", default=False)
     parser.add_argument("--decay", type=float, default=0.8) # decay for mutual information loss
     parser.add_argument("--target_vocab_util", type=float, default=0.9) # target vocabulary utilization
     parser.add_argument("--min_abs_ppl", type=float, default=0.0) # minimum absolute perplexity for policy loss
-    parser.add_argument("--alpha_info_gain", type=float, default=1.0) # info gain loss weight
+
+    # Coarse to fine search
     parser.add_argument("--coarse_to_fine_search", action="store_true", default=False) # coarse to fine search (curriculum on K ratio)
     parser.add_argument("--max_K", type=int, default=512) # initial K ratio (max K ratio)
     parser.add_argument("--num_c2f_phases", type=int, default=4) # number of coarse to fine phases
@@ -238,12 +246,16 @@ class Hyperparameters:
     temperature: float = 5.0
     min_temperature: float = 0.5
     
+    # 2stage training
     compression_frac: float = 0.5
+    comp_span_abs: int = 8
+    comp_span_traj: int = 8
+    mem_span_abs: int = 1792
+    mem_span_traj: int = 1792
     
     alpha_base: float = 1.0
     alpha_loss: float = 0.0
     alpha_marg_ent: float = 1.0
-    use_marg_entropy_regularization: bool = False
     decay: float = 0.8
     target_vocab_util: float = 0.8
     min_abs_ppl: float = 0.0
@@ -376,8 +388,6 @@ comp_loss_fn = comp_loss_fn.to(device)
 def get_current_K(step: int, total_steps: int, current_vocab_util: float, curr_K: int) -> int:
     if not args.coarse_to_fine_search:
         return args.K
-    if current_vocab_util >= args.vocab_util_halt_threshold and step >= 200: 
-        return curr_K
 
     steps_per_phase = total_steps // args.num_c2f_phases
     current_phase = min(step // steps_per_phase, args.num_c2f_phases - 1)
@@ -403,17 +413,23 @@ initial_state = dict(model=copy.deepcopy(model.state_dict()),
                      optimizers=[copy.deepcopy(opt.state_dict()) for opt in optimizers]) # save the initial state
 
 attn_blocksize = torch.tensor(64, dtype=torch.int, device="cuda")
-memory_span_abs = torch.tensor(1792, dtype=torch.int, device="cuda")
-memory_span_traj = torch.tensor(1792, dtype=torch.int, device="cuda")
 temperature_warmup = torch.cat([
     torch.tensor([args.min_temperature], device="cuda"),  # Low temp for first rollout
     torch.full((args.num_rollouts - 1,), args.temperature, device="cuda")  # Low temp for diversity
 ])
 
 for i in range(warmup_steps):
-    phase = "compression" if i < warmup_steps * 0.5 else "memorization"
+    if i < warmup_steps * args.compression_frac: 
+        phase = "compression"
+        memory_span_abs = torch.tensor(args.comp_span_abs, dtype=torch.int, device="cuda")
+        memory_span_traj = torch.tensor(args.comp_span_traj, dtype=torch.int, device="cuda")
+    else: 
+        phase = "memorization"
+        memory_span_abs = torch.tensor(args.mem_span_abs, dtype=torch.int, device="cuda")
+        memory_span_traj = torch.tensor(args.mem_span_traj, dtype=torch.int, device="cuda")
+
     tokens = torch.randint(0, args.vocab_size, size=(1, args.train_seq_len,), device="cuda")
-    print(f" :: Sorl search propagation starts with tokens of length {tokens.shape[1]}")
+    print(f" :: Sorl search propagation starts with tokens of length {tokens.shape[1]} | phase: {phase} | memory span: {memory_span_abs} x {memory_span_traj}")
     forward_start = time.time() 
     K = args.K  # Use fixed K for warmup (kernel compilation only)
     # GAT specific function 
@@ -499,12 +515,12 @@ for step in range(train_steps + 1):
     
     if step < train_steps * args.compression_frac: 
         phase = "compression"
-        memory_span_abs = torch.tensor(curr_K, dtype=torch.int, device='cuda')
-        memory_span_traj = torch.tensor(curr_K, dtype=torch.int, device='cuda')
+        memory_span_abs = torch.tensor(args.comp_span_abs, dtype=torch.int, device='cuda')
+        memory_span_traj = torch.tensor(args.comp_span_traj, dtype=torch.int, device='cuda')
     else: 
         phase = "memorization"
-        memory_span_abs = torch.tensor(1792, dtype=torch.int, device='cuda')
-        memory_span_traj = torch.tensor(1792, dtype=torch.int, device='cuda')
+        memory_span_abs = torch.tensor(args.mem_span_abs, dtype=torch.int, device='cuda')
+        memory_span_traj = torch.tensor(args.mem_span_traj, dtype=torch.int, device='cuda')
 
     # --- coarse to fine search ---
     K = get_current_K(step, train_steps, train_vocab_util, curr_K)
@@ -603,8 +619,9 @@ for step in range(train_steps + 1):
         loss.backward()
         
     for param in model.parameters():
-        param.grad /= train_accumulation_steps
-        dist.all_reduce(param.grad, op=dist.ReduceOp.AVG)
+        if param.grad is not None: 
+            param.grad /= train_accumulation_steps
+            dist.all_reduce(param.grad, op=dist.ReduceOp.AVG)
     # set optimization hyperparameters
     for opt in optimizers:
         for group in opt.param_groups:
@@ -640,18 +657,24 @@ print0(f"-- max_iterations: {args.max_iterations}", console=True)
 print0(f"-- temperature: {args.temperature}", console=True)
 print0(f"-- min_temperature: {args.min_temperature}", console=True)
 print0(f"-- compression_frac: {args.compression_frac}", console=True)
+print0(f"-- comp_span_abs: {args.comp_span_abs}", console=True)
+print0(f"-- comp_span_traj: {args.comp_span_traj}", console=True)
+print0(f"-- mem_span_abs: {args.mem_span_abs}", console=True)
+print0(f"-- mem_span_traj: {args.mem_span_traj}", console=True)
 print0(f"-- abstract_vocab_size: {args.abstract_vocab_size}", console=True)
+
 print0(f"-- alpha_base: {args.alpha_base}", console=True)
 print0(f"-- alpha_loss: {args.alpha_loss}", console=True)
+print0(f"-- alpha_info_gain: {args.alpha_info_gain}", console=True)
 print0(f"-- alpha_marg_ent: {args.alpha_marg_ent}", console=True)
-print0(f"-- use_marg_entropy_regularization: {args.use_marg_entropy_regularization}", console=True)
 print0(f"-- decay: {args.decay}", console=True)
 print0(f"-- target_vocab_util: {args.target_vocab_util}", console=True)
 print0(f"-- min_abs_ppl: {args.min_abs_ppl}", console=True)
-print0(f"-- alpha_info_gain: {args.alpha_info_gain}", console=True)
+
 print0(f"-- coarse_to_fine_search: {args.coarse_to_fine_search}", console=True)
 print0(f"-- max_K: {args.max_K}", console=True)
 print0(f"-- num_c2f_phases: {args.num_c2f_phases}", console=True)
+
 print0(f"-- no_attn_sweep: {args.no_attn_sweep}", console=True)
 print0(f"loss record:\n{loss_record}", console=True)
 
