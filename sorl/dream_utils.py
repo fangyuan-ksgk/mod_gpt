@@ -1,11 +1,7 @@
 import torch
-from sorl.gat_sim import BOS_TOKEN_ID, GAT, recursion, extract_and_sample, recursion_v3
+from sorl.gat_dream import BOS_TOKEN_ID, GAT, recursion, extract_and_sample, recursion_v3
 import torch.nn.functional as F
-from torch.distributions import Categorical
 from typing import Optional, Union
-from torch import nn                
-import math
-
 
 @torch.compile
 def infer_rythmic_insert_mask(tokens, K, traj_vocab_size):
@@ -52,7 +48,7 @@ def insert_tokens(tokens, insert_mask, placeholder_token):
     return expanded_tokens
 
 @torch.no_grad()
-def sorl_rollout_v2(data: torch.Tensor, model: GAT, n: int, K: int, max_iterations: int, memory_span: int, attn_blocksize: int, temperature: Union[float, torch.Tensor] = 0.0,
+def sorl_rollout_v2(data: torch.Tensor, model: GAT, n: int, K: int, max_iterations: int, memory_span_abs: int, memory_span_traj: int, attn_blocksize: int, temperature: Union[float, torch.Tensor] = 0.0,
                  truncate_seq_len: bool = True):
     """
     Direct rollout without greedy sample. 
@@ -68,13 +64,13 @@ def sorl_rollout_v2(data: torch.Tensor, model: GAT, n: int, K: int, max_iteratio
     repeat_data = data.repeat_interleave(n, dim=0)
 
     # --- search --- 
-    search_data, search_ppt = recursion(model, repeat_data, max_iterations=max_iterations, 
-                                memory_span=memory_span, attn_blocksize=attn_blocksize, temperature=temperature)
+    search_data, search_traj_ppt, search_abs_ppt = recursion(model, repeat_data, max_iterations=max_iterations, 
+                                memory_span_abs=memory_span_abs, memory_span_traj=memory_span_traj, attn_blocksize=attn_blocksize, temperature=temperature)
 
-    return search_data, search_ppt
+    return search_data, search_traj_ppt, search_abs_ppt
 
 @torch.no_grad()
-def sorl_rollout_v3(data: torch.Tensor, model: GAT, n: int, K: int, max_iterations: int, memory_span: int, attn_blocksize: int, temperature: Union[float, torch.Tensor] = 0.0,
+def sorl_rollout_v3(data: torch.Tensor, model: GAT, n: int, K: int, max_iterations: int, memory_span_abs: int, memory_span_traj: int, attn_blocksize: int, temperature: Union[float, torch.Tensor] = 0.0,
                  truncate_seq_len: bool = True):
     """
     Direct rollout without greedy sample. 
@@ -90,10 +86,10 @@ def sorl_rollout_v3(data: torch.Tensor, model: GAT, n: int, K: int, max_iteratio
     repeat_data = data.repeat_interleave(n, dim=0)
 
     # --- search --- 
-    search_data, search_ppt, abs_logits = recursion_v3(model, repeat_data, max_iterations=max_iterations, 
-                                memory_span=memory_span, attn_blocksize=attn_blocksize, temperature=temperature)
+    search_data, search_traj_ppt, search_abs_ppt, abs_logits = recursion_v3(model, repeat_data, max_iterations=max_iterations, 
+                                memory_span_abs=memory_span_abs, memory_span_traj=memory_span_traj, attn_blocksize=attn_blocksize, temperature=temperature)
 
-    return search_data, search_ppt, abs_logits
+    return search_data, search_traj_ppt, search_abs_ppt, abs_logits
 
 def avg_ppt_per_sample(ppt, ppt_idx):
     """Average perplexity per document, per rollout."""
@@ -109,10 +105,9 @@ def normalize_advantage(raw_adv: torch.Tensor):
     norm_raw_adv = raw_adv / raw_adv.max(dim=0, keepdim=True).values
     return norm_raw_adv
 
-def select_best_per_doc(search_data, ppt, levels, model):
+def select_best_per_doc(search_data, traj_ppt, abs_ppt, levels, model):
     trajectory_mask = (levels[:, 1:] == 0).float()
-    trajectory_ppt = ppt * trajectory_mask
-    abs_ppt = ppt * (1 - trajectory_mask)
+    trajectory_ppt = traj_ppt * trajectory_mask
     
     doc_idx = (search_data == BOS_TOKEN_ID).cumsum(dim=1)
     doc_idx = doc_idx - doc_idx.min(dim=1, keepdim=True).values # idx starts from 0  
@@ -122,92 +117,50 @@ def select_best_per_doc(search_data, ppt, levels, model):
     rollout_for_each_pos = best_rollout_per_doc[doc_idx[0]]
 
     best_seq = search_data[rollout_for_each_pos, torch.arange(search_data.shape[1], device=search_data.device)]
-    best_ppt = ppt[rollout_for_each_pos[1:], torch.arange(ppt.shape[1], device=ppt.device)]
+    best_traj_ppt = traj_ppt[rollout_for_each_pos[1:], torch.arange(traj_ppt.shape[1], device=traj_ppt.device)]
+    best_abs_ppt = abs_ppt[rollout_for_each_pos[1:], torch.arange(abs_ppt.shape[1], device=abs_ppt.device)]
 
     max_doc_ppt = doc_ppt.max(dim=0).values
     best_ppt_advantage = (max_doc_ppt - min_doc_ppt) / max_doc_ppt.clamp(min=1e-8)
 
-    return best_seq.unsqueeze(0), best_ppt, best_ppt_advantage.mean()
-
-def select_best_per_doc_v2(search_data, ppt, levels, r_min: float = 1.0, reward_mode: int = 0):
-    trajectory_mask = (levels[:, 1:] == 0).float()
-    trajectory_ppt = ppt * trajectory_mask
-    abs_ppt = ppt * (1 - trajectory_mask)
-    
-    doc_idx = (search_data == BOS_TOKEN_ID).cumsum(dim=1)
-    doc_idx = doc_idx - doc_idx.min(dim=1, keepdim=True).values # idx starts from 0  
-    doc_ppt = avg_ppt_per_sample(trajectory_ppt, doc_idx[:,1:])
-
-    min_doc_ppt, best_rollout_per_doc = doc_ppt.min(dim=0) # argmin
-    rollout_for_each_pos = best_rollout_per_doc[doc_idx[0]]
-
-    best_seq = search_data[rollout_for_each_pos, torch.arange(search_data.shape[1], device=search_data.device)]
-    best_ppt = ppt[rollout_for_each_pos[1:], torch.arange(ppt.shape[1], device=ppt.device)]
-
-    max_doc_ppt = doc_ppt.max(dim=0).values
-    best_ppt_advantage = (max_doc_ppt - min_doc_ppt) / max_doc_ppt.clamp(min=1e-8)
-
-    # --- utility reward --- 
-    if reward_mode == 0: # exponential PMI: r = max(exp(PMI), r_min)
-        utility_reward = torch.exp(max_doc_ppt - min_doc_ppt).clamp(min=r_min)
-    elif reward_mode == 1: # PMI = log(p(s | a)/p(s))
-        utility_reward = (max_doc_ppt - min_doc_ppt).clamp(min=r_min)
-    utility_reward = utility_reward[doc_idx[0]]
-
-    return best_seq.unsqueeze(0), best_ppt, best_ppt_advantage.mean(), utility_reward
+    return best_seq.unsqueeze(0), best_traj_ppt, best_abs_ppt, best_ppt_advantage.mean()
 
 def sorl_search(tokens, model, n=3, K=3, max_iterations=1,
-                memory_span=1792, attn_blocksize=1792, temperature: Union[float, torch.Tensor] = 1.0, truncate_seq_len: bool = True): 
+                memory_span_abs=1792, memory_span_traj=1792, attn_blocksize=1792, temperature: Union[float, torch.Tensor] = 1.0, truncate_seq_len: bool = True): 
     """
     Hopefully the last ver |:->))
     """
     # --- generate & evaluate rollouts ---
-    search_data, search_ppt = sorl_rollout_v2(tokens, model, n=n, K=K, 
+    search_data, search_traj_ppt, search_abs_ppt = sorl_rollout_v2(tokens, model, n=n, K=K, 
                                max_iterations=max_iterations,
-                               memory_span=memory_span,
+                               memory_span_abs=memory_span_abs,
+                               memory_span_traj=memory_span_traj,
                                attn_blocksize=attn_blocksize,
                                temperature=temperature,
                                truncate_seq_len=truncate_seq_len)
-    search_ppt = search_ppt.reshape(search_data.shape[0], -1)
+    search_traj_ppt = search_traj_ppt.reshape(search_data.shape[0], -1)
+    search_abs_ppt = search_abs_ppt.reshape(search_data.shape[0], -1)
 
     # --- select best rollouts ---
     levels = (search_data >= model.vocab_sizes[0]).long()
-    best_data, best_ppt, best_ppt_advantage = select_best_per_doc(search_data, search_ppt, levels, model)  # stay with default for select mode (for now)
+    best_data, best_traj_ppt, best_abs_ppt, best_ppt_advantage = select_best_per_doc(search_data, search_traj_ppt, search_abs_ppt, levels, model)  # stay with default for select mode (for now)
 
-    return best_data, best_ppt, best_ppt_advantage
+    return best_data, best_traj_ppt, best_abs_ppt, best_ppt_advantage
 
-def sorl_search_v8(tokens, model, n=3, K=3, max_iterations=1,
-                memory_span=1792, attn_blocksize=1792, temperature: Union[float, torch.Tensor] = 1.0, truncate_seq_len: bool = True, use_per_abs_selection: bool = False): 
-    """
-    Hopefully the last ver |:->))
-    """
-    # --- generate & evaluate rollouts ---
-    search_data, search_ppt = sorl_rollout_v2(tokens, model, n=n, K=K, 
-                               max_iterations=max_iterations,
-                               memory_span=memory_span,
-                               attn_blocksize=attn_blocksize,
-                               temperature=temperature,
-                               truncate_seq_len=truncate_seq_len)
-    search_ppt = search_ppt.reshape(search_data.shape[0], -1)
-
-    # --- select best rollouts ---
-    levels = (search_data >= model.vocab_sizes[0]).long()
-    best_data, best_ppt, best_ppt_advantage, utility_reward = select_best_per_doc_v2(search_data, search_ppt, levels)  # stay with default for select mode (for now)
-
-    return best_data, best_ppt, best_ppt_advantage, utility_reward[1:]
-
-def sorl_evaluate(tokens, model, n=2, K=4, max_iterations=1, memory_span=1792, attn_blocksize=1792, temperature: Union[float, torch.Tensor] = 1.0,
+def sorl_evaluate(tokens, model, n=2, K=4, max_iterations=1, memory_span_abs=1792, memory_span_traj=1792, attn_blocksize=1792, temperature: Union[float, torch.Tensor] = 1.0,
                   loss_mask: Optional[torch.Tensor] = None, truncate_seq_len: bool = True):
     """
     Search & Check greedy rollout advantage
     """
-    search_data, search_ppt = sorl_rollout_v2(tokens, model, n=n, K=K, 
+    search_data, search_traj_ppt, search_abs_ppt = sorl_rollout_v2(tokens, model, n=n, K=K, 
                                max_iterations=max_iterations,
-                               memory_span=memory_span,
+                               memory_span_abs=memory_span_abs,
+                               memory_span_traj=memory_span_traj,
                                attn_blocksize=attn_blocksize,
                                temperature=temperature,
                                truncate_seq_len=truncate_seq_len)
-    search_ppt = search_ppt.reshape(search_data.shape[0], -1)
+    search_traj_ppt = search_traj_ppt.reshape(search_data.shape[0], -1)
+    search_abs_ppt = search_abs_ppt.reshape(search_data.shape[0], -1)
 
     # Get valid positions
     bos_pos_mask = torch.logical_and(
@@ -219,34 +172,37 @@ def sorl_evaluate(tokens, model, n=2, K=4, max_iterations=1, memory_span=1792, a
     
     # --- greedy rollout's advantage ---
     valid_traj_mask = bos_pos_mask * traj_mask
-    raw_ppt_adv = (search_ppt[1:].mean(dim=0) - search_ppt[0]) / (search_ppt[1:].mean(dim=0) + 1e-8)
+    raw_ppt_adv = (search_traj_ppt[1:].mean(dim=0) - search_traj_ppt[0]) / (search_traj_ppt[1:].mean(dim=0) + 1e-8)
     search_adv = (raw_ppt_adv * valid_traj_mask[0]).sum() / valid_traj_mask[0].sum().clamp(min=1)
 
     # --- losses ---
-    greedy_ppt = search_ppt[0]
+    greedy_traj_ppt = search_traj_ppt[0]
+    greedy_abs_ppt = search_abs_ppt[0]
     abs_mask = 1 - traj_mask[0]
     
     valid_traj = valid_traj_mask[0]
     valid_abs = bos_pos_mask[0] * abs_mask
     
-    traj_loss = (greedy_ppt * valid_traj).sum() / valid_traj.sum().clamp(min=1)
-    abs_loss = (greedy_ppt * valid_abs).sum() / valid_abs.sum().clamp(min=1)
+    traj_loss = (greedy_traj_ppt * valid_traj).sum() / valid_traj.sum().clamp(min=1)
+    abs_loss = (greedy_abs_ppt * valid_abs).sum() / valid_abs.sum().clamp(min=1)
     
     return search_data[:1], search_adv, traj_loss, abs_loss
 
 
-def sorl_evaluate_v2(tokens, model, n=2, K=4, max_iterations=1, memory_span=1792, attn_blocksize=1792, temperature: Union[float, torch.Tensor] = 1.0,
+def sorl_evaluate_v2(tokens, model, n=2, K=4, max_iterations=1, memory_span_abs=1792, memory_span_traj=1792, attn_blocksize=1792, temperature: Union[float, torch.Tensor] = 1.0,
                   loss_mask: Optional[torch.Tensor] = None, truncate_seq_len: bool = True):
     """
     Search & Check greedy rollout advantage & topological similarity
     """
-    search_data, search_ppt, abs_logits = sorl_rollout_v3(tokens, model, n=n, K=K, 
+    search_data, search_traj_ppt, search_abs_ppt, abs_logits = sorl_rollout_v3(tokens, model, n=n, K=K, 
                                                         max_iterations=max_iterations,
-                                                        memory_span=memory_span,
+                                                        memory_span_abs=memory_span_abs,
+                                                        memory_span_traj=memory_span_traj,
                                                         attn_blocksize=attn_blocksize,
                                                         temperature=temperature,
                                                         truncate_seq_len=truncate_seq_len)
-    search_ppt = search_ppt.reshape(search_data.shape[0], -1)
+    search_traj_ppt = search_traj_ppt.reshape(search_data.shape[0], -1)
+    search_abs_ppt = search_abs_ppt.reshape(search_data.shape[0], -1)
 
     # Get valid positions
     bos_pos_mask = torch.logical_and(
@@ -258,17 +214,18 @@ def sorl_evaluate_v2(tokens, model, n=2, K=4, max_iterations=1, memory_span=1792
     
     # --- greedy rollout's advantage ---
     valid_traj_mask = bos_pos_mask * traj_mask
-    raw_ppt_adv = (search_ppt[1:].mean(dim=0) - search_ppt[0]) / (search_ppt[1:].mean(dim=0) + 1e-8)
+    raw_ppt_adv = (search_traj_ppt[1:].mean(dim=0) - search_traj_ppt[0]) / (search_traj_ppt[1:].mean(dim=0) + 1e-8)
     search_adv = (raw_ppt_adv * valid_traj_mask[0]).sum() / valid_traj_mask[0].sum().clamp(min=1)
 
     # --- losses ---
-    greedy_ppt = search_ppt[0]
+    greedy_traj_ppt = search_traj_ppt[0]
+    greedy_abs_ppt = search_abs_ppt[0]
     valid_traj_mask = valid_traj_mask[0].bool()
     abs_mask = (1 - traj_mask[0]).bool()
     traj_mask = traj_mask[0].bool()
     
-    traj_loss = greedy_ppt[valid_traj_mask] 
-    abs_loss = greedy_ppt[abs_mask]
+    traj_loss = greedy_traj_ppt[valid_traj_mask] 
+    abs_loss = greedy_abs_ppt[abs_mask]
     
     greedy_abs_logits = abs_logits[0, abs_mask, :]
     greedy_abs_tokens = search_data[0, 1:][abs_mask]
@@ -281,7 +238,7 @@ def sorl_evaluate_v2(tokens, model, n=2, K=4, max_iterations=1, memory_span=1792
     return search_data[:1], search_adv, traj_loss, abs_loss, greedy_abs_logits, greedy_abs_tokens, avg_logit_sim
 
 
-def generate(model, idx, K, max_iterations=0, memory_span=1792, attn_blocksize=1792, temperature=0.0):
+def generate(model, idx, K, max_iterations=0, memory_span_abs=1792, memory_span_traj=1792, attn_blocksize=1792, temperature=0.0):
     
     # --- insert placeholder tokens ---
     insert_mask = infer_rythmic_insert_mask(idx, K, model.vocab_sizes[0])
@@ -292,13 +249,13 @@ def generate(model, idx, K, max_iterations=0, memory_span=1792, attn_blocksize=1
     recursion_mask = (idx == model.vocab_sizes[0]) # abstract pre-fill only
     recursion_mask[:, 0] = False
     for _ in range(max_iterations): 
-        _, logits = model.forward(idx, memory_span, attn_blocksize)
+        _, _, logits = model.forward(idx, memory_span_abs, memory_span_traj, attn_blocksize)
         idx = extract_and_sample(
             logits, idx, recursion_mask, model.vocab_sizes, temperature
         )
     
     # --- generate next trajectory token ---
-    _, logits = model.forward(idx, memory_span, attn_blocksize)
+    _, _, logits = model.forward(idx, memory_span_abs, memory_span_traj, attn_blocksize)
     next_token_logits = logits[:, -1, :model.vocab_sizes[0]]
 
     if temperature == 0.0:

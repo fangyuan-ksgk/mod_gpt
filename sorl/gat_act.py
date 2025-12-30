@@ -1,5 +1,5 @@
-# GAT with recursion + adaptive stop
-
+# GAT with continuous & discrete recursion + adaptive stop
+# - abandoned as continuous recurions is too slow and costly
 from sorl.model import Block, CastedLinear, create_block_mask
 from dataclasses import dataclass, field
 from typing import Optional, List, Tuple

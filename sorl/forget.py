@@ -7,7 +7,6 @@ from sorl.gat_act import BOS_TOKEN_ID
 import scipy.stats
 import matplotlib.pyplot as plt
 import numpy as np
-from sorl.neo_utils import select_best_info_gain
 
 def compute_abs_stats(tokens, model, n, K, max_iterations, memory_span, attn_blocksize, temperature, truncate_seq_len):
         
@@ -48,7 +47,7 @@ def compute_abs_stats(tokens, model, n, K, max_iterations, memory_span, attn_blo
     # --- base traj loss ---
     base_traj_ppt, _  = model.forward(tokens, memory_span, attn_blocksize)
     levels = (search_data >= model.vocab_sizes[0]).long()
-    best_data, best_ppt, _, info_gain_reward = select_best_info_gain(tokens, base_traj_ppt, search_data, search_ppt, levels)
+    best_data, best_ppt, _ = select_best_per_doc(search_data, search_ppt, levels, model)
     best_traj_ppt = best_ppt[best_data[0, 1:] < model.vocab_sizes[0]]
     info_gain = (base_traj_ppt[..., :best_traj_ppt.shape[-1]] - best_traj_ppt) # traj ppt might be truncated
     
@@ -66,44 +65,65 @@ def compute_abs_stats(tokens, model, n, K, max_iterations, memory_span, attn_blo
     return doc_ppt, greedy_abs_logits, greedy_abs_tokens, doc_rel_info_gain, rel_info_gain, greedy_adv, base_traj_ppt.mean() 
 
 
-def compute_abs_stats_v2(tokens, model, n, K, max_iterations, memory_span, attn_blocksize, temperature, truncate_seq_len):
-
-    search_data, search_ppt, abs_logits = sorl_rollout_v3(tokens, model, n=n, K=K, 
-                                                                max_iterations=max_iterations,
-                                                            memory_span=memory_span,
+from sorl.dream_utils import sorl_rollout_v3 as dream_rollout
+def compute_abs_stats_v2(tokens, model, n, K, max_iterations, memory_span_abs, memory_span_traj, attn_blocksize, temperature, truncate_seq_len):
+        
+    search_data, search_ppt, abs_logits = dream_rollout(tokens, model, n=n, K=K, 
+                                                            max_iterations=max_iterations,
+                                                            memory_span_abs=memory_span_abs,
+                                                            memory_span_traj=memory_span_traj,
                                                             attn_blocksize=attn_blocksize,
                                                             temperature=temperature,
                                                             truncate_seq_len=truncate_seq_len)
     search_ppt = search_ppt.reshape(search_data.shape[0], -1)
 
-    # --- greedy & random rollout ppt ---
-    cond_traj_mask = (search_data[0, 1:] < model.vocab_sizes[0])
-    greedy_traj_ppt = search_ppt[0][cond_traj_mask]
-    random_traj_ppt = search_ppt[1:].mean(dim=0)[cond_traj_mask]
+    # Get valid positions
+    bos_pos_mask = torch.logical_and(
+        search_data[:, :-1] != BOS_TOKEN_ID, 
+        search_data[:, 1:] != BOS_TOKEN_ID
+    ).float()
+
+    traj_mask = (search_data[:, 1:] < model.vocab_sizes[0]).float()
+
+    # --- greedy rollout's advantage ---
+    valid_traj_mask = bos_pos_mask * traj_mask
+    raw_ppt_adv = (search_ppt[1:].mean(dim=0) - search_ppt[0]) / (search_ppt[1:].mean(dim=0) + 1e-8)
+    greedy_adv = (raw_ppt_adv * valid_traj_mask[0]).sum() / valid_traj_mask[0].sum().clamp(min=1)
+
+    # --- losses ---
+    greedy_ppt = search_ppt[0]
+    abs_mask = 1 - traj_mask[0]
+
+    valid_traj = valid_traj_mask[0]
+    traj_ppt = search_ppt[0] * valid_traj
+    doc_idx = (search_data == BOS_TOKEN_ID).cumsum(dim=1)
+    doc_idx = doc_idx - doc_idx.min(dim=1, keepdim=True).values # idx starts from 0  
+    doc_ppt = avg_ppt_per_sample(traj_ppt.unsqueeze(0), doc_idx[:1, 1:]).squeeze(0)
+
+    greedy_abs_logits = abs_logits[0, abs_mask.bool(), :]
+    greedy_abs_tokens = search_data[0, 1:][abs_mask.bool()]
 
     # --- base traj loss ---
-    base_traj_ppt, _  = model.forward(tokens, memory_span, attn_blocksize)
-    base_traj_mask = (tokens[:, 1:] != BOS_TOKEN_ID).float()
-    base_traj_loss = (base_traj_ppt * base_traj_mask[0]).sum() / base_traj_mask.sum().clamp(min=1)
-
-    # --- search (per-doc-best rollout) info gain ---
+    base_traj_ppt, _  = model.forward(tokens, memory_span_abs, memory_span_traj, attn_blocksize)
     levels = (search_data >= model.vocab_sizes[0]).long()
-    best_data, best_ppt, _, _ = select_best_info_gain(tokens, base_traj_ppt, search_data, search_ppt, levels)
-    best_traj_ppt = best_ppt[cond_traj_mask]
-
-    # --- information gain, search advantage (relative & absolute) ---
-    greedy_adv = ((random_traj_ppt - greedy_traj_ppt) / (random_traj_ppt + 1e-8)).mean()
-    greedy_abs_adv = (random_traj_ppt - greedy_traj_ppt).mean()
-    search_adv = ((random_traj_ppt - best_traj_ppt) / (random_traj_ppt + 1e-8)).mean()
-    search_abs_adv = (random_traj_ppt - best_traj_ppt).mean()
-    greedy_info_gain = (base_traj_ppt - greedy_traj_ppt).mean()
-    search_info_gain = (base_traj_ppt - best_traj_ppt).mean()
-
-    greedy_traj_loss = greedy_traj_ppt.mean()
-    search_traj_loss = best_traj_ppt.mean()
-
-    return base_traj_loss, greedy_traj_loss, search_traj_loss, greedy_adv, greedy_abs_adv, search_adv, search_abs_adv, greedy_info_gain, search_info_gain
+    best_data, best_ppt, _ = select_best_per_doc(search_data, search_ppt, levels, model)
+    best_traj_ppt = best_ppt[best_data[0, 1:] < model.vocab_sizes[0]]
+    info_gain = (base_traj_ppt[..., :best_traj_ppt.shape[-1]] - best_traj_ppt) # traj ppt might be truncated
     
+    
+    rel_info_gain = info_gain.mean() / base_traj_ppt[..., :best_traj_ppt.shape[-1]].mean() # focus on hard case
+
+    rel_info_gain_v2 = (info_gain / base_traj_ppt[..., :best_traj_ppt.shape[-1]].clamp(min=1e-8)).mean() # focus on simple case
+
+    traj_mask = best_data[0, 1:] < model.vocab_sizes[0]
+    traj_doc_idx = doc_idx[0, 1:][traj_mask]
+    doc_info_gain = avg_ppt_per_sample(info_gain.unsqueeze(0), traj_doc_idx.unsqueeze(0)).squeeze(0)
+    doc_base_traj_ppt = avg_ppt_per_sample(base_traj_ppt.unsqueeze(0), traj_doc_idx.unsqueeze(0)).squeeze(0)
+    doc_rel_info_gain = doc_info_gain / doc_base_traj_ppt
+
+    return doc_ppt, greedy_abs_logits, greedy_abs_tokens, doc_rel_info_gain, rel_info_gain, greedy_adv, base_traj_ppt.mean() 
+
+
 def compute_abs_stats_v3(tokens, model, base_model, n, K, max_iterations, memory_span, attn_blocksize, temperature, truncate_seq_len):
 
     search_data, search_ppt, abs_logits = sorl_rollout_v3(tokens, model, n=n, K=K, 
@@ -126,7 +146,7 @@ def compute_abs_stats_v3(tokens, model, base_model, n, K, max_iterations, memory
 
     # --- search (per-doc-best rollout) info gain ---
     levels = (search_data >= model.vocab_sizes[0]).long()
-    best_data, best_ppt, _, _ = select_best_info_gain(tokens, base_traj_ppt, search_data, search_ppt, levels)
+    best_data, best_ppt, _ = select_best_per_doc(search_data, search_ppt, levels, model)
     best_traj_ppt = best_ppt[cond_traj_mask]
 
     # --- information gain, search advantage (relative & absolute) ---
@@ -143,14 +163,17 @@ def compute_abs_stats_v3(tokens, model, base_model, n, K, max_iterations, memory
     return base_traj_loss, greedy_traj_loss, search_traj_loss, greedy_adv, greedy_abs_adv, search_adv, search_abs_adv, greedy_info_gain, search_info_gain
     
 
-def compute_abs_stats_v4(tokens, model, base_model, n, K, max_iterations, memory_span, attn_blocksize, temperature, truncate_seq_len, pad_token):
+from sorl.dream_utils import sorl_rollout_v3 as dream_rollout
+from sorl.dream_utils import select_best_per_doc
+def compute_abs_stats_v5(tokens, model, n, K, max_iterations, memory_span_abs, memory_span_traj, attn_blocksize, temperature, truncate_seq_len, pad_token):
 
-    search_data, search_ppt, abs_logits = sorl_rollout_v3(tokens, model, n=n, K=K, 
-                                                                max_iterations=max_iterations,
-                                                            memory_span=memory_span,
-                                                            attn_blocksize=attn_blocksize,
-                                                            temperature=temperature,
-                                                            truncate_seq_len=truncate_seq_len)
+    search_data, search_ppt, abs_logits = dream_rollout(tokens, model, n=n, K=K, 
+                                                        max_iterations=max_iterations,
+                                                        memory_span_abs=memory_span_abs,
+                                                        memory_span_traj=memory_span_traj,
+                                                        attn_blocksize=attn_blocksize,
+                                                        temperature=temperature,
+                                                        truncate_seq_len=truncate_seq_len)
     search_ppt = search_ppt.reshape(search_data.shape[0], -1)
 
     # --- greedy & random rollout ppt ---
@@ -159,13 +182,13 @@ def compute_abs_stats_v4(tokens, model, base_model, n, K, max_iterations, memory
     random_traj_ppt = search_ppt[1:].mean(dim=0)[cond_traj_mask]
 
     # --- base traj loss ---
-    base_traj_ppt = base_model.forward(tokens[:, :-1].long(), tokens[:, 1:].long(), attn_blocksize)
+    base_traj_ppt = model.forward(tokens, memory_span_abs, memory_span_traj, attn_blocksize)[0]
     base_traj_mask = (tokens[:, 1:] != BOS_TOKEN_ID).float()
     base_traj_loss = (base_traj_ppt * base_traj_mask[0]).sum() / base_traj_mask.sum().clamp(min=1)
 
     # --- search (per-doc-best rollout) info gain ---
     levels = (search_data >= model.vocab_sizes[0]).long()
-    best_data, best_ppt, _, _ = select_best_info_gain(tokens, base_traj_ppt, search_data, search_ppt, levels)
+    best_data, best_ppt, _ = select_best_per_doc(search_data, search_ppt, levels, model)
     best_traj_ppt = best_ppt[cond_traj_mask]
 
     # --- information gain, search advantage (relative & absolute) ---
@@ -179,33 +202,26 @@ def compute_abs_stats_v4(tokens, model, base_model, n, K, max_iterations, memory
     greedy_traj_loss = greedy_traj_ppt.mean()
     search_traj_loss = best_traj_ppt.mean()
 
-    # --- alien mask ---
-    pad_mask = (tokens[:, 1:] == pad_token).float()
-    alien_greedy_adv = ((greedy_adv * pad_mask).sum() / (pad_mask.sum() + 1e-8)) 
-    # alien_search_adv = ((search_adv * pad_mask).sum() / pad_mask.sum()) 
-    alien_greedy_info_gain = ((greedy_info_gain * pad_mask).sum() / (pad_mask.sum() + 1e-8)) 
-    alien_search_info_gain = ((search_info_gain * pad_mask).sum() / (pad_mask.sum() + 1e-8)) 
-    id_greedy_info_gain = ((greedy_info_gain * (1 - pad_mask)).sum() / (1 - pad_mask).sum()) 
-    id_search_info_gain = ((search_info_gain * (1 - pad_mask)).sum() / (1 - pad_mask).sum()) 
- 
-    alien_greedy_traj_loss = ((greedy_traj_ppt * pad_mask).sum() / (pad_mask.sum() + 1e-8)) 
-    id_greedy_traj_loss = ((greedy_traj_ppt * (1 - pad_mask)).sum() / (1 - pad_mask).sum()) 
-    alien_base_traj_loss = ((base_traj_ppt * pad_mask).sum() / (pad_mask.sum() + 1e-8)) 
-    id_base_traj_loss = ((base_traj_ppt * (1 - pad_mask)).sum() / (1 - pad_mask).sum()) 
+    # --- information gain, search advantage (relative & absolute) ---
+    greedy_adv = ((random_traj_ppt - greedy_traj_ppt) / (random_traj_ppt + 1e-8)).mean()
+    greedy_abs_adv = (random_traj_ppt - greedy_traj_ppt).mean()
+    search_adv = ((random_traj_ppt - best_traj_ppt) / (random_traj_ppt + 1e-8)).mean()
+    search_abs_adv = (random_traj_ppt - best_traj_ppt).mean()
+    greedy_info_gain = (base_traj_ppt - greedy_traj_ppt).mean()
+    search_info_gain = (base_traj_ppt - best_traj_ppt).mean()
 
-    id_greedy_adv = ((greedy_adv * (1 - pad_mask)).sum() / (1 - pad_mask).sum()) 
-
-    return {"id_base_traj_loss": id_base_traj_loss, 
-            "id_greedy_traj_loss": id_greedy_traj_loss, 
-            "id_greedy_info_gain": id_greedy_info_gain, 
-            "id_search_info_gain": id_search_info_gain, 
-            "id_greedy_adv": id_greedy_adv,
-            "alien_base_traj_loss": alien_base_traj_loss, 
-            "alien_greedy_traj_loss": alien_greedy_traj_loss, 
-            "alien_greedy_info_gain": alien_greedy_info_gain, 
-            "alien_search_info_gain": alien_search_info_gain,
-            "alien_greedy_adv": alien_greedy_adv}    
-
+    return {
+            "base_traj_loss": base_traj_loss, 
+            "greedy_traj_loss": greedy_traj_loss, 
+            "search_traj_loss": search_traj_loss, 
+            "greedy_adv": greedy_adv, 
+            "search_adv": search_adv, 
+            "greedy_abs_adv": greedy_abs_adv, 
+            "search_abs_adv": search_abs_adv, 
+            "greedy_info_gain": greedy_info_gain,  
+            "search_info_gain": search_info_gain
+            }   
+      
 
 def visualize_info_gain(tokens, model, base_model, K, max_iterations, memory_span, attn_blocksize, 
                         n=5, temperature=None, figsize=(14, 8)):
