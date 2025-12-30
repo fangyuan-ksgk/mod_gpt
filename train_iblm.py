@@ -37,7 +37,6 @@ def parse_args():
     parser.add_argument("--mbe_patience", type=int, default=125)
     parser.add_argument("--mbe_min_delta", type=float, default=0.01)
     parser.add_argument("--entropy_spike_tolerance", type=float, default=0.1)
-    parser.add_argument("--patch_size", type=int, default=8)
     parser.add_argument("--mbe_weight", type=float, default=1.0)
     parser.add_argument("--use_gapt", action="store_true")
     parser.add_argument("--skip_first", type=int, default=1)
@@ -374,6 +373,7 @@ early_stop = False
 for step in range(train_steps + 1):
     last_step = (step == train_steps) or early_stop
     attn_blocksize = torch.tensor(64*((step/train_steps * (1792 - 64) + 64)//64), dtype=torch.int, device='cuda')
+    patch_size = torch.tensor(8*((step/train_steps * (1024 - 8) + 8)//8), dtype=torch.int, device='cuda')
     
     # --------------- VALIDATION SECTION -----------------
     if last_step or (args.val_loss_every > 0 and step % args.val_loss_every == 0):
@@ -389,7 +389,7 @@ for step in range(train_steps + 1):
         with torch.no_grad():
             for i in range(val_steps):
                 inputs, targets = next(val_loader)
-                loss_dict = model.forward(inputs, targets, attn_blocksize, args.patch_size)
+                loss_dict = model.forward(inputs, targets, attn_blocksize, patch_size)
                 compute_loss(loss_dict)
                 for name, loss in loss_dict.items(): 
                     val_loss[name] += loss                
@@ -423,7 +423,7 @@ for step in range(train_steps + 1):
     # --------------- TRAINING SECTION -----------------
     for accum_step in range(train_accumulation_steps): 
         inputs, targets = next(train_loader)
-        loss_dict = model.forward(inputs, targets, attn_blocksize, args.patch_size)
+        loss_dict = model.forward(inputs, targets, attn_blocksize, patch_size)
         compute_loss(loss_dict)  
 
         # --- aggregate loss ---
@@ -496,7 +496,6 @@ print0(f"-- entropy_patience: {args.entropy_patience}", console=True)
 print0(f"-- entropy_min_delta: {args.entropy_min_delta}", console=True)
 print0(f"-- mbe_patience: {args.mbe_patience}", console=True)
 print0(f"-- mbe_min_delta: {args.mbe_min_delta}", console=True)
-print0(f"-- patch_size: {args.patch_size}", console=True)
 print0(f"-- mbe_weight: {args.mbe_weight}", console=True)
 print0(f"-- entropy_spike_tolerance: {args.entropy_spike_tolerance}", console=True)
 print0(f"-- skip_first: {args.skip_first}", console=True)
