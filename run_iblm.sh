@@ -55,26 +55,47 @@ echo "========================================="
 #   --run_info "Baseline (no reg)"
 
 # (a.1) Sweep on MBE weight (for soft-add MBE reg)
-for MBE_WEIGHT in 0.1 0.5 1.0; do
-  torchrun \
-    --nproc_per_node=$N_GPUS \
-    --master_addr=$MASTER_ADDR \
-    --master_port=$((MASTER_PORT++)) \
-    train_iblm.py \
-    --batch_size $BATCH_SIZE \
-    --train_seq_len $TRAIN_SEQ_LEN \
-    --val_seq_len $VAL_SEQ_LEN \
-    --num_iterations $NUM_ITERATIONS \
-    --patch_size 8 \
-    --run_info "Baseline (with soft-add MBE reg, MBE_WEIGHT=$MBE_WEIGHT)"
-done 
+# for MBE_WEIGHT in 0.1 0.5 1.0; do
+#   torchrun \
+#     --nproc_per_node=$N_GPUS \
+#     --master_addr=$MASTER_ADDR \
+#     --master_port=$((MASTER_PORT++)) \
+#     train_iblm.py \
+#     --batch_size $BATCH_SIZE \
+#     --train_seq_len $TRAIN_SEQ_LEN \
+#     --val_seq_len $VAL_SEQ_LEN \
+#     --num_iterations $NUM_ITERATIONS \
+#     --patch_size 8 \
+#     --run_info "Baseline (with soft-add MBE reg, MBE_WEIGHT=$MBE_WEIGHT)"
+# done 
 
-echo "========================================="
-echo "GAPT: Gated Phase Transition Training"
-echo "========================================="
+# echo "========================================="
+# echo "GAPT: Gated Phase Transition Training"
+# echo "========================================="
 
-# (a.2) Sweep on Patch size (for soft-add MBE reg)
-for PATCH_SIZE in 8 32 64; do
+# # (a.2) Sweep on Patch size (for soft-add MBE reg)
+# for PATCH_SIZE in 8 32 64; do
+#   torchrun \
+#     --nproc_per_node=$N_GPUS \
+#     --master_addr=$MASTER_ADDR \
+#     --master_port=$((MASTER_PORT++)) \
+#     train_iblm.py \
+#     --batch_size $BATCH_SIZE \
+#     --train_seq_len $TRAIN_SEQ_LEN \
+#     --val_seq_len $VAL_SEQ_LEN \
+#     --num_iterations $NUM_ITERATIONS \
+#     --use_gapt \
+#     --entropy_patience 250 \
+#     --entropy_min_delta 0.01 \
+#     --mbe_patience 50 \
+#     --mbe_min_delta 0.01 \
+#     --min_a 1e-5 \
+#     --patch_size $PATCH_SIZE \
+#     --run_info "IBLM (soft-add MBE, MBE_WEIGHT=1.0, PATCH_SIZE=$PATCH_SIZE)"
+# done
+
+# (a.3) Sweep on mbe patience and entropy_min_delta
+for MBE_PATIENCE in 100 150; do
   torchrun \
     --nproc_per_node=$N_GPUS \
     --master_addr=$MASTER_ADDR \
@@ -87,12 +108,34 @@ for PATCH_SIZE in 8 32 64; do
     --use_gapt \
     --entropy_patience 250 \
     --entropy_min_delta 0.01 \
+    --mbe_patience $MBE_PATIENCE \
+    --mbe_min_delta 0.01 \
+    --min_a 1e-5 \
+    --patch_size 8 \
+    --run_info "IBLM (soft-add GAPT, MBE_PATIENCE=$MBE_PATIENCE)"
+done
+
+# (a.4) Sweep on entropy min_delta (for soft-add GAPT)
+for ENTROPY_DELTA in 0.02 0.05 0.1; do
+  torchrun \
+    --nproc_per_node=$N_GPUS \
+    --master_addr=$MASTER_ADDR \
+    --master_port=$((MASTER_PORT++)) \
+    train_iblm.py \
+    --batch_size $BATCH_SIZE \
+    --train_seq_len $TRAIN_SEQ_LEN \
+    --val_seq_len $VAL_SEQ_LEN \
+    --num_iterations $NUM_ITERATIONS \
+    --use_gapt \
+    --entropy_patience 250 \
+    --entropy_min_delta $ENTROPY_DELTA \
     --mbe_patience 50 \
     --mbe_min_delta 0.01 \
     --min_a 1e-5 \
-    --patch_size $PATCH_SIZE \
-    --run_info "IBLM (soft-add MBE, MBE_WEIGHT=1.0, PATCH_SIZE=$PATCH_SIZE)"
+    --patch_size 8 \
+    --run_info "IBLM (soft-add GAPT, ENTROPY_DELTA=$ENTROPY_DELTA)"
 done
+
 
 
 # Large scale model sweep (10B fineweb)
