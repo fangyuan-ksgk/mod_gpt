@@ -418,15 +418,14 @@ temperature_warmup = torch.cat([
     torch.full((args.num_rollouts - 1,), args.temperature, device="cuda")  # Low temp for diversity
 ])
 
+memory_span_abs = torch.tensor(args.mem_span_abs, dtype=torch.int, device="cuda")
+memory_span_traj = torch.tensor(args.mem_span_traj, dtype=torch.int, device="cuda")
+
 for i in range(warmup_steps):
     if i < warmup_steps * args.compression_frac: 
-        phase = "compression"
-        memory_span_abs = torch.tensor(args.comp_span_abs, dtype=torch.int, device="cuda")
-        memory_span_traj = torch.tensor(args.comp_span_traj, dtype=torch.int, device="cuda")
+        phase = "compression" # [W] Wild idea: intentional vocab collapse during 'compression' stage by muting H(A) regularization
     else: 
         phase = "memorization"
-        memory_span_abs = torch.tensor(args.mem_span_abs, dtype=torch.int, device="cuda")
-        memory_span_traj = torch.tensor(args.mem_span_traj, dtype=torch.int, device="cuda")
 
     tokens = torch.randint(0, args.vocab_size, size=(1, args.train_seq_len,), device="cuda")
     print(f" :: Sorl search propagation starts with tokens of length {tokens.shape[1]} | phase: {phase} | memory span: {memory_span_abs} x {memory_span_traj}")
@@ -440,16 +439,13 @@ for i in range(warmup_steps):
                                                                           temperature=temperature_warmup)
     search_end = time.time()
     print(f" :: Sorl search takes {search_end - search_start} second")
-    
+        
+    base_loss = model.forward(tokens, memory_span_abs, memory_span_traj, attn_blocksize)[0].mean()
+    info_loss, abs_loss, zipf_loss = mem_loss_fn(search_tokens, model, base_loss.detach(), memory_span_abs, memory_span_traj, attn_blocksize)
     if phase == "memorization": 
-        # --- compute memorization loss --- 
-        base_loss = model.forward(tokens, memory_span_abs, memory_span_traj, attn_blocksize)[0].mean()
-        info_loss, abs_loss, zipf_loss = mem_loss_fn(search_tokens, model, base_loss.detach(), memory_span_abs, memory_span_traj, attn_blocksize)
         loss = args.alpha_base * base_loss + args.alpha_info_gain * info_loss + args.alpha_loss * abs_loss + args.alpha_marg_ent * zipf_loss
-    else: 
-        # --- compute compression loss --- 
-        cond_traj_loss, abs_loss, zipf_bigram_loss = comp_loss_fn(search_tokens, model, memory_span_abs, memory_span_traj, attn_blocksize)
-        loss = cond_traj_loss + args.alpha_loss * abs_loss + args.alpha_marg_ent * zipf_bigram_loss
+    else: # [W]
+        loss = args.alpha_base * base_loss + args.alpha_info_gain * info_loss + args.alpha_loss * abs_loss
 
     forward_end = time.time()
     print(f" :: Loss computation takes {forward_end - search_end} second")
@@ -506,6 +502,10 @@ train_vocab_util = 1.0
 curr_K = args.max_K if args.coarse_to_fine_search else args.K
 phase = "compression"
 
+# [W] Wild idea: intentional vocab collapse during 'compression' stage by muting H(A) regularization
+memory_span_abs = torch.tensor(args.mem_span_abs, dtype=torch.int, device='cuda')
+memory_span_traj = torch.tensor(args.mem_span_traj, dtype=torch.int, device='cuda')
+
 for step in range(train_steps + 1):
     last_step = (step == train_steps) or early_stop
     if args.no_attn_sweep: 
@@ -515,12 +515,8 @@ for step in range(train_steps + 1):
     
     if step < train_steps * args.compression_frac: 
         phase = "compression"
-        memory_span_abs = torch.tensor(args.comp_span_abs, dtype=torch.int, device='cuda')
-        memory_span_traj = torch.tensor(args.comp_span_traj, dtype=torch.int, device='cuda')
     else: 
         phase = "memorization"
-        memory_span_abs = torch.tensor(args.mem_span_abs, dtype=torch.int, device='cuda')
-        memory_span_traj = torch.tensor(args.mem_span_traj, dtype=torch.int, device='cuda')
 
     # --- coarse to fine search ---
     K = get_current_K(step, train_steps, train_vocab_util, curr_K)
@@ -608,12 +604,12 @@ for step in range(train_steps + 1):
                                                                 )
 
         # --- compute loss --- 
+        base_loss = model.forward(tokens, memory_span_abs, memory_span_traj, attn_blocksize)[0].mean()
+        info_loss, abs_loss, zipf_loss = mem_loss_fn(search_tokens, model, base_loss.detach(), memory_span_abs, memory_span_traj, attn_blocksize)
+
         if phase == "compression": 
-            cond_traj_loss, abs_loss, zipf_bigram_loss = comp_loss_fn(search_tokens, model, memory_span_abs, memory_span_traj, attn_blocksize)
-            loss = cond_traj_loss + args.alpha_loss * abs_loss + args.alpha_marg_ent * zipf_bigram_loss
+            loss = args.alpha_base * base_loss + args.alpha_info_gain * info_loss + args.alpha_loss * abs_loss
         else: 
-            base_loss = model.forward(tokens, memory_span_abs, memory_span_traj, attn_blocksize)[0].mean()
-            info_loss, abs_loss, zipf_loss = mem_loss_fn(search_tokens, model, base_loss.detach(), memory_span_abs, memory_span_traj, attn_blocksize)
             loss = args.alpha_base * base_loss + args.alpha_info_gain * info_loss + args.alpha_loss * abs_loss + args.alpha_marg_ent * zipf_loss
             
         loss.backward()
