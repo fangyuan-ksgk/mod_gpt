@@ -98,27 +98,52 @@ for MBE_WEIGHT in 5.0 10.0 50.0; do
     --run_info "IBLM (soft-add GAPT, entropy_patience=125, mbe_patience=75, patch size 8 -> 1024, MBE_WEIGHT=$MBE_WEIGHT, patch_curriculum_ratio=0.5)"
 done
 
-# # (a.3.1) Sweep on patience ratio
-# for ENTROPY_PATIENCE in 100 125 150 175; do
-#   for MBE_PATIENCE in 50 75 100 125 150 175; do
-#     torchrun \
-#       --nproc_per_node=$N_GPUS \
-#       --master_addr=$MASTER_ADDR \
-#       --master_port=$((MASTER_PORT++)) \
-#       train_iblm.py \
-#       --batch_size $BATCH_SIZE \
-#       --train_seq_len $TRAIN_SEQ_LEN \
-#       --val_seq_len $VAL_SEQ_LEN \
-#       --num_iterations $NUM_ITERATIONS \
-#       --use_gapt \
-#       --entropy_patience $ENTROPY_PATIENCE \
-#       --entropy_min_delta 0.01 \
-#       --mbe_patience $MBE_PATIENCE \
-#       --mbe_min_delta 0.01 \
-#       --mbe_weight 10.0 \
-#       --run_info "IBLM (soft-add GAPT, entropy_patience=$ENTROPY_PATIENCE, mbe_patience=$MBE_PATIENCE, patch size 8 -> 1024, MBE_WEIGHT=10.0)"
-#   done
-# done
+# If GAPT helps regularize MBE loss, we discuss further on 
+# (a). What 'shape' of MBE regularization is optimal (this regards the per-layer MBE mask)
+# (b). What 'patience' ratio is optimal (following sweep)
+
+# (I.a) Sweep on entropy patience & mbe patience
+for ENTROPY_PATIENCE in 100 125 150 175; do
+  for MBE_PATIENCE in 50 75 100 125 150 175; do
+    torchrun \
+      --nproc_per_node=$N_GPUS \
+      --master_addr=$MASTER_ADDR \
+      --master_port=$((MASTER_PORT++)) \
+      train_iblm.py \
+      --batch_size $BATCH_SIZE \
+      --train_seq_len $TRAIN_SEQ_LEN \
+      --val_seq_len $VAL_SEQ_LEN \
+      --num_iterations $NUM_ITERATIONS \
+      --use_gapt \
+      --entropy_patience $ENTROPY_PATIENCE \
+      --entropy_min_delta 0.01 \
+      --mbe_patience $MBE_PATIENCE \
+      --mbe_min_delta 0.01 \
+      --mbe_weight 10.0 \
+      --run_info "IBLM (soft-add GAPT, entropy_patience=$ENTROPY_PATIENCE, mbe_patience=$MBE_PATIENCE, patch size 8 -> 1024, MBE_WEIGHT=10.0)"
+  done
+done
+
+# (I.b) Sweep on MBE schedule (for shape of MBE regularization)
+for MBE_SCHEDULE in "all_middle" "rotate" "rotate_accum" "progressive" "weighted_valley" "weighted_mountain" "alternating" "block"; do
+  torchrun \
+    --nproc_per_node=$N_GPUS \
+    --master_addr=$MASTER_ADDR \
+    --master_port=$((MASTER_PORT++)) \
+    train_iblm.py \
+    --batch_size $BATCH_SIZE \
+    --train_seq_len $TRAIN_SEQ_LEN \
+    --val_seq_len $VAL_SEQ_LEN \
+    --num_iterations $NUM_ITERATIONS \
+    --use_gapt \
+    --entropy_patience 125 \
+    --entropy_min_delta 0.01 \
+    --mbe_patience 75 \
+    --mbe_min_delta 0.01 \
+    --mbe_weight 10.0  \
+    --patch_curriculum_ratio 0.5 \
+    --run_info "IBLM (soft-add GAPT, entropy_patience=125, mbe_patience=75, patch size 8 -> 1024, MBE_WEIGHT=10.0, patch_curriculum_ratio=0.5, MBE_SCHEDULE=$MBE_SCHEDULE)"
+done
 
 
 
