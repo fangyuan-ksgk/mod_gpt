@@ -29,7 +29,7 @@ EXPLORATION_MODE=0 # SGPO - exploration
 ALPHA_MARG_ENT=1.0
 DECAY=0.8
 TARGET_VOCAB_UTIL=0.8
-K=128
+K=8
 ABSTRACT_VOCAB_SIZE=256
 
 
@@ -51,15 +51,10 @@ ABSTRACT_VOCAB_SIZE=256
 
 # ================================================
 # FineWeb SoRL (0.8B subset) + GPT2-small (info gain SoRL)
-# - turn on attn_sweep helps improve ppl a bit. 
-
-# (1). Sweep on K suggests larger K is better (32 > 8 > 4) for info-gain formulation + Zipfian prior
-#      not clear when does this saturate? I think 128 is a nice spot for TS dataset || No big difference TBH. 
-# (2). Does clamp on policy loss improves things? we need a sweep experiments || Nope.
-# (3). Does marginal entropy regularization under-performs Zipfian prior with info-gain formulation? || Yep, it doesn't work for info-gain formulation. 
-# (4). Does different temperature helps? || Nope. 
-# (5). Does different 'num rollouts' helps (I think we can affort 3 or 4, just to compare things) || Don't know due to OOM, we better reduce seq_len to test this out. 
-# (6). Does different weight on marginal distribution regularization helps?  || Nope.
+# - bottleneck attention mask creates dependency on abstraction, we want to test how to combine this with info gain SoRL formulation
+#   to cure the p(s) > p(s | a) issue 
+# (a). 2-stage, begin with 'compression' then goto 'memorization'
+# (b). cyclic 
 # ================================================
 
 TRAIN_FILES="data/fineweb10B/fineweb_train_*.bin"
@@ -70,7 +65,7 @@ TARGET_VOCAB_UTIL=0.8
 ALPHA_INFO_GAIN=100.0
 
 # Info Gain SoRL script
-# for ALPHA_INFO_GAIN in 10.0 100.0 1000.0; do
+# for ALPHA_INFO_GAIN in 100.0; do
 # torchrun \
 #   --nproc_per_node=$N_GPUS \
 #   --master_addr=$MASTER_ADDR \
@@ -94,131 +89,80 @@ ALPHA_INFO_GAIN=100.0
 #   --target_vocab_util $TARGET_VOCAB_UTIL \
 #   --use_static_memory_span \
 #   --alpha_info_gain $ALPHA_INFO_GAIN \
-#   --run_info "FineWeb info-gain SoRL | alpha_info_gain=$ALPHA_INFO_GAIN | No orthogonal init"
+#   --orthogonal_init \
+#   --run_info "FineWeb info-gain SoRL | alpha_info_gain=$ALPHA_INFO_GAIN | Orthogonal init"
 # done
 
-# ================================================
+# =========================
 # 2-stage Info Gain SoRL
-# 
+# =========================
 
-
-# (memory compression) compression mask stage -> mask-free stage | lift up greedy_adv slightly, not trasferrable to SoRL stage
-# (vocabulary compression) compression state w/o H(A) regularization to collapse vocabulary -> H(A) regularized stage
-# ================================================
-
-# (e.3). Vocab Compression & Info Gain Compression --> SoRL stage
+# (e.3). Bottleneck memory compression stage --> SoRL
 COMPRESSION_FRACTION=0.5
-torchrun \
-  --nproc_per_node=$N_GPUS \
-  --master_addr=$MASTER_ADDR \
-  --master_port=$MASTER_PORT \
-  train_sorl.py \
-  --batch_size $BATCH_SIZE \
-  --train_files "$TRAIN_FILES" \
-  --val_files "$VAL_FILES" \
-  --train_seq_len $TRAIN_SEQ_LEN \
-  --val_seq_len $VAL_SEQ_LEN \
-  --num_iterations 1750 \
-  --num_rollouts $NUM_ROLLOUTS \
-  --K 8 \
-  --abstract_vocab_size $ABSTRACT_VOCAB_SIZE \
-  --max_iterations $MAX_ITERATIONS \
-  --min_temperature 0.0 \
-  --temperature 5.0 \
-  --compression_frac $COMPRESSION_FRACTION \
-  --info_gain_vocab_compression \
-  --alpha_loss $ALPHA_LOSS \
-  --alpha_marg_ent $ALPHA_MARG_ENT \
-  --decay $DECAY \
-  --target_vocab_util $TARGET_VOCAB_UTIL \
-  --alpha_info_gain $ALPHA_INFO_GAIN \
-  --run_info "FineWeb 2-stage info-gain SoRL (Info gain vocab compression fraction=$COMPRESSION_FRACTION) | no orthogonal init"
+COMP_SPAN_TRAJ=8 
 
-# (e.4). Vocab Compression & Conditional PPL Compression --> SoRL stage
-torchrun \
-  --nproc_per_node=$N_GPUS \
-  --master_addr=$MASTER_ADDR \
-  --master_port=$MASTER_PORT \
-  train_sorl.py \
-  --batch_size $BATCH_SIZE \
-  --train_files "$TRAIN_FILES" \
-  --val_files "$VAL_FILES" \
-  --train_seq_len $TRAIN_SEQ_LEN \
-  --val_seq_len $VAL_SEQ_LEN \
-  --num_iterations 1750 \
-  --num_rollouts $NUM_ROLLOUTS \
-  --K 8 \
-  --abstract_vocab_size $ABSTRACT_VOCAB_SIZE \
-  --max_iterations $MAX_ITERATIONS \
-  --min_temperature 0.0 \
-  --temperature 5.0 \
-  --compression_frac $COMPRESSION_FRACTION \
-  --cond_ppl_vocab_compression \
-  --alpha_loss $ALPHA_LOSS \
-  --alpha_marg_ent $ALPHA_MARG_ENT \
-  --decay $DECAY \
-  --target_vocab_util $TARGET_VOCAB_UTIL \
-  --alpha_info_gain $ALPHA_INFO_GAIN \
-  --run_info "FineWeb 2-stage info-gain SoRL (Cond PPL vocab compression fraction=$COMPRESSION_FRACTION) | no orthogonal init"
+for COMP_SPAN_ABS in 1792 8; do
+  torchrun \
+    --nproc_per_node=$N_GPUS \
+    --master_addr=$MASTER_ADDR \
+    --master_port=$MASTER_PORT \
+    train_sorl.py \
+    --batch_size $BATCH_SIZE \
+    --train_files "$TRAIN_FILES" \
+    --val_files "$VAL_FILES" \
+    --train_seq_len $TRAIN_SEQ_LEN \
+    --val_seq_len $VAL_SEQ_LEN \
+    --num_iterations 1750 \
+    --num_rollouts $NUM_ROLLOUTS \
+    --K 8 \
+    --abstract_vocab_size $ABSTRACT_VOCAB_SIZE \
+    --max_iterations $MAX_ITERATIONS \
+    --min_temperature 0.0 \
+    --temperature 5.0 \
+    --compression_frac $COMPRESSION_FRACTION \
+    --cond_ppl_compression \
+    --comp_span_abs $COMP_SPAN_ABS \
+    --comp_span_traj $COMP_SPAN_TRAJ \
+    --alpha_loss $ALPHA_LOSS \
+    --alpha_marg_ent $ALPHA_MARG_ENT \
+    --decay $DECAY \
+    --target_vocab_util $TARGET_VOCAB_UTIL \
+    --alpha_info_gain $ALPHA_INFO_GAIN \
+    --orthogonal_init \
+    --run_info "FineWeb 2-stage info-gain SoRL (Bottleneck memory compression fraction=$COMPRESSION_FRACTION, comp_span_abs=$COMP_SPAN_ABS, comp_span_traj=$COMP_SPAN_TRAJ)"
+done
 
-# (e.5). Info Gain Compression -> SoRL stage
-torchrun \
-  --nproc_per_node=$N_GPUS \
-  --master_addr=$MASTER_ADDR \
-  --master_port=$MASTER_PORT \
-  train_sorl.py \
-  --batch_size $BATCH_SIZE \
-  --train_files "$TRAIN_FILES" \
-  --val_files "$VAL_FILES" \
-  --train_seq_len $TRAIN_SEQ_LEN \
-  --val_seq_len $VAL_SEQ_LEN \
-  --num_iterations 1750 \
-  --num_rollouts $NUM_ROLLOUTS \
-  --K 8 \
-  --abstract_vocab_size $ABSTRACT_VOCAB_SIZE \
-  --max_iterations $MAX_ITERATIONS \
-  --min_temperature 0.0 \
-  --temperature 5.0 \
-  --compression_frac $COMPRESSION_FRACTION \
-  --info_gain_compression \
-  --comp_span_abs 64 \
-  --comp_span_traj 64 \
-  --alpha_loss $ALPHA_LOSS \
-  --alpha_marg_ent $ALPHA_MARG_ENT \
-  --decay $DECAY \
-  --target_vocab_util $TARGET_VOCAB_UTIL \
-  --alpha_info_gain $ALPHA_INFO_GAIN \
-  --run_info "FineWeb 2-stage info-gain SoRL (Info gain compression fraction=$COMPRESSION_FRACTION, comp_span=64) | no orthogonal init"
-
-# (e.6). Conditional PPL Compression -> SoRL stage
-torchrun \
-  --nproc_per_node=$N_GPUS \
-  --master_addr=$MASTER_ADDR \
-  --master_port=$MASTER_PORT \
-  train_sorl.py \
-  --batch_size $BATCH_SIZE \
-  --train_files "$TRAIN_FILES" \
-  --val_files "$VAL_FILES" \
-  --train_seq_len $TRAIN_SEQ_LEN \
-  --val_seq_len $VAL_SEQ_LEN \
-  --num_iterations 1750 \
-  --num_rollouts $NUM_ROLLOUTS \
-  --K 8 \
-  --abstract_vocab_size $ABSTRACT_VOCAB_SIZE \
-  --max_iterations $MAX_ITERATIONS \
-  --min_temperature 0.0 \
-  --temperature 5.0 \
-  --compression_frac $COMPRESSION_FRACTION \
-  --cond_ppl_compression \
-  --comp_span_abs 64 \
-  --comp_span_traj 64 \
-  --alpha_loss $ALPHA_LOSS \
-  --alpha_marg_ent $ALPHA_MARG_ENT \
-  --decay $DECAY \
-  --target_vocab_util $TARGET_VOCAB_UTIL \
-  --alpha_info_gain $ALPHA_INFO_GAIN \
-  --run_info "FineWeb 2-stage info-gain SoRL (Cond PPL compression fraction=$COMPRESSION_FRACTION, comp_span=64) | no orthogonal init"
-
+# (e.4). Bottleneck memory compression + vocab compression --> SoRL
+for COMP_SPAN_ABS in 1792 8; do
+  torchrun \
+    --nproc_per_node=$N_GPUS \
+    --master_addr=$MASTER_ADDR \
+    --master_port=$MASTER_PORT \
+    train_sorl.py \
+    --batch_size $BATCH_SIZE \
+    --train_files "$TRAIN_FILES" \
+    --val_files "$VAL_FILES" \
+    --train_seq_len $TRAIN_SEQ_LEN \
+    --val_seq_len $VAL_SEQ_LEN \
+    --num_iterations 1750 \
+    --num_rollouts $NUM_ROLLOUTS \
+    --K 8 \
+    --abstract_vocab_size $ABSTRACT_VOCAB_SIZE \
+    --max_iterations $MAX_ITERATIONS \
+    --min_temperature 0.0 \
+    --temperature 5.0 \
+    --compression_frac $COMPRESSION_FRACTION \
+    --cond_ppl_vocab_compression \
+    --comp_span_abs $COMP_SPAN_ABS \
+    --comp_span_traj $COMP_SPAN_TRAJ \
+    --alpha_loss $ALPHA_LOSS \
+    --alpha_marg_ent $ALPHA_MARG_ENT \
+    --decay $DECAY \
+    --target_vocab_util $TARGET_VOCAB_UTIL \
+    --alpha_info_gain $ALPHA_INFO_GAIN \
+    --orthogonal_init \
+    --run_info "FineWeb 2-stage info-gain SoRL (Bottleneck memory compression + vocab compression fraction=$COMPRESSION_FRACTION, comp_span_abs=$COMP_SPAN_ABS, comp_span_traj=$COMP_SPAN_TRAJ)"
+done
 
 # # FineWeb Baseline
 # torchrun \
