@@ -89,7 +89,7 @@ ALPHA_INFO_GAIN=100.0
 #   --target_vocab_util $TARGET_VOCAB_UTIL \
 #   --use_static_memory_span \
 #   --alpha_info_gain $ALPHA_INFO_GAIN \
-#   --orthogonal_init \
+#   --use_orthogonal_init \
 #   --run_info "FineWeb info-gain SoRL | alpha_info_gain=$ALPHA_INFO_GAIN | Orthogonal init"
 # done
 
@@ -128,7 +128,7 @@ for COMP_SPAN_ABS in 1792 8; do
     --decay $DECAY \
     --target_vocab_util $TARGET_VOCAB_UTIL \
     --alpha_info_gain $ALPHA_INFO_GAIN \
-    --orthogonal_init \
+    --use_orthogonal_init \
     --run_info "FineWeb 2-stage info-gain SoRL (Bottleneck memory compression fraction=$COMPRESSION_FRACTION, comp_span_abs=$COMP_SPAN_ABS, comp_span_traj=$COMP_SPAN_TRAJ)"
 done
 
@@ -160,7 +160,7 @@ for COMP_SPAN_ABS in 1792 8; do
     --decay $DECAY \
     --target_vocab_util $TARGET_VOCAB_UTIL \
     --alpha_info_gain $ALPHA_INFO_GAIN \
-    --orthogonal_init \
+    --use_orthogonal_init \
     --run_info "FineWeb 2-stage info-gain SoRL (Bottleneck memory compression + vocab compression fraction=$COMPRESSION_FRACTION, comp_span_abs=$COMP_SPAN_ABS, comp_span_traj=$COMP_SPAN_TRAJ)"
 done
 
