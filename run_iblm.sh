@@ -78,7 +78,8 @@ echo "========================================="
 # echo "GAPT: Gated Phase Transition Training"
 # echo "========================================="
 
-for MBE_WEIGHT in 5.0; do
+# [Question] what's the optimal MBE weight? What's the limit of MBE compression? 
+for MBE_WEIGHT in 6.0 8.0 9.0 10.0 12.0 15.0 20.0; do
   torchrun \
     --nproc_per_node=$N_GPUS \
     --master_addr=$MASTER_ADDR \
@@ -125,25 +126,25 @@ for ENTROPY_PATIENCE in 100 125 150 175; do
 done
 
 # (I.b) Sweep on MBE schedule (for shape of MBE regularization)
-for MBE_SCHEDULE in "all_middle" "rotate" "rotate_accum" "progressive" "weighted_valley" "weighted_mountain" "alternating" "block"; do
-  torchrun \
-    --nproc_per_node=$N_GPUS \
-    --master_addr=$MASTER_ADDR \
-    --master_port=$((MASTER_PORT++)) \
-    train_iblm.py \
-    --batch_size $BATCH_SIZE \
-    --train_seq_len $TRAIN_SEQ_LEN \
-    --val_seq_len $VAL_SEQ_LEN \
-    --num_iterations $NUM_ITERATIONS \
-    --use_gapt \
-    --entropy_patience 125 \
-    --entropy_min_delta 0.01 \
-    --mbe_patience 75 \
-    --mbe_min_delta 0.01 \
-    --mbe_weight 5.0  \
-    --patch_curriculum_ratio 0.5 \
-    --run_info "IBLM (soft-add GAPT, entropy_patience=125, mbe_patience=75, patch size 8 -> 1024, MBE_WEIGHT=10.0, patch_curriculum_ratio=0.5, MBE_SCHEDULE=$MBE_SCHEDULE)"
-done
+# for MBE_SCHEDULE in "all_middle" "rotate" "rotate_accum" "progressive" "weighted_valley" "weighted_mountain" "alternating" "block"; do
+#   torchrun \
+#     --nproc_per_node=$N_GPUS \
+#     --master_addr=$MASTER_ADDR \
+#     --master_port=$((MASTER_PORT++)) \
+#     train_iblm.py \
+#     --batch_size $BATCH_SIZE \
+#     --train_seq_len $TRAIN_SEQ_LEN \
+#     --val_seq_len $VAL_SEQ_LEN \
+#     --num_iterations $NUM_ITERATIONS \
+#     --use_gapt \
+#     --entropy_patience 125 \
+#     --entropy_min_delta 0.01 \
+#     --mbe_patience 75 \
+#     --mbe_min_delta 0.01 \
+#     --mbe_weight 5.0  \
+#     --patch_curriculum_ratio 0.5 \
+#     --run_info "IBLM (soft-add GAPT, entropy_patience=125, mbe_patience=75, patch size 8 -> 1024, MBE_WEIGHT=10.0, patch_curriculum_ratio=0.5, MBE_SCHEDULE=$MBE_SCHEDULE)"
+# done
 
 
 
