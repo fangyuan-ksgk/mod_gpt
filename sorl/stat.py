@@ -425,19 +425,26 @@ def create_sorl_training_frame(step_idx, loss_record, run_info, val_interval=125
     all_steps = np.arange(n_total) * val_interval
     steps = np.arange(step_idx + 1) * val_interval
     
+    # Extract data with correct keys
     base_loss = loss_record.get('base_traj_loss', [])[:step_idx + 1]
-    cond_loss = loss_record.get('cond_traj_loss (search)', [])[:step_idx + 1]
-    search_adv = loss_record.get('search_adv', [])[:step_idx + 1]
-    search_info_gain = loss_record.get('search_info_gain', [])[:step_idx + 1]
-    util_rate = loss_record.get('util_rate', [])[:step_idx + 1]
+    cond_loss_greedy = loss_record.get('cond_traj_loss (greedy)', [])[:step_idx + 1]
+    cond_loss_search = loss_record.get('cond_traj_loss (search)', [])[:step_idx + 1]
+    greedy_adv = loss_record.get('greedy_adv', [])[:step_idx + 1]
+    info_gain_greedy = loss_record.get('info_gain (greedy)', [])[:step_idx + 1]
+    info_gain_search = loss_record.get('info_gain (search)', [])[:step_idx + 1]
+    util_rate_greedy = loss_record.get('util_rate (greedy)', [])[:step_idx + 1]
+    util_rate_search = loss_record.get('util_rate (search)', [])[:step_idx + 1]
     K_values = loss_record.get('K', [])[:step_idx + 1]
     
     # Colors (light mode friendly)
-    c_base = '#2E86AB'      # Deep blue
-    c_cond = '#E94F37'      # Red-orange
-    c_adv = '#1B998B'       # Teal
-    c_info = '#7B68EE'      # Medium slate blue
-    c_util = '#F39C12'      # Orange
+    c_base = '#2E86AB'       # Deep blue
+    c_greedy = '#E94F37'     # Red-orange
+    c_search = '#9B59B6'     # Purple
+    c_adv = '#1B998B'        # Teal
+    c_info_greedy = '#7B68EE'  # Medium slate blue
+    c_info_search = '#FF6B6B'  # Coral
+    c_util_greedy = '#F39C12'  # Orange
+    c_util_search = '#27AE60'  # Green
     
     fig, axes = plt.subplots(3, 1, figsize=(10, 8), sharex=True)
     fig.patch.set_facecolor('white')
@@ -451,41 +458,41 @@ def create_sorl_training_frame(step_idx, loss_record, run_info, val_interval=125
     # Fixed x-axis limits
     x_min, x_max = 0, all_steps[-1]
     
-    # Row 1: Trajectory Losses
-    axes[0].plot(steps, base_loss, color=c_base, linewidth=2, label='Base Traj Loss', alpha=0.9)
-    axes[0].plot(steps, cond_loss, color=c_cond, linewidth=2, label='Cond Traj Loss (Search)', alpha=0.9)
+    # Row 1: Trajectory Losses (base + greedy + search)
+    axes[0].plot(steps, base_loss, color=c_base, linewidth=2, label='Base', alpha=0.9)
+    axes[0].plot(steps, cond_loss_greedy, color=c_greedy, linewidth=2, label='Cond (Greedy)', alpha=0.9)
+    axes[0].plot(steps, cond_loss_search, color=c_search, linewidth=2, label='Cond (Search)', alpha=0.9, linestyle='--')
     axes[0].set_ylabel('Loss', fontsize=10)
     axes[0].legend(loc='upper right', fontsize=8)
     axes[0].set_title('Trajectory Losses', fontsize=11, fontweight='bold')
     axes[0].set_xlim(x_min, x_max)
-    axes[0].set_ylim(axis_limits['loss_min'], axis_limits['loss_max'])  # No if check
-    
+    axes[0].set_ylim(axis_limits['loss_min'], axis_limits['loss_max'])
 
-    # Row 2: Search Metrics (dual y-axis)
+    # Row 2: Advantage & Info Gain (dual y-axis)
     ax2_twin = axes[1].twinx()
-    l1, = axes[1].plot(steps, search_adv, color=c_adv, linewidth=2, label='Search Adv', alpha=0.9)
-    l2, = ax2_twin.plot(steps, search_info_gain, color=c_info, linewidth=2, label='Search Info Gain', alpha=0.9)
+    l1, = axes[1].plot(steps, greedy_adv, color=c_adv, linewidth=2, label='Greedy Adv', alpha=0.9)
+    l2, = ax2_twin.plot(steps, info_gain_greedy, color=c_info_greedy, linewidth=2, label='Info Gain (Greedy)', alpha=0.9)
+    l3, = ax2_twin.plot(steps, info_gain_search, color=c_info_search, linewidth=2, label='Info Gain (Search)', alpha=0.9, linestyle='--')
     axes[1].set_ylabel('Advantage', color=c_adv, fontsize=10)
-    ax2_twin.set_ylabel('Info Gain', color=c_info, fontsize=10)
-    ax2_twin.spines['right'].set_color(c_info)
+    ax2_twin.set_ylabel('Info Gain', fontsize=10)
     ax2_twin.spines['top'].set_visible(False)
-    ax2_twin.tick_params(colors=c_info)
     axes[1].tick_params(axis='y', colors=c_adv)
     axes[1].axhline(0, color='gray', linestyle='--', alpha=0.5)
     ax2_twin.axhline(0, color='gray', linestyle='--', alpha=0.5)
-    axes[1].legend([l1, l2], ['Search Adv', 'Search Info Gain'], loc='upper right', fontsize=8)
-    axes[1].set_title('Search Metrics', fontsize=11, fontweight='bold')
+    axes[1].legend([l1, l2, l3], ['Greedy Adv', 'Info Gain (Greedy)', 'Info Gain (Search)'], loc='upper right', fontsize=8)
+    axes[1].set_title('Advantage & Info Gain', fontsize=11, fontweight='bold')
     axes[1].set_xlim(x_min, x_max)
     axes[1].set_ylim(axis_limits['adv_min'], axis_limits['adv_max'])
     ax2_twin.set_ylim(axis_limits['info_min'], axis_limits['info_max'])
     
-    # Row 3: Util Rate + K indicator
-    axes[2].plot(steps, util_rate, color=c_util, linewidth=2, label='Util Rate', alpha=0.9)
-    axes[2].set_ylabel('Util Rate', color=c_util, fontsize=10)
+    # Row 3: Util Rate (greedy + search) + K indicator
+    axes[2].plot(steps, util_rate_greedy, color=c_util_greedy, linewidth=2, label='Util Rate (Greedy)', alpha=0.9)
+    axes[2].plot(steps, util_rate_search, color=c_util_search, linewidth=2, label='Util Rate (Search)', alpha=0.9, linestyle='--')
+    axes[2].set_ylabel('Util Rate', fontsize=10)
     axes[2].set_xlabel('Training Step', fontsize=10)
     axes[2].set_xlim(x_min, x_max)
     axes[2].set_ylim(0, 1.05)
-    axes[2].tick_params(axis='y', colors=c_util)
+    axes[2].legend(loc='lower right', fontsize=8)
     
     # Add K value as text annotation
     if K_values:
@@ -521,21 +528,24 @@ def generate_sorl_dynamics_gif(loss_record, save_path, run_info, val_interval=12
         print("No data found in loss_record")
         return
     
-    # Precompute axis limits from ALL data (include everything)
+    # Precompute axis limits from ALL data
     all_base = loss_record.get('base_traj_loss', [])
-    all_cond = loss_record.get('cond_traj_loss (search)', [])
-    all_adv = loss_record.get('search_adv', [])
-    all_info = loss_record.get('search_info_gain', [])
+    all_cond_greedy = loss_record.get('cond_traj_loss (greedy)', [])
+    all_cond_search = loss_record.get('cond_traj_loss (search)', [])
+    all_adv = loss_record.get('greedy_adv', [])
+    all_info_greedy = loss_record.get('info_gain (greedy)', [])
+    all_info_search = loss_record.get('info_gain (search)', [])
     
     # Compute fixed limits from full data
-    loss_all = all_base + all_cond
+    loss_all = all_base + all_cond_greedy + all_cond_search
+    info_all = all_info_greedy + all_info_search
     axis_limits = {
         'loss_min': min(loss_all) * 0.95,
         'loss_max': max(loss_all) * 1.05,
         'adv_min': min(all_adv) - 0.005,
         'adv_max': max(all_adv) + 0.005,
-        'info_min': min(all_info) - 0.01,
-        'info_max': max(all_info) + 0.01,
+        'info_min': min(info_all) - 0.01,
+        'info_max': max(info_all) + 0.01,
     }
     
     print(f"Fixed axis limits: {axis_limits}")

@@ -70,32 +70,32 @@ TARGET_VOCAB_UTIL=0.8
 ALPHA_INFO_GAIN=10.0
 
 # Info Gain SoRL script
-for ALPHA_INFO_GAIN in 10.0 100.0 1000.0; do
-torchrun \
-  --nproc_per_node=$N_GPUS \
-  --master_addr=$MASTER_ADDR \
-  --master_port=$MASTER_PORT \
-  train_sorl_v3.py \
-  --batch_size $BATCH_SIZE \
-  --train_files "$TRAIN_FILES" \
-  --val_files "$VAL_FILES" \
-  --train_seq_len $TRAIN_SEQ_LEN \
-  --val_seq_len $VAL_SEQ_LEN \
-  --num_iterations 1750 \
-  --num_rollouts $NUM_ROLLOUTS \
-  --K $K \
-  --abstract_vocab_size $ABSTRACT_VOCAB_SIZE \
-  --max_iterations $MAX_ITERATIONS \
-  --min_temperature 0.0 \
-  --temperature 5.0 \
-  --alpha_loss $ALPHA_LOSS \
-  --alpha_marg_ent $ALPHA_MARG_ENT \
-  --decay $DECAY \
-  --target_vocab_util $TARGET_VOCAB_UTIL \
-  --use_static_memory_span \
-  --alpha_info_gain $ALPHA_INFO_GAIN \
-  --run_info "FineWeb info-gain SoRL | alpha_info_gain=$ALPHA_INFO_GAIN | No orthogonal init"
-done
+# for ALPHA_INFO_GAIN in 10.0 100.0 1000.0; do
+# torchrun \
+#   --nproc_per_node=$N_GPUS \
+#   --master_addr=$MASTER_ADDR \
+#   --master_port=$MASTER_PORT \
+#   train_sorl_v3.py \
+#   --batch_size $BATCH_SIZE \
+#   --train_files "$TRAIN_FILES" \
+#   --val_files "$VAL_FILES" \
+#   --train_seq_len $TRAIN_SEQ_LEN \
+#   --val_seq_len $VAL_SEQ_LEN \
+#   --num_iterations 1750 \
+#   --num_rollouts $NUM_ROLLOUTS \
+#   --K $K \
+#   --abstract_vocab_size $ABSTRACT_VOCAB_SIZE \
+#   --max_iterations $MAX_ITERATIONS \
+#   --min_temperature 0.0 \
+#   --temperature 5.0 \
+#   --alpha_loss $ALPHA_LOSS \
+#   --alpha_marg_ent $ALPHA_MARG_ENT \
+#   --decay $DECAY \
+#   --target_vocab_util $TARGET_VOCAB_UTIL \
+#   --use_static_memory_span \
+#   --alpha_info_gain $ALPHA_INFO_GAIN \
+#   --run_info "FineWeb info-gain SoRL | alpha_info_gain=$ALPHA_INFO_GAIN | No orthogonal init"
+# done
 
 # ================================================
 # 2-stage Info Gain SoRL
@@ -129,9 +129,8 @@ for COMPRESSION_FRACTION in 0.3 0.5 0.7; do
     --alpha_marg_ent $ALPHA_MARG_ENT \
     --decay $DECAY \
     --target_vocab_util $TARGET_VOCAB_UTIL \
-    --use_orthogonal_init \
     --alpha_info_gain $ALPHA_INFO_GAIN \
-    --run_info "FineWeb 2-stage info-gain SoRL (compression_frac=$COMPRESSION_FRACTION)"
+    --run_info "FineWeb 2-stage info-gain SoRL (compression_frac=$COMPRESSION_FRACTION) | no orthogonal init"
 done 
 
 
@@ -184,7 +183,6 @@ done
 #       --alpha_marg_ent $ALPHA_MARG_ENT \
 #       --decay $DECAY \
 #       --target_vocab_util $TARGET_VOCAB_UTIL \
-#       --use_orthogonal_init \
 #       --use_static_memory_span \
 #       --alpha_info_gain $ALPHA_INFO_GAIN \
 #       --no_attn_sweep \
