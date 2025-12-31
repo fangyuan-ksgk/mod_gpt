@@ -78,7 +78,7 @@ echo "========================================="
 # echo "GAPT: Gated Phase Transition Training"
 # echo "========================================="
 
-for MBE_WEIGHT in 5.0 10.0 50.0; do
+for MBE_WEIGHT in 5.0; do
   torchrun \
     --nproc_per_node=$N_GPUS \
     --master_addr=$MASTER_ADDR \
@@ -119,7 +119,7 @@ for ENTROPY_PATIENCE in 100 125 150 175; do
       --entropy_min_delta 0.01 \
       --mbe_patience $MBE_PATIENCE \
       --mbe_min_delta 0.01 \
-      --mbe_weight 10.0 \
+      --mbe_weight 5.0 \
       --run_info "IBLM (soft-add GAPT, entropy_patience=$ENTROPY_PATIENCE, mbe_patience=$MBE_PATIENCE, patch size 8 -> 1024, MBE_WEIGHT=10.0)"
   done
 done
@@ -140,7 +140,7 @@ for MBE_SCHEDULE in "all_middle" "rotate" "rotate_accum" "progressive" "weighted
     --entropy_min_delta 0.01 \
     --mbe_patience 75 \
     --mbe_min_delta 0.01 \
-    --mbe_weight 10.0  \
+    --mbe_weight 5.0  \
     --patch_curriculum_ratio 0.5 \
     --run_info "IBLM (soft-add GAPT, entropy_patience=125, mbe_patience=75, patch size 8 -> 1024, MBE_WEIGHT=10.0, patch_curriculum_ratio=0.5, MBE_SCHEDULE=$MBE_SCHEDULE)"
 done
