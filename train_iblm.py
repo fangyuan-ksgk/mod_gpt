@@ -449,15 +449,7 @@ for step in range(train_steps + 1):
         if args.no_reg: 
             loss_dict = {"entropy": loss_dict["entropy"]}
         elif args.use_gapt:
-            # ------------------------------------------------------------------------------------
-            # Reflection 1. 
-            # - change phase when batch changes instead of parameter changes is un-reasonable
-            # - increasing 'patience' accomodate this error
-            # - this is currently saying "change phase when encounter a hard data batch" ...
-            # - the ideal case should be to "change when optimization leads to spike in loss ..."
-            # - "patience" is a parameter that needs to be tuned
-            # ------------------------------------------------------------------------------------
-            loss = gapt.step(loss_dict["entropy"], loss_dict["mbe"], verbose=False)
+            loss = gapt.step(loss_dict["entropy"], args.mbe_weight * loss_dict["mbe"], verbose=False) # weight MBE loss
             loss_name = "entropy" if gapt.phi == 1 else "mbe"
             loss_dict = {loss_name: loss}
         else:
@@ -466,7 +458,6 @@ for step in range(train_steps + 1):
                 (loss_dict['mbe'] - loss_dict['mbe'].clamp(min=0.01)) / softness
             )
             loss_dict = {"combined": loss_dict["entropy"] + args.mbe_weight * soft_aux}
-            # loss_dict = {"combined": loss_dict["entropy"] + args.mbe_weight * loss_dict["mbe"]}
 
         # --- backward ---
         if args.log_grad_info: 
