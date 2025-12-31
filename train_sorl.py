@@ -68,7 +68,7 @@ def parse_args():
     parser.add_argument("--alpha_base", type=float, default=1.0)  # base loss weight
     parser.add_argument("--alpha_loss", type=float, default=0.1)  # abs loss weight
     parser.add_argument("--alpha_marg_ent", type=float, default=1.0) # marginal entropy weight
-    parser.add_argument("--alpha_info_gain", type=float, default=10.0) # info gain loss weight
+    parser.add_argument("--alpha_info_gain", type=float, default=100.0) # info gain loss weight
 
     parser.add_argument("--use_orthogonal_init", action="store_true", default=False)
     parser.add_argument("--decay", type=float, default=0.8) # decay for mutual information loss

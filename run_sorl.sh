@@ -67,7 +67,7 @@ VAL_FILES="data/fineweb10B/fineweb_val_*.bin"
 ALPHA_MARG_ENT=1.0
 DECAY=0.8
 TARGET_VOCAB_UTIL=0.8
-ALPHA_INFO_GAIN=10.0
+ALPHA_INFO_GAIN=100.0
 
 # Info Gain SoRL script
 # for ALPHA_INFO_GAIN in 10.0 100.0 1000.0; do
