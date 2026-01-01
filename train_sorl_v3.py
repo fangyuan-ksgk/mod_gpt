@@ -39,6 +39,7 @@ def parse_args():
     parser.add_argument("--num_iterations", type=int, default=1750)
     parser.add_argument("--save_checkpoint", action="store_true", default=False)
     parser.add_argument("--log_grad_info", action="store_true")
+    parser.add_argument("--save_checkpoint_every", type=int, default=0)
 
     # Model
     parser.add_argument("--model_size", type=str, default="small") # model size
@@ -231,7 +232,7 @@ class Hyperparameters:
     val_loss_every : int = 125 
     save_checkpoint : bool = False
     log_grad_info: bool = False
-    
+    save_checkpoint_every: int = 0
     # sorl specific
     num_rollouts: int = 2
     num_rollouts_val: int = 2
@@ -556,6 +557,12 @@ for step in range(train_steps + 1):
         # start the clock again
         torch.cuda.synchronize()
         t0 = time.perf_counter()
+
+    if args.save_checkpoint_every > 0 and step % args.save_checkpoint_every == 0:
+        if master_process:
+            log = dict(step=step, code=code, model=model.state_dict(), optimizers=[opt.state_dict() for opt in optimizers])
+            os.makedirs(f"logs/{run_id}", exist_ok=True)
+            torch.save(log, f"logs/{run_id}/state_step{step:06d}.pt")
 
     if last_step:
         if master_process: 
