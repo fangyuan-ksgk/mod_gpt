@@ -13,7 +13,7 @@ export NCCL_DEBUG=WARN
 # ============================================================================
 # Configuration
 # ============================================================================
-BATCH_SIZE=16  # Closer to benchmark batch_size=32
+BATCH_SIZE=32  # Closer to benchmark batch_size=32
 TRAIN_SEQ_LEN=$((32 * 1024))
 VAL_SEQ_LEN=$((32 * 1024))
 NUM_ITERATIONS=1750
@@ -41,35 +41,6 @@ MASTER_PORT=29500
 echo "========================================="
 echo "Baseline: Training WITHOUT GAPT"
 echo "========================================="
-# torchrun \
-#   --nproc_per_node=$N_GPUS \
-#   --master_addr=$MASTER_ADDR \
-#   --master_port=$((MASTER_PORT++)) \
-#   train_iblm.py \
-#   --batch_size $BATCH_SIZE \
-#   --train_seq_len $TRAIN_SEQ_LEN \
-#   --val_seq_len $VAL_SEQ_LEN \
-#   --num_iterations $NUM_ITERATIONS \
-#   --patch_size 8 \
-#   --no_reg \
-#   --run_info "Baseline (no reg)"
-
-# (a.1) Sweep on MBE weight (for soft-add MBE reg)
-# for MBE_WEIGHT in 0.1 0.3 0.5; do
-#   torchrun \
-#     --nproc_per_node=$N_GPUS \
-#     --master_addr=$MASTER_ADDR \
-#     --master_port=$((MASTER_PORT++)) \
-#     train_iblm.py \
-#     --batch_size $BATCH_SIZE \
-#     --train_seq_len $TRAIN_SEQ_LEN \
-#     --val_seq_len $VAL_SEQ_LEN \
-#     --num_iterations $NUM_ITERATIONS \
-#     --mbe_weight $MBE_WEIGHT \
-#     --patch_size 8 \
-#     --run_info "Baseline (with soft-add MBE reg, MBE_WEIGHT=$MBE_WEIGHT)"
-# done 
-
 
 # [Issue] Currently MBE is not sufficiently compressed with GAPT alone
 # [Resolution] MBE is not weighted when adopting GAPT
@@ -78,35 +49,11 @@ echo "========================================="
 # echo "GAPT: Gated Phase Transition Training"
 # echo "========================================="
 
-# [Question] what's the optimal MBE weight? What's the limit of MBE compression? 
-for MBE_WEIGHT in 6.0 8.0 9.0 10.0 12.0 15.0 20.0; do
+# Scaling experiment (10B fineweb dataset)
+# -----------------------------------------
+NUM_ITERATIONS=20000
+for MODEL_SIZE in "xl"; do
   torchrun \
-    --nproc_per_node=$N_GPUS \
-    --master_addr=$MASTER_ADDR \
-    --master_port=$((MASTER_PORT++)) \
-    train_iblm.py \
-    --batch_size $BATCH_SIZE \
-    --train_seq_len $TRAIN_SEQ_LEN \
-    --val_seq_len $VAL_SEQ_LEN \
-    --num_iterations $NUM_ITERATIONS \
-    --use_gapt \
-    --entropy_patience 125 \
-    --entropy_min_delta 0.01 \
-    --mbe_patience 75 \
-    --mbe_min_delta 0.01 \
-    --mbe_weight $MBE_WEIGHT \
-    --patch_curriculum_ratio 0.5 \
-    --run_info "IBLM (soft-add GAPT, entropy_patience=125, mbe_patience=75, patch size 8 -> 1024, MBE_WEIGHT=$MBE_WEIGHT, patch_curriculum_ratio=0.5)"
-done
-
-# If GAPT helps regularize MBE loss, we discuss further on 
-# (a). What 'shape' of MBE regularization is optimal (this regards the per-layer MBE mask)
-# (b). What 'patience' ratio is optimal (following sweep)
-
-# (I.a) Sweep on entropy patience & mbe patience
-for ENTROPY_PATIENCE in 100 125 150 175; do
-  for MBE_PATIENCE in 50 75 100 125 150 175; do
-    torchrun \
       --nproc_per_node=$N_GPUS \
       --master_addr=$MASTER_ADDR \
       --master_port=$((MASTER_PORT++)) \
@@ -116,70 +63,17 @@ for ENTROPY_PATIENCE in 100 125 150 175; do
       --val_seq_len $VAL_SEQ_LEN \
       --num_iterations $NUM_ITERATIONS \
       --use_gapt \
-      --entropy_patience $ENTROPY_PATIENCE \
+      --entropy_patience 125 \
       --entropy_min_delta 0.01 \
-      --mbe_patience $MBE_PATIENCE \
+      --mbe_patience 75 \
       --mbe_min_delta 0.01 \
-      --mbe_weight 5.0 \
-      --run_info "IBLM (soft-add GAPT, entropy_patience=$ENTROPY_PATIENCE, mbe_patience=$MBE_PATIENCE, patch size 8 -> 1024, MBE_WEIGHT=10.0)"
-  done
+      --mbe_weight 20.0 \
+      --patch_curriculum_ratio 0.5 \
+      --save_checkpoint \
+      --model_size $MODEL_SIZE \
+      --run_info "GAPT Sweep: ModelSize=$MODEL_SIZE | CEPat=125 | MBEPat=75 | w=20.0" 
 done
 
-# (I.b) Sweep on MBE schedule (for shape of MBE regularization)
-# for MBE_SCHEDULE in "all_middle" "rotate" "rotate_accum" "progressive" "weighted_valley" "weighted_mountain" "alternating" "block"; do
-#   torchrun \
-#     --nproc_per_node=$N_GPUS \
-#     --master_addr=$MASTER_ADDR \
-#     --master_port=$((MASTER_PORT++)) \
-#     train_iblm.py \
-#     --batch_size $BATCH_SIZE \
-#     --train_seq_len $TRAIN_SEQ_LEN \
-#     --val_seq_len $VAL_SEQ_LEN \
-#     --num_iterations $NUM_ITERATIONS \
-#     --use_gapt \
-#     --entropy_patience 125 \
-#     --entropy_min_delta 0.01 \
-#     --mbe_patience 75 \
-#     --mbe_min_delta 0.01 \
-#     --mbe_weight 5.0  \
-#     --patch_curriculum_ratio 0.5 \
-#     --run_info "IBLM (soft-add GAPT, entropy_patience=125, mbe_patience=75, patch size 8 -> 1024, MBE_WEIGHT=10.0, patch_curriculum_ratio=0.5, MBE_SCHEDULE=$MBE_SCHEDULE)"
-# done
-
-
-
-
-
-# Large scale model sweep (10B fineweb)
-# Issue #1. MBE collapse to nan value for 'large' GPT model training
-#           better set a lower-bound on mbe values during optimization
-# Fix #1.   Added MBE clamping gadget to avoid 'over-optimization' of mbe loss
-#           it's worth sweeping through different 'minMBE' effect on things
-
-# Scaling experiment (10B fineweb dataset)
-# -----------------------------------------
-# NUM_ITERATIONS=8000
-# for MODEL_SIZE in "small" "medium" "large" "xl"; do
-#   torchrun \
-#       --nproc_per_node=$N_GPUS \
-#       --master_addr=$MASTER_ADDR \
-#       --master_port=$((MASTER_PORT++)) \
-#       train_iblm.py \
-#       --batch_size $BATCH_SIZE \
-#       --train_seq_len $TRAIN_SEQ_LEN \
-#       --val_seq_len $VAL_SEQ_LEN \
-#       --num_iterations $NUM_ITERATIONS \
-#       --use_gapt \
-#       --entropy_patience 250 \
-#       --entropy_min_delta 0.01 \
-#       --mbe_patience 50 \
-#       --mbe_min_delta 0.01 \
-#       --patch_size 8 \
-#       --model_size $MODEL_SIZE \
-#       --min_a 1e-5 \
-#       --save_checkpoint \
-#       --run_info "GAPT Sweep: ModelSize=$MODEL_SIZE | CEPat=250 | MBEPat=50 | ClampMinMBE=1e-5" 
-# done
 
 # NUM_ITERATIONS=8000
 # # Baseline experiment (10B fineweb dataset)

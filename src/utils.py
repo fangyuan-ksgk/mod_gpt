@@ -1419,3 +1419,64 @@ def extract_log_data(log_path):
             break
     
     return config, loss_record
+
+
+def plot_mbe_comparison(base_mbe, gapt_mbe): 
+    n_layer = len(base_mbe)
+    layers = np.arange(n_layer)
+    bar_width = 0.38
+
+    # Compute stats
+    base_avg, gapt_avg = np.mean(base_mbe), np.mean(gapt_mbe)
+    reduction = (base_avg - gapt_avg) / base_avg * 100
+
+    fig, ax = plt.subplots(figsize=(12, 6), dpi=120)
+
+    # Color palette
+    base_color = '#5B8DEF'  # Soft blue
+    gapt_color = '#FF6B6B'  # Coral red
+
+    # Grouped bars
+    bars_base = ax.bar(layers - bar_width/2, base_mbe, bar_width, 
+                    label='Baseline', color=base_color, alpha=0.85, edgecolor='#3d5a80', linewidth=0.8)
+    bars_gapt = ax.bar(layers + bar_width/2, gapt_mbe, bar_width, 
+                    label='GAPT (w=20)', color=gapt_color, alpha=0.85, edgecolor='#9d4452', linewidth=0.8)
+
+    # Average lines
+    ax.axhline(y=base_avg, color=base_color, linestyle='--', linewidth=1.8, alpha=0.6)
+    ax.axhline(y=gapt_avg, color=gapt_color, linestyle='--', linewidth=1.8, alpha=0.6)
+
+    # Legend
+    legend_elements = [
+        Patch(facecolor=base_color, label=f'Baseline (avg: {base_avg:.3f})', alpha=0.85, edgecolor='#3d5a80'),
+        Patch(facecolor=gapt_color, label=f'GAPT (avg: {gapt_avg:.3f})', alpha=0.85, edgecolor='#9d4452'),
+    ]
+    ax.legend(handles=legend_elements, loc='upper right', frameon=False, fontsize=12)
+
+    # Labels & Title
+    ax.set_xlabel('Layer Index', fontsize=14, color='#444444')
+    ax.set_ylabel('MBE Loss', fontsize=14, color='#444444')
+    ax.set_title(f'GPT2-small: Baseline vs GAPT — Layer-wise MBE\n'
+                f'Average MBE Reduction: {reduction:.1f}%', fontsize=14, pad=12, fontweight='medium')
+    ax.set_xticks(layers)
+    ax.set_xticklabels([str(i) for i in layers])
+
+    # Styling
+    ax.grid(axis='y', alpha=0.2, linestyle='-', color='#000000')
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.spines['left'].set_color('#888888')
+    ax.spines['bottom'].set_color('#888888')
+    ax.set_ylim(0, max(max(base_mbe), max(gapt_mbe)) * 1.15)
+
+    # Value labels (optional — can be verbose, uncomment if needed)
+    for bar in bars_base:
+        ax.text(bar.get_x() + bar.get_width()/2., bar.get_height() + 0.01,
+                f'{bar.get_height():.2f}', ha='center', va='bottom', fontsize=7, color='#555555')
+    for bar in bars_gapt:
+        ax.text(bar.get_x() + bar.get_width()/2., bar.get_height() + 0.01,
+                f'{bar.get_height():.2f}', ha='center', va='bottom', fontsize=7, color='#555555')
+
+    plt.tight_layout()
+    plt.savefig('gpt2-small-base-vs-gapt-mbe.png', dpi=150, bbox_inches='tight')
+    plt.show()

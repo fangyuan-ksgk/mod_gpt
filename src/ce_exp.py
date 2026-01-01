@@ -128,7 +128,11 @@ def decide_group_name(epoch, epochs, mod="positive"):
         return "negative" if epoch % 2 == 0 else "positive"
     if mod == "mix": 
         return "mix" 
-    
+    if mod == "positive_mix_small_negative": 
+        return "positive" if epoch % 100 != 0 else "mix"
+    if mod == "negative_mix_small_positive": 
+        return "negative" if epoch % 100 != 0 else "mix"
+
 def _build_log_str(group_name, val_loss, similarity_metrics):
     assert group_name in ["positive", "negative"], "group_name must be either 'positive' or 'negative'"
     return f"l1 {group_name} loss: {val_loss[f'l1_{group_name}']:.4f} | mbe {group_name} loss: {val_loss[f'mbe_{group_name}']:.4f} | param shift similarity {group_name} : {similarity_metrics[f'param_shift_cosine_similarity_{group_name}']:.4f} | rep similarity {group_name} : {similarity_metrics[f'rep_cosine_similarity_{group_name}']:.4f}"
