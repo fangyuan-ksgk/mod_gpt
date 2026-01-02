@@ -30,7 +30,6 @@ def parse_args():
     parser.add_argument("--val_seq_len", type=int, default=16*1024)
     parser.add_argument("--no_reg", action="store_true")
     parser.add_argument("--switch_phase", action="store_true")
-    parser.add_argument("--patch_curriculum_ratio", type=float, default=0.5)
     parser.add_argument("--log_grad_info", action="store_true")
     parser.add_argument("--num_iterations", type=int, default=1750)
     parser.add_argument("--entropy_patience", type=int, default=125)
@@ -376,15 +375,16 @@ for step in range(train_steps + 1):
 
     attn_blocksize = torch.tensor(64*((step/train_steps * (1792 - 64) + 64)//64), dtype=torch.int, device='cuda')
 
-    min_pow, max_pow = 3, 10
-    curriculum_ratio = args.patch_curriculum_ratio  # curriculum finishes at X% of training steps
-    curriculum_steps = int(train_steps * curriculum_ratio)
-    if step < curriculum_steps:
-        curr_pow = min_pow + (max_pow - min_pow) * step / max(curriculum_steps, 1)
-        curr_pow = round(curr_pow)
-    else:
-        curr_pow = max_pow
-    patch_size = torch.tensor(2 ** curr_pow, dtype=torch.int, device='cuda')
+    # min_pow, max_pow = 3, 10
+    # curriculum_ratio = args.patch_curriculum_ratio  # curriculum finishes at X% of training steps
+    # curriculum_steps = int(train_steps * curriculum_ratio)
+    # if step < curriculum_steps:
+    #     curr_pow = min_pow + (max_pow - min_pow) * step / max(curriculum_steps, 1)
+    #     curr_pow = round(curr_pow)
+    # else:
+    #     curr_pow = max_pow
+    # patch_size = torch.tensor(2 ** curr_pow, dtype=torch.int, device='cuda')
+    patch_size = args.patch_size
     
     # --------------- VALIDATION SECTION -----------------
     if last_step or (args.val_loss_every > 0 and step % args.val_loss_every == 0):
@@ -454,8 +454,8 @@ for step in range(train_steps + 1):
             loss_dict = {loss_name: loss}
         else:
             softness = 0.1  # controls sharpness
-            soft_aux = loss_dict['mbe'].clamp(min=0.01) + softness * torch.nn.functional.softplus(
-                (loss_dict['mbe'] - loss_dict['mbe'].clamp(min=0.01)) / softness
+            soft_aux = loss_dict['mbe'].clamp(min=1e-5) + softness * torch.nn.functional.softplus(
+                (loss_dict['mbe'] - loss_dict['mbe'].clamp(min=1e-5)) / softness
             )
             loss_dict = {"combined": loss_dict["entropy"] + args.mbe_weight * soft_aux}
 
@@ -499,7 +499,6 @@ print0(f"-- entropy_min_delta: {args.entropy_min_delta}", console=True)
 print0(f"-- mbe_patience: {args.mbe_patience}", console=True)
 print0(f"-- mbe_min_delta: {args.mbe_min_delta}", console=True)
 print0(f"-- mbe_weight: {args.mbe_weight}", console=True)
-print0(f"-- patch_curriculum_ratio: {args.patch_curriculum_ratio}", console=True)
 print0(f"-- entropy_spike_tolerance: {args.entropy_spike_tolerance}", console=True)
 print0(f"-- skip_first: {args.skip_first}", console=True)
 print0(f"-- skip_last: {args.skip_last}", console=True)

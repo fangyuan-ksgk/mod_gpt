@@ -49,10 +49,14 @@ echo "========================================="
 # echo "GAPT: Gated Phase Transition Training"
 # echo "========================================="
 
+# Obs #1. memory spikes up with new changes
+#         (Hyp) bigger 'patch size' -> more memory required? 
+#               since it doesn't really make lots of difference, why don't we use static patch size (small one)? 
+
 # Scaling experiment (10B fineweb dataset)
 # -----------------------------------------
 NUM_ITERATIONS=20000
-for MODEL_SIZE in "xl"; do
+for MODEL_SIZE in "small" "xl"; do
   torchrun \
       --nproc_per_node=$N_GPUS \
       --master_addr=$MASTER_ADDR \
