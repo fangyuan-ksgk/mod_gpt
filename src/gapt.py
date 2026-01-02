@@ -241,7 +241,7 @@ class GatedPhaseTransition:
     with percentage-based thresholds.
     """
     def __init__(self, tau_plateau_m: float = 0.01, tau_plateau_a: float = 0.01, tau_spike: float = 0.1, 
-                 p_m: int = 5, p_a: int = 5, clamp_a: float = 1e-5):
+                 p_m: int = 5, p_a: int = 5, clamp_a: float = 1e-5, use_softplus: bool = False):
         """
         Args:
             tau_plateau: Relative threshold for detecting plateau (e.g., 0.01 = 1% improvement)
@@ -263,6 +263,7 @@ class GatedPhaseTransition:
         self.min_m = float('inf')
         self.min_a = float('inf')
         self.clamp_a = clamp_a
+        self.use_softplus = use_softplus
 
     def _relative_gain(self, current_loss: torch.Tensor, min_loss: float) -> float:
         """Calculate percentage improvement (negative = degradation)"""
@@ -276,14 +277,14 @@ class GatedPhaseTransition:
         if self.phi == 1:
             return main_loss
         elif self.phi == 2:
-            return main_loss + auxiliary_loss.clamp(min=self.clamp_a)
-
-            # softness = 0.1  # controls sharpness
-            # soft_aux = self.min_a + softness * torch.nn.functional.softplus(
-            #     (auxiliary_loss - self.clamp_a) / softness
-            # )
-            # return main_loss + soft_aux
-
+            if not self.use_softplus:
+                return main_loss + auxiliary_loss.clamp(min=self.clamp_a)
+            else:
+                softness = 0.1  # controls sharpness
+                soft_aux = self.clamp_a + softness * torch.nn.functional.softplus(
+                    (auxiliary_loss - self.clamp_a) / softness
+                )
+                return main_loss + soft_aux
         return main_loss # fallback
     
     def step(self, main_loss: torch.Tensor, auxiliary_loss: torch.Tensor, 
