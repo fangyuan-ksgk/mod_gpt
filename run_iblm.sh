@@ -21,6 +21,7 @@ N_GPUS=4
 MASTER_ADDR=127.0.0.1
 MASTER_PORT=29500
 
+
 # ============================================================================
 # BASELINE EXPERIMENTS
 # ============================================================================
@@ -55,29 +56,29 @@ echo "========================================="
 
 # Scaling experiment (10B fineweb dataset)
 # -----------------------------------------
-for MODEL_SIZE in "small"; do
-  torchrun \
-      --nproc_per_node=$N_GPUS \
-      --master_addr=$MASTER_ADDR \
-      --master_port=$((MASTER_PORT++)) \
-      train_iblm.py \
-      --batch_size $BATCH_SIZE \
-      --train_seq_len $TRAIN_SEQ_LEN \
-      --val_seq_len $VAL_SEQ_LEN \
-      --num_iterations 1750 \
-      --use_gapt \
-      --entropy_patience 125 \
-      --entropy_min_delta 0.01 \
-      --mbe_patience 75 \
-      --mbe_min_delta 0.01 \
-      --mbe_weight 20.0 \
-      --save_checkpoint \
-      --model_size $MODEL_SIZE \
-      --run_info "GAPT Sweep: ModelSize=$MODEL_SIZE | CEPat=125 | MBEPat=75 | w=20.0 | SimpleClamp" 
-done
+# for MODEL_SIZE in "small"; do
+#   torchrun \
+#       --nproc_per_node=$N_GPUS \
+#       --master_addr=$MASTER_ADDR \
+#       --master_port=$((MASTER_PORT++)) \
+#       train_iblm.py \
+#       --batch_size $BATCH_SIZE \
+#       --train_seq_len $TRAIN_SEQ_LEN \
+#       --val_seq_len $VAL_SEQ_LEN \
+#       --num_iterations 1750 \
+#       --use_gapt \
+#       --entropy_patience 125 \
+#       --entropy_min_delta 0.01 \
+#       --mbe_patience 75 \
+#       --mbe_min_delta 0.01 \
+#       --mbe_weight 20.0 \
+#       --save_checkpoint \
+#       --model_size $MODEL_SIZE \
+#       --run_info "GAPT Sweep: ModelSize=$MODEL_SIZE | CEPat=125 | MBEPat=75 | w=20.0 | SimpleClamp" 
+# done
 
 NUM_ITERATIONS=20000
-for MODEL_SIZE in "medium"; do
+for MODEL_SIZE in "large"; do
   torchrun \
       --nproc_per_node=$N_GPUS \
       --master_addr=$MASTER_ADDR \
