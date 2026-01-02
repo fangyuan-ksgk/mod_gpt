@@ -97,6 +97,8 @@ for MODEL_SIZE in "small"; do
       --run_info "GAPT Sweep: ModelSize=$MODEL_SIZE | CEPat=125 | MBEPat=75 | w=20.0 | Softplus=True" 
 done
 
+python data/cached_fineweb10B.py
+
 NUM_ITERATIONS=20000
 for MODEL_SIZE in "large"; do
   torchrun \
