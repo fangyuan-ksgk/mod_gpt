@@ -76,7 +76,7 @@ def load_param_shift(path="param_shift.pkl"):
         param_shift = pickle.load(f)
     return param_shift
 
-def build_dataset(train_size, val_size, model, in_dim, param_shift=None):
+def build_dataset(train_size, val_size, model, in_dim, param_shift=None, shift_magnitude=1.0):
     if param_shift is None: 
         param_shift = generate_param_shift(model)
     data_size = train_size + val_size 
@@ -86,10 +86,10 @@ def build_dataset(train_size, val_size, model, in_dim, param_shift=None):
     x2 = sample_p2(data_size, in_dim)
     
     model_positive_shift = copy.deepcopy(model)
-    mlp_positive_shift = apply_param_shift(model_positive_shift, param_shift, 1.0)
+    mlp_positive_shift = apply_param_shift(model_positive_shift, param_shift, shift_magnitude)
     y_positive, h_positive = mlp_positive_shift(x1)
     model_negative_shift = copy.deepcopy(model)
-    mlp_negative_shift = apply_param_shift(model_negative_shift, param_shift, -1.0)
+    mlp_negative_shift = apply_param_shift(model_negative_shift, param_shift, -shift_magnitude)
     y_negative, h_negative = mlp_negative_shift(x2)
     print(f"- Dataset constructed with {data_size} positive & negative samples")
     trainset = {"positive": (x1[:train_size], y_positive.detach()[:train_size]), "negative": (x2[:train_size], y_negative.detach()[:train_size])}
@@ -254,9 +254,9 @@ class SimpleModel(nn.Module):
         h = self.activation(self.layer1(x))
         return self.layer2(h), h
     
-    def compute_loss(self, x, y): 
+    def compute_loss(self, x, y, patch_size=8): 
         y_pred, h = self(x)
-        loss_dict = {"l1": l1_loss(y_pred, y), "mbe": mbe_loss(h)}
+        loss_dict = {"l1": l1_loss(y_pred, y), "mbe": mbe_loss(h, patch_size)}
         return loss_dict
         
     def get_hidden_representation(self, x):
@@ -439,3 +439,5 @@ def neuron_specialization_frame(trained_model, trainset, batch_size=32, group_na
     pil_image = Image.fromarray(image)
     
     return pil_image, specialized
+
+

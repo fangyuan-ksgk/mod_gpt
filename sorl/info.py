@@ -625,3 +625,119 @@ class SoRLLoss_v10(nn.Module):
 
         # --- Return: p(s | a), p(a | s), KL(p(a_t, a_t+1), soft_zipf_prior) ---
         return traj_loss, abs_loss, soft_zipf_kl
+
+
+def mutual_distillation_loss(logits_a, logits_b, temperature=2.0):
+    # Soft probabilities
+    soft_a = F.softmax(logits_a / temperature, dim=-1)
+    soft_b = F.softmax(logits_b / temperature, dim=-1)
+    
+    # Log probs for KL
+    log_soft_a = F.log_softmax(logits_a / temperature, dim=-1)
+    log_soft_b = F.log_softmax(logits_b / temperature, dim=-1)
+    
+    # Bidirectional KL (mutual teaching)
+    kl_a_to_b = F.kl_div(log_soft_b, soft_a.detach(), reduction='batchmean')
+    kl_b_to_a = F.kl_div(log_soft_a, soft_b.detach(), reduction='batchmean')
+    
+    # Scale by T^2 (standard distillation scaling)
+    return (kl_a_to_b + kl_b_to_a) * (temperature ** 2)
+
+def lossless_compression_loss(base_logits, cond_logits, temperature=2.0):
+    soft_base = F.softmax(base_logits / temperature, dim=-1).detach()  # Target (frozen)
+    log_soft_cond = F.log_softmax(cond_logits / temperature, dim=-1)    
+    return F.kl_div(log_soft_cond, soft_base, reduction='batchmean') * (temperature ** 2)
+
+
+class SoRLLoss_v11(nn.Module): 
+    """
+    SoRL loss: p(s | a)/p(s), p(a | s), KL(p(a_t, a_t+1), soft_zipf_prior), mutual distillation loss
+    """
+
+    def __init__(self, abs_vocab_size, decay=0.8, target_vocab_util=0.8, min_abs_ppl=0.0):
+        super().__init__()
+        self.decay = decay
+        self.min_abs_ppl = min_abs_ppl
+        self.zipf_loss = Zipfian2gramLoss(abs_vocab_size, decay, target_vocab_util)
+
+    def forward(self, data, model, base_traj_loss, base_logits, memory_span_abs: int, memory_span_traj: int, attn_blocksize: int):
+ 
+        traj_ppt, abs_ppt, logits = model.forward(data, memory_span_abs, memory_span_traj, attn_blocksize)
+        traj_ppt = traj_ppt.reshape(data.shape[0], -1)
+        abs_ppt = abs_ppt.reshape(data.shape[0], -1)
+        logits = logits.reshape(data.shape[0], -1, logits.size(-1))
+
+        levels = (data >= model.vocab_sizes[0]).long()[:, 1:]
+        bos_pos_mask = torch.logical_and(
+            data[:, :-1] != BOS_TOKEN_ID, 
+            data[:, 1:] != BOS_TOKEN_ID
+        ).float()
+
+        traj_mask = (levels[0] == 0).float()
+        abs_mask = 1 - traj_mask
+
+        valid_traj_mask = bos_pos_mask * traj_mask
+        valid_abs_mask = bos_pos_mask * abs_mask
+
+        traj_loss = (traj_ppt * valid_traj_mask).sum() / valid_traj_mask.sum().clamp(min=1)
+        abs_loss = (abs_ppt * valid_abs_mask).clamp(min=self.min_abs_ppl).sum() / valid_abs_mask.sum().clamp(min=1)
+        info_loss = traj_loss - base_traj_loss
+
+        # --- KL(p(a_t, a_t+1), soft_zipf_prior) --- 
+        abs_positions = abs_mask.bool()
+        abs_logits = logits[:, :-1][:, abs_positions, model.vocab_sizes[0]:]
+        soft_zipf_kl = self.zipf_loss(abs_logits)
+
+        # --- KL(p(s), p(s | a)) ---
+        cond_traj_logits = logits[:, :-1][:, ~abs_positions]
+        md_loss = mutual_distillation_loss(base_logits[:, :-1], cond_traj_logits)
+
+        # --- Return: p(s | a)/p(s), p(a | s), KL(p(a_t, a_t+1), soft_zipf_prior), mutual distillation loss ---
+        return info_loss, abs_loss, soft_zipf_kl, md_loss 
+
+
+class SoRLLoss_v12(nn.Module): 
+    """
+    SoRL loss: p(s | a)/p(s), p(a | s), KL(p(a_t, a_t+1), soft_zipf_prior), lossless compression loss
+    """
+
+    def __init__(self, abs_vocab_size, decay=0.8, target_vocab_util=0.8, min_abs_ppl=0.0):
+        super().__init__()
+        self.decay = decay
+        self.min_abs_ppl = min_abs_ppl
+        self.zipf_loss = Zipfian2gramLoss(abs_vocab_size, decay, target_vocab_util)
+
+    def forward(self, data, model, base_traj_loss, base_logits, memory_span_abs: int, memory_span_traj: int, attn_blocksize: int):
+ 
+        traj_ppt, abs_ppt, logits = model.forward(data, memory_span_abs, memory_span_traj, attn_blocksize)
+        traj_ppt = traj_ppt.reshape(data.shape[0], -1)
+        abs_ppt = abs_ppt.reshape(data.shape[0], -1)
+        logits = logits.reshape(data.shape[0], -1, logits.size(-1))
+
+        levels = (data >= model.vocab_sizes[0]).long()[:, 1:]
+        bos_pos_mask = torch.logical_and(
+            data[:, :-1] != BOS_TOKEN_ID, 
+            data[:, 1:] != BOS_TOKEN_ID
+        ).float()
+
+        traj_mask = (levels[0] == 0).float()
+        abs_mask = 1 - traj_mask
+
+        valid_traj_mask = bos_pos_mask * traj_mask
+        valid_abs_mask = bos_pos_mask * abs_mask
+
+        traj_loss = (traj_ppt * valid_traj_mask).sum() / valid_traj_mask.sum().clamp(min=1)
+        abs_loss = (abs_ppt * valid_abs_mask).clamp(min=self.min_abs_ppl).sum() / valid_abs_mask.sum().clamp(min=1)
+        info_loss = traj_loss - base_traj_loss
+
+        # --- KL(p(a_t, a_t+1), soft_zipf_prior) --- 
+        abs_positions = abs_mask.bool()
+        abs_logits = logits[:, :-1][:, abs_positions, model.vocab_sizes[0]:]
+        soft_zipf_kl = self.zipf_loss(abs_logits)
+
+        # --- KL(p(s), p(s | a)) ---
+        cond_traj_logits = logits[:, :-1][:, ~abs_positions]
+        lc_loss = lossless_compression_loss(base_logits[:, :-1], cond_traj_logits)
+
+        # --- Return: p(s | a)/p(s), p(a | s), KL(p(a_t, a_t+1), soft_zipf_prior), lossless compression loss ---
+        return info_loss, abs_loss, soft_zipf_kl, lc_loss 
