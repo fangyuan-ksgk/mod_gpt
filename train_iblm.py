@@ -39,6 +39,8 @@ def parse_args():
     parser.add_argument("--entropy_spike_tolerance", type=float, default=0.1)
     parser.add_argument("--mbe_weight", type=float, default=1.0)
     parser.add_argument("--use_gapt", action="store_true")
+    parser.add_argument("--reg_mbe", action="store_true")
+    parser.add_argument("--reg_l2", action="store_true")
     parser.add_argument("--skip_first", type=int, default=1)
     parser.add_argument("--skip_last", type=int, default=1)
     parser.add_argument("--mbe_schedule", type=str, default="rotate")
@@ -453,12 +455,19 @@ for step in range(train_steps + 1):
             loss = gapt.step(loss_dict["entropy"], args.mbe_weight * loss_dict["mbe"], verbose=False) # weight MBE loss
             loss_name = "entropy" if gapt.phi == 1 else "mbe"
             loss_dict = {loss_name: loss}
-        else:
+        elif args.reg_mbe:
             softness = 0.1  # controls sharpness
             soft_aux = 1e-5 + loss_dict['mbe'].clamp(min=1e-5) + softness * torch.nn.functional.softplus(
                 (loss_dict['mbe'] - loss_dict['mbe'].clamp(min=1e-5)) / softness
             )
             loss_dict = {"combined": loss_dict["entropy"] + args.mbe_weight * soft_aux}
+        elif args.reg_l2: 
+            # L2 regularization on all parameters
+            l2_reg = sum((param ** 2).sum() for param in model.parameters())
+            l2_norm = l2_reg.sqrt() # L2 norm of all parameters
+            loss_dict = {"combined": loss_dict["entropy"] + args.mbe_weight * l2_norm}
+        else: 
+            assert False, "Invalid regularization mode"
 
         # --- backward ---
         if args.log_grad_info: 
@@ -494,6 +503,8 @@ print0(f"Experiment configuration: {args.run_info}\n", console=True)
 print0(f"loss record:\n{loss_record}", console=True)
 print0(f"IBLM Configuration:\n{args}", console=True)
 print0(f"-- use_gapt: {args.use_gapt}", console=True)
+print0(f"-- reg_mbe: {args.reg_mbe}", console=True)
+print0(f"-- reg_l2: {args.reg_l2}", console=True)
 print0(f"-- model_size: {args.model_size}", console=True)
 print0(f"-- entropy_patience: {args.entropy_patience}", console=True)
 print0(f"-- entropy_min_delta: {args.entropy_min_delta}", console=True)
