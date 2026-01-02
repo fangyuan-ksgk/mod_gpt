@@ -455,7 +455,7 @@ for step in range(train_steps + 1):
             loss_dict = {loss_name: loss}
         else:
             softness = 0.1  # controls sharpness
-            soft_aux = loss_dict['mbe'].clamp(min=1e-5) + softness * torch.nn.functional.softplus(
+            soft_aux = 1e-5 + loss_dict['mbe'].clamp(min=1e-5) + softness * torch.nn.functional.softplus(
                 (loss_dict['mbe'] - loss_dict['mbe'].clamp(min=1e-5)) / softness
             )
             loss_dict = {"combined": loss_dict["entropy"] + args.mbe_weight * soft_aux}
