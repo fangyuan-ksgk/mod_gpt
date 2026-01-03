@@ -40,9 +40,11 @@ MASTER_PORT=29500
 
 # ========================================="
 # Exp 1. FineWeb0.8B (Base, GAPT, MBE, L2)
+# Exp 2. FineWeb10B | 1750 steps | GPT2-large (sweep) | GAPT, MBE with multiple weight choice 
+#        what config leads to maximal MBE compression? 
 # ========================================="
 
-MODEL_SIZE="small"
+MODEL_SIZE="large"
 
 # Command 1: GAPT + Softplus (correct)
 torchrun \
@@ -63,7 +65,7 @@ torchrun \
     --save_checkpoint \
     --use_softplus_gapt \
     --model_size $MODEL_SIZE \
-    --run_info "GAPT: ModelSize=$MODEL_SIZE | CEPat=125 | MBEPat=75 | w=20.0 | Softplus=True" 
+    --run_info "GAPT: ModelSize=$MODEL_SIZE | CEPat=125 | MBEPat=75 | w=40.0 | Softplus=True" 
 
 # Command 2: GAPT + SimpleClamp (correct)
 torchrun \
@@ -83,25 +85,9 @@ torchrun \
     --mbe_weight 20.0 \
     --save_checkpoint \
     --model_size $MODEL_SIZE \
-    --run_info "GAPT: ModelSize=$MODEL_SIZE | CEPat=125 | MBEPat=75 | w=20.0 | SimpleClamp (1e-5)"
+    --run_info "GAPT: ModelSize=$MODEL_SIZE | CEPat=125 | MBEPat=75 | w=40.0 | SimpleClamp (1e-5)"
 
-# Command 3: L2-regularized (removed stray space, cleaned up unused args)
-torchrun \
-    --nproc_per_node=$N_GPUS \
-    --master_addr=$MASTER_ADDR \
-    --master_port=$((MASTER_PORT++)) \
-    train_iblm.py \
-    --batch_size 16 \
-    --train_seq_len $TRAIN_SEQ_LEN \
-    --val_seq_len $VAL_SEQ_LEN \
-    --num_iterations 1750 \
-    --mbe_weight 0.3 \
-    --reg_l2 \
-    --save_checkpoint \
-    --model_size $MODEL_SIZE \
-    --run_info "L2-regularized: ModelSize=$MODEL_SIZE | w=0.3"
-
-# Command 4: MBE-regularized (removed stray space, cleaned up unused args)
+# Command 3: MBE-regularized (removed stray space, cleaned up unused args)
 torchrun \
     --nproc_per_node=$N_GPUS \
     --master_addr=$MASTER_ADDR \
@@ -117,6 +103,49 @@ torchrun \
     --model_size $MODEL_SIZE \
     --run_info "MBE-regularized: ModelSize=$MODEL_SIZE | w=0.3"
 
+# Command 4: L2-regularized (removed stray space, cleaned up unused args)
+torchrun \
+    --nproc_per_node=$N_GPUS \
+    --master_addr=$MASTER_ADDR \
+    --master_port=$((MASTER_PORT++)) \
+    train_iblm.py \
+    --batch_size 16 \
+    --train_seq_len $TRAIN_SEQ_LEN \
+    --val_seq_len $VAL_SEQ_LEN \
+    --num_iterations 1750 \
+    --mbe_weight 0.3 \
+    --reg_l2 \
+    --save_checkpoint \
+    --model_size $MODEL_SIZE \
+    --run_info "L2-regularized: ModelSize=$MODEL_SIZE | w=0.3"
+
+
+# =============================================================================="
+# Ablate on GPT-2 large || 1750 steps || MBE weight, GAPT or MBE regularization
+# =============================================================================="
+
+# MODEL_SIZE="large"
+
+# # Command 1: GAPT + Softplus (correct)
+# torchrun \
+#     --nproc_per_node=$N_GPUS \
+#     --master_addr=$MASTER_ADDR \
+#     --master_port=$((MASTER_PORT++)) \
+#     train_iblm.py \
+#     --batch_size 16 \
+#     --train_seq_len $TRAIN_SEQ_LEN \
+#     --val_seq_len $VAL_SEQ_LEN \
+#     --num_iterations 1750 \
+#     --use_gapt \
+#     --entropy_patience 125 \
+#     --entropy_min_delta 0.01 \
+#     --mbe_patience 75 \
+#     --mbe_min_delta 0.01 \
+#     --mbe_weight 20.0 \
+#     --save_checkpoint \
+#     --use_softplus_gapt \
+#     --model_size $MODEL_SIZE \
+#     --run_info "GAPT: ModelSize=$MODEL_SIZE | CEPat=125 | MBEPat=75 | w=20.0 | Softplus=True" 
 
 # ========================================="
 # Exp 2. FineWeb 10B, scaling experiment (GPT2 small, medium, large)

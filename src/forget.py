@@ -18,7 +18,7 @@ from src.gapt import GatedPhaseTransition
 # ============================================================
 CFG = {
     "in_dim": 10, "hidden_dim": 20, "out_dim": 10,
-    "pretrain_epochs": 1000, "finetune_epochs": 1000,
+    "pretrain_epochs": 1000, "finetune_epochs": 2000,
     "batch_size": 32, "lr": 0.01,
     "accumulation_steps": 32,
     "n_runs": 6,

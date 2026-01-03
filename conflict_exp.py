@@ -21,7 +21,10 @@ EXP_CFG = {
     "n_ft_runs": 5,
     
     # Ablation: shift magnitudes
-    "shift_magnitudes": [1.0],
+    "shift_magnitudes": [0.1, 0.2, 0.3, 0.4, 0.5, 0.7, 0.8, 0.9, 1.0],
+    
+    # Ablation: pretrain methods
+    "pretrain_methods": ["base", "gapt"],
     
     # Data
     "train_size": 500,
@@ -29,8 +32,8 @@ EXP_CFG = {
     
     # Paths
     "init_params_path": "initial_mlp_params.pt",
-    "output_dir": "bin/sweep_v2",
-    "results_csv": "bin/sweep_v2/results.csv",
+    "output_dir": "bin/sweep_v4",
+    "results_csv": "bin/sweep_v4/results.csv",
 }
 
 os.makedirs(EXP_CFG["output_dir"], exist_ok=True)
@@ -73,7 +76,8 @@ def run_experiment():
     total_steps = (
         len(EXP_CFG["shift_magnitudes"]) * 
         EXP_CFG["num_data"] * 
-        EXP_CFG["num_runs"]
+        EXP_CFG["num_runs"] *
+        len(EXP_CFG["pretrain_methods"])
     )
     tracker = ProgressTracker(total_steps)
     
@@ -87,6 +91,7 @@ def run_experiment():
     
     print(f"Starting experiment: {total_steps} total steps")
     print(f"Shift magnitudes: {EXP_CFG['shift_magnitudes']}")
+    print(f"Pretrain methods: {EXP_CFG['pretrain_methods']}")
     print("="*60)
     
     for shift_idx, shift_mag in enumerate(EXP_CFG["shift_magnitudes"]):
@@ -111,88 +116,90 @@ def run_experiment():
             print(f"\n  Dataset {data_idx+1}/{EXP_CFG['num_data']} (shift={shift_mag})")
             
             for run_idx in range(EXP_CFG["num_runs"]):
-                # Skip if already done (resume support)
-                key = (shift_mag, data_idx, run_idx)
-                if any(r['shift_mag'] == shift_mag and 
-                       r['data_idx'] == data_idx and 
-                       r['run_idx'] == run_idx for r in all_results):
-                    tracker.step()
-                    print(f"  [SKIP] shift={shift_mag} data={data_idx} run={run_idx} (already done)")
-                    continue
-                
-                step_start = time.time()
-                
-                # Pretrain
-                torch.manual_seed(2000 + data_idx * 100 + run_idx)
-                pt_model = copy.deepcopy(orig_model)
-                pt_start = time.time()
-                pt_loss = train_phase(
-                    pt_model, trainset, valset, orig_model, param_shift,
-                    method_name="base", epochs=CFG['pretrain_epochs'], train_mode="mix"
-                )
-                pt_time = time.time() - pt_start
-                
-                # Save pretrain checkpoint
-                pt_path = f"{EXP_CFG['output_dir']}/pt_s{shift_mag}_d{data_idx}_r{run_idx}.pt"
-                torch.save(pt_model.state_dict(), pt_path)
-                
-                # Finetune with all methods
-                ft_start = time.time()
-                pt_loss_dict, ft_loss = run_ft_experiment(
-                    pt_path, trainset, valset, param_shift, orig_model,
-                    ft_steps=1000, n_ft_runs=EXP_CFG["n_ft_runs"], patch_size=32
-                )
-                ft_time = time.time() - ft_start
-                step_time = time.time() - step_start
+                for pt_method in EXP_CFG["pretrain_methods"]:
+                    # Skip if already done (resume support)
+                    if any(r['shift_mag'] == shift_mag and 
+                           r['data_idx'] == data_idx and 
+                           r['run_idx'] == run_idx and
+                           r.get('pt_method') == pt_method for r in all_results):
+                        tracker.step()
+                        print(f"  [SKIP] shift={shift_mag} data={data_idx} run={run_idx} pt={pt_method}")
+                        continue
+                    
+                    step_start = time.time()
+                    
+                    # Pretrain with specified method
+                    torch.manual_seed(2000 + data_idx * 100 + run_idx)
+                    pt_model = copy.deepcopy(orig_model)
+                    pt_start = time.time()
+                    pt_loss = train_phase(
+                        pt_model, trainset, valset, orig_model, param_shift,
+                        method_name=pt_method, epochs=CFG['pretrain_epochs'], train_mode="mix"
+                    )
+                    pt_time = time.time() - pt_start
+                    
+                    # Save pretrain checkpoint (include pt_method in filename)
+                    pt_path = f"{EXP_CFG['output_dir']}/pt_{pt_method}_s{shift_mag}_d{data_idx}_r{run_idx}.pt"
+                    torch.save(pt_model.state_dict(), pt_path)
+                    
+                    # Finetune with all methods
+                    ft_start = time.time()
+                    pt_loss_dict, ft_loss = run_ft_experiment(
+                        pt_path, trainset, valset, param_shift, orig_model,
+                        ft_steps=1000, n_ft_runs=EXP_CFG["n_ft_runs"], patch_size=32
+                    )
+                    ft_time = time.time() - ft_start
+                    step_time = time.time() - step_start
 
-                # Record metrics
-                base_mbe_pos = ft_loss['base']['mbe_positive']
-                base_l1_neg = ft_loss['base']['l1_negative']
-                init_l1_neg = pt_loss_dict["l1_negative"].item() if hasattr(pt_loss_dict["l1_negative"], 'item') else pt_loss_dict["l1_negative"]
-                
-                allev_results = {}
-                for ft_method in ['gapt', 'mbe']:
-                    method_l1_neg = ft_loss[ft_method]['l1_negative']
+                    # Record metrics
+                    base_mbe_pos = ft_loss['base']['mbe_positive']
+                    base_l1_neg = ft_loss['base']['l1_negative']
+                    init_l1_neg = pt_loss_dict["l1_negative"].item() if hasattr(pt_loss_dict["l1_negative"], 'item') else pt_loss_dict["l1_negative"]
                     
-                    # Avoid division by zero
-                    denom = base_l1_neg - init_l1_neg
-                    if abs(denom) < 1e-6:
-                        alleviation = 0.0
-                    else:
-                        alleviation = (base_l1_neg - method_l1_neg) / denom * 100
+                    allev_results = {}
+                    for ft_method in ['gapt', 'mbe']:
+                        method_l1_neg = ft_loss[ft_method]['l1_negative']
+                        
+                        # Avoid division by zero
+                        denom = base_l1_neg - init_l1_neg
+                        if abs(denom) < 1e-6:
+                            alleviation = 0.0
+                        else:
+                            alleviation = (base_l1_neg - method_l1_neg) / denom * 100
+                        
+                        allev_results[ft_method] = alleviation
+                        
+                        all_results.append({
+                            'shift_mag': shift_mag,
+                            'data_idx': data_idx,
+                            'run_idx': run_idx,
+                            'pt_method': pt_method,  # NEW: track pretrain method
+                            'init_l1_neg': init_l1_neg,
+                            'init_mbe_neg': pt_loss_dict["mbe_negative"].item() if hasattr(pt_loss_dict["mbe_negative"], 'item') else pt_loss_dict["mbe_negative"],
+                            'ft_method': ft_method,
+                            'base_mbe_pos': base_mbe_pos,
+                            'method_mbe_pos': ft_loss[ft_method]['mbe_positive'],
+                            'base_l1_neg': base_l1_neg,
+                            'method_l1_neg': method_l1_neg,
+                            'alleviation_pct': alleviation,
+                            'compression_ratio': base_mbe_pos / (ft_loss[ft_method]['mbe_positive'] + 1e-8),
+                        })
                     
-                    allev_results[ft_method] = alleviation
+                    tracker.step()
                     
-                    all_results.append({
-                        'shift_mag': shift_mag,
-                        'data_idx': data_idx,
-                        'run_idx': run_idx,
-                        'init_l1_neg': init_l1_neg,
-                        'init_mbe_neg': pt_loss_dict["mbe_negative"].item() if hasattr(pt_loss_dict["mbe_negative"], 'item') else pt_loss_dict["mbe_negative"],
-                        'ft_method': ft_method,
-                        'base_mbe_pos': base_mbe_pos,
-                        'method_mbe_pos': ft_loss[ft_method]['mbe_positive'],
-                        'base_l1_neg': base_l1_neg,
-                        'method_l1_neg': method_l1_neg,
-                        'alleviation_pct': alleviation,
-                        'compression_ratio': base_mbe_pos / (ft_loss[ft_method]['mbe_positive'] + 1e-8),
-                    })
-                
-                tracker.step()
-                
-                # Detailed logging
-                elapsed = time.time() - tracker.start_time
-                elapsed_str = str(timedelta(seconds=int(elapsed)))
-                print(f"\n  [{tracker.current}/{tracker.total}] shift={shift_mag} | data={data_idx} | run={run_idx}")
-                print(f"    PT: {pt_time:.1f}s | FT: {ft_time:.1f}s | Total step: {step_time:.1f}s")
-                print(f"    init_l1_neg={init_l1_neg:.4f} → base_l1_neg={base_l1_neg:.4f}")
-                print(f"    GAPT alleviation: {allev_results['gapt']:+.1f}% | MBE alleviation: {allev_results['mbe']:+.1f}%")
-                print(f"    Elapsed: {elapsed_str} | ETA: {tracker.eta()}")
-                
-                # Save incrementally every 5 steps
-                if tracker.current % 5 == 0:
-                    pd.DataFrame(all_results).to_csv(EXP_CFG["results_csv"], index=False)
-                    print(f"    >>> Checkpoint saved ({len(all_results)} results)")
+                    # Detailed logging
+                    elapsed = time.time() - tracker.start_time
+                    elapsed_str = str(timedelta(seconds=int(elapsed)))
+                    print(f"\n  [{tracker.current}/{tracker.total}] shift={shift_mag} | data={data_idx} | run={run_idx} | pt={pt_method}")
+                    print(f"    PT: {pt_time:.1f}s | FT: {ft_time:.1f}s | Total step: {step_time:.1f}s")
+                    print(f"    init_l1_neg={init_l1_neg:.4f} → base_l1_neg={base_l1_neg:.4f}")
+                    print(f"    GAPT alleviation: {allev_results['gapt']:+.1f}% | MBE alleviation: {allev_results['mbe']:+.1f}%")
+                    print(f"    Elapsed: {elapsed_str} | ETA: {tracker.eta()}")
+                    
+                    # Save incrementally every 5 steps
+                    if tracker.current % 5 == 0:
+                        pd.DataFrame(all_results).to_csv(EXP_CFG["results_csv"], index=False)
+                        print(f"    >>> Checkpoint saved ({len(all_results)} results)")
     
     # Final save
     df = pd.DataFrame(all_results)
@@ -211,6 +218,25 @@ def analyze_results():
     
     df = pd.read_csv(EXP_CFG["results_csv"])
     
+    # ---- Analysis by Pretrain Method ----
+    print("\n" + "="*60)
+    print("ANALYSIS BY PRETRAIN METHOD")
+    print("="*60)
+    
+    for pt_method in EXP_CFG["pretrain_methods"]:
+        subset = df[df['pt_method'] == pt_method]
+        if len(subset) == 0:
+            continue
+        print(f"\nPretrain: {pt_method.upper()}")
+        for ft_method in ['gapt', 'mbe']:
+            ft_subset = subset[subset['ft_method'] == ft_method]
+            if len(ft_subset) == 0:
+                continue
+            mean_allev = ft_subset['alleviation_pct'].mean()
+            std_allev = ft_subset['alleviation_pct'].std()
+            print(f"  → Finetune {ft_method}: mean={mean_allev:.1f}% ± {std_allev:.1f}%")
+    
+    # ---- Analysis by Shift Magnitude ----
     print("\n" + "="*60)
     print("ANALYSIS BY SHIFT MAGNITUDE")
     print("="*60)
@@ -230,18 +256,48 @@ def analyze_results():
         print(f"  base_mbe_pos → alleviation: r={corr_mbe:.3f}, p={p_mbe:.4f}")
         print(f"  base_l1_neg → alleviation:  r={corr_l1:.3f}, p={p_l1:.4f}")
     
-    # Plot by shift magnitude
+    # ---- Plot: Pretrain Method Comparison ----
+    fig, axes = plt.subplots(1, len(EXP_CFG["pretrain_methods"]), figsize=(5*len(EXP_CFG["pretrain_methods"]), 5))
+    if len(EXP_CFG["pretrain_methods"]) == 1:
+        axes = [axes]
+    
+    for ax, pt_method in zip(axes, EXP_CFG["pretrain_methods"]):
+        for ft_method, color in [('gapt', 'blue'), ('mbe', 'orange')]:
+            subset = df[(df['pt_method'] == pt_method) & (df['ft_method'] == ft_method)]
+            if len(subset) == 0:
+                continue
+            means = subset.groupby('shift_mag')['alleviation_pct'].mean()
+            stds = subset.groupby('shift_mag')['alleviation_pct'].std()
+            ax.errorbar(means.index, means.values, yerr=stds.values, 
+                       label=f'FT: {ft_method}', marker='o', capsize=3, color=color)
+        ax.axhline(0, color='gray', linestyle='--', alpha=0.5)
+        ax.set_xlabel('Shift Magnitude')
+        ax.set_ylabel('Alleviation (%)')
+        ax.set_title(f'Pretrain: {pt_method.upper()}')
+        ax.legend()
+    
+    plt.tight_layout()
+    plt.savefig(f"{EXP_CFG['output_dir']}/analysis_by_pretrain.png", dpi=150)
+    plt.show()
+    
+    # ---- Plot: Shift Magnitude Detail (original) ----
     fig, axes = plt.subplots(2, 2, figsize=(12, 10))
     
-    for ax, shift_mag in zip(axes.flat, EXP_CFG["shift_magnitudes"]):
+    for ax, shift_mag in zip(axes.flat, EXP_CFG["shift_magnitudes"][:4]):
         subset = df[(df['shift_mag'] == shift_mag) & (df['ft_method'] == 'gapt')]
         if len(subset) == 0:
             continue
-        ax.scatter(subset['base_l1_neg'], subset['alleviation_pct'], alpha=0.6)
+        for pt_method, marker in [('base', 'o'), ('gapt', 's'), ('mbe', '^')]:
+            pt_subset = subset[subset['pt_method'] == pt_method]
+            if len(pt_subset) == 0:
+                continue
+            ax.scatter(pt_subset['base_l1_neg'], pt_subset['alleviation_pct'], 
+                      alpha=0.6, marker=marker, label=f'PT: {pt_method}')
         ax.axhline(0, color='gray', linestyle='--', alpha=0.5)
         ax.set_xlabel('base_l1_neg')
         ax.set_ylabel('Alleviation (%)')
         ax.set_title(f'Shift Magnitude = {shift_mag}')
+        ax.legend()
     
     plt.tight_layout()
     plt.savefig(f"{EXP_CFG['output_dir']}/analysis_by_shift.png", dpi=150)
