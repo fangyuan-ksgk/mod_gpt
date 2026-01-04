@@ -272,8 +272,16 @@ print0("="*100)
 ########################################
 model: nn.Module = GPT(model_config).cuda()
 if args.continue_from_ckpt:
-    model.load_state_dict(torch.load(args.continue_from_ckpt, map_location="cuda")["model"])
+    ckpt = torch.load(args.continue_from_ckpt, map_location="cuda")
+    state_dict = ckpt["model"]
+    # Fix for torch.compile: strip "_orig_mod." prefix if present
+    wanted_prefix = '_orig_mod.'
+    for k,v in list(state_dict.items()):
+        if k.startswith(wanted_prefix):
+            state_dict[k[len(wanted_prefix):]] = state_dict.pop(k)
+    model.load_state_dict(state_dict)
 
+    
 for m in model.modules():
     if isinstance(m, nn.Embedding):
         m.bfloat16()
