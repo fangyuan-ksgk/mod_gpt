@@ -26,6 +26,7 @@ def parse_args():
     parser.add_argument("--train_files", type=str, default="data/fineweb10B/fineweb_train_*.bin")
     parser.add_argument("--val_files", type=str, default="data/fineweb10B/fineweb_val_*.bin")
     parser.add_argument("--test_files", type=str, default="data/multiplication_test_ood*.bin")
+    parser.add_argument("--continue_from_ckpt", type=str, default=None)
     parser.add_argument("--train_seq_len", type=int, default=32*1024)
     parser.add_argument("--val_seq_len", type=int, default=16*1024)
     parser.add_argument("--no_reg", action="store_true")
@@ -183,6 +184,7 @@ master_process = (rank == 0) # this process will do logging, checkpointing etc.
 
 @dataclass
 class Hyperparameters:
+    continue_from_ckpt: str = None
     # data
     train_files : str = "data/fineweb10B/fineweb_train_*.bin" # input .bin to train on
     val_files : str = "data/fineweb10B/fineweb_val_*.bin" # input .bin to eval validation loss on
@@ -269,7 +271,9 @@ print0("="*100)
 #    Construct model and optimizer     #
 ########################################
 model: nn.Module = GPT(model_config).cuda()
-    
+if args.continue_from_ckpt:
+    model.load_state_dict(torch.load(args.continue_from_ckpt, map_location="cuda")["model"])
+
 for m in model.modules():
     if isinstance(m, nn.Embedding):
         m.bfloat16()

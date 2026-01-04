@@ -44,6 +44,45 @@ MASTER_PORT=29500
 #        what config leads to maximal MBE compression? 
 # ========================================="
 
+# GPT2-xl: continue training from ckpt
+CKPT_PATH="logs/fw5B-gpt2-xl-gapt/state.pt"
+torchrun \
+    --nproc_per_node=$N_GPUS \
+    --master_addr=$MASTER_ADDR \
+    --master_port=$((MASTER_PORT++)) \
+    train_iblm.py \
+    --batch_size 32 \
+    --train_seq_len $TRAIN_SEQ_LEN \
+    --val_seq_len $VAL_SEQ_LEN \
+    --num_iterations 10000 \
+    --continue_from_ckpt $CKPT_PATH \
+    --save_checkpoint \
+    --use_gapt \
+    --entropy_patience 125 \
+    --entropy_min_delta 0.01 \
+    --mbe_patience 75 \
+    --mbe_min_delta 0.01 \
+    --mbe_weight 40.0 \
+    --model_size $MODEL_SIZE \
+    --run_info "GAPT: ModelSize=$MODEL_SIZE | GAPT | w=20.0" 
+    
+torchrun \
+    --nproc_per_node=$N_GPUS \
+    --master_addr=$MASTER_ADDR \
+    --master_port=$((MASTER_PORT++)) \
+    train_iblm.py \
+    --batch_size 32 \
+    --train_seq_len $TRAIN_SEQ_LEN \
+    --val_seq_len $VAL_SEQ_LEN \
+    --num_iterations 10000 \
+    --continue_from_ckpt $CKPT_PATH \
+    --mbe_weight 0.3 \
+    --save_checkpoint \
+    --reg_mbe \
+    --model_size $MODEL_SIZE \
+    --run_info "GAPT: ModelSize=$MODEL_SIZE | MBE regularization | w=0.3" 
+
+
 MODEL_SIZE="large"
 
 # Command 1: GAPT + Softplus (correct)
