@@ -27,6 +27,7 @@ class GATConfig:
     flex_kernel_options: Optional[dict] = None
     device: str = "cuda" if torch.cuda.is_available() else "cpu"
     _compile: bool = True if device == "cuda" else False
+    bos_token_id: int = BOS_TOKEN_ID
 
     @classmethod
     def gpt_size(cls, size: str, vocab_sizes: List[int], flex_kernel_options: Optional[dict] = None):
@@ -83,11 +84,12 @@ class GAT(nn.Module):
       
         self.device = config.device
         self._compile = config._compile
+        self.bos_token_id = config.bos_token_id
 
 
     def _forward_pass(self, idx: torch.Tensor, memory_span_abs: int, memory_span_traj: int, attn_blocksize: int):
 
-        docs = (idx == BOS_TOKEN_ID).cumsum(1)
+        docs = (idx == self.bos_token_id).cumsum(1)
         
         levels = (idx >= self.vocab_sizes[0]).long()
         accum_levels = levels.cumsum(1)
@@ -149,7 +151,7 @@ class GAT(nn.Module):
         )
 
         # Don't predict: (1) what comes after BOS, (2) BOS itself
-        bos_pos_mask = torch.logical_and(idx[:, :-1] != BOS_TOKEN_ID, idx[:, 1:] != BOS_TOKEN_ID).view(-1).float()        
+        bos_pos_mask = torch.logical_and(idx[:, :-1] != self.bos_token_id, idx[:, 1:] != self.bos_token_id).view(-1).float()        
         traj_loss = traj_loss * bos_pos_mask
         abs_loss = abs_loss * bos_pos_mask
 
@@ -157,7 +159,7 @@ class GAT(nn.Module):
 
     def _forward_with_noise(self, idx: torch.Tensor, memory_span_abs: int, memory_span_traj: int, attn_blocksize: int, noise_scale: float = 0.0):
 
-        docs = (idx == BOS_TOKEN_ID).cumsum(1)
+        docs = (idx == self.bos_token_id).cumsum(1)
         
         levels = (idx >= self.vocab_sizes[0]).long()
         accum_levels = levels.cumsum(1)
@@ -226,7 +228,7 @@ class GAT(nn.Module):
         )
 
         # Don't predict: (1) what comes after BOS, (2) BOS itself
-        bos_pos_mask = torch.logical_and(idx[:, :-1] != BOS_TOKEN_ID, idx[:, 1:] != BOS_TOKEN_ID).view(-1).float()        
+        bos_pos_mask = torch.logical_and(idx[:, :-1] != self.bos_token_id, idx[:, 1:] != self.bos_token_id).view(-1).float()        
         traj_loss = traj_loss * bos_pos_mask
         abs_loss = abs_loss * bos_pos_mask
 

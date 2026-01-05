@@ -50,21 +50,68 @@ class DigitTokenizer:
     def decode(self, ids):
         return ''.join(self.inv_vocab[idx] for idx in ids)
     
-    def encode_multiplication(self, a, b, c):
-        text = f"<bos>{a} x {b} = {c}<eos>"
+    def _zpad(self, num, width):
+        """Zero-pad a number to fixed width (e.g., 7 -> '007' for width=3)"""
+        return str(num).zfill(width)
+    
+    def encode_multiplication(self, a, b, c, a_digits=None, b_digits=None, c_digits=None):
+        """
+        Encode multiplication with optional zero-padding for fixed-length sequences.
+        
+        Args:
+            a, b: operands
+            c: result
+            a_digits, b_digits: number of digits for operands (None = no padding)
+            c_digits: number of digits for result (None = no padding)
+            
+        Example:
+            For 1-3 digit × 1-3 digit multiplication with max 6-digit result:
+            encode_multiplication(7, 12, 84, a_digits=3, b_digits=3, c_digits=6)
+            -> "<bos>007 x 012 = 000084<eos>"
+        """
+        a_str = self._zpad(a, a_digits) if a_digits else str(a)
+        b_str = self._zpad(b, b_digits) if b_digits else str(b)
+        c_str = self._zpad(c, c_digits) if c_digits else str(c)
+        text = f"<bos>{a_str} x {b_str} = {c_str}<eos>"
         return self.encode(text)
 
-    def encode_addition(self, a, b, c):
-        text = f"<bos>{a} + {b} = {c}<eos>"
+    def encode_addition(self, a, b, c, a_digits=None, b_digits=None, c_digits=None):
+        """Encode addition with optional zero-padding."""
+        a_str = self._zpad(a, a_digits) if a_digits else str(a)
+        b_str = self._zpad(b, b_digits) if b_digits else str(b)
+        c_str = self._zpad(c, c_digits) if c_digits else str(c)
+        text = f"<bos>{a_str} + {b_str} = {c_str}<eos>"
         return self.encode(text)
     
-    def encode_subtraction(self, a, b, c):
-        text = f"<bos>{a} - {b} = {c}<eos>"
+    def encode_subtraction(self, a, b, c, a_digits=None, b_digits=None, c_digits=None):
+        """Encode subtraction with optional zero-padding."""
+        a_str = self._zpad(a, a_digits) if a_digits else str(a)
+        b_str = self._zpad(b, b_digits) if b_digits else str(b)
+        c_str = self._zpad(c, c_digits) if c_digits else str(c)
+        text = f"<bos>{a_str} - {b_str} = {c_str}<eos>"
         return self.encode(text)
     
-    def encode_division(self, a, b, c):
-        text = f"<bos>{a} / {b} = {c}<eos>"
+    def encode_division(self, a, b, c, a_digits=None, b_digits=None, c_digits=None):
+        """Encode division with optional zero-padding."""
+        a_str = self._zpad(a, a_digits) if a_digits else str(a)
+        b_str = self._zpad(b, b_digits) if b_digits else str(b)
+        c_str = self._zpad(c, c_digits) if c_digits else str(c)
+        text = f"<bos>{a_str} / {b_str} = {c_str}<eos>"
         return self.encode(text)
+    
+    @staticmethod
+    def fixed_seq_length(a_digits, b_digits, c_digits):
+        """
+        Calculate sequence length for fixed-format arithmetic.
+        
+        Format: <bos> + a + ' ' + op + ' ' + b + ' ' + '=' + ' ' + c + <eos>
+        Tokens: 1 + a_digits + 1 + 1 + 1 + b_digits + 1 + 1 + 1 + c_digits + 1
+              = a_digits + b_digits + c_digits + 8
+        
+        Example:
+            3-digit × 3-digit with 6-digit result: 3 + 3 + 6 + 8 = 20 tokens
+        """
+        return a_digits + b_digits + c_digits + 8
 
 
 # Data Loader (for scripted run)
@@ -125,4 +172,7 @@ def check_answer(query_tokens, answer_tokens, tokenizer):
     
     pred_digits = ''.join(c for c in pred if c.isdigit())
     true_digits = ''.join(c for c in true if c.isdigit())
-    return pred_digits == true_digits, pred_digits if pred_digits else pred, true_digits
+    # Strip leading zeros for comparison (handles zero-padded sequences)
+    pred_val = pred_digits.lstrip('0') or '0'
+    true_val = true_digits.lstrip('0') or '0'
+    return pred_val == true_val, pred_digits if pred_digits else pred, true_digits

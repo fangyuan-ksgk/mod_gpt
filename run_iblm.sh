@@ -44,103 +44,103 @@ MASTER_PORT=29500
 #        what config leads to maximal MBE compression? 
 # ========================================="
 
-# GPT2-xl: continue training from ckpt
-CKPT_PATH="logs/fw5B-gpt2-xl-gapt/state.pt"
-torchrun \
-    --nproc_per_node=$N_GPUS \
-    --master_addr=$MASTER_ADDR \
-    --master_port=$((MASTER_PORT++)) \
-    train_iblm.py \
-    --batch_size 32 \
-    --train_seq_len $TRAIN_SEQ_LEN \
-    --val_seq_len $VAL_SEQ_LEN \
-    --num_iterations 10000 \
-    --continue_from_ckpt $CKPT_PATH \
-    --save_checkpoint \
-    --use_gapt \
-    --entropy_patience 125 \
-    --entropy_min_delta 0.01 \
-    --mbe_patience 75 \
-    --mbe_min_delta 0.01 \
-    --mbe_weight 40.0 \
-    --model_size $MODEL_SIZE \
-    --run_info "GAPT: ModelSize=$MODEL_SIZE | GAPT | w=20.0" 
+# # GPT2-xl: continue training from ckpt
+# CKPT_PATH="logs/fw5B-gpt2-xl-gapt/state.pt"
+# torchrun \
+#     --nproc_per_node=$N_GPUS \
+#     --master_addr=$MASTER_ADDR \
+#     --master_port=$((MASTER_PORT++)) \
+#     train_iblm.py \
+#     --batch_size 32 \
+#     --train_seq_len $TRAIN_SEQ_LEN \
+#     --val_seq_len $VAL_SEQ_LEN \
+#     --num_iterations 10000 \
+#     --continue_from_ckpt $CKPT_PATH \
+#     --save_checkpoint \
+#     --use_gapt \
+#     --entropy_patience 125 \
+#     --entropy_min_delta 0.01 \
+#     --mbe_patience 75 \
+#     --mbe_min_delta 0.01 \
+#     --mbe_weight 40.0 \
+#     --model_size $MODEL_SIZE \
+#     --run_info "GAPT: ModelSize=$MODEL_SIZE | GAPT | w=20.0" 
     
-torchrun \
-    --nproc_per_node=$N_GPUS \
-    --master_addr=$MASTER_ADDR \
-    --master_port=$((MASTER_PORT++)) \
-    train_iblm.py \
-    --batch_size 32 \
-    --train_seq_len $TRAIN_SEQ_LEN \
-    --val_seq_len $VAL_SEQ_LEN \
-    --num_iterations 10000 \
-    --continue_from_ckpt $CKPT_PATH \
-    --mbe_weight 0.3 \
-    --save_checkpoint \
-    --reg_mbe \
-    --model_size $MODEL_SIZE \
-    --run_info "GAPT: ModelSize=$MODEL_SIZE | MBE regularization | w=0.3" 
+# torchrun \
+#     --nproc_per_node=$N_GPUS \
+#     --master_addr=$MASTER_ADDR \
+#     --master_port=$((MASTER_PORT++)) \
+#     train_iblm.py \
+#     --batch_size 32 \
+#     --train_seq_len $TRAIN_SEQ_LEN \
+#     --val_seq_len $VAL_SEQ_LEN \
+#     --num_iterations 10000 \
+#     --continue_from_ckpt $CKPT_PATH \
+#     --mbe_weight 0.3 \
+#     --save_checkpoint \
+#     --reg_mbe \
+#     --model_size $MODEL_SIZE \
+#     --run_info "GAPT: ModelSize=$MODEL_SIZE | MBE regularization | w=0.3" 
 
 
-MODEL_SIZE="large"
+# MODEL_SIZE="large"
 
-# Command 1: GAPT + Softplus (correct)
-torchrun \
-    --nproc_per_node=$N_GPUS \
-    --master_addr=$MASTER_ADDR \
-    --master_port=$((MASTER_PORT++)) \
-    train_iblm.py \
-    --batch_size 16 \
-    --train_seq_len $TRAIN_SEQ_LEN \
-    --val_seq_len $VAL_SEQ_LEN \
-    --num_iterations 1750 \
-    --use_gapt \
-    --entropy_patience 125 \
-    --entropy_min_delta 0.01 \
-    --mbe_patience 75 \
-    --mbe_min_delta 0.01 \
-    --mbe_weight 40.0 \
-    --save_checkpoint \
-    --use_softplus_gapt \
-    --model_size $MODEL_SIZE \
-    --run_info "GAPT: ModelSize=$MODEL_SIZE | CEPat=125 | MBEPat=75 | w=40.0 | Softplus=True" 
+# # Command 1: GAPT + Softplus (correct)
+# torchrun \
+#     --nproc_per_node=$N_GPUS \
+#     --master_addr=$MASTER_ADDR \
+#     --master_port=$((MASTER_PORT++)) \
+#     train_iblm.py \
+#     --batch_size 16 \
+#     --train_seq_len $TRAIN_SEQ_LEN \
+#     --val_seq_len $VAL_SEQ_LEN \
+#     --num_iterations 1750 \
+#     --use_gapt \
+#     --entropy_patience 125 \
+#     --entropy_min_delta 0.01 \
+#     --mbe_patience 75 \
+#     --mbe_min_delta 0.01 \
+#     --mbe_weight 40.0 \
+#     --save_checkpoint \
+#     --use_softplus_gapt \
+#     --model_size $MODEL_SIZE \
+#     --run_info "GAPT: ModelSize=$MODEL_SIZE | CEPat=125 | MBEPat=75 | w=40.0 | Softplus=True" 
 
-# Command 2: GAPT + SimpleClamp (correct)
-torchrun \
-    --nproc_per_node=$N_GPUS \
-    --master_addr=$MASTER_ADDR \
-    --master_port=$((MASTER_PORT++)) \
-    train_iblm.py \
-    --batch_size 16 \
-    --train_seq_len $TRAIN_SEQ_LEN \
-    --val_seq_len $VAL_SEQ_LEN \
-    --num_iterations 1750 \
-    --use_gapt \
-    --entropy_patience 125 \
-    --entropy_min_delta 0.01 \
-    --mbe_patience 75 \
-    --mbe_min_delta 0.01 \
-    --mbe_weight 40.0 \
-    --save_checkpoint \
-    --model_size $MODEL_SIZE \
-    --run_info "GAPT: ModelSize=$MODEL_SIZE | CEPat=125 | MBEPat=75 | w=40.0 | SimpleClamp (1e-5)"
+# # Command 2: GAPT + SimpleClamp (correct)
+# torchrun \
+#     --nproc_per_node=$N_GPUS \
+#     --master_addr=$MASTER_ADDR \
+#     --master_port=$((MASTER_PORT++)) \
+#     train_iblm.py \
+#     --batch_size 16 \
+#     --train_seq_len $TRAIN_SEQ_LEN \
+#     --val_seq_len $VAL_SEQ_LEN \
+#     --num_iterations 1750 \
+#     --use_gapt \
+#     --entropy_patience 125 \
+#     --entropy_min_delta 0.01 \
+#     --mbe_patience 75 \
+#     --mbe_min_delta 0.01 \
+#     --mbe_weight 40.0 \
+#     --save_checkpoint \
+#     --model_size $MODEL_SIZE \
+#     --run_info "GAPT: ModelSize=$MODEL_SIZE | CEPat=125 | MBEPat=75 | w=40.0 | SimpleClamp (1e-5)"
 
-# Command 3: MBE-regularized (removed stray space, cleaned up unused args)
-torchrun \
-    --nproc_per_node=$N_GPUS \
-    --master_addr=$MASTER_ADDR \
-    --master_port=$((MASTER_PORT++)) \
-    train_iblm.py \
-    --batch_size 16 \
-    --train_seq_len $TRAIN_SEQ_LEN \
-    --val_seq_len $VAL_SEQ_LEN \
-    --num_iterations 1750 \
-    --mbe_weight 0.3 \
-    --reg_mbe \
-    --save_checkpoint \
-    --model_size $MODEL_SIZE \
-    --run_info "MBE-regularized: ModelSize=$MODEL_SIZE | w=0.3"
+# # Command 3: MBE-regularized (removed stray space, cleaned up unused args)
+# torchrun \
+#     --nproc_per_node=$N_GPUS \
+#     --master_addr=$MASTER_ADDR \
+#     --master_port=$((MASTER_PORT++)) \
+#     train_iblm.py \
+#     --batch_size 16 \
+#     --train_seq_len $TRAIN_SEQ_LEN \
+#     --val_seq_len $VAL_SEQ_LEN \
+#     --num_iterations 1750 \
+#     --mbe_weight 0.3 \
+#     --reg_mbe \
+#     --save_checkpoint \
+#     --model_size $MODEL_SIZE \
+#     --run_info "MBE-regularized: ModelSize=$MODEL_SIZE | w=0.3"
 
 # =============================================================================="
 # Ablate on GPT-2 large || 1750 steps || MBE weight, GAPT or MBE regularization
@@ -242,25 +242,25 @@ torchrun \
 # done
 
 
-# NUM_ITERATIONS=8000
-# # Baseline experiment (10B fineweb dataset)
+NUM_ITERATIONS=20000
+# Baseline experiment (10B fineweb dataset)
 # # -----------------------------------------
-# for MODEL_SIZE in "small" "medium" "large"; do
-#   torchrun \
-#     --nproc_per_node=$N_GPUS \
-#     --master_addr=$MASTER_ADDR \
-#     --master_port=$((MASTER_PORT++)) \
-#     train_iblm.py \
-#     --batch_size $BATCH_SIZE \
-#     --train_seq_len $TRAIN_SEQ_LEN \
-#     --val_seq_len $VAL_SEQ_LEN \
-#     --num_iterations $NUM_ITERATIONS \
-#     --patch_size 8 \
-#     --no_reg \
-#     --model_size $MODEL_SIZE \
-#     --save_checkpoint \
-#     --run_info "Baseline: ModelSize=$MODEL_SIZE" 
-# done 
+for MODEL_SIZE in "xl"; do
+  torchrun \
+    --nproc_per_node=$N_GPUS \
+    --master_addr=$MASTER_ADDR \
+    --master_port=$((MASTER_PORT++)) \
+    train_iblm.py \
+    --batch_size $BATCH_SIZE \
+    --train_seq_len $TRAIN_SEQ_LEN \
+    --val_seq_len $VAL_SEQ_LEN \
+    --num_iterations $NUM_ITERATIONS \
+    --no_reg \
+    --model_size $MODEL_SIZE \
+    --save_checkpoint \
+    --save_checkpoint_every 2000 \
+    --run_info "Baseline: ModelSize=$MODEL_SIZE" 
+done 
 
 
 
