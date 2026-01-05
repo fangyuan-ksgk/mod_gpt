@@ -53,16 +53,9 @@ def parse_args():
     # Architecture / Vocab
     parser.add_argument("--abstract_vocab_size", type=int, default=256)
 
-    # 2-stage training
-    parser.add_argument("--compression_frac", type=float, default=0.5)
-    parser.add_argument("--comp_span_abs", type=int, default=1792)
-    parser.add_argument("--comp_span_traj", type=int, default=1792)
-    parser.add_argument("--mem_span_abs", type=int, default=1792)
-    parser.add_argument("--mem_span_traj", type=int, default=1792)
-    parser.add_argument("--info_gain_vocab_compression", action="store_true", default=False) # info gain loss + no H(A) reg. (compression stage)
-    parser.add_argument("--info_gain_compression", action="store_true", default=False) # info gain loss + H(A) reg. (compression stage)
-    parser.add_argument("--cond_ppl_vocab_compression", action="store_true", default=False) # conditional perplexity loss + no H(A) reg. (compression stage)
-    parser.add_argument("--cond_ppl_compression", action="store_true", default=False) # conditional perplexity loss + H(A) reg. (compression stage)
+    # Memory compression span
+    parser.add_argument("--span_abs", type=int, default=1792)
+    parser.add_argument("--span_traj", type=int, default=1792)
 
     # Loss / Regularization
     parser.add_argument("--alpha_base", type=float, default=1.0)  # base loss weight
@@ -250,16 +243,9 @@ class Hyperparameters:
     temperature: float = 5.0
     min_temperature: float = 0.5
     
-    # 2stage training
-    compression_frac: float = 0.5
-    comp_span_abs: int = 8
-    comp_span_traj: int = 8
-    mem_span_abs: int = 1792
-    mem_span_traj: int = 1792
-    info_gain_vocab_compression: bool = False
-    info_gain_compression: bool = False
-    cond_ppl_vocab_compression: bool = False
-    cond_ppl_compression: bool = False
+    # Memory span config
+    span_abs: int = 1792
+    span_traj: int = 1792
     
     alpha_base: float = 1.0
     alpha_loss: float = 0.0
@@ -428,17 +414,12 @@ temperature_warmup = torch.cat([
 
 
 for i in range(warmup_steps):
-    if i < warmup_steps * args.compression_frac: 
-        phase = "compression" # [W] Wild idea: intentional vocab collapse during 'compression' stage by muting H(A) regularization
-        memory_span_abs = torch.tensor(args.comp_span_abs, dtype=torch.int, device="cuda")
-        memory_span_traj = torch.tensor(args.comp_span_traj, dtype=torch.int, device="cuda")
-    else: 
-        phase = "memorization"
-        memory_span_abs = torch.tensor(args.mem_span_abs, dtype=torch.int, device="cuda")
-        memory_span_traj = torch.tensor(args.mem_span_traj, dtype=torch.int, device="cuda")
+
+    memory_span_abs = torch.tensor(args.span_abs, dtype=torch.int, device="cuda")
+    memory_span_traj = torch.tensor(args.span_traj, dtype=torch.int, device="cuda")
 
     tokens = torch.randint(0, args.vocab_size, size=(1, args.train_seq_len,), device="cuda")
-    print(f" :: Sorl search propagation starts with tokens of length {tokens.shape[1]} | phase: {phase} | memory span: {memory_span_abs} x {memory_span_traj}")
+    print(f" :: Sorl search propagation starts with tokens of length {tokens.shape[1]} | memory span: {memory_span_abs} x {memory_span_traj}")
     forward_start = time.time() 
     K = args.K  # Use fixed K for warmup (kernel compilation only)
     # GAT specific function 
@@ -449,27 +430,10 @@ for i in range(warmup_steps):
                                                                           temperature=temperature_warmup)
     search_end = time.time()
     print(f" :: Sorl search takes {search_end - search_start} second")
-        
-    
-    if phase == "memorization": 
-        base_loss = model.forward(tokens, memory_span_abs, memory_span_traj, attn_blocksize)[0].mean()
-        info_loss, abs_loss, zipf_loss = mem_loss_fn(search_tokens, model, base_loss.detach(), memory_span_abs, memory_span_traj, attn_blocksize)
-        loss = args.alpha_base * base_loss + args.alpha_info_gain * info_loss + args.alpha_loss * abs_loss + args.alpha_marg_ent * zipf_loss
-    else: # [W]
-        if args.info_gain_vocab_compression: 
-            base_loss = model.forward(tokens, memory_span_abs, memory_span_traj, attn_blocksize)[0].mean()
-            info_loss, abs_loss, zipf_loss = mem_loss_fn(search_tokens, model, base_loss.detach(), memory_span_abs, memory_span_traj, attn_blocksize)
-            loss = args.alpha_base * base_loss + args.alpha_info_gain * info_loss + args.alpha_loss * abs_loss
-        elif args.info_gain_compression: 
-            base_loss = model.forward(tokens, memory_span_abs, memory_span_traj, attn_blocksize)[0].mean()
-            info_loss, abs_loss, zipf_loss = mem_loss_fn(search_tokens, model, base_loss.detach(), memory_span_abs, memory_span_traj, attn_blocksize)
-            loss = args.alpha_base * base_loss + args.alpha_info_gain * info_loss + args.alpha_loss * abs_loss  + args.alpha_marg_ent * zipf_loss
-        elif args.cond_ppl_vocab_compression: 
-            cond_traj_loss, abs_loss, zipf_loss = comp_loss_fn(search_tokens, model, memory_span_abs, memory_span_traj, attn_blocksize)
-            loss = cond_traj_loss + args.alpha_loss * abs_loss
-        elif args.cond_ppl_compression: 
-            cond_traj_loss, abs_loss, zipf_loss = comp_loss_fn(search_tokens, model, memory_span_abs, memory_span_traj, attn_blocksize)
-            loss = cond_traj_loss + args.alpha_loss * abs_loss + args.alpha_marg_ent * zipf_loss
+            
+    base_loss = model.forward(tokens, memory_span_abs, memory_span_traj, attn_blocksize)[0].mean()
+    info_loss, abs_loss, zipf_loss = mem_loss_fn(search_tokens, model, base_loss.detach(), memory_span_abs, memory_span_traj, attn_blocksize)
+    loss = args.alpha_base * base_loss + args.alpha_info_gain * info_loss + args.alpha_loss * abs_loss + args.alpha_marg_ent * zipf_loss
 
     forward_end = time.time()
     print(f" :: Loss computation takes {forward_end - search_end} second")
@@ -536,14 +500,8 @@ for step in range(train_steps + 1):
     else: 
         attn_blocksize = torch.tensor(64*((step/train_steps * (1792 - 64) + 64)//64), dtype=torch.int, device='cuda')    
     
-    if step < train_steps * args.compression_frac: 
-        phase = "compression"
-        memory_span_abs = torch.tensor(args.comp_span_abs, dtype=torch.int, device="cuda")
-        memory_span_traj = torch.tensor(args.comp_span_traj, dtype=torch.int, device="cuda")
-    else: 
-        phase = "memorization"
-        memory_span_abs = torch.tensor(args.mem_span_abs, dtype=torch.int, device="cuda")
-        memory_span_traj = torch.tensor(args.mem_span_traj, dtype=torch.int, device="cuda")
+    memory_span_abs = torch.tensor(args.span_abs, dtype=torch.int, device="cuda")
+    memory_span_traj = torch.tensor(args.span_traj, dtype=torch.int, device="cuda")
 
     # --- coarse to fine search ---
     K = get_current_K(step, train_steps, train_vocab_util, curr_K)
@@ -631,25 +589,10 @@ for step in range(train_steps + 1):
                                                                 )
 
         # --- compute loss --- 
-        if phase == "memorization": 
-            base_loss = model.forward(tokens, memory_span_abs, memory_span_traj, attn_blocksize)[0].mean()
-            info_loss, abs_loss, zipf_loss = mem_loss_fn(search_tokens, model, base_loss.detach(), memory_span_abs, memory_span_traj, attn_blocksize)
-            loss = args.alpha_base * base_loss + args.alpha_info_gain * info_loss + args.alpha_loss * abs_loss
-        else: 
-            if args.info_gain_vocab_compression: 
-                base_loss = model.forward(tokens, memory_span_abs, memory_span_traj, attn_blocksize)[0].mean()
-                info_loss, abs_loss, zipf_loss = mem_loss_fn(search_tokens, model, base_loss.detach(), memory_span_abs, memory_span_traj, attn_blocksize)
-                loss = args.alpha_base * base_loss + args.alpha_info_gain * info_loss + args.alpha_loss * abs_loss
-            elif args.info_gain_compression: 
-                base_loss = model.forward(tokens, memory_span_abs, memory_span_traj, attn_blocksize)[0].mean()
-                info_loss, abs_loss, zipf_loss = mem_loss_fn(search_tokens, model, base_loss.detach(), memory_span_abs, memory_span_traj, attn_blocksize)
-                loss = args.alpha_base * base_loss + args.alpha_info_gain * info_loss + args.alpha_loss * abs_loss  + args.alpha_marg_ent * zipf_loss
-            elif args.cond_ppl_vocab_compression: 
-                cond_traj_loss, abs_loss, zipf_loss = comp_loss_fn(search_tokens, model, memory_span_abs, memory_span_traj, attn_blocksize)
-                loss = cond_traj_loss + args.alpha_loss * abs_loss
-            elif args.cond_ppl_compression: 
-                cond_traj_loss, abs_loss, zipf_loss = comp_loss_fn(search_tokens, model, memory_span_abs, memory_span_traj, attn_blocksize)
-                loss = cond_traj_loss + args.alpha_loss * abs_loss + args.alpha_marg_ent * zipf_loss
+        base_loss = model.forward(tokens, memory_span_abs, memory_span_traj, attn_blocksize)[0].mean()
+        info_loss, abs_loss, zipf_loss = mem_loss_fn(search_tokens, model, base_loss.detach(), memory_span_abs, memory_span_traj, attn_blocksize)
+        loss = args.alpha_base * base_loss + args.alpha_info_gain * info_loss + args.alpha_loss * abs_loss
+
         loss.backward()
         
     for param in model.parameters():

@@ -66,12 +66,12 @@ ALPHA_INFO_GAIN=100.0
 MODEL_SIZE="small"
 
 # Can we train a Info-Gain SoRL on fineweb5B at GPT2-small scale? 
-for COMP_SPAN_ABS in 64 128 256 512; do
+for COMP_SPAN_ABS in 64 128 256 1024; do
   torchrun \
   --nproc_per_node=$N_GPUS \
   --master_addr=$MASTER_ADDR \
   --master_port=$MASTER_PORT \
-  train_sorl_v3.py \
+  train_sorl.py \
   --batch_size $BATCH_SIZE \
   --train_files "$TRAIN_FILES" \
   --val_files "$VAL_FILES" \
@@ -81,7 +81,7 @@ for COMP_SPAN_ABS in 64 128 256 512; do
   --num_rollouts $NUM_ROLLOUTS \
   --K $K \
   --abstract_vocab_size $ABSTRACT_VOCAB_SIZE \
-  --comp_span_abs $COMP_SPAN_ABS \
+  --span_abs $COMP_SPAN_ABS \
   --max_iterations $MAX_ITERATIONS \
   --min_temperature 0.0 \
   --temperature 5.0 \
