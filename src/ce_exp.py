@@ -10,11 +10,28 @@ from collections import defaultdict
 from torch.utils.data import DataLoader, TensorDataset
 
 from src.gapt import patch_mbe as patch_mbe3
+from src.model import GPT, GPTConfig
 
 # utils function
 # ------------------------------------------------------------
 
+def sample_sequences(n_samples, seq_len=32, vocab_size=50257, subset="first_half"):
+    """
+    Generate random sequences from a subset of the vocabulary.
+    This simulates 'disjoint distributions' similar to sample_p1/p2.
+    """
+    half_vocab = vocab_size // 2
+    if subset == "first_half":
+        # Tokens from 0 to half_vocab
+        return torch.randint(0, half_vocab, (n_samples, seq_len))
+    else:
+        # Tokens from half_vocab to vocab_size
+        return torch.randint(half_vocab, vocab_size, (n_samples, seq_len))
+
 def sample_p1(n_samples, in_dim=10, std=0.25):
+    if isinstance(in_dim, tuple): # Handle image/sequence shapes if passed blindly
+         return torch.randn(n_samples, *in_dim)
+    
     half_dim = in_dim // 2
     first_half = torch.randn(n_samples, half_dim) * std + 1.0
     second_half = torch.randn(n_samples, in_dim - half_dim) * std
@@ -76,21 +93,34 @@ def load_param_shift(path="param_shift.pkl"):
         param_shift = pickle.load(f)
     return param_shift
 
-def build_dataset(train_size, val_size, model, in_dim, param_shift=None, shift_magnitude=1.0):
+def build_dataset(train_size, val_size, model, in_dim, param_shift=None, shift_magnitude=1.0, data_type="vector"):
     if param_shift is None: 
         param_shift = generate_param_shift(model)
     data_size = train_size + val_size 
 
     # sample inputs (p1 & p2)    
-    x1 = sample_p1(data_size, in_dim)
-    x2 = sample_p2(data_size, in_dim)
+    if data_type == "gpt":
+        # in_dim here is interpreted as (seq_len, vocab_size) or just seq_len
+        seq_len = in_dim if isinstance(in_dim, int) else 32
+        vocab_size = model.config.vocab_size if hasattr(model, 'config') else 50257
+        x1 = sample_sequences(data_size, seq_len, vocab_size, "first_half")
+        x2 = sample_sequences(data_size, seq_len, vocab_size, "second_half")
+    else:
+        x1 = sample_p1(data_size, in_dim)
+        x2 = sample_p2(data_size, in_dim)
     
+    # Ensure model is on the right device for generation
+    device = next(model.parameters()).device
+    x1, x2 = x1.to(device), x2.to(device)
+
     model_positive_shift = copy.deepcopy(model)
     mlp_positive_shift = apply_param_shift(model_positive_shift, param_shift, shift_magnitude)
     y_positive, h_positive = mlp_positive_shift(x1)
+    
     model_negative_shift = copy.deepcopy(model)
     mlp_negative_shift = apply_param_shift(model_negative_shift, param_shift, -shift_magnitude)
     y_negative, h_negative = mlp_negative_shift(x2)
+    
     print(f"- Dataset constructed with {data_size} positive & negative samples")
     trainset = {"positive": (x1[:train_size], y_positive.detach()[:train_size]), "negative": (x2[:train_size], y_negative.detach()[:train_size])}
     valset = {"positive": (x1[train_size:], y_positive.detach()[train_size:]), "negative": (x2[train_size:], y_negative.detach()[train_size:])}
@@ -240,6 +270,98 @@ def mbe_loss(x, patch_size=8):
 
 def l1_loss(y_pred, y): 
     return torch.nn.functional.l1_loss(y_pred, y)
+
+class GPTAdapter(nn.Module):
+    """
+    Wraps the GPT model from src.model to conform to the CE experiment interface:
+    forward(x) -> logits, hidden
+    compute_loss(x, y) -> dict
+    """
+    def __init__(self, config):
+        super().__init__()
+        self.model = GPT(config)
+        self.config = config
+        
+    def forward(self, x):
+        # We need to extract logits and hidden state.
+        # Since src.model.GPT.forward returns loss directly, we'll manually access components
+        # or rely on a modified forward.
+        # Here we replicate the forward pass logic briefly to get internal states:
+        
+        # 1. Embed
+        idx = x
+        b, t = idx.size()
+        
+        # We need block mask if we use the exact forward, but for simplicity in CE exp
+        # we might skip complex masking or generate a simple one.
+        # However, GPT.forward creates it internally.
+        
+        # To avoid duplicating code, let's look at how GPT is implemented.
+        # It computes x = wte(idx), then layers, then head.
+        
+        x = self.model.transformer.wte(idx)
+        # x = norm(x) # In src/model.py, norm is applied after wte? 
+        # Checking src/model.py: x = self.transformer.wte(idx); x = norm(x)
+        # We need the 'norm' function from src.model
+        from src.model import norm, create_block_mask
+        x = norm(x)
+        x0 = x
+        v1 = None
+        
+        # Create a dummy block mask for causal attention
+        # (Simplified: assume standard causal for this exp)
+        # For strict compatibility, we should call the internal create_block_mask
+        # or just pass None if the model handles it (it doesn't seem to handle None for block_mask in Block.forward).
+        
+        # Hack: The src.model.GPT expects 'attn_blocksize' in forward.
+        # We'll re-implement a simple forward here that extracts what we need.
+        
+        device = x.device
+        S = idx.shape[1]
+        
+        # Helper to create standard causal mask if needed, but FlexAttention usually needs one.
+        # If we are using the 'CustomGPT' we just ported to HF, it works differently.
+        # Assuming we wrap the src.model.GPT:
+        
+        # We'll use the model's own forward to get the loss, but we need logits/hidden for the experiment.
+        # Let's just modify the forward to run the layers manually.
+        
+        # Generate simple causal block mask if possible, or just pass None 
+        # (depends on if CausalSelfAttention handles None block_mask). 
+        # Looking at code: flex_attention requires block_mask usually.
+        
+        # For the sake of this experiment, let's assume we can pass a simple causal mask or the model handles it.
+        # If using FlexAttention, we strictly need a block mask.
+        
+        docs = (idx == 50256).cumsum(1)
+        def document_causal_mask(b, h, q_idx, kv_idx):
+             return q_idx >= kv_idx
+
+        block_mask = create_block_mask(document_causal_mask, None, None, S, S, device=device, _compile=False)
+
+        for block in self.model.transformer.h:
+            x, v1 = block(x, v1, x0, block_mask)
+            
+        h = x # Hidden representation
+        
+        x = norm(x)
+        logits = self.model.lm_head(x)
+        # activation scaling from model
+        logits = 30 * torch.tanh(logits / 30)
+        
+        return logits, h
+
+    def compute_loss(self, x, y, patch_size=8):
+        logits, h = self(x)
+        # y here is the TARGET LOGITS from the teacher (distillation)
+        # So we use MSE or KL Div, not CrossEntropy against tokens.
+        # ce_exp uses l1_loss by default.
+        
+        loss_dict = {
+            "l1": l1_loss(logits, y), 
+            "mbe": mbe_loss(h, patch_size) # MBE on hidden states
+        }
+        return loss_dict
 
 # Simple MLP model
 # ------------------------------------------------------------
