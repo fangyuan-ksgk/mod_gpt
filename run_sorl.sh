@@ -63,9 +63,10 @@ ALPHA_MARG_ENT=1.0
 DECAY=0.8
 TARGET_VOCAB_UTIL=0.8
 ALPHA_INFO_GAIN=100.0
+MODEL_SIZE="small"
 
 # Can we train a Info-Gain SoRL on fineweb5B at GPT2-small scale? 
-for MODEL_SIZE in "small"; do
+for COMP_SPAN_ABS in 64 128 256 512; do
   torchrun \
   --nproc_per_node=$N_GPUS \
   --master_addr=$MASTER_ADDR \
@@ -76,10 +77,11 @@ for MODEL_SIZE in "small"; do
   --val_files "$VAL_FILES" \
   --train_seq_len $TRAIN_SEQ_LEN \
   --val_seq_len $VAL_SEQ_LEN \
-  --num_iterations 10000 \
+  --num_iterations 1750 \
   --num_rollouts $NUM_ROLLOUTS \
   --K $K \
   --abstract_vocab_size $ABSTRACT_VOCAB_SIZE \
+  --comp_span_abs $COMP_SPAN_ABS \
   --max_iterations $MAX_ITERATIONS \
   --min_temperature 0.0 \
   --temperature 5.0 \
@@ -89,8 +91,7 @@ for MODEL_SIZE in "small"; do
   --target_vocab_util $TARGET_VOCAB_UTIL \
   --use_static_memory_span \
   --alpha_info_gain $ALPHA_INFO_GAIN \
-  --save_checkpoint_every 1000 \
-  --run_info "FineWeb5B ModelSize=$MODEL_SIZE | alpha_info_gain=$ALPHA_INFO_GAIN | Orthogonal init | "
+  --run_info "FineWeb0.8B ModelSize=$MODEL_SIZE | alpha_info_gain=$ALPHA_INFO_GAIN | Orthogonal init | bottleneck compression | abs_mem_span=$COMP_SPAN_ABS"
 done
 
 # =========================

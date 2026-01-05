@@ -690,7 +690,9 @@ class SoRLLoss_v11(nn.Module):
 
         # --- KL(p(s), p(s | a)) ---
         cond_traj_logits = logits[:, :-1][:, ~abs_positions]
-        md_loss = mutual_distillation_loss(base_logits[:, :-1], cond_traj_logits)
+        # md_loss = mutual_distillation_loss(base_logits[:, :-1], cond_traj_logits)
+        # md_loss = mutual_distillation_loss(base_logits[:, :-1, :model.vocab_sizes[0]], cond_traj_logits[..., :model.vocab_sizes[0]])
+        md_loss = mutual_distillation_loss(base_logits[:, :-1, :model.vocab_sizes[0]], cond_traj_logits[..., :model.vocab_sizes[0]].detach())
 
         # --- Return: p(s | a)/p(s), p(a | s), KL(p(a_t, a_t+1), soft_zipf_prior), mutual distillation loss ---
         return info_loss, abs_loss, soft_zipf_kl, md_loss 
