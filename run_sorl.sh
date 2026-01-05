@@ -89,7 +89,7 @@ for COMP_SPAN_ABS in 64 128 256 1024; do
   --alpha_marg_ent $ALPHA_MARG_ENT \
   --decay $DECAY \
   --target_vocab_util $TARGET_VOCAB_UTIL \
-  --use_static_memory_span \
+  --no_attn_sweep \
   --alpha_info_gain $ALPHA_INFO_GAIN \
   --run_info "FineWeb0.8B ModelSize=$MODEL_SIZE | alpha_info_gain=$ALPHA_INFO_GAIN | Orthogonal init | bottleneck compression | abs_mem_span=$COMP_SPAN_ABS"
 done
