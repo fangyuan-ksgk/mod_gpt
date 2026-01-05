@@ -48,7 +48,8 @@ def parse_args():
     parser.add_argument("--min_a", type=float, default=1e-5)
     parser.add_argument("--use_softplus_gapt", action="store_true")
     parser.add_argument("--save_checkpoint", action="store_true")
-
+    parser.add_argument("--save_checkpoint_every", type=int, default=0)
+    
     parser.add_argument("--model_size", type=str, default="small")
     parser.add_argument("--run_info", type=str, default="")
     
@@ -201,6 +202,7 @@ class Hyperparameters:
     # evaluation and logging
     val_loss_every : int = 125 # every how many steps to evaluate val loss? 0 for only at the end
     save_checkpoint : bool = False
+    save_checkpoint_every : int = 0
     no_reg: bool = False
     switch_phase: bool = False # use gapt
     mbe_weight: float = 1.0
@@ -445,6 +447,12 @@ for step in range(train_steps + 1):
                 torch.save(log, f"logs/{run_id}/state_step{step:06d}.pt") 
         # the last step only has the validation loop, so break to avoid training
         break
+
+    elif args.save_checkpoint_every > 0 and step % args.save_checkpoint_every == 0:
+        if master_process:
+            log = dict(step=step, code=code, model=model.state_dict(), optimizers=[opt.state_dict() for opt in optimizers])
+            os.makedirs(f"logs/{run_id}", exist_ok=True)
+            torch.save(log, f"logs/{run_id}/state_step{step:06d}.pt")
             
     # --------------- TRAINING SECTION -----------------
     for accum_step in range(train_accumulation_steps): 
