@@ -43,9 +43,9 @@ MASTER_PORT=29500
 #        | MBE composition mode sweep: naive, max, softmax
 # ========================================="
 
-MODEL_SIZE="small"
+MODEL_SIZE="medium"
 
-for MBE_COMP_MODE in "naive" "max" "softmax" ; do
+for MBE_COMP_MODE in "decay" ; do
   torchrun \
       --nproc_per_node=$N_GPUS \
       --master_addr=$MASTER_ADDR \
@@ -65,24 +65,6 @@ for MBE_COMP_MODE in "naive" "max" "softmax" ; do
       --mbe_schedule "all_middle" \
       --model_size $MODEL_SIZE \
       --run_info "GAPT: ModelSize=$MODEL_SIZE | GAPT | w=20.0 | MBE comp mode: $MBE_COMP_MODE | regularize on all middle layers" 
-done
-
-for MBE_COMP_MODE in "naive" "max" "softmax" ; do
-  torchrun \
-      --nproc_per_node=$N_GPUS \
-      --master_addr=$MASTER_ADDR \
-      --master_port=$((MASTER_PORT++)) \
-      train_iblm.py \
-      --batch_size 32 \
-      --train_seq_len $TRAIN_SEQ_LEN \
-      --val_seq_len $VAL_SEQ_LEN \
-      --num_iterations 1750 \
-      --reg_mbe \
-      --mbe_weight 1.0 \
-      --mbe_comp_mode $MBE_COMP_MODE \
-      --mbe_schedule "all_middle" \
-      --model_size $MODEL_SIZE \
-      --run_info "MBE regularization: ModelSize=$MODEL_SIZE | w=1.0 | MBE comp mode: $MBE_COMP_MODE | regularize on all middle layers" 
 done
 
 # torchrun \
