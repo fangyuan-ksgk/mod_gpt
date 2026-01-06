@@ -104,8 +104,10 @@ class GAT(nn.Module):
             skip_abs = accum_levels[b, q_idx] > accum_levels[b, kv_idx]
             traj_memory_span = (q_idx - kv_idx) <= memory_span_traj
             abs_memory_span = (q_idx - kv_idx) <= memory_span_abs
-            # memory_compression_mask = to_abstract | (from_abstract & abs_memory_span) | (~from_abstract & traj_memory_span & ~skip_abs)
-            memory_compression_mask = to_abstract | (from_abstract & abs_memory_span) | (~from_abstract & traj_memory_span)
+            # --- bottleneck mask ---
+            memory_compression_mask = to_abstract | (from_abstract & abs_memory_span) | (~from_abstract & traj_memory_span & ~skip_abs)
+            # --- compression mask ---
+            # memory_compression_mask = to_abstract | (from_abstract & abs_memory_span) | (~from_abstract & traj_memory_span)
 
             return causal_mask & document_mask & window_mask & memory_compression_mask
 
@@ -133,83 +135,6 @@ class GAT(nn.Module):
 
     def forward(self, idx, memory_span_abs, memory_span_traj, attn_blocksize):
         x = self._forward_pass(idx, memory_span_abs, memory_span_traj, attn_blocksize)
-        logits = self.lm_head(x)
-        logits = 30 * torch.tanh(logits / 30)
-        logits = logits.float()
-
-        # --- loss (traj & abs) --- 
-        traj_loss = F.cross_entropy(
-            logits[:, :-1, :self.vocab_sizes[0]].contiguous().view(-1, self.vocab_sizes[0]), 
-            idx[:, 1:].clamp(max=self.vocab_sizes[0]-1).contiguous().view(-1).long(), 
-            reduction="none"
-        )
-
-        abs_loss = F.cross_entropy(
-            logits[:, :-1, self.vocab_sizes[0]:].contiguous().view(-1, self.vocab_sizes[1]), 
-            (idx[:, 1:] - self.vocab_sizes[0]).clamp(min=0).contiguous().view(-1).long(), 
-            reduction="none"
-        )
-
-        # Don't predict: (1) what comes after BOS, (2) BOS itself
-        bos_pos_mask = torch.logical_and(idx[:, :-1] != self.bos_token_id, idx[:, 1:] != self.bos_token_id).view(-1).float()        
-        traj_loss = traj_loss * bos_pos_mask
-        abs_loss = abs_loss * bos_pos_mask
-
-        return traj_loss, abs_loss, logits
-
-    def _forward_with_noise(self, idx: torch.Tensor, memory_span_abs: int, memory_span_traj: int, attn_blocksize: int, noise_scale: float = 0.0):
-
-        docs = (idx == self.bos_token_id).cumsum(1)
-        
-        levels = (idx >= self.vocab_sizes[0]).long()
-        accum_levels = levels.cumsum(1)
-
-        def causal_mask(b, h, q_idx, kv_idx):
-            causal_mask = q_idx >= kv_idx
-            document_mask = docs[b, q_idx] == docs[b, kv_idx]
-            window_mask = q_idx - kv_idx < attn_blocksize
-            to_abstract = levels[b, kv_idx] > 0
-            from_abstract = levels[b, q_idx] > 0
-            
-            skip_abs = accum_levels[b, q_idx] > accum_levels[b, kv_idx]
-            traj_memory_span = (q_idx - kv_idx) <= memory_span_traj
-            abs_memory_span = (q_idx - kv_idx) <= memory_span_abs
-            memory_compression_mask = to_abstract | (from_abstract & abs_memory_span) | (~from_abstract & traj_memory_span & ~skip_abs)
-            # memory_compression_mask = to_abstract | (from_abstract & abs_memory_span) | (~from_abstract & traj_memory_span)
-
-            return causal_mask & document_mask & window_mask & memory_compression_mask
-
-        S = idx.shape[1]
-        block_mask = create_block_mask(causal_mask, None, None, S, S, device=self.device, _compile=self._compile)
-
-        
-        x = self.transformer.wte(idx)
-
-        # --- add noise to traj embeddings ---
-        traj_mask = (idx < self.vocab_sizes[0]).unsqueeze(-1).float()
-        traj_noise = torch.randn_like(x) * noise_scale * traj_mask
-
-        x = x + traj_noise
-
-        x = norm(x)
-        x0 = x
-        v1 = None
-
-        skip_connections = []
-        for i in range(self.num_encoder_layers):
-            x, v1 = self.transformer.h[i](x, v1, x0, block_mask)
-            skip_connections.append(x)
-        
-        for i in range(self.num_decoder_layers):
-            skip_idx = self.num_encoder_layers - 1 - i
-            x = x + self.skip_weights[i] * skip_connections[skip_idx]
-            x, v1 = self.transformer.h[self.num_encoder_layers + i](x, v1, x0, block_mask)
-
-        x = norm(x)
-        return x
-
-    def forward_with_noise(self, idx, memory_span_abs, memory_span_traj, attn_blocksize, noise_scale=0.0):
-        x = self._forward_with_noise(idx, memory_span_abs, memory_span_traj, attn_blocksize, noise_scale)
         logits = self.lm_head(x)
         logits = 30 * torch.tanh(logits / 30)
         logits = logits.float()
