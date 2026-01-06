@@ -383,6 +383,26 @@ class SimpleModel(nn.Module):
         
     def get_hidden_representation(self, x):
         return self.activation(self.layer1(x))
+
+
+class SimpleModelV2(nn.Module):
+    def __init__(self, input_dim=10, hidden_dim=50, output_dim=1):
+        super().__init__()
+        self.layer1 = nn.Linear(input_dim, hidden_dim)
+        self.activation = nn.ReLU()
+        self.layer2 = nn.Linear(hidden_dim, output_dim)
+        
+    def forward(self, x):
+        h = self.activation(self.layer1(x))
+        return self.layer2(h), h
+    
+    def compute_loss(self, x, y, patch_size=8): 
+        y_pred, h = self(x)
+        loss_dict = {"l1": l1_loss(y_pred, y), "mbe": mbe_loss(h, patch_size)}
+        return loss_dict
+        
+    def get_hidden_representation(self, x):
+        return self.activation(self.layer1(x))
     
     
     

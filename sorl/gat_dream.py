@@ -139,7 +139,7 @@ class GAT(nn.Module):
         logits = 30 * torch.tanh(logits / 30)
         logits = logits.float()
 
-        # --- loss (traj & abs) --- 
+        # --- loss (traj & abs) --- | This might be too slow
         traj_loss = F.cross_entropy(
             logits[:, :-1, :self.vocab_sizes[0]].contiguous().view(-1, self.vocab_sizes[0]), 
             idx[:, 1:].clamp(max=self.vocab_sizes[0]-1).contiguous().view(-1).long(), 

@@ -375,6 +375,8 @@ def get_mbe_layer_mask(
     start_layer = skip_first
     end_layer = n_layer - skip_last
     n_active = end_layer - start_layer
+
+    # A simpler idea: we'd pick the layer with highest MBE at each step, this bake in 'uniformity' naturally
     
     if mode == "all_middle":
         # Regularize all middle layers equally
@@ -440,6 +442,14 @@ def get_mbe_layer_mask(
         block_start = start_layer + block_idx * block_size
         block_end = block_start + block_size if block_idx < n_blocks - 1 else end_layer
         mask[block_start:block_end] = 1.0
+
+    elif mode == "slope": 
+        # Input layers get HIGH MBE weight, output layers get LOW MBE weight
+        # Linear decay from 1.0 at start_layer to min_weight at end_layer-1
+        min_weight = 0.1
+        for i in range(start_layer, end_layer):
+            progress = (i - start_layer) / max(n_active - 1, 1)
+            mask[i] = 1.0 - progress * (1.0 - min_weight)
         
     else:
         raise ValueError(f"Unknown mode: {mode}. Choose from: all_middle, rotate, rotate_accum, "
