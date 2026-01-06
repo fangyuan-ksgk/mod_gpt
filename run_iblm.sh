@@ -54,7 +54,7 @@ for MBE_COMP_MODE in "decay" ; do
       --batch_size 32 \
       --train_seq_len $TRAIN_SEQ_LEN \
       --val_seq_len $VAL_SEQ_LEN \
-      --num_iterations 1750 \
+      --num_iterations 20000 \
       --use_gapt \
       --entropy_patience 125 \
       --entropy_min_delta 0.01 \

@@ -472,12 +472,6 @@ for step in range(train_steps + 1):
             mbe_loss = (masked_mbe.sum() / per_layer_mbe_mask.sum())
         elif args.mbe_comp_mode == "max": 
             mbe_loss = masked_mbe.max()
-        elif args.mbe_comp_mode == "softmax": 
-            active_mask = per_layer_mbe_mask > 0
-            mbe_loss = masked_mbe.softmax(dim=0).mean()
-            active_mbe = masked_mbe[active_mask]
-            weights = torch.softmax(active_mbe / args.mbe_softmax_temp, dim=0)
-            mbe_loss = (active_mbe * weights).sum() / weights.sum()
         elif args.mbe_comp_mode == "decay": # exponential decay
             gradients = masked_mbe[1:] - masked_mbe[:-1]
             spike_idx = gradients.argmax()
