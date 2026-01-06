@@ -39,6 +39,8 @@ def parse_args():
     parser.add_argument("--mbe_min_delta", type=float, default=0.01)
     parser.add_argument("--entropy_spike_tolerance", type=float, default=0.1)
     parser.add_argument("--mbe_weight", type=float, default=1.0)
+    parser.add_argument("--mbe_softmax_temp", type=float, default=1.0)
+    parser.add_argument("--mbe_comp_mode", type=str, default="naive") # naive, max, softmax
     parser.add_argument("--use_gapt", action="store_true")
     parser.add_argument("--reg_mbe", action="store_true")
     parser.add_argument("--reg_l2", action="store_true")
@@ -465,7 +467,20 @@ for step in range(train_steps + 1):
         #          we should adapt this mask across steps, too
         per_layer_mbe_mask = get_mbe_layer_mask(step, accum_step, train_accumulation_steps, model.num_encoder_layers + model.num_decoder_layers, mode=args.mbe_schedule, skip_first=args.skip_first, skip_last=args.skip_last)
         mbe_loss_per_layer = torch.stack([loss_dict[k] for k in loss_dict.keys() if k.startswith("mbe_")])
-        mbe_loss = (mbe_loss_per_layer * per_layer_mbe_mask).mean()
+        masked_mbe = mbe_loss_per_layer * per_layer_mbe_mask
+        if args.mbe_comp_mode == "naive": 
+            mbe_loss = (masked_mbe.sum() / per_layer_mbe_mask.sum())
+        elif args.mbe_comp_mode == "max": 
+            mbe_loss = masked_mbe.max()
+        elif args.mbe_comp_mode == "softmax": 
+            active_mask = per_layer_mbe_mask > 0
+            mbe_loss = masked_mbe.softmax(dim=0).mean()
+            active_mbe = masked_mbe[active_mask]
+            weights = torch.softmax(active_mbe / args.mbe_softmax_temp, dim=0)
+            mbe_loss = (active_mbe * weights).sum() / weights.sum()
+        else: 
+            assert False, f"Unknown MBE composition mode: {args.mbe_comp_mode}"
+
         loss_dict = {
             "entropy": loss_dict["entropy"], "mbe": mbe_loss
         }
