@@ -472,10 +472,14 @@ for step in range(train_steps + 1):
             mbe_loss = (masked_mbe.sum() / per_layer_mbe_mask.sum())
         elif args.mbe_comp_mode == "max": 
             mbe_loss = masked_mbe.max()
-        elif args.mbe_comp_mode == "decay": # exponential decay
+        elif args.mbe_comp_mode == "decay":
             gradients = masked_mbe[1:] - masked_mbe[:-1]
             spike_idx = gradients.argmax()
             mbe_loss = masked_mbe[spike_idx + 1]
+        elif args.mbe_comp_mode == "spike": 
+            gradients = masked_mbe[1:] - masked_mbe[:-1]
+            decay_idx = gradients.argmin()
+            mbe_loss = masked_mbe[decay_idx + 1]
         else: 
             assert False, f"Unknown MBE composition mode: {args.mbe_comp_mode}"
 
