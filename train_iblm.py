@@ -41,6 +41,7 @@ def parse_args():
     parser.add_argument("--mbe_weight", type=float, default=1.0)
     parser.add_argument("--mbe_softmax_temp", type=float, default=1.0)
     parser.add_argument("--mbe_comp_mode", type=str, default="naive") # naive, max, softmax, decay
+    parser.add_argument("--bottleneck_portion", type=float, default=0.1)
     parser.add_argument("--use_gapt", action="store_true")
     parser.add_argument("--reg_mbe", action="store_true")
     parser.add_argument("--reg_l2", action="store_true")
@@ -481,6 +482,11 @@ for step in range(train_steps + 1):
             gradients = masked_mbe[1:] - masked_mbe[:-1]
             decay_idx = gradients.argmin()
             mbe_loss = masked_mbe[decay_idx + 1]
+        elif args.mbe_comp_mode == "bottleneck": 
+            k = max(1, int(len(masked_mbe) * args.bottleneck_portion))
+            gradients = masked_mbe[1:] - masked_mbe[:-1]
+            _, indices = torch.topk(gradients, k, largest=False)
+            mbe_loss = masked_mbe[indices + 1].mean()
         elif args.mbe_comp_mode == "decrease": # mean diff-mbe bottleneck
             gradients = masked_mbe[1:] - masked_mbe[:-1]
             violations = gradients.clamp(min=0)
@@ -555,6 +561,8 @@ print0(f"-- entropy_min_delta: {args.entropy_min_delta}", console=True)
 print0(f"-- mbe_patience: {args.mbe_patience}", console=True)
 print0(f"-- mbe_min_delta: {args.mbe_min_delta}", console=True)
 print0(f"-- mbe_weight: {args.mbe_weight}", console=True)
+print0(f"-- bottleneck_portion: {args.bottleneck_portion}", console=True)
+print0(f"-- mbe_comp_mode: {args.mbe_comp_mode}", console=True)
 print0(f"-- entropy_spike_tolerance: {args.entropy_spike_tolerance}", console=True)
 print0(f"-- skip_first: {args.skip_first}", console=True)
 print0(f"-- skip_last: {args.skip_last}", console=True)
