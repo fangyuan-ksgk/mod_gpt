@@ -43,54 +43,29 @@ MASTER_PORT=29500
 #        | MBE composition mode sweep: naive, max, softmax
 # ========================================="
 
-# MODEL_SIZE="small"
-# for MBE_COMP_MODE in "spike"; do
-#   torchrun \
-#       --nproc_per_node=$N_GPUS \
-#       --master_addr=$MASTER_ADDR \
-#       --master_port=$((MASTER_PORT++)) \
-#       train_iblm.py \
-#       --batch_size 32 \
-#       --train_seq_len $TRAIN_SEQ_LEN \
-#       --val_seq_len $VAL_SEQ_LEN \
-#       --num_iterations 1750 \
-#       --use_gapt \
-#       --entropy_patience 125 \
-#       --entropy_min_delta 0.01 \
-#       --mbe_patience 75 \
-#       --mbe_min_delta 0.01 \
-#       --mbe_weight 20.0 \
-#       --mbe_comp_mode $MBE_COMP_MODE \
-#       --mbe_schedule "all_middle" \
-#       --model_size $MODEL_SIZE \
-#       --run_info "GAPT: ModelSize=$MODEL_SIZE | GAPT | w=20.0 | MBE comp mode: $MBE_COMP_MODE | regularize on all middle layers" 
-# done
+MODEL_SIZE="xl"
+for MBE_COMP_MODE in "spike" "naive" "bottleneck" "max" "min"; do
+  torchrun \
+      --nproc_per_node=$N_GPUS \
+      --master_addr=$MASTER_ADDR \
+      --master_port=$((MASTER_PORT++)) \
+      train_iblm.py \
+      --batch_size 32 \
+      --train_seq_len $TRAIN_SEQ_LEN \
+      --val_seq_len $VAL_SEQ_LEN \
+      --num_iterations 1750 \
+      --use_gapt \
+      --entropy_patience 125 \
+      --entropy_min_delta 0.01 \
+      --mbe_patience 75 \
+      --mbe_min_delta 0.01 \
+      --mbe_weight 20.0 \
+      --mbe_comp_mode $MBE_COMP_MODE \
+      --mbe_schedule "all_middle" \
+      --model_size $MODEL_SIZE \
+      --run_info "GAPT: ModelSize=$MODEL_SIZE | GAPT | w=20.0 | MBE comp mode: $MBE_COMP_MODE | regularize on all middle layers" 
+done
 
-# MBE_COMP_MODE="bottleneck"
-# for BOTTLENECK_PORTION in 0.1 0.2; do
-#   torchrun \
-#       --nproc_per_node=$N_GPUS \
-#       --master_addr=$MASTER_ADDR \
-#       --master_port=$((MASTER_PORT++)) \
-#       train_iblm.py \
-#       --batch_size 32 \
-#       --train_seq_len $TRAIN_SEQ_LEN \
-#       --val_seq_len $VAL_SEQ_LEN \
-#       --num_iterations 1750 \
-#       --use_gapt \
-#       --entropy_patience 125 \
-#       --entropy_min_delta 0.01 \
-#       --mbe_patience 75 \
-#       --mbe_min_delta 0.01 \
-#       --mbe_weight 20.0 \
-#       --bottleneck_portion $BOTTLENECK_PORTION \
-#       --mbe_comp_mode $MBE_COMP_MODE \
-#       --mbe_schedule "all_middle" \
-#       --model_size $MODEL_SIZE \
-#       --run_info "GAPT: ModelSize=$MODEL_SIZE | GAPT | w=20.0 | MBE comp mode: $MBE_COMP_MODE | regularize on all middle layers" 
-# done
-
-MODEL_SIZE="medium"
 MBE_COMP_MODE="spike"
 for MBE_WEIGHT in 1.0 5.0 10.0; do
   torchrun \
@@ -139,29 +114,29 @@ done
 #       --run_info "GAPT: ModelSize=$MODEL_SIZE | GAPT | w=20.0 | MBE comp mode: $MBE_COMP_MODE | regularize on all middle layers" 
 # done
 
-MODEL_SIZE="large"
-MBE_COMP_MODE="spike"
-for MBE_WEIGHT in 1.0 5.0 10.0; do
-  torchrun \
-      --nproc_per_node=$N_GPUS \
-      --master_addr=$MASTER_ADDR \
-      --master_port=$((MASTER_PORT++)) \
-      train_iblm.py \
-      --batch_size 32 \
-      --train_seq_len $TRAIN_SEQ_LEN \
-      --val_seq_len $VAL_SEQ_LEN \
-      --num_iterations 1750 \
-      --use_gapt \
-      --entropy_patience 125 \
-      --entropy_min_delta 0.01 \
-      --mbe_patience 75 \
-      --mbe_min_delta 0.01 \
-      --mbe_weight $MBE_WEIGHT \
-      --mbe_comp_mode $MBE_COMP_MODE \
-      --mbe_schedule "all_middle" \
-      --model_size $MODEL_SIZE \
-      --run_info "GAPT: ModelSize=$MODEL_SIZE | GAPT | w=20.0 | MBE comp mode: $MBE_COMP_MODE | regularize on all middle layers" 
-done
+# MODEL_SIZE="large"
+# MBE_COMP_MODE="spike"
+# for MBE_WEIGHT in 1.0 5.0 10.0; do
+#   torchrun \
+#       --nproc_per_node=$N_GPUS \
+#       --master_addr=$MASTER_ADDR \
+#       --master_port=$((MASTER_PORT++)) \
+#       train_iblm.py \
+#       --batch_size 32 \
+#       --train_seq_len $TRAIN_SEQ_LEN \
+#       --val_seq_len $VAL_SEQ_LEN \
+#       --num_iterations 1750 \
+#       --use_gapt \
+#       --entropy_patience 125 \
+#       --entropy_min_delta 0.01 \
+#       --mbe_patience 75 \
+#       --mbe_min_delta 0.01 \
+#       --mbe_weight $MBE_WEIGHT \
+#       --mbe_comp_mode $MBE_COMP_MODE \
+#       --mbe_schedule "all_middle" \
+#       --model_size $MODEL_SIZE \
+#       --run_info "GAPT: ModelSize=$MODEL_SIZE | GAPT | w=20.0 | MBE comp mode: $MBE_COMP_MODE | regularize on all middle layers" 
+# done
 
 # torchrun \
 #     --nproc_per_node=$N_GPUS \
