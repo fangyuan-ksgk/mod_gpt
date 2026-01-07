@@ -477,10 +477,16 @@ for step in range(train_steps + 1):
             gradients = masked_mbe[1:] - masked_mbe[:-1]
             spike_idx = gradients.argmax()
             mbe_loss = masked_mbe[spike_idx + 1]
-        elif args.mbe_comp_mode == "spike": 
+        elif args.mbe_comp_mode == "spike": # maximize diff-mbe bottleneck
             gradients = masked_mbe[1:] - masked_mbe[:-1]
             decay_idx = gradients.argmin()
             mbe_loss = masked_mbe[decay_idx + 1]
+        elif args.mbe_comp_mode == "decrease": # mean diff-mbe bottleneck
+            gradients = masked_mbe[1:] - masked_mbe[:-1]
+            violations = gradients.clamp(min=0)
+            mbe_loss = violations.sum() / (violations>0).sum()
+        elif args.mbe_comp_mode == "min": # absolute mbe bottleneck
+            mbe_loss = masked_mbe.min()
         else: 
             assert False, f"Unknown MBE composition mode: {args.mbe_comp_mode}"
 
