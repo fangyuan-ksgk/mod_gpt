@@ -467,7 +467,6 @@ for step in range(train_steps + 1):
         #          we should adapt this mask across steps, too
         per_layer_mbe_mask = get_mbe_layer_mask(step, accum_step, train_accumulation_steps, model.num_encoder_layers + model.num_decoder_layers, mode=args.mbe_schedule, skip_first=args.skip_first, skip_last=args.skip_last)
         mbe_loss_per_layer = torch.stack([loss_dict[k] for k in loss_dict.keys() if k.startswith("mbe_")])
-        mbe_loss_per_layer = mbe_loss_per_layer.clamp(min=args.min_a) # clamp to avoid numerical instability
 
         masked_mbe = mbe_loss_per_layer * per_layer_mbe_mask
         if args.mbe_comp_mode == "naive": 
