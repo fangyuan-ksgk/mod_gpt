@@ -44,7 +44,7 @@ MASTER_PORT=29500
 # ========================================="
 
 MODEL_SIZE="medium"
-for MBE_COMP_MODE in "decrease" "min"; do
+for MBE_COMP_MODE in "decrease" "min" "spike"; do
   torchrun \
       --nproc_per_node=$N_GPUS \
       --master_addr=$MASTER_ADDR \
