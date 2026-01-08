@@ -42,8 +42,33 @@ MASTER_PORT=29500
 # Exp 1. FineWeb0.8B (Base, GAPT, MBE, L2)
 #        | MBE composition mode sweep: naive, max, softmax
 # ========================================="
-MBE_COMP_MODE="spike"
-for MODEL_SIZE in "small" "medium" "large"; do
+# MBE_COMP_MODE="spike"
+# for MODEL_SIZE in "small" "medium" "large"; do
+#   torchrun \
+#       --nproc_per_node=$N_GPUS \
+#       --master_addr=$MASTER_ADDR \
+#       --master_port=$((MASTER_PORT++)) \
+#       train_iblm.py \
+#       --batch_size 32 \
+#       --train_seq_len $TRAIN_SEQ_LEN \
+#       --val_seq_len $VAL_SEQ_LEN \
+#       --num_iterations 1750 \
+#       --use_gapt \
+#       --entropy_patience 125 \
+#       --entropy_min_delta 0.01 \
+#       --mbe_patience 75 \
+#       --mbe_min_delta 0.01 \
+#       --mbe_weight 20.0 \
+#       --mbe_comp_mode $MBE_COMP_MODE \
+#       --mbe_schedule "all_middle" \
+#       --model_size $MODEL_SIZE \
+#       --save_checkpoint \
+#       --run_info "GAPT: ModelSize=$MODEL_SIZE | GAPT | w=20.0 | MBE comp mode: $MBE_COMP_MODE | regularize on all middle layers" 
+# done
+
+# 贼心不死
+MODEL_SIZE="medium"
+for MBE_COMP_MODE in "valley"; do
   torchrun \
       --nproc_per_node=$N_GPUS \
       --master_addr=$MASTER_ADDR \

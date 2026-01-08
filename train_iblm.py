@@ -493,11 +493,16 @@ for step in range(train_steps + 1):
             mbe_loss = violations.sum() / (violations>0).sum()
         elif args.mbe_comp_mode == "min": # absolute mbe bottleneck
             mbe_loss = masked_mbe.min()
-        elif args.mbe_comp_mode == "spike_is": 
+        elif args.mbe_comp_mode == "spike_is": # doesn't work
             gradients =  masked_mbe[:-1] - masked_mbe[1:]
             probs = torch.nn.functional.softmax(gradients / args.mbe_softmax_temp, dim=0)
             decay_idx = torch.multinomial(probs, 1).item()
             mbe_loss = masked_mbe[decay_idx + 1]
+        elif args.mbe_comp_mode == "valley": 
+            padded_mbe = torch.nn.functional.pad(masked_mbe, (1, 1), value=float('inf'))
+            is_valley = (padded_mbe[1:-1] < padded_mbe[:-2]) & (padded_mbe[1:-1] < padded_mbe[2:])
+            valley_indices = torch.where(is_valley)[0]
+            mbe_loss = padded_mbe[valley_indices + 1].mean()            
         else: 
             assert False, f"Unknown MBE composition mode: {args.mbe_comp_mode}"
 
