@@ -498,7 +498,7 @@ for step in range(train_steps + 1):
             probs = torch.nn.functional.softmax(gradients / args.mbe_softmax_temp, dim=0)
             decay_idx = torch.multinomial(probs, 1).item()
             mbe_loss = masked_mbe[decay_idx + 1]
-        elif args.mbe_comp_mode == "valley": 
+        elif args.mbe_comp_mode == "valley": # we don't regularize "collapsed" layers
             padded_mbe = torch.nn.functional.pad(masked_mbe, (1, 1), value=float('inf'))
             is_valley = (padded_mbe[1:-1] < padded_mbe[:-2]) & (padded_mbe[1:-1] < padded_mbe[2:])
             valley_indices = torch.where(is_valley)[0]
