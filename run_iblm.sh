@@ -42,9 +42,8 @@ MASTER_PORT=29500
 # Exp 1. FineWeb0.8B (Base, GAPT, MBE, L2)
 #        | MBE composition mode sweep: naive, max, softmax
 # ========================================="
-
-MODEL_SIZE="medium"
-for MBE_COMP_MODE in "spike_is"; do
+MBE_COMP_MODE="spike"
+for MODEL_SIZE in "small" "medium" "large"; do
   torchrun \
       --nproc_per_node=$N_GPUS \
       --master_addr=$MASTER_ADDR \
@@ -63,119 +62,10 @@ for MBE_COMP_MODE in "spike_is"; do
       --mbe_comp_mode $MBE_COMP_MODE \
       --mbe_schedule "all_middle" \
       --model_size $MODEL_SIZE \
+      --save_checkpoint \
       --run_info "GAPT: ModelSize=$MODEL_SIZE | GAPT | w=20.0 | MBE comp mode: $MBE_COMP_MODE | regularize on all middle layers" 
 done
 
-
-# # Just to validate that 'numerical instability' is gone with the raw MBE clamping
-# MODEL_SIZE="large"
-# for MBE_COMP_MODE in "naive"; do
-#   torchrun \
-#       --nproc_per_node=$N_GPUS \
-#       --master_addr=$MASTER_ADDR \
-#       --master_port=$((MASTER_PORT++)) \
-#       train_iblm.py \
-#       --batch_size 32 \
-#       --train_seq_len $TRAIN_SEQ_LEN \
-#       --val_seq_len $VAL_SEQ_LEN \
-#       --num_iterations 1750 \
-#       --use_gapt \
-#       --entropy_patience 125 \
-#       --entropy_min_delta 0.01 \
-#       --mbe_patience 75 \
-#       --mbe_min_delta 0.01 \
-#       --mbe_weight 20.0 \
-#       --mbe_comp_mode $MBE_COMP_MODE \
-#       --mbe_schedule "all_middle" \
-#       --model_size $MODEL_SIZE \
-#       --run_info "GAPT: ModelSize=$MODEL_SIZE | GAPT | w=20.0 | MBE comp mode: $MBE_COMP_MODE | regularize on all middle layers" 
-# done
-
-# MODEL_SIZE="large"
-# MBE_COMP_MODE="spike"
-# for MBE_WEIGHT in 1.0 5.0 10.0; do
-#   torchrun \
-#       --nproc_per_node=$N_GPUS \
-#       --master_addr=$MASTER_ADDR \
-#       --master_port=$((MASTER_PORT++)) \
-#       train_iblm.py \
-#       --batch_size 32 \
-#       --train_seq_len $TRAIN_SEQ_LEN \
-#       --val_seq_len $VAL_SEQ_LEN \
-#       --num_iterations 1750 \
-#       --use_gapt \
-#       --entropy_patience 125 \
-#       --entropy_min_delta 0.01 \
-#       --mbe_patience 75 \
-#       --mbe_min_delta 0.01 \
-#       --mbe_weight $MBE_WEIGHT \
-#       --mbe_comp_mode $MBE_COMP_MODE \
-#       --mbe_schedule "all_middle" \
-#       --model_size $MODEL_SIZE \
-#       --run_info "GAPT: ModelSize=$MODEL_SIZE | GAPT | w=20.0 | MBE comp mode: $MBE_COMP_MODE | regularize on all middle layers" 
-# done
-
-# torchrun \
-#     --nproc_per_node=$N_GPUS \
-#     --master_addr=$MASTER_ADDR \
-#     --master_port=$((MASTER_PORT++)) \
-#     train_iblm.py \
-#     --batch_size 32 \
-#     --train_seq_len $TRAIN_SEQ_LEN \
-#     --val_seq_len $VAL_SEQ_LEN \
-#     --num_iterations 10000 \
-#     --continue_from_ckpt $CKPT_PATH \
-#     --mbe_weight 0.3 \
-#     --save_checkpoint \
-#     --reg_mbe \
-#     --model_size $MODEL_SIZE \
-#     --run_info "GAPT: ModelSize=$MODEL_SIZE | MBE regularization | w=0.3" 
-
-
-# MODEL_SIZE="large"
-
-# # Command 1: GAPT + Softplus (correct)
-# torchrun \
-#     --nproc_per_node=$N_GPUS \
-#     --master_addr=$MASTER_ADDR \
-#     --master_port=$((MASTER_PORT++)) \
-#     train_iblm.py \
-#     --batch_size 16 \
-#     --train_seq_len $TRAIN_SEQ_LEN \
-#     --val_seq_len $VAL_SEQ_LEN \
-#     --num_iterations 1750 \
-#     --use_gapt \
-#     --entropy_patience 125 \
-#     --entropy_min_delta 0.01 \
-#     --mbe_patience 75 \
-#     --mbe_min_delta 0.01 \
-#     --mbe_weight 40.0 \
-#     --save_checkpoint \
-#     --use_softplus_gapt \
-#     --model_size $MODEL_SIZE \
-#     --run_info "GAPT: ModelSize=$MODEL_SIZE | CEPat=125 | MBEPat=75 | w=40.0 | Softplus=True" 
-
-# # Command 2: GAPT + SimpleClamp (correct)
-# torchrun \
-#     --nproc_per_node=$N_GPUS \
-#     --master_addr=$MASTER_ADDR \
-#     --master_port=$((MASTER_PORT++)) \
-#     train_iblm.py \
-#     --batch_size 16 \
-#     --train_seq_len $TRAIN_SEQ_LEN \
-#     --val_seq_len $VAL_SEQ_LEN \
-#     --num_iterations 1750 \
-#     --use_gapt \
-#     --entropy_patience 125 \
-#     --entropy_min_delta 0.01 \
-#     --mbe_patience 75 \
-#     --mbe_min_delta 0.01 \
-#     --mbe_weight 40.0 \
-#     --save_checkpoint \
-#     --model_size $MODEL_SIZE \
-#     --run_info "GAPT: ModelSize=$MODEL_SIZE | CEPat=125 | MBEPat=75 | w=40.0 | SimpleClamp (1e-5)"
-
-# # Command 3: MBE-regularized (removed stray space, cleaned up unused args)
 # torchrun \
 #     --nproc_per_node=$N_GPUS \
 #     --master_addr=$MASTER_ADDR \
