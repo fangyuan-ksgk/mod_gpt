@@ -1,6 +1,6 @@
 """
-OpenPhi Textbooks dataset (for srs pretraining)
-https://huggingface.co/datasets/open-phi/textbooks
+SciPhi Textbooks dataset (for pretraining)
+https://huggingface.co/datasets/SciPhi/textbooks-are-all-you-need-lite
 """
 import os
 import argparse
@@ -44,7 +44,8 @@ eot = enc._special_tokens['<|endoftext|>'] # end of text token
 def tokenize(doc):
     # tokenizes a single document and returns a numpy array of uint16 tokens
     tokens = [eot] # the special <|endoftext|> token delimits all documents
-    tokens.extend(enc.encode_ordinary(doc["markdown"]))
+    text = doc["formatted_prompt"] + doc["completion"]
+    tokens.extend(enc.encode_ordinary(text))
     tokens_np = np.array(tokens)
     assert (0 <= tokens_np).all() and (tokens_np < 2**16).all(), "token dictionary too large for uint16"
     tokens_np_uint16 = tokens_np.astype(np.uint16)
@@ -52,9 +53,8 @@ def tokenize(doc):
 # ------------------------------------------
 
 def main(): 
-    parser = argparse.ArgumentParser(description="OpenPhi Textbooks dataset preprocessing")
+    parser = argparse.ArgumentParser(description="SciPhi Textbooks dataset preprocessing")
     parser.add_argument("-s", "--shard_size", type=int, default=10**8, help="Size of each shard in tokens")
-    parser.add_argument("--split", type=str, default="train", choices=["train", "validation"], help="Which split to process")
     args = parser.parse_args()
 
     # create the cache the local directory if it doesn't exist yet
@@ -62,9 +62,9 @@ def main():
     DATA_CACHE_DIR = os.path.join(os.path.dirname(__file__), local_dir)
     os.makedirs(DATA_CACHE_DIR, exist_ok=True)
 
-    # download the dataset
-    print(f"Loading OpenPhi Textbooks {args.split} split...")
-    ts = load_dataset("open-phi/textbooks", split=args.split, streaming=True)
+    # download the dataset (SciPhi only has train split)
+    print("Loading SciPhi Textbooks dataset...")
+    ts = load_dataset("SciPhi/textbooks-are-all-you-need-lite", split="train", streaming=True)
     
     MAX_TOTAL_TOKENS = 1_000_000_000
     total_processed_tokens = 0
@@ -97,7 +97,7 @@ def main():
             else:
                 # write the current shard and start a new one
                 split = "val" if shard_index == 0 else "train"
-                filename = os.path.join(DATA_CACHE_DIR, f"textbook_{split}_{shard_index:06d}.bin")
+                filename = os.path.join(DATA_CACHE_DIR, f"sci_phi_textbook_{split}_{shard_index:06d}.bin")
                 # split the document into whatever fits in this shard; the remainder goes to next one
                 remainder = args.shard_size - token_count
                 progress_bar.update(remainder)
@@ -112,10 +112,10 @@ def main():
         # write any remaining tokens as the last shard
         if token_count != 0:
             split = "val" if shard_index == 0 else "train"
-            filename = os.path.join(DATA_CACHE_DIR, f"textbook_{split}_{shard_index:06d}.bin")
+            filename = os.path.join(DATA_CACHE_DIR, f"sci_phi_textbook_{split}_{shard_index:06d}.bin")
             write_datafile(filename, all_tokens_np[:token_count])
 
-    print(f"Done! Processed {shard_index + 1} shards for {args.split} split.")
+    print(f"Done! Processed {shard_index + 1} shards.")
 
 if __name__ == "__main__":
     main()

@@ -1,3 +1,4 @@
+import os
 import torch 
 from pathlib import Path
 import glob
@@ -10,6 +11,27 @@ import torch
 from PIL import Image
 from matplotlib.patches import Patch
 import io
+import torch.distributed as dist
+
+# -----------------------------------------------------------------------------
+# Auto-discover validation sets from data/ subdirectories
+
+def discover_eval_suites(data_dir="data"):
+    """
+    Auto-discover validation sets from data/ subdirectories.
+    Returns dict: {folder_name: "data/folder_name/*val*.bin"}
+    """
+    suites = {}
+    if not os.path.isdir(data_dir):
+        return suites
+    for entry in os.listdir(data_dir):
+        subdir = os.path.join(data_dir, entry)
+        if os.path.isdir(subdir) and not entry.startswith("__"):
+            # Check if val files exist
+            val_pattern = os.path.join(subdir, "*val*.bin")
+            if glob.glob(val_pattern):
+                suites[entry] = val_pattern
+    return suites
 
 # -----------------------------------------------------------------------------
 # distributed data loader
@@ -1480,3 +1502,82 @@ def plot_mbe_comparison(base_mbe, gapt_mbe):
     plt.tight_layout()
     plt.savefig('gpt2-small-base-vs-gapt-mbe.png', dpi=150, bbox_inches='tight')
     plt.show()
+
+class EvalManager:
+    def __init__(self, val_file_dict, val_seq_len, val_tokens, rank, world_size):
+        """
+        Args:
+            val_file_dict: Dict mapping dataset name to file pattern 
+                           e.g. {'fineweb': 'data/fw*.bin', 'code': 'data/code*.bin'}
+        """
+        self.val_file_dict = val_file_dict
+        self.val_seq_len = val_seq_len
+        self.val_tokens = val_tokens
+        self.rank = rank
+        self.world_size = world_size
+        
+        # Pre-calculate steps once
+        self.total_val_len = world_size * val_seq_len
+        self.val_steps = val_tokens // self.total_val_len
+
+    def evaluate(self, model, attn_blocksize, patch_size):
+        """Run evaluation on ALL datasets in the dictionary"""
+        model.eval()
+        results = {}
+
+        for name, file_pattern in self.val_file_dict.items():
+            val_loss = defaultdict(float)
+            val_mbe = defaultdict(float)
+            # Create a fresh loader for this dataset
+            loader = distributed_data_generator(file_pattern, self.total_val_len, self.rank, self.world_size)
+            
+            with torch.no_grad():
+                for i in range(self.val_steps):
+                    try:
+                        inputs, targets = next(loader)
+                    except StopIteration:
+                        break
+
+                    loss_dict = model.forward(inputs, targets, attn_blocksize, patch_size)
+                    compute_loss(loss_dict)
+
+                    # Record all losses
+                    for k, v in loss_dict.items():
+                        if isinstance(v, torch.Tensor):
+                            val_loss[k] += v.item()
+                        else:
+                            val_loss[k] += v
+                    # Also gather all MBE_{layer} stats
+                    # MBE keys are like "mbe_0", "mbe_1", etc.
+                    for k, v in loss_dict.items():
+                        if k.startswith("mbe_"):
+                            if isinstance(v, torch.Tensor):
+                                val_mbe[k] += v.item()
+                            else:
+                                val_mbe[k] += v
+                            
+            # Average and Reduce
+            for k in val_loss:
+                val_loss[k] /= self.val_steps
+            for k in val_mbe:
+                val_mbe[k] /= self.val_steps
+            
+            # Reduce across GPUs
+            for k in val_loss:
+                t = torch.tensor(val_loss[k], device="cuda")
+                dist.all_reduce(t, op=dist.ReduceOp.AVG)
+                val_loss[k] = t.item()
+            
+            for k in val_mbe:
+                t = torch.tensor(val_mbe[k], device="cuda")
+                dist.all_reduce(t, op=dist.ReduceOp.AVG)
+                val_mbe[k] = t.item()
+
+            # Main metric + attach mbe to result
+            results[name] = {
+                "entropy": val_loss.get('entropy', None),
+                "mbe": {k: val_mbe[k] for k in sorted(val_mbe)}
+            }
+            
+        model.train()
+        return results
