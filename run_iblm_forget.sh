@@ -35,8 +35,8 @@ torchrun \
   --master_port=$((MASTER_PORT++)) \
   train_iblm.py \
   --continue_from_ckpt "ckpt/fineweb10B-gpt2-small-20k.pt" \
-  --train_files $TINY_STORIES_FILES \
-  --val_files $FINEWEB_VAL_FILES \
+  --train_files "$TINY_STORIES_FILES" \
+  --val_files "$FINEWEB_VAL_FILES" \
   --batch_size $BATCH_SIZE \
   --train_seq_len $TRAIN_SEQ_LEN \
   --val_seq_len $VAL_SEQ_LEN \
@@ -54,8 +54,8 @@ for MBE_WEIGHT in 20.0; do
       --master_port=$((MASTER_PORT++)) \
       train_iblm.py \
       --continue_from_ckpt "ckpt/fineweb10B-gpt2-small-20k.pt" \
-      --train_files $TINY_STORIES_FILES \
-      --val_files $FINEWEB_VAL_FILES \
+      --train_files "$TINY_STORIES_FILES" \
+      --val_files "$FINEWEB_VAL_FILES" \
       --batch_size $BATCH_SIZE \
       --train_seq_len $TRAIN_SEQ_LEN \
       --val_seq_len $VAL_SEQ_LEN \
