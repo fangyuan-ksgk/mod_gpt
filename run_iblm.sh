@@ -47,8 +47,7 @@ MASTER_PORT=29500
 # Exp 3. What if skip connection are removed, so that bottleneck is "real" bottleneck that can't be bypassed?
 # ========================================="
 MBE_COMP_MODE="spike"
-MODEL_SIZE="small"
-for MBE_COMP_MODE in "spike"; do
+for MODEL_SIZE in "small" "medium" "large"; do
   torchrun \
       --nproc_per_node=$N_GPUS \
       --master_addr=$MASTER_ADDR \
@@ -68,36 +67,8 @@ for MBE_COMP_MODE in "spike"; do
       --mbe_schedule "all_middle" \
       --model_size $MODEL_SIZE \
       --no_skip_connections \
-      --use_softplus_gapt \
       --save_checkpoint \
-      --run_info "GAPT: ModelSize=$MODEL_SIZE (no skip connections)| GAPT (softplus)| w=20.0 | MBE comp mode: $MBE_COMP_MODE | regularize on all middle layers" 
-done
-
-MODEL_SIZE="small"
-MBE_COMP_MODE="spike"
-for MBE_WEIGHT in 1.0 5.0 10.0; do
-  torchrun \
-      --nproc_per_node=$N_GPUS \
-      --master_addr=$MASTER_ADDR \
-      --master_port=$((MASTER_PORT++)) \
-      train_iblm.py \
-      --batch_size 32 \
-      --train_seq_len $TRAIN_SEQ_LEN \
-      --val_seq_len $VAL_SEQ_LEN \
-      --num_iterations 1750 \
-      --use_gapt \
-      --entropy_patience 125 \
-      --entropy_min_delta 0.01 \
-      --mbe_patience 75 \
-      --mbe_min_delta 0.01 \
-      --mbe_weight $MBE_WEIGHT \
-      --mbe_comp_mode $MBE_COMP_MODE \
-      --mbe_schedule "all_middle" \
-      --model_size $MODEL_SIZE \
-      --use_softplus_gapt \
-      --no_skip_connections \
-      --save_checkpoint \
-      --run_info "GAPT: ModelSize=$MODEL_SIZE (no skip connections) | GAPT | w=$MBE_WEIGHT | MBE comp mode: $MBE_COMP_MODE | regularize on all middle layers" 
+      --run_info "GAPT: ModelSize=$MODEL_SIZE (no skip connections)| GAPT | w=20.0 | MBE comp mode: $MBE_COMP_MODE" 
 done
 
 
