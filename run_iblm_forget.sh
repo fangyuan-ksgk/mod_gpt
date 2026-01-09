@@ -16,46 +16,52 @@ export NCCL_DEBUG=WARN
 BATCH_SIZE=32  # Closer to benchmark batch_size=32
 TRAIN_SEQ_LEN=$((32 * 1024))
 VAL_SEQ_LEN=$((32 * 1024))
-NUM_ITERATIONS=500
+NUM_ITERATIONS=125
 N_GPUS=4
 MASTER_ADDR=127.0.0.1
 MASTER_PORT=29500
 
 # ====================================
 # Catastrohpic Forgetting Probe
+# 1. CPT on OOD dataset:
+#    (without prior memories on CPT data)
+#    what's the forgetting level like for prior knowledge? 
+# 2. CPT on ID dataset: 
+#    (with prior memories on CPT data)
+#    what's the forgetting level like for prior knowledge? 
 # ====================================
+
 MBE_COMP_MODE="spike"
 MODEL_SIZE="small"
-TINY_STORIES_FILES="data/tinystories/tinystory_train_*.bin"
-FINEWEB_VAL_FILES="data/fineweb10B/fineweb_val_*.bin"
+FORGET_MODE="fineweb"
+MBE_WEIGHT=20.0
 
-torchrun \
-  --nproc_per_node=$N_GPUS \
-  --master_addr=$MASTER_ADDR \
-  --master_port=$((MASTER_PORT++)) \
-  train_iblm.py \
-  --continue_from_ckpt "ckpt/fineweb10B-gpt2-small-20k.pt" \
-  --train_files "$TINY_STORIES_FILES" \
-  --val_files "$FINEWEB_VAL_FILES" \
-  --batch_size $BATCH_SIZE \
-  --train_seq_len $TRAIN_SEQ_LEN \
-  --val_seq_len $VAL_SEQ_LEN \
-  --num_iterations $NUM_ITERATIONS \
-  --no_reg \
-  --model_size $MODEL_SIZE \
-  --save_checkpoint \
-  --run_info "Continuous Pretrain w. Baseline on TinyStories: ModelSize=$MODEL_SIZE" 
-
-
-for MBE_WEIGHT in 20.0; do
+for n in $(seq 0 19); do
+  FINEWEB_TRAIN_FILES="data/forget_fineweb/bin${n}/fineweb_train_*.bin"
   torchrun \
+    --nproc_per_node=$N_GPUS \
+    --master_addr=$MASTER_ADDR \
+    --master_port=$((MASTER_PORT++)) \
+    train_iblm_forget.py \
+    --continue_from_ckpt "ckpt/fineweb10B-gpt2-small-20k.pt" \
+    --train_files "$FINEWEB_TRAIN_FILES" \
+    --batch_size $BATCH_SIZE \
+    --train_seq_len $TRAIN_SEQ_LEN \
+    --val_seq_len $VAL_SEQ_LEN \
+    --num_iterations $NUM_ITERATIONS \
+    --no_reg \
+    --model_size $MODEL_SIZE \
+    --save_checkpoint \
+    --forget_mode $FORGET_MODE \
+    --run_info "Continuous Pretrain w. Baseline on FineWeb: ModelSize=$MODEL_SIZE" 
+
+    torchrun \
       --nproc_per_node=$N_GPUS \
       --master_addr=$MASTER_ADDR \
       --master_port=$((MASTER_PORT++)) \
       train_iblm.py \
       --continue_from_ckpt "ckpt/fineweb10B-gpt2-small-20k.pt" \
-      --train_files "$TINY_STORIES_FILES" \
-      --val_files "$FINEWEB_VAL_FILES" \
+      --train_files "$FINEWEB_TRAIN_FILES" \
       --batch_size $BATCH_SIZE \
       --train_seq_len $TRAIN_SEQ_LEN \
       --val_seq_len $VAL_SEQ_LEN \
@@ -70,5 +76,5 @@ for MBE_WEIGHT in 20.0; do
       --mbe_schedule "all_middle" \
       --model_size $MODEL_SIZE \
       --save_checkpoint \
-      --run_info "continuous pretrain w. GAPT on TinyStories: ModelSize=$MODEL_SIZE | w=$MBE_WEIGHT | MBE comp mode: $MBE_COMP_MODE"
+      --run_info "continuous pretrain w. GAPT on FineWeb subset: ModelSize=$MODEL_SIZE | w=$MBE_WEIGHT | MBE comp mode: $MBE_COMP_MODE"
 done

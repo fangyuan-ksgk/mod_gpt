@@ -4,13 +4,29 @@
 import os
 import shutil
 from pathlib import Path
+import sys
+
+# Usage: python forget_fineweb.py [max_bins]
+# If max_bins is provided, only copy up to that many bins.
 
 # Source and destination paths
 src_dir = Path("data/fineweb10B")
 dst_base = Path("data/forget_fineweb")
 
+# Optional command line argument to cap number of bins
+max_bins = None
+if len(sys.argv) > 1:
+    try:
+        max_bins = int(sys.argv[1])
+    except ValueError:
+        print(f"Invalid argument for cap: {sys.argv[1]}")
+        sys.exit(1)
+
 # Find all train .bin files
 train_bins = sorted(src_dir.glob("fineweb_train_*.bin"))
+
+if max_bins is not None:
+    train_bins = train_bins[:max_bins]
 
 for i, bin_file in enumerate(train_bins):
     # Create folder like bin0, bin1, bin2...
