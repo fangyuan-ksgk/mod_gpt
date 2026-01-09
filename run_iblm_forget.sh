@@ -26,7 +26,7 @@ MASTER_PORT=29500
 # ====================================
 MBE_COMP_MODE="spike"
 MODEL_SIZE="small"
-TINY_STORIES_FILES="data/tinystory/tinystory_train_*.bin"
+TINY_STORIES_FILES="data/tinystories/tinystory_train_*.bin"
 FINEWEB_VAL_FILES="data/fineweb10B/fineweb_val_*.bin"
 
 torchrun \
