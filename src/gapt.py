@@ -239,7 +239,8 @@ class GPT_pure(nn.Module):
 
     def __init__(self, config):
         super().__init__()
-
+        self.num_encoder_layers = config.n_layer // 2
+        self.num_decoder_layers = config.n_layer - self.num_encoder_layers
         self.num_layers = config.n_layer
         self.transformer = nn.ModuleDict(dict(
             wte = nn.Embedding(config.vocab_size, config.n_embd),
