@@ -435,7 +435,7 @@ for step in range(train_steps + 1):
             os.makedirs(f"logs/{run_id}", exist_ok=True)
             if args.log_grad_info: 
                 grad_tracker.save_grad_info(f"logs/{run_id}/grad_step{step:06d}.pkl")
-            plot_training_losses(loss_record, save_path=f"logs/{run_id}/loss_curve.png")
+            # plot_training_losses(loss_record, save_path=f"logs/{run_id}/loss_curve.png")
             
             if args.save_checkpoint:
                 log = dict(step=step, code=code, model=model.state_dict(), optimizers=[opt.state_dict() for opt in optimizers])
