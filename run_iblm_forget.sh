@@ -70,5 +70,5 @@ for MBE_WEIGHT in 20.0; do
       --mbe_schedule "all_middle" \
       --model_size $MODEL_SIZE \
       --save_checkpoint \
-      --run_info "continuous pretrain w. GAPT on TinyStories: ModelSize=$MODEL_SIZE | w=$MBE_WEIGHT | MBE comp mode: $MBE_COMP_MODE" 
+      --run_info "continuous pretrain w. GAPT on TinyStories: ModelSize=$MODEL_SIZE | w=$MBE_WEIGHT | MBE comp mode: $MBE_COMP_MODE"
 done
