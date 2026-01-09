@@ -41,9 +41,12 @@ MASTER_PORT=29500
 # ========================================="
 # Exp 1. FineWeb0.8B (Base, GAPT, MBE, L2)
 #        | MBE composition mode sweep: naive, max, softmax
+# Exp 2. FineWeb10B (GPT2 small, medium, large, xl)
+#        | 'num_iterations' change the 'attention blocksize' at each step (smaller for bigger iterations number)
+#        | therefore it's unfair to compare results at same step across run with different 'num_itrations'
 # ========================================="
 MBE_COMP_MODE="spike"
-for MODEL_SIZE in "xl"; do
+for MODEL_SIZE in "small"; do
   torchrun \
       --nproc_per_node=$N_GPUS \
       --master_addr=$MASTER_ADDR \
@@ -52,7 +55,7 @@ for MODEL_SIZE in "xl"; do
       --batch_size 32 \
       --train_seq_len $TRAIN_SEQ_LEN \
       --val_seq_len $VAL_SEQ_LEN \
-      --num_iterations 21000 \
+      --num_iterations 1750 \
       --use_gapt \
       --entropy_patience 125 \
       --entropy_min_delta 0.01 \
@@ -64,6 +67,22 @@ for MODEL_SIZE in "xl"; do
       --model_size $MODEL_SIZE \
       --save_checkpoint \
       --run_info "GAPT: ModelSize=$MODEL_SIZE | GAPT | w=20.0 | MBE comp mode: $MBE_COMP_MODE | regularize on all middle layers" 
+done
+
+for MODEL_SIZE in "small"; do
+  torchrun \
+      --nproc_per_node=$N_GPUS \
+      --master_addr=$MASTER_ADDR \
+      --master_port=$((MASTER_PORT++)) \
+      train_iblm.py \
+      --batch_size 32 \
+      --train_seq_len $TRAIN_SEQ_LEN \
+      --val_seq_len $VAL_SEQ_LEN \
+      --num_iterations 1750 \
+      --no_reg \
+      --model_size $MODEL_SIZE \
+      --save_checkpoint \
+      --run_info "GAPT: ModelSize=$MODEL_SIZE | 1750 steps | no regularization" 
 done
 
 # 贼心不死
@@ -89,120 +108,6 @@ done
 #       --model_size $MODEL_SIZE \
 #       --save_checkpoint \
 #       --run_info "GAPT: ModelSize=$MODEL_SIZE | GAPT | w=20.0 | MBE comp mode: $MBE_COMP_MODE | regularize on all middle layers" 
-# done
-
-# torchrun \
-#     --nproc_per_node=$N_GPUS \
-#     --master_addr=$MASTER_ADDR \
-#     --master_port=$((MASTER_PORT++)) \
-#     train_iblm.py \
-#     --batch_size 16 \
-#     --train_seq_len $TRAIN_SEQ_LEN \
-#     --val_seq_len $VAL_SEQ_LEN \
-#     --num_iterations 1750 \
-#     --mbe_weight 0.3 \
-#     --reg_mbe \
-#     --save_checkpoint \
-#     --model_size $MODEL_SIZE \
-#     --run_info "MBE-regularized: ModelSize=$MODEL_SIZE | w=0.3"
-
-# =============================================================================="
-# Ablate on GPT-2 large || 1750 steps || MBE weight, GAPT or MBE regularization
-# =============================================================================="
-
-# MODEL_SIZE="large"
-
-# # Command 1: GAPT + Softplus (correct)
-# torchrun \
-#     --nproc_per_node=$N_GPUS \
-#     --master_addr=$MASTER_ADDR \
-#     --master_port=$((MASTER_PORT++)) \
-#     train_iblm.py \
-#     --batch_size 16 \
-#     --train_seq_len $TRAIN_SEQ_LEN \
-#     --val_seq_len $VAL_SEQ_LEN \
-#     --num_iterations 1750 \
-#     --use_gapt \
-#     --entropy_patience 125 \
-#     --entropy_min_delta 0.01 \
-#     --mbe_patience 75 \
-#     --mbe_min_delta 0.01 \
-#     --mbe_weight 20.0 \
-#     --save_checkpoint \
-#     --use_softplus_gapt \
-#     --model_size $MODEL_SIZE \
-#     --run_info "GAPT: ModelSize=$MODEL_SIZE | CEPat=125 | MBEPat=75 | w=20.0 | Softplus=True" 
-
-# ========================================="
-# Exp 2. FineWeb 10B, scaling experiment (GPT2 small, medium, large)
-# ========================================="
-
-# # Scaling experiment (10B fineweb dataset)
-# # -----------------------------------------
-# for MODEL_SIZE in "small"; do
-#   torchrun \
-#       --nproc_per_node=$N_GPUS \
-#       --master_addr=$MASTER_ADDR \
-#       --master_port=$((MASTER_PORT++)) \
-#       train_iblm.py \
-#       --batch_size 16 \
-#       --train_seq_len $TRAIN_SEQ_LEN \
-#       --val_seq_len $VAL_SEQ_LEN \
-#       --num_iterations 1750 \
-#       --use_gapt \
-#       --entropy_patience 125 \
-#       --entropy_min_delta 0.01 \
-#       --mbe_patience 75 \
-#       --mbe_min_delta 0.01 \
-#       --mbe_weight 20.0 \
-#       --save_checkpoint \
-#       --model_size $MODEL_SIZE \
-#       --run_info "GAPT Sweep: ModelSize=$MODEL_SIZE | CEPat=125 | MBEPat=75 | w=20.0 | SimpleClamp" 
-    
-#   torchrun \
-#       --nproc_per_node=$N_GPUS \
-#       --master_addr=$MASTER_ADDR \
-#       --master_port=$((MASTER_PORT++)) \
-#       train_iblm.py \
-#       --batch_size 16 \
-#       --train_seq_len $TRAIN_SEQ_LEN \
-#       --val_seq_len $VAL_SEQ_LEN \
-#       --num_iterations 1750 \
-#       --use_gapt \
-#       --entropy_patience 125 \
-#       --entropy_min_delta 0.01 \
-#       --mbe_patience 75 \
-#       --mbe_min_delta 0.01 \
-#       --mbe_weight 20.0 \
-#       --save_checkpoint \
-#       --use_softplus_gapt \
-#       --model_size $MODEL_SIZE \
-#       --run_info "GAPT Sweep: ModelSize=$MODEL_SIZE | CEPat=125 | MBEPat=75 | w=20.0 | Softplus=True" 
-# done
-
-# python data/cached_fineweb10B.py
-
-# NUM_ITERATIONS=20000
-# for MODEL_SIZE in "large"; do
-#   torchrun \
-#       --nproc_per_node=$N_GPUS \
-#       --master_addr=$MASTER_ADDR \
-#       --master_port=$((MASTER_PORT++)) \
-#       train_iblm.py \
-#       --batch_size $BATCH_SIZE \
-#       --train_seq_len $TRAIN_SEQ_LEN \
-#       --val_seq_len $VAL_SEQ_LEN \
-#       --num_iterations $NUM_ITERATIONS \
-#       --use_gapt \
-#       --entropy_patience 125 \
-#       --entropy_min_delta 0.01 \
-#       --mbe_patience 75 \
-#       --mbe_min_delta 0.01 \
-#       --mbe_weight 20.0 \
-#       --use_softplus_gapt \
-#       --save_checkpoint \
-#       --model_size $MODEL_SIZE \
-#       --run_info "GAPT Sweep: ModelSize=$MODEL_SIZE | CEPat=125 | MBEPat=75 | w=20.0 | Softplus=True" 
 # done
 
 
