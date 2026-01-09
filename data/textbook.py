@@ -64,7 +64,10 @@ def main():
 
     # download the dataset
     print(f"Loading OpenPhi Textbooks {args.split} split...")
-    ts = load_dataset("open-phi/textbooks", split=args.split)
+    ts = load_dataset("open-phi/textbooks", split=args.split, streaming=True)
+    
+    MAX_TOTAL_TOKENS = 1_000_000_000
+    total_processed_tokens = 0
         
     # tokenize all documents and write output shards, each of shard_size tokens (last shard has remainder)
     nprocs = max(1, os.cpu_count() - 2) # don't hog the entire system
@@ -75,6 +78,12 @@ def main():
         token_count = 0
         progress_bar = None
         for tokens in pool.imap(tokenize, ts, chunksize=16):
+            
+            if total_processed_tokens >= MAX_TOTAL_TOKENS:
+                print(f"Reached {MAX_TOTAL_TOKENS} tokens limit. Stopping.")
+                break
+                
+            total_processed_tokens += len(tokens)
 
             # is there enough space in the current shard for the new tokens?
             if token_count + len(tokens) < args.shard_size:
