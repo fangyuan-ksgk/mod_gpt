@@ -48,7 +48,7 @@ MASTER_PORT=29500
 # ========================================="
 MBE_COMP_MODE="spike"
 MODEL_SIZE="small"
-for MBE_COMP_MODE in "naive" "max" "decay" "valley"; do
+for MBE_COMP_MODE in "spike"; do
   torchrun \
       --nproc_per_node=$N_GPUS \
       --master_addr=$MASTER_ADDR \
@@ -68,8 +68,9 @@ for MBE_COMP_MODE in "naive" "max" "decay" "valley"; do
       --mbe_schedule "all_middle" \
       --model_size $MODEL_SIZE \
       --no_skip_connections \
+      --use_softplus_gapt \
       --save_checkpoint \
-      --run_info "GAPT: ModelSize=$MODEL_SIZE (no skip connections)| GAPT | w=20.0 | MBE comp mode: $MBE_COMP_MODE | regularize on all middle layers" 
+      --run_info "GAPT: ModelSize=$MODEL_SIZE (no skip connections)| GAPT (softplus)| w=20.0 | MBE comp mode: $MBE_COMP_MODE | regularize on all middle layers" 
 done
 
 MODEL_SIZE="small"
@@ -93,6 +94,7 @@ for MBE_WEIGHT in 1.0 5.0 10.0; do
       --mbe_comp_mode $MBE_COMP_MODE \
       --mbe_schedule "all_middle" \
       --model_size $MODEL_SIZE \
+      --use_softplus_gapt \
       --no_skip_connections \
       --save_checkpoint \
       --run_info "GAPT: ModelSize=$MODEL_SIZE (no skip connections) | GAPT | w=$MBE_WEIGHT | MBE comp mode: $MBE_COMP_MODE | regularize on all middle layers" 
