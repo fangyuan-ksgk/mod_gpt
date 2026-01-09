@@ -43,6 +43,7 @@ def parse_args():
     parser.add_argument("--mbe_comp_mode", type=str, default="naive") # naive, max, softmax, decay
     parser.add_argument("--bottleneck_portion", type=float, default=0.1)
     parser.add_argument("--use_gapt", action="store_true")
+    parser.add_argument("--no_skip_connections", action="store_true")
     parser.add_argument("--reg_mbe", action="store_true")
     parser.add_argument("--reg_l2", action="store_true")
     parser.add_argument("--skip_first", type=int, default=1)
@@ -166,7 +167,7 @@ class Muon(torch.optim.Optimizer):
 # -----------------------------------------------------------------------------
 # PyTorch nn.Module definitions for the GPT-2 model
 
-from src.gapt import GPT, GPTConfig
+from src.gapt import GPT, GPTConfig, GPT_pure
 
 # -----------------------------------------------------------------------------
 # Our own simple Distributed Data Loader
@@ -275,7 +276,10 @@ print0("="*100)
 ########################################
 #    Construct model and optimizer     #
 ########################################
-model: nn.Module = GPT(model_config).cuda()
+if args.no_skip_connections: 
+    model: nn.Module = GPT_pure(model_config).cuda()
+else:
+    model: nn.Module = GPT(model_config).cuda()
 if args.continue_from_ckpt:
     ckpt = torch.load(args.continue_from_ckpt, map_location="cuda")
     state_dict = ckpt["model"]
@@ -566,6 +570,7 @@ print0(f"-- use_gapt: {args.use_gapt}", console=True)
 print0(f"-- reg_mbe: {args.reg_mbe}", console=True)
 print0(f"-- reg_l2: {args.reg_l2}", console=True)
 print0(f"-- model_size: {args.model_size}", console=True)
+print0(f"-- no_skip_connections: {args.no_skip_connections}", console=True)
 print0(f"-- entropy_patience: {args.entropy_patience}", console=True)
 print0(f"-- entropy_min_delta: {args.entropy_min_delta}", console=True)
 print0(f"-- mbe_patience: {args.mbe_patience}", console=True)

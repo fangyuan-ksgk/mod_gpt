@@ -176,7 +176,7 @@ class GPT(nn.Module):
             if self.enable_timing:
                 t0 = time.perf_counter()
             
-            x = x + self.skip_weights[i] * skip_connections.pop()
+            x = x + self.skip_weights[i] * skip_connections.pop() # break skip connections
             x, v1 = self.transformer.h[self.num_encoder_layers + i](x, v1, x0, block_mask)
             
             if self.enable_timing:
@@ -232,6 +232,79 @@ class GPT(nn.Module):
         print(f"TOTAL:                    {total_time:8.2f} ms")
         print("=" * 60 + "\n")
 
+
+
+
+class GPT_pure(nn.Module):
+
+    def __init__(self, config):
+        super().__init__()
+
+        self.num_encoder_layers = config.n_layer // 2
+        self.num_decoder_layers = config.n_layer - self.num_encoder_layers 
+        self.skip_weights = nn.Parameter(torch.ones(self.num_decoder_layers))
+
+        self.transformer = nn.ModuleDict(dict(
+            wte = nn.Embedding(config.vocab_size, config.n_embd),
+            h = nn.ModuleList([Block(config) for _ in range(config.n_layer)]),
+        ))
+        self.lm_head = CastedLinear(config.n_embd, config.vocab_size)
+        self.lm_head.weight.data.zero_()
+
+        self.device = config.device
+        self._compile = config._compile
+        self.enable_timing = False  # Toggle for timing
+
+    def forward(self, idx, target, attn_blocksize, patch_size):
+        """Localized Rank Regularization for Each Block"""
+        timings = {} if self.enable_timing else None
+        
+        # ===== Block Mask Creation =====
+        if self.enable_timing:
+            t0 = time.perf_counter()
+        
+        docs = (idx == 50256).cumsum(1)
+        def document_causal_mask(b, h, q_idx, kv_idx):
+          causal_mask = q_idx >= kv_idx
+          document_mask = docs[b, q_idx] == docs[b, kv_idx]
+          window_mask = q_idx - kv_idx < attn_blocksize
+          return causal_mask & document_mask & window_mask
+
+        S = idx.shape[1]
+        block_mask = create_block_mask(document_causal_mask, None, None, S, S, device=self.device, _compile=self._compile)
+        
+        if self.enable_timing:
+            timings['block_mask_creation'] = (time.perf_counter() - t0) * 1000
+            t0 = time.perf_counter()
+
+        # ===== Embedding + Norm =====
+        x = self.transformer.wte(idx)
+        x = norm(x)
+        loss_dict = {}
+        
+        if self.enable_timing:
+            timings['embedding_norm'] = (time.perf_counter() - t0) * 1000
+        
+        x0 = x
+        v1 = None
+
+        for i in range(self.num_layers): 
+            x, v1 = self.transformer.h[i](x, v1, x0, block_mask)
+            loss_dict[f"{RANK_REG_LOSS}_{i}"] = patch_mbe(x, patch_size)
+        
+        x = norm(x)
+        logits = self.lm_head(x)
+        logits = 30 * torch.tanh(logits / 30)
+        logits = logits.float()
+        loss = F.cross_entropy(logits.view(-1, logits.size(-1)), target.view(-1))
+        loss_dict["entropy"] = loss
+        
+        if self.enable_timing:
+            timings['output_head_loss'] = (time.perf_counter() - t0) * 1000
+            loss_dict["_timings"] = timings
+            self._print_timing_summary(timings)
+        
+        return loss_dict
 
 # Gated Phase Transition 
 # ---------------------------------------------------------------------------------------
