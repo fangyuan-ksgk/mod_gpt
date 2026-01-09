@@ -13,7 +13,7 @@ from collections import defaultdict
 import torch
 from torch import nn, Tensor
 import torch.distributed as dist
-from src.utils import plot_training_losses, compute_loss, EvalManager, discover_eval_suites
+from src.utils import plot_training_losses, compute_loss, EvalManager, discover_eval_suites, discover_forget_suites
 
 import argparse
 
@@ -406,8 +406,15 @@ for step in range(train_steps + 1):
         torch.cuda.synchronize()
         training_time_ms += 1000 * (time.perf_counter() - t0)
         
+        # Suites within FineWeb10B training set (simpler, have prior memories in GPT model)
+        # -> (1). we copy .bin into different folders into "data/fineweb_forget"
+        # -> (2). we switch "data" into "data/fineweb_forget" in the above code line
+
         # Cross-Eval Suites: Auto-discover all validation sets in data/
-        val_suites = discover_eval_suites("data")
+        # val_suites = discover_eval_suites("data")
+        val_suites = discover_forget_suites("data/fineweb_forget")
+        
+
         val_suites["target"] = args.val_files  # Override/add target validation
 
         eval_manager = EvalManager(val_suites, args.val_seq_len, args.val_tokens, rank, world_size)

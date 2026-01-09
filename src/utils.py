@@ -33,6 +33,24 @@ def discover_eval_suites(data_dir="data"):
                 suites[entry] = val_pattern
     return suites
 
+
+def discover_forget_suites(data_dir="data"):
+    """
+    Auto-discover validation sets from data/ subdirectories.
+    Returns dict: {folder_name: "data/folder_name/*val*.bin"}
+    """
+    suites = {}
+    if not os.path.isdir(data_dir):
+        return suites
+    for entry in os.listdir(data_dir):
+        subdir = os.path.join(data_dir, entry)
+        if os.path.isdir(subdir) and not entry.startswith("__"):
+            # Check if val files exist
+            val_pattern = os.path.join(subdir, "*.bin")
+            if glob.glob(val_pattern):
+                suites[entry] = val_pattern
+    return suites
+
 # -----------------------------------------------------------------------------
 # distributed data loader
 
