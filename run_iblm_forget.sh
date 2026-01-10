@@ -65,7 +65,7 @@ for n in $(seq 0 $((NUM_SHARDS - 1))); do
       --nproc_per_node=$N_GPUS \
       --master_addr=$MASTER_ADDR \
       --master_port=$((MASTER_PORT++)) \
-      train_iblm.py \
+      train_iblm_forget.py \
       --continue_from_ckpt $BASE_CKPT \
       --train_files "$FINEWEB_TRAIN_FILES" \
       --batch_size $BATCH_SIZE \
@@ -88,7 +88,7 @@ for n in $(seq 0 $((NUM_SHARDS - 1))); do
       --nproc_per_node=$N_GPUS \
       --master_addr=$MASTER_ADDR \
       --master_port=$((MASTER_PORT++)) \
-      train_iblm.py \
+      train_iblm_forget.py \
       --continue_from_ckpt $BASE_CKPT \
       --train_files "$FINEWEB_TRAIN_FILES" \
       --batch_size $BATCH_SIZE \
@@ -133,7 +133,7 @@ for n in $(seq 0 $((NUM_SHARDS - 1))); do
       --nproc_per_node=$N_GPUS \
       --master_addr=$MASTER_ADDR \
       --master_port=$((MASTER_PORT++)) \
-      train_iblm.py \
+      train_iblm_forget.py \
       --continue_from_ckpt $GAPT_CKPT \
       --train_files "$FINEWEB_TRAIN_FILES" \
       --batch_size $BATCH_SIZE \
@@ -156,7 +156,7 @@ for n in $(seq 0 $((NUM_SHARDS - 1))); do
       --nproc_per_node=$N_GPUS \
       --master_addr=$MASTER_ADDR \
       --master_port=$((MASTER_PORT++)) \
-      train_iblm.py \
+      train_iblm_forget.py \
       --continue_from_ckpt $GAPT_CKPT \
       --train_files "$FINEWEB_TRAIN_FILES" \
       --batch_size $BATCH_SIZE \
