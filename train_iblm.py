@@ -50,6 +50,7 @@ def parse_args():
     parser.add_argument("--skip_last", type=int, default=1)
     parser.add_argument("--mbe_schedule", type=str, default="rotate")
     parser.add_argument("--min_a", type=float, default=1e-5)
+    parser.add_argument("--prune_layers", type=str, default=None, help="Comma-separated layer indices to prune, e.g. '22,23,24'")
     parser.add_argument("--use_softplus_gapt", action="store_true")
     parser.add_argument("--save_checkpoint", action="store_true")
     parser.add_argument("--save_checkpoint_every", type=int, default=0)
@@ -290,6 +291,10 @@ if args.continue_from_ckpt:
             state_dict[k[len(wanted_prefix):]] = state_dict.pop(k)
     model.load_state_dict(state_dict)
 
+if args.prune_layers: 
+    from src.prune import prune_layer
+    prune_layer_indices = [int(x.strip()) for x in args.prune_layers.split(",")]
+    prune_layer(model, prune_layer_indices)
     
 for m in model.modules():
     if isinstance(m, nn.Embedding):
