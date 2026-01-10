@@ -404,15 +404,6 @@ for step in range(train_steps + 1):
 
     attn_blocksize = torch.tensor(64*((step/train_steps * (1792 - 64) + 64)//64), dtype=torch.int, device='cuda')
 
-    # min_pow, max_pow = 3, 10
-    # curriculum_ratio = args.patch_curriculum_ratio  # curriculum finishes at X% of training steps
-    # curriculum_steps = int(train_steps * curriculum_ratio)
-    # if step < curriculum_steps:
-    #     curr_pow = min_pow + (max_pow - min_pow) * step / max(curriculum_steps, 1)
-    #     curr_pow = round(curr_pow)
-    # else:
-    #     curr_pow = max_pow
-    # patch_size = torch.tensor(2 ** curr_pow, dtype=torch.int, device='cuda')
     patch_size = args.patch_size
     
     # --------------- VALIDATION SECTION -----------------
