@@ -408,7 +408,7 @@ for step in range(train_steps + 1):
         training_time_ms += 1000 * (time.perf_counter() - t0)
                 
         if args.forget_mode == "fineweb": # forgetting within fineweb10B when continuously pre-train on subset
-            val_suites = discover_forget_suites("data/fineweb_forget")
+            val_suites = discover_forget_suites("data/forget_fineweb")
         else: # Cross-Eval Suites: Auto-discover all validation sets in data/
             val_suites = discover_eval_suites("data")
             val_suites["target"] = args.val_files  # Override/add target validation
