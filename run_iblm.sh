@@ -47,7 +47,7 @@ MASTER_PORT=29500
 # Exp 3. What if skip connection are removed, so that bottleneck is "real" bottleneck that can't be bypassed?
 # ========================================="
 MBE_COMP_MODE="spike"
-for MODEL_SIZE in "small" "medium" "large"; do
+for MODEL_SIZE in "small" "medium"; do
   torchrun \
       --nproc_per_node=$N_GPUS \
       --master_addr=$MASTER_ADDR \
@@ -56,7 +56,7 @@ for MODEL_SIZE in "small" "medium" "large"; do
       --batch_size 32 \
       --train_seq_len $TRAIN_SEQ_LEN \
       --val_seq_len $VAL_SEQ_LEN \
-      --num_iterations 1750 \
+      --num_iterations 21000 \
       --use_gapt \
       --entropy_patience 125 \
       --entropy_min_delta 0.01 \
@@ -68,6 +68,7 @@ for MODEL_SIZE in "small" "medium" "large"; do
       --model_size $MODEL_SIZE \
       --no_skip_connections \
       --save_checkpoint \
+      --use_softplus_gapt \
       --run_info "GAPT: ModelSize=$MODEL_SIZE (no skip connections)| GAPT | w=20.0 | MBE comp mode: $MBE_COMP_MODE" 
 done
 
