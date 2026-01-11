@@ -228,6 +228,7 @@ class Hyperparameters:
     use_prior_weights: bool = False
     prior_weight: str = "natural"
     run_info: str = ""
+    prune_layers: str = None
 
 cli_args = parse_args()
 args = Hyperparameters()
