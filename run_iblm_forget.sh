@@ -62,7 +62,7 @@ torchrun \
   --model_size $MODEL_SIZE \
   --save_checkpoint \
   --forget_mode $FORGET_MODE \
-  --method_name "base_cpt_from_base" \
+  --method_name "base_cpt_from_base_random_shards" \
   --run_info "CPT on random shards: modelSize=$MODEL_SIZE | base CPT from base Ckpt"
 
 torchrun \
@@ -86,7 +86,7 @@ torchrun \
   --mbe_schedule "all_middle" \
   --model_size $MODEL_SIZE \
   --save_checkpoint \
-  --method_name "gapt_from_base" \
+  --method_name "gapt_cpt_from_base_random_shards" \
   --run_info "CPT w. GAPT on random shards: ModelSize=$MODEL_SIZE | w=$MBE_WEIGHT | $MBE_COMP_MODE | GAPT CPT from base Ckpt"
 
 
