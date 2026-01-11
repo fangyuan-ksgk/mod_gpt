@@ -254,6 +254,10 @@ no_priority = True
 if master_process:
     # Structured run_id: {model}_{method}_{shard}_{timestamp}
     timestamp = time.strftime("%Y%m%d_%H%M%S")
+    if args.shard_idx > 0: 
+        shard_idx = args.shard_idx
+    else: 
+        shard_idx = "all"
     run_id = f"{args.model_size}_{args.method_name}_shard{args.shard_idx}_{timestamp}"
     os.makedirs("logs", exist_ok=True)
     logfile = f"logs/{run_id}.txt"
