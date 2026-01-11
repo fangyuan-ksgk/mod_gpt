@@ -57,6 +57,8 @@ def parse_args():
     parser.add_argument("--forget_mode", type=str, default="fineweb") # fineweb, med
     parser.add_argument("--model_size", type=str, default="small")
     parser.add_argument("--run_info", type=str, default="")
+    parser.add_argument("--shard_idx", type=int, default=0, help="Which data shard (bin) is used for CPT")
+    parser.add_argument("--method_name", type=str, default="baseline", help="CPT method identifier (e.g., baseline, gapt, gapt_softplus)")
     
     return parser.parse_args()
 
@@ -250,9 +252,12 @@ train_accumulation_steps = args.batch_size // world_size # long seq train is mor
 logfile = None
 no_priority = True
 if master_process:
-    run_id = uuid.uuid4()
+    # Structured run_id: {model}_{method}_{shard}_{timestamp}
+    timestamp = time.strftime("%Y%m%d_%H%M%S")
+    run_id = f"{args.model_size}_{args.method_name}_shard{args.shard_idx}_{timestamp}"
     os.makedirs("logs", exist_ok=True)
     logfile = f"logs/{run_id}.txt"
+    print(f"Run ID: {run_id}")
     print(logfile)
 def print0(s, console=False):
     if master_process:
