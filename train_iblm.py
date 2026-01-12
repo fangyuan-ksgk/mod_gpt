@@ -429,7 +429,10 @@ for step in range(train_steps + 1):
                 loss_dict = model.forward(inputs, targets, attn_blocksize, patch_size)
                 token_stats = collect_token_stats(loss_dict["logits"], targets)
                 compute_loss(loss_dict)
-                for name, loss in loss_dict.items(): 
+                for name, loss in loss_dict.items():
+                    # Skip non-scalar tensors (like logits)
+                    if name == "logits" or (hasattr(loss, 'numel') and loss.numel() > 1):
+                        continue
                     val_loss[name] += loss                
         for name in val_loss: 
             val_loss[name] /= val_steps

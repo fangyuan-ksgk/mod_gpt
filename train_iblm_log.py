@@ -445,7 +445,10 @@ for step in range(train_steps + 1):
                     all_token_stats['mbe'].append(mbe_per_layer)
                 
                 compute_loss(loss_dict)
-                for name, loss in loss_dict.items(): 
+                for name, loss in loss_dict.items():
+                    # Skip non-scalar tensors (like logits)
+                    if name == "logits" or (hasattr(loss, 'numel') and loss.numel() > 1):
+                        continue
                     val_loss[name] += loss
         
         # Plot entropy vs probability scatter at each validation step
