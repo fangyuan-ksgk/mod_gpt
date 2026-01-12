@@ -52,6 +52,7 @@ def parse_args():
     parser.add_argument("--min_a", type=float, default=1e-5)
     parser.add_argument("--prune_layers", type=str, default=None, help="Comma-separated layer indices to prune, e.g. '22,23,24'")
     parser.add_argument("--use_softplus_gapt", action="store_true")
+    parser.add_argument("--use_eaft", action="store_true")s
     parser.add_argument("--save_checkpoint", action="store_true")
     parser.add_argument("--save_checkpoint_every", type=int, default=0)
     
@@ -362,7 +363,7 @@ for i in range(warmup_steps):
     inputs = targets = torch.randint(0, args.vocab_size, size=(1, args.train_seq_len,), device="cuda")
     print(f" :: Forward propagation starts with inputs & targets of length {inputs.shape[1]}")
     forward_start = time.time() 
-    loss_dict = model.forward(inputs.to(torch.int32), targets, attn_blocksize, args.patch_size)
+    loss_dict = model.forward(inputs.to(torch.int32), targets, attn_blocksize, args.patch_size, use_eaft=args.use_eaft)
     compute_loss(loss_dict)
     loss_dict = {"entropy": loss_dict["entropy"], "mbe": sum(v for k, v in loss_dict.items() if k.startswith("mbe_"))}
     backward_start = time.time()
@@ -461,7 +462,7 @@ for step in range(train_steps + 1):
     # --------------- TRAINING SECTION -----------------
     for accum_step in range(train_accumulation_steps): 
         inputs, targets = next(train_loader)
-        loss_dict = model.forward(inputs, targets, attn_blocksize, patch_size)
+        loss_dict = model.forward(inputs, targets, attn_blocksize, patch_size, use_eaft=args.use_eaft)
         compute_loss(loss_dict)  
 
         # --- aggregate loss ---

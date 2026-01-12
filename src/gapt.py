@@ -13,6 +13,7 @@ import torch.nn.functional as F
 from dataclasses import dataclass, field
 from .model import CastedLinear, Block, create_block_mask, norm
 import time
+from .eaft import _eaft_cross_entropy
 
 @dataclass
 class GPTConfig:
@@ -119,7 +120,7 @@ class GPT(nn.Module):
         self._compile = config._compile
         self.enable_timing = False  # Toggle for timing
 
-    def forward(self, idx, target, attn_blocksize, patch_size):
+    def forward(self, idx, target, attn_blocksize, patch_size, use_eaft: bool = False):
         """Localized Rank Regularization for Each Block"""
         timings = {} if self.enable_timing else None
         
@@ -196,7 +197,11 @@ class GPT(nn.Module):
         logits = self.lm_head(x)
         logits = 30 * torch.tanh(logits / 30)
         logits = logits.float()
-        loss = F.cross_entropy(logits.view(-1, logits.size(-1)), target.view(-1))
+
+        if use_eaft:
+            loss = _eaft_cross_entropy(logits, target)
+        else:
+            loss = F.cross_entropy(logits.view(-1, logits.size(-1)), target.view(-1))
         loss_dict["entropy"] = loss
         
         if self.enable_timing:
