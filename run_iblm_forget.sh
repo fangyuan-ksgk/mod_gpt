@@ -47,51 +47,51 @@ MBE_WEIGHT=20.0
 # -------------------------------
 
 ALL_SHARDS_FINEWEB="data/fineweb/fineweb_train_*.bin"
-torchrun \
-  --nproc_per_node=$N_GPUS \
-  --master_addr=$MASTER_ADDR \
-  --master_port=$((MASTER_PORT++)) \
-  train_iblm_forget.py \
-  --continue_from_ckpt $BASE_CKPT \
-  --train_files "$ALL_SHARDS_FINEWEB" \
-  --batch_size $BATCH_SIZE \
-  --train_seq_len $TRAIN_SEQ_LEN \
-  --val_seq_len $VAL_SEQ_LEN \
-  --num_iterations $NUM_ITERATIONS \
-  --no_reg \
-  --model_size $MODEL_SIZE \
-  --save_checkpoint \
-  --forget_mode $FORGET_MODE \
-  --method_name "base_cpt_from_base_random_shards" \
-  --run_info "CPT on random shards: modelSize=$MODEL_SIZE | base CPT from base Ckpt"
+# torchrun \
+#   --nproc_per_node=$N_GPUS \
+#   --master_addr=$MASTER_ADDR \
+#   --master_port=$((MASTER_PORT++)) \
+#   train_iblm_forget.py \
+#   --continue_from_ckpt $BASE_CKPT \
+#   --train_files "$ALL_SHARDS_FINEWEB" \
+#   --batch_size $BATCH_SIZE \
+#   --train_seq_len $TRAIN_SEQ_LEN \
+#   --val_seq_len $VAL_SEQ_LEN \
+#   --num_iterations $NUM_ITERATIONS \
+#   --no_reg \
+#   --model_size $MODEL_SIZE \
+#   --save_checkpoint \
+#   --forget_mode $FORGET_MODE \
+#   --method_name "base_cpt_from_base_random_shards" \
+#   --run_info "CPT on random shards: modelSize=$MODEL_SIZE | base CPT from base Ckpt"
 
-torchrun \
-  --nproc_per_node=$N_GPUS \
-  --master_addr=$MASTER_ADDR \
-  --master_port=$((MASTER_PORT++)) \
-  train_iblm_forget.py \
-  --continue_from_ckpt $BASE_CKPT \
-  --train_files "$ALL_SHARDS_FINEWEB" \
-  --batch_size $BATCH_SIZE \
-  --train_seq_len $TRAIN_SEQ_LEN \
-  --val_seq_len $VAL_SEQ_LEN \
-  --num_iterations $NUM_ITERATIONS \
-  --use_gapt \
-  --entropy_patience 125 \
-  --entropy_min_delta 0.01 \
-  --mbe_patience 75 \
-  --mbe_min_delta 0.01 \
-  --mbe_weight $MBE_WEIGHT \
-  --mbe_comp_mode $MBE_COMP_MODE \
-  --mbe_schedule "all_middle" \
-  --model_size $MODEL_SIZE \
-  --save_checkpoint \
-  --method_name "gapt_cpt_from_base_random_shards" \
-  --run_info "CPT w. GAPT on random shards: ModelSize=$MODEL_SIZE | w=$MBE_WEIGHT | $MBE_COMP_MODE | GAPT CPT from base Ckpt"
+# torchrun \
+#   --nproc_per_node=$N_GPUS \
+#   --master_addr=$MASTER_ADDR \
+#   --master_port=$((MASTER_PORT++)) \
+#   train_iblm_forget.py \
+#   --continue_from_ckpt $BASE_CKPT \
+#   --train_files "$ALL_SHARDS_FINEWEB" \
+#   --batch_size $BATCH_SIZE \
+#   --train_seq_len $TRAIN_SEQ_LEN \
+#   --val_seq_len $VAL_SEQ_LEN \
+#   --num_iterations $NUM_ITERATIONS \
+#   --use_gapt \
+#   --entropy_patience 125 \
+#   --entropy_min_delta 0.01 \
+#   --mbe_patience 75 \
+#   --mbe_min_delta 0.01 \
+#   --mbe_weight $MBE_WEIGHT \
+#   --mbe_comp_mode $MBE_COMP_MODE \
+#   --mbe_schedule "all_middle" \
+#   --model_size $MODEL_SIZE \
+#   --save_checkpoint \
+#   --method_name "gapt_cpt_from_base_random_shards" \
+#   --run_info "CPT w. GAPT on random shards: ModelSize=$MODEL_SIZE | w=$MBE_WEIGHT | $MBE_COMP_MODE | GAPT CPT from base Ckpt"
 
 
 # ------------------------------
-# (II). CPT on specific shards | 500 steps produce a 8% reduction in catastrophic forgetting | softplus ver. is better
+# (II). CPT on specific shards | 750 steps produce a 8% reduction in catastrophic forgetting | softplus ver. is better
 # ------------------------------
 
 for n in $(seq 0 $((NUM_SHARDS - 1))); do
