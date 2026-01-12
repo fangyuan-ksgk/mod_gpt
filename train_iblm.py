@@ -52,7 +52,7 @@ def parse_args():
     parser.add_argument("--min_a", type=float, default=1e-5)
     parser.add_argument("--prune_layers", type=str, default=None, help="Comma-separated layer indices to prune, e.g. '22,23,24'")
     parser.add_argument("--use_softplus_gapt", action="store_true")
-    parser.add_argument("--use_eaft", action="store_true")s
+    parser.add_argument("--use_eaft", action="store_true")
     parser.add_argument("--save_checkpoint", action="store_true")
     parser.add_argument("--save_checkpoint_every", type=int, default=0)
     
