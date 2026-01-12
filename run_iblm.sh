@@ -45,9 +45,11 @@ MASTER_PORT=29500
 #        | 'num_iterations' change the 'attention blocksize' at each step (smaller for bigger iterations number)
 #        | therefore it's unfair to compare results at same step across run with different 'num_itrations'
 # Exp 3. What if skip connection are removed, so that bottleneck is "real" bottleneck that can't be bypassed?
+
+# Exp 4. Does EAFT loss help pre-training?
 # ========================================="
 MBE_COMP_MODE="spike"
-for MODEL_SIZE in "small" "medium"; do
+for MODEL_SIZE in "small"; do
   torchrun \
       --nproc_per_node=$N_GPUS \
       --master_addr=$MASTER_ADDR \
@@ -56,7 +58,21 @@ for MODEL_SIZE in "small" "medium"; do
       --batch_size 32 \
       --train_seq_len $TRAIN_SEQ_LEN \
       --val_seq_len $VAL_SEQ_LEN \
-      --num_iterations 21000 \
+      --num_iterations 1750 \
+      --no_reg \
+      --model_size $MODEL_SIZE \
+      --use_eaft \
+      --run_info "EAFT: ModelSize=$MODEL_SIZE" 
+
+  torchrun \
+      --nproc_per_node=$N_GPUS \
+      --master_addr=$MASTER_ADDR \
+      --master_port=$((MASTER_PORT++)) \
+      train_iblm.py \
+      --batch_size 32 \
+      --train_seq_len $TRAIN_SEQ_LEN \
+      --val_seq_len $VAL_SEQ_LEN \
+      --num_iterations 1750 \
       --use_gapt \
       --entropy_patience 125 \
       --entropy_min_delta 0.01 \
@@ -66,10 +82,22 @@ for MODEL_SIZE in "small" "medium"; do
       --mbe_comp_mode $MBE_COMP_MODE \
       --mbe_schedule "all_middle" \
       --model_size $MODEL_SIZE \
-      --no_skip_connections \
-      --save_checkpoint \
       --use_softplus_gapt \
-      --run_info "GAPT: ModelSize=$MODEL_SIZE (no skip connections)| GAPT | w=20.0 | MBE comp mode: $MBE_COMP_MODE" 
+      --use_eaft \
+      --run_info "EAFT + GAPT: ModelSize=$MODEL_SIZE | GAPT | w=20.0 | MBE comp mode: $MBE_COMP_MODE" 
+
+  torchrun \
+      --nproc_per_node=$N_GPUS \
+      --master_addr=$MASTER_ADDR \
+      --master_port=$((MASTER_PORT++)) \
+      train_iblm.py \
+      --batch_size 32 \
+      --train_seq_len $TRAIN_SEQ_LEN \
+      --val_seq_len $VAL_SEQ_LEN \
+      --num_iterations 1750 \
+      --no_reg \
+      --model_size $MODEL_SIZE \
+      --run_info "Baseline: ModelSize=$MODEL_SIZE" 
 done
 
 
