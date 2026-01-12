@@ -239,6 +239,240 @@ class GPT(nn.Module):
         print("=" * 60 + "\n")
 
 
+class GPT_log(nn.Module):
+
+    def __init__(self, config):
+        super().__init__()
+
+        self.num_encoder_layers = config.n_layer // 2
+        self.num_decoder_layers = config.n_layer - self.num_encoder_layers 
+        self.skip_weights = nn.Parameter(torch.ones(self.num_decoder_layers))
+
+        self.transformer = nn.ModuleDict(dict(
+            wte = nn.Embedding(config.vocab_size, config.n_embd),
+            h = nn.ModuleList([Block(config) for _ in range(config.n_layer)]),
+        ))
+        self.lm_head = CastedLinear(config.n_embd, config.vocab_size)
+        self.lm_head.weight.data.zero_()
+
+        self.device = config.device
+        self._compile = config._compile
+        self.enable_timing = False  # Toggle for timing
+
+    def forward(self, idx, target, attn_blocksize, patch_size, use_eaft: bool = False):
+        """Localized Rank Regularization for Each Block"""
+        timings = {} if self.enable_timing else None
+        
+        # ===== Block Mask Creation =====
+        if self.enable_timing:
+            t0 = time.perf_counter()
+        
+        docs = (idx == 50256).cumsum(1)
+        def document_causal_mask(b, h, q_idx, kv_idx):
+          causal_mask = q_idx >= kv_idx
+          document_mask = docs[b, q_idx] == docs[b, kv_idx]
+          window_mask = q_idx - kv_idx < attn_blocksize
+          return causal_mask & document_mask & window_mask
+
+        S = idx.shape[1]
+        block_mask = create_block_mask(document_causal_mask, None, None, S, S, device=self.device, _compile=self._compile)
+        
+        if self.enable_timing:
+            timings['block_mask_creation'] = (time.perf_counter() - t0) * 1000
+            t0 = time.perf_counter()
+
+        # ===== Embedding + Norm =====
+        x = self.transformer.wte(idx)
+        x = norm(x)
+        loss_dict = {}
+        
+        if self.enable_timing:
+            timings['embedding_norm'] = (time.perf_counter() - t0) * 1000
+        
+        x0 = x
+        v1 = None
+
+        # ===== Encoder Layers =====
+        skip_connections = []
+        for i in range(self.num_encoder_layers):
+            if self.enable_timing:
+                t0 = time.perf_counter()
+            
+            x, v1 = self.transformer.h[i](x, v1, x0, block_mask)
+            
+            if self.enable_timing:
+                timings[f'encoder_layer_{i}_forward'] = (time.perf_counter() - t0) * 1000
+                t0 = time.perf_counter()
+            
+            loss_dict[f"{RANK_REG_LOSS}_{i}"] = patch_mbe(x, patch_size)
+            
+            if self.enable_timing:
+                timings[f'encoder_layer_{i}_mbe'] = (time.perf_counter() - t0) * 1000
+            
+            skip_connections.append(x)
+        
+        # ===== Decoder Layers =====
+        for i in range(self.num_decoder_layers):
+            if self.enable_timing:
+                t0 = time.perf_counter()
+            
+            x = x + self.skip_weights[i] * skip_connections.pop() # break skip connections
+            x, v1 = self.transformer.h[self.num_encoder_layers + i](x, v1, x0, block_mask)
+            
+            if self.enable_timing:
+                timings[f'decoder_layer_{i}_forward'] = (time.perf_counter() - t0) * 1000
+                t0 = time.perf_counter()
+            
+            loss_dict[f"{RANK_REG_LOSS}_{self.num_encoder_layers + i}"] = patch_mbe(x, patch_size)
+            
+            if self.enable_timing:
+                timings[f'decoder_layer_{i}_mbe'] = (time.perf_counter() - t0) * 1000
+        
+        # ===== Output Head + Loss =====
+        if self.enable_timing:
+            t0 = time.perf_counter()
+        
+        x = norm(x)
+        logits = self.lm_head(x)
+        logits = 30 * torch.tanh(logits / 30)
+        logits = logits.float()
+
+        loss_dict["logits"] = logits # ToBeRemoved | logging purpose only
+        if use_eaft:
+            loss = _eaft_cross_entropy(logits, target)
+        else:
+            loss = F.cross_entropy(logits.view(-1, logits.size(-1)), target.view(-1))
+        loss_dict["entropy"] = loss
+        
+        if self.enable_timing:
+            timings['output_head_loss'] = (time.perf_counter() - t0) * 1000
+            loss_dict["_timings"] = timings
+            self._print_timing_summary(timings)
+        
+        return loss_dict
+    
+    def _print_timing_summary(self, timings):
+        """Print a formatted timing summary"""
+        print("\n" + "="*60)
+        print("⏱️  Forward Pass Timing Breakdown (ms)")
+        print("="*60)
+        
+        # Group timings
+        setup_time = timings.get('block_mask_creation', 0) + timings.get('embedding_norm', 0)
+        encoder_forward = sum(v for k, v in timings.items() if 'encoder' in k and 'forward' in k)
+        encoder_mbe = sum(v for k, v in timings.items() if 'encoder' in k and 'mbe' in k)
+        decoder_forward = sum(v for k, v in timings.items() if 'decoder' in k and 'forward' in k)
+        decoder_mbe = sum(v for k, v in timings.items() if 'decoder' in k and 'mbe' in k)
+        output_time = timings.get('output_head_loss', 0)
+        
+        total_time = setup_time + encoder_forward + encoder_mbe + decoder_forward + decoder_mbe + output_time
+        
+        print(f"Setup (mask + embed):     {setup_time:8.2f} ms  ({setup_time/total_time*100:5.1f}%)")
+        print(f"Encoder Forward:          {encoder_forward:8.2f} ms  ({encoder_forward/total_time*100:5.1f}%)")
+        print(f"Encoder MBE:              {encoder_mbe:8.2f} ms  ({encoder_mbe/total_time*100:5.1f}%)")
+        print(f"Decoder Forward:          {decoder_forward:8.2f} ms  ({decoder_forward/total_time*100:5.1f}%)")
+        print(f"Decoder MBE:              {decoder_mbe:8.2f} ms  ({decoder_mbe/total_time*100:5.1f}%)")
+        print(f"Output (head + loss):     {output_time:8.2f} ms  ({output_time/total_time*100:5.1f}%)")
+        print("-" * 60)
+        print(f"TOTAL:                    {total_time:8.2f} ms")
+        print("=" * 60 + "\n")
+
+    def forward_with_patch_stats(self, idx, target, attn_blocksize, patch_size):
+        """
+        Forward pass that collects per-patch statistics for detailed MBE analysis.
+        
+        Returns:
+            loss_dict: standard losses
+            patch_stats: dict with per-patch metrics for each layer
+        """
+        from src.mbe import patch_mbe_detailed
+        
+        # Block mask
+        docs = (idx == 50256).cumsum(1)
+        def document_causal_mask(b, h, q_idx, kv_idx):
+            causal_mask = q_idx >= kv_idx
+            document_mask = docs[b, q_idx] == docs[b, kv_idx]
+            window_mask = q_idx - kv_idx < attn_blocksize
+            return causal_mask & document_mask & window_mask
+
+        B, S = idx.shape
+        num_patches = S // patch_size
+        block_mask = create_block_mask(document_causal_mask, None, None, S, S, 
+                                       device=self.device, _compile=self._compile)
+        
+        x = self.transformer.wte(idx)
+        x = norm(x)
+        
+        loss_dict = {}
+        # Per-layer, per-patch MBE: {layer_idx: (B, num_patches)}
+        layer_patch_mbe = {}
+        
+        x0 = x
+        v1 = None
+
+        # Encoder layers
+        skip_connections = []
+        for i in range(self.num_encoder_layers):
+            x, v1 = self.transformer.h[i](x, v1, x0, block_mask)
+            
+            # Per-patch MBE for this layer
+            patch_mbe_vals = patch_mbe_detailed(x, patch_size)  # (B, num_patches)
+            layer_patch_mbe[i] = patch_mbe_vals.detach()
+            loss_dict[f"{RANK_REG_LOSS}_{i}"] = patch_mbe_vals.mean()
+            
+            skip_connections.append(x)
+        
+        # Decoder layers
+        for i in range(self.num_decoder_layers):
+            x = x + self.skip_weights[i] * skip_connections.pop()
+            x, v1 = self.transformer.h[self.num_encoder_layers + i](x, v1, x0, block_mask)
+            
+            layer_idx = self.num_encoder_layers + i
+            patch_mbe_vals = patch_mbe_detailed(x, patch_size)
+            layer_patch_mbe[layer_idx] = patch_mbe_vals.detach()
+            loss_dict[f"{RANK_REG_LOSS}_{layer_idx}"] = patch_mbe_vals.mean()
+        
+        # Output head
+        x = norm(x)
+        logits = self.lm_head(x)
+        logits = 30 * torch.tanh(logits / 30)
+        logits = logits.float()
+        
+        # Per-token CE loss
+        loss_flat = F.cross_entropy(
+            logits.view(-1, logits.size(-1)), 
+            target.view(-1), 
+            reduction='none'
+        )
+        per_token_loss = loss_flat.view(B, S)
+        
+        # Per-token probability and entropy
+        with torch.no_grad():
+            probs = torch.softmax(logits, dim=-1)
+            correct_probs = probs.gather(-1, target.unsqueeze(-1)).squeeze(-1)  # (B, S)
+            entropy = -(probs * probs.log().clamp(min=-100)).sum(dim=-1)  # (B, S)
+        
+        # Aggregate to per-patch
+        per_patch_loss = per_token_loss.view(B, num_patches, patch_size).mean(dim=-1)
+        per_patch_prob = correct_probs.view(B, num_patches, patch_size).mean(dim=-1)
+        per_patch_entropy = entropy.view(B, num_patches, patch_size).mean(dim=-1)
+        
+        # Average MBE across layers for each patch
+        stacked_mbe = torch.stack(list(layer_patch_mbe.values()), dim=0)  # (n_layers, B, num_patches)
+        avg_patch_mbe = stacked_mbe.mean(dim=0)  # (B, num_patches)
+        
+        loss_dict["entropy"] = per_token_loss.mean()
+        loss_dict["logits"] = logits
+        
+        patch_stats = {
+            'patch_mbe': avg_patch_mbe.detach().cpu(),           # (B, num_patches)
+            'patch_loss': per_patch_loss.detach().cpu(),         # (B, num_patches)  
+            'patch_prob': per_patch_prob.detach().cpu(),         # (B, num_patches)
+            'patch_entropy': per_patch_entropy.detach().cpu(),   # (B, num_patches)
+            'layer_patch_mbe': {k: v.cpu() for k, v in layer_patch_mbe.items()},  # per-layer detail
+        }
+        
+        return loss_dict, patch_stats
 
 
 class GPT_pure(nn.Module):

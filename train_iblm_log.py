@@ -170,7 +170,7 @@ class Muon(torch.optim.Optimizer):
 # -----------------------------------------------------------------------------
 # PyTorch nn.Module definitions for the GPT-2 model
 
-from src.gapt import GPT, GPTConfig, GPT_pure
+from src.gapt import GPT, GPTConfig, GPT_pure, GPT_log
 
 # -----------------------------------------------------------------------------
 # Our own simple Distributed Data Loader
@@ -283,7 +283,8 @@ print0("="*100)
 if args.no_skip_connections: 
     model: nn.Module = GPT_pure(model_config).cuda()
 else:
-    model: nn.Module = GPT(model_config).cuda()
+    # Use GPT_log for detailed per-patch MBE logging
+    model: nn.Module = GPT_log(model_config).cuda()
 if args.continue_from_ckpt:
     ckpt = torch.load(args.continue_from_ckpt, map_location="cuda")
     state_dict = ckpt["model"]
@@ -422,6 +423,7 @@ for step in range(train_steps + 1):
         val_loader = distributed_data_generator(args.val_files, val_seq_len, rank, world_size)
         val_loss = defaultdict(float)
         all_token_stats = {'probs': [], 'entropies': [], 'grad_magnitudes': [], 'per_token_loss': [], 'mbe': []}
+        all_patch_stats = {'patch_mbe': [], 'patch_loss': [], 'patch_prob': [], 'patch_entropy': []}
 
         for i in range(val_steps):
             inputs, targets = next(val_loader)
@@ -444,6 +446,14 @@ for step in range(train_steps + 1):
                     mbe_per_layer = {k: v.item() for k, v in loss_dict.items() if k.startswith("mbe_")}
                     all_token_stats['mbe'].append(mbe_per_layer)
                 
+                # Collect per-patch stats (using GPT_log's special method)
+                if master_process and i < 20 and hasattr(model, '_orig_mod') and hasattr(model._orig_mod, 'forward_with_patch_stats'):
+                    _, patch_stats = model._orig_mod.forward_with_patch_stats(inputs, targets, attn_blocksize, patch_size)
+                    all_patch_stats['patch_mbe'].append(patch_stats['patch_mbe'])
+                    all_patch_stats['patch_loss'].append(patch_stats['patch_loss'])
+                    all_patch_stats['patch_prob'].append(patch_stats['patch_prob'])
+                    all_patch_stats['patch_entropy'].append(patch_stats['patch_entropy'])
+                
                 compute_loss(loss_dict)
                 for name, loss in loss_dict.items():
                     # Skip non-scalar tensors (like logits)
@@ -457,6 +467,11 @@ for step in range(train_steps + 1):
             # Save raw data for later analysis
             torch.save(all_token_stats, f"logs/{run_id}/token_stats_step{step:06d}.pt")
             plot_entropy_vs_prob(all_token_stats, save_path=f"logs/{run_id}/entropy_prob_step{step:06d}.png")
+        
+        # Save per-patch stats for MBE correlation analysis
+        if master_process and all_patch_stats['patch_mbe']:
+            os.makedirs(f"logs/{run_id}", exist_ok=True)
+            torch.save(all_patch_stats, f"logs/{run_id}/patch_stats_step{step:06d}.pt")
                 
         for name in val_loss: 
             val_loss[name] /= val_steps

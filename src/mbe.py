@@ -36,3 +36,18 @@ def patch_mbe(x, patch_size=8):
     x_reshaped = x.reshape(B, num_patches, patch_size, D).reshape(-1, patch_size, D)    
     mbe_values = mbe_alpha2_exact(x_reshaped)
     return mbe_values.mean()
+
+
+def patch_mbe_detailed(x, patch_size=8):
+    """
+    Compute per-patch MBE values (not averaged).
+    
+    Returns:
+        mbe_per_patch: (B, num_patches) tensor of MBE values
+    """
+    B, S, D = x.shape 
+    assert S % patch_size == 0, "Sequence length must be divisible by patch size"
+    num_patches = S // patch_size
+    x_reshaped = x.reshape(B, num_patches, patch_size, D).reshape(-1, patch_size, D)    
+    mbe_values = mbe_alpha2_exact(x_reshaped)  # (B * num_patches,)
+    return mbe_values.view(B, num_patches)
