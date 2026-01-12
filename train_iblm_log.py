@@ -437,6 +437,15 @@ for step in range(train_steps + 1):
                     all_token_stats['grad_magnitudes'].append(token_stats['grad_magnitudes'])
                     all_token_stats['per_token_loss'].append(token_stats['per_token_loss'])
             
+            # Collect per-patch stats WITH gradients (OUTSIDE no_grad block)
+            if master_process and i < 10 and hasattr(model, '_orig_mod') and hasattr(model._orig_mod, 'forward_with_patch_stats_and_grads'):
+                _, patch_stats = model._orig_mod.forward_with_patch_stats_and_grads(inputs, targets, attn_blocksize, patch_size)
+                all_patch_stats['patch_mbe'].append(patch_stats['patch_mbe'])
+                all_patch_stats['patch_loss'].append(patch_stats['patch_loss'])
+                all_patch_stats['patch_prob'].append(patch_stats['patch_prob'])
+                all_patch_stats['patch_entropy'].append(patch_stats['patch_entropy'])
+                all_patch_stats['patch_grad'].append(patch_stats['patch_grad'])
+            
             # Standard validation (no grad) for loss computation
             with torch.no_grad():
                 loss_dict = model.forward(inputs, targets, attn_blocksize, patch_size)
@@ -445,15 +454,6 @@ for step in range(train_steps + 1):
                 if master_process and i < 20:
                     mbe_per_layer = {k: v.item() for k, v in loss_dict.items() if k.startswith("mbe_")}
                     all_token_stats['mbe'].append(mbe_per_layer)
-                
-                # Collect per-patch stats WITH gradients (limit batches due to backward cost)
-                if master_process and i < 10 and hasattr(model, '_orig_mod') and hasattr(model._orig_mod, 'forward_with_patch_stats_and_grads'):
-                    _, patch_stats = model._orig_mod.forward_with_patch_stats_and_grads(inputs, targets, attn_blocksize, patch_size)
-                    all_patch_stats['patch_mbe'].append(patch_stats['patch_mbe'])
-                    all_patch_stats['patch_loss'].append(patch_stats['patch_loss'])
-                    all_patch_stats['patch_prob'].append(patch_stats['patch_prob'])
-                    all_patch_stats['patch_entropy'].append(patch_stats['patch_entropy'])
-                    all_patch_stats['patch_grad'].append(patch_stats['patch_grad'])
                 
                 compute_loss(loss_dict)
                 for name, loss in loss_dict.items():
