@@ -474,6 +474,125 @@ class GPT_log(nn.Module):
         
         return loss_dict, patch_stats
 
+    def forward_with_patch_stats_and_grads(self, idx, target, attn_blocksize, patch_size):
+        """
+        Forward + backward pass to collect per-patch stats INCLUDING gradient magnitudes.
+        
+        This is expensive (requires backward pass) but gives complete data for analysis.
+        
+        Returns:
+            loss_dict: standard losses
+            patch_stats: dict with per-patch MBE, loss, prob, entropy, AND gradient magnitude
+        """
+        from src.mbe import patch_mbe_detailed
+        
+        B, S = idx.shape
+        num_patches = S // patch_size
+        
+        # Enable gradients for embedding
+        embed_weight = self.transformer.wte.weight
+        if embed_weight.grad is not None:
+            embed_weight.grad.zero_()
+        
+        # Block mask
+        docs = (idx == 50256).cumsum(1)
+        def document_causal_mask(b, h, q_idx, kv_idx):
+            causal_mask = q_idx >= kv_idx
+            document_mask = docs[b, q_idx] == docs[b, kv_idx]
+            window_mask = q_idx - kv_idx < attn_blocksize
+            return causal_mask & document_mask & window_mask
+
+        block_mask = create_block_mask(document_causal_mask, None, None, S, S, 
+                                       device=self.device, _compile=self._compile)
+        
+        x = self.transformer.wte(idx)
+        x = norm(x)
+        
+        loss_dict = {}
+        layer_patch_mbe = {}
+        
+        x0 = x
+        v1 = None
+
+        # Encoder layers
+        skip_connections = []
+        for i in range(self.num_encoder_layers):
+            x, v1 = self.transformer.h[i](x, v1, x0, block_mask)
+            patch_mbe_vals = patch_mbe_detailed(x, patch_size)
+            layer_patch_mbe[i] = patch_mbe_vals.detach()
+            loss_dict[f"{RANK_REG_LOSS}_{i}"] = patch_mbe_vals.mean()
+            skip_connections.append(x)
+        
+        # Decoder layers
+        for i in range(self.num_decoder_layers):
+            x = x + self.skip_weights[i] * skip_connections.pop()
+            x, v1 = self.transformer.h[self.num_encoder_layers + i](x, v1, x0, block_mask)
+            layer_idx = self.num_encoder_layers + i
+            patch_mbe_vals = patch_mbe_detailed(x, patch_size)
+            layer_patch_mbe[layer_idx] = patch_mbe_vals.detach()
+            loss_dict[f"{RANK_REG_LOSS}_{layer_idx}"] = patch_mbe_vals.mean()
+        
+        # Output head
+        x = norm(x)
+        logits = self.lm_head(x)
+        logits = 30 * torch.tanh(logits / 30)
+        logits = logits.float()
+        
+        # Per-token CE loss (keep graph for backward)
+        loss_flat = F.cross_entropy(
+            logits.view(-1, logits.size(-1)), 
+            target.view(-1), 
+            reduction='none'
+        )
+        per_token_loss = loss_flat.view(B, S)
+        
+        # Backward pass to get gradients
+        total_loss = per_token_loss.sum()
+        total_loss.backward()
+        
+        # Get per-token gradient magnitude from embedding
+        # Gradient shape: (vocab_size, embed_dim)
+        # We need gradient for each token position
+        embed_grad = embed_weight.grad  # (vocab_size, embed_dim)
+        
+        # Per-token gradient: look up gradient for each token ID
+        token_grads = embed_grad[idx]  # (B, S, embed_dim)
+        per_token_grad_mag = token_grads.norm(dim=-1)  # (B, S)
+        
+        # Aggregate to per-patch
+        per_patch_grad = per_token_grad_mag.view(B, num_patches, patch_size).mean(dim=-1)
+        per_patch_loss_val = per_token_loss.view(B, num_patches, patch_size).mean(dim=-1)
+        
+        # Per-token probability and entropy (no grad needed)
+        with torch.no_grad():
+            probs = torch.softmax(logits, dim=-1)
+            correct_probs = probs.gather(-1, target.unsqueeze(-1)).squeeze(-1)
+            entropy = -(probs * probs.log().clamp(min=-100)).sum(dim=-1)
+        
+        per_patch_prob = correct_probs.view(B, num_patches, patch_size).mean(dim=-1)
+        per_patch_entropy = entropy.view(B, num_patches, patch_size).mean(dim=-1)
+        
+        # Average MBE across layers
+        stacked_mbe = torch.stack(list(layer_patch_mbe.values()), dim=0)
+        avg_patch_mbe = stacked_mbe.mean(dim=0)
+        
+        loss_dict["entropy"] = per_token_loss.mean()
+        loss_dict["logits"] = logits
+        
+        patch_stats = {
+            'patch_mbe': avg_patch_mbe.detach().cpu(),
+            'patch_loss': per_patch_loss_val.detach().cpu(),
+            'patch_prob': per_patch_prob.detach().cpu(),
+            'patch_entropy': per_patch_entropy.detach().cpu(),
+            'patch_grad': per_patch_grad.detach().cpu(),  # NEW: per-patch gradient magnitude
+            'layer_patch_mbe': {k: v.cpu() for k, v in layer_patch_mbe.items()},
+        }
+        
+        # Clean up gradients
+        self.zero_grad(set_to_none=True)
+        
+        return loss_dict, patch_stats
+
 
 class GPT_pure(nn.Module):
 

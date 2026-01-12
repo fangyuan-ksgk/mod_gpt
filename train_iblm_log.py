@@ -423,7 +423,7 @@ for step in range(train_steps + 1):
         val_loader = distributed_data_generator(args.val_files, val_seq_len, rank, world_size)
         val_loss = defaultdict(float)
         all_token_stats = {'probs': [], 'entropies': [], 'grad_magnitudes': [], 'per_token_loss': [], 'mbe': []}
-        all_patch_stats = {'patch_mbe': [], 'patch_loss': [], 'patch_prob': [], 'patch_entropy': []}
+        all_patch_stats = {'patch_mbe': [], 'patch_loss': [], 'patch_prob': [], 'patch_entropy': [], 'patch_grad': []}
 
         for i in range(val_steps):
             inputs, targets = next(val_loader)
@@ -446,13 +446,14 @@ for step in range(train_steps + 1):
                     mbe_per_layer = {k: v.item() for k, v in loss_dict.items() if k.startswith("mbe_")}
                     all_token_stats['mbe'].append(mbe_per_layer)
                 
-                # Collect per-patch stats (using GPT_log's special method)
-                if master_process and i < 20 and hasattr(model, '_orig_mod') and hasattr(model._orig_mod, 'forward_with_patch_stats'):
-                    _, patch_stats = model._orig_mod.forward_with_patch_stats(inputs, targets, attn_blocksize, patch_size)
+                # Collect per-patch stats WITH gradients (limit batches due to backward cost)
+                if master_process and i < 10 and hasattr(model, '_orig_mod') and hasattr(model._orig_mod, 'forward_with_patch_stats_and_grads'):
+                    _, patch_stats = model._orig_mod.forward_with_patch_stats_and_grads(inputs, targets, attn_blocksize, patch_size)
                     all_patch_stats['patch_mbe'].append(patch_stats['patch_mbe'])
                     all_patch_stats['patch_loss'].append(patch_stats['patch_loss'])
                     all_patch_stats['patch_prob'].append(patch_stats['patch_prob'])
                     all_patch_stats['patch_entropy'].append(patch_stats['patch_entropy'])
+                    all_patch_stats['patch_grad'].append(patch_stats['patch_grad'])
                 
                 compute_loss(loss_dict)
                 for name, loss in loss_dict.items():

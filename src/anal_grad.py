@@ -531,3 +531,164 @@ def print_mbe_phase_summary(corr_df: pd.DataFrame) -> None:
         print(f"  Early phase (positive corr): High MBE → High gradient")
         print(f"  Late phase (negative corr):  Low MBE → High gradient")
 
+
+# ============================================
+# Patch-Level Analysis (High Statistical Power)
+# ============================================
+
+def load_patch_stats(log_dir: str) -> Dict[int, Dict]:
+    """
+    Load all patch_stats_step*.pt files from a directory.
+    
+    Returns:
+        Dict mapping step number to patch stats dict
+    """
+    log_path = Path(log_dir)
+    pt_files = sorted(log_path.glob("patch_stats_step*.pt"))
+    
+    all_stats = {}
+    for f in pt_files:
+        step = int(f.stem.split('step')[1])
+        all_stats[step] = torch.load(f)
+    
+    return all_stats
+
+
+def compute_patch_correlations(patch_stats: Dict, step: int) -> Dict[str, float]:
+    """
+    Compute correlations at patch level for a single step.
+    
+    Each batch contributes B * num_patches data points.
+    """
+    # Concatenate all batches: (total_patches,)
+    patch_mbe = torch.cat([p.flatten() for p in patch_stats['patch_mbe']]).float().numpy()
+    patch_loss = torch.cat([p.flatten() for p in patch_stats['patch_loss']]).float().numpy()
+    patch_prob = torch.cat([p.flatten() for p in patch_stats['patch_prob']]).float().numpy()
+    patch_entropy = torch.cat([p.flatten() for p in patch_stats['patch_entropy']]).float().numpy()
+    
+    n_patches = len(patch_mbe)
+    
+    return {
+        'step': step,
+        'n_patches': n_patches,
+        'mbe_loss_corr': np.corrcoef(patch_mbe, patch_loss)[0, 1],
+        'mbe_prob_corr': np.corrcoef(patch_mbe, patch_prob)[0, 1],
+        'mbe_entropy_corr': np.corrcoef(patch_mbe, patch_entropy)[0, 1],
+        'mean_mbe': patch_mbe.mean(),
+        'mean_loss': patch_loss.mean(),
+    }
+
+
+def analyze_patch_mbe_dynamics(log_dir: str, 
+                                save_path: str = "patch_mbe_dynamics.png") -> pd.DataFrame:
+    """
+    Analyze MBE-loss correlation at patch level across training.
+    
+    This provides ~1000x more data points than batch-level analysis.
+    """
+    all_patch_stats = load_patch_stats(log_dir)
+    
+    if not all_patch_stats:
+        print(f"No patch stats found in {log_dir}")
+        return pd.DataFrame()
+    
+    results = []
+    for step in sorted(all_patch_stats.keys()):
+        try:
+            corr = compute_patch_correlations(all_patch_stats[step], step)
+            results.append(corr)
+        except Exception as e:
+            print(f"Error at step {step}: {e}")
+    
+    df = pd.DataFrame(results)
+    
+    # Print summary
+    print("=== Patch-Level MBE Correlations ===")
+    print(f"{'Step':>6} | {'N Patches':>10} | {'MBE-Loss':>10} | {'MBE-Prob':>10}")
+    print("-" * 45)
+    for _, row in df.iterrows():
+        print(f"{row['step']:>6} | {row['n_patches']:>10} | {row['mbe_loss_corr']:>10.3f} | {row['mbe_prob_corr']:>10.3f}")
+    
+    # Plot
+    fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+    
+    # MBE-Loss correlation
+    ax1 = axes[0]
+    ax1.plot(df['step'], df['mbe_loss_corr'], 'o-', color='#9B59B6', linewidth=2.5, markersize=8)
+    ax1.axhline(0, color='gray', linestyle='--', alpha=0.7)
+    ax1.fill_between(df['step'], 0, df['mbe_loss_corr'],
+                     where=df['mbe_loss_corr'] > 0, alpha=0.3, color='#E74C3C',
+                     label='High MBE → High Loss')
+    ax1.fill_between(df['step'], 0, df['mbe_loss_corr'],
+                     where=df['mbe_loss_corr'] < 0, alpha=0.3, color='#27AE60',
+                     label='Low MBE → High Loss')
+    ax1.set_xlabel('Training Step', fontsize=12)
+    ax1.set_ylabel('Correlation', fontsize=12)
+    ax1.set_title('Patch-Level MBE-Loss Correlation', fontsize=14)
+    ax1.legend(loc='best')
+    ax1.grid(True, alpha=0.3)
+    ax1.set_ylim(-1, 1)
+    
+    # MBE and Loss trajectories
+    ax2 = axes[1]
+    ax2.plot(df['step'], df['mean_mbe'], 'o-', color='#3498DB', linewidth=2, label='Mean MBE')
+    ax2_twin = ax2.twinx()
+    ax2_twin.plot(df['step'], df['mean_loss'], 's-', color='#E74C3C', linewidth=2, label='Mean Loss')
+    ax2.set_xlabel('Training Step', fontsize=12)
+    ax2.set_ylabel('Mean MBE', fontsize=12, color='#3498DB')
+    ax2_twin.set_ylabel('Mean Loss', fontsize=12, color='#E74C3C')
+    ax2.set_title('MBE and Loss Over Training', fontsize=14)
+    ax2.grid(True, alpha=0.3)
+    
+    plt.tight_layout()
+    plt.savefig(save_path, dpi=150)
+    plt.close()
+    print(f"\nSaved: {save_path}")
+    
+    return df
+
+
+def plot_patch_scatter(patch_stats: Dict, step: int, 
+                       save_path: str = None) -> None:
+    """
+    Scatter plot of per-patch MBE vs Loss for a single step.
+    """
+    patch_mbe = torch.cat([p.flatten() for p in patch_stats['patch_mbe']]).float().numpy()
+    patch_loss = torch.cat([p.flatten() for p in patch_stats['patch_loss']]).float().numpy()
+    patch_prob = torch.cat([p.flatten() for p in patch_stats['patch_prob']]).float().numpy()
+    
+    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+    
+    # MBE vs Loss
+    ax1 = axes[0]
+    scatter = ax1.scatter(patch_mbe, patch_loss, c=patch_prob, cmap='RdYlGn', 
+                          alpha=0.5, s=10, vmin=0, vmax=1)
+    plt.colorbar(scatter, ax=ax1, label='P(correct)')
+    ax1.set_xlabel('Patch MBE', fontsize=12)
+    ax1.set_ylabel('Patch Loss', fontsize=12)
+    ax1.set_title(f'Patch MBE vs Loss (Step {step})', fontsize=14)
+    
+    corr = np.corrcoef(patch_mbe, patch_loss)[0, 1]
+    ax1.text(0.05, 0.95, f'r = {corr:.3f}', transform=ax1.transAxes, 
+             fontsize=12, verticalalignment='top',
+             bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
+    
+    # MBE vs Prob
+    ax2 = axes[1]
+    ax2.scatter(patch_mbe, patch_prob, c=patch_loss, cmap='viridis', 
+                alpha=0.5, s=10)
+    ax2.set_xlabel('Patch MBE', fontsize=12)
+    ax2.set_ylabel('Patch P(correct)', fontsize=12)
+    ax2.set_title(f'Patch MBE vs Accuracy (Step {step})', fontsize=14)
+    
+    corr2 = np.corrcoef(patch_mbe, patch_prob)[0, 1]
+    ax2.text(0.05, 0.95, f'r = {corr2:.3f}', transform=ax2.transAxes, 
+             fontsize=12, verticalalignment='top',
+             bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
+    
+    plt.tight_layout()
+    if save_path:
+        plt.savefig(save_path, dpi=150)
+        print(f"Saved: {save_path}")
+    plt.close()
+
