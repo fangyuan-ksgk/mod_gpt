@@ -56,6 +56,8 @@ def parse_args():
     parser.add_argument("--use_eaft", action="store_true")
     parser.add_argument("--save_checkpoint", action="store_true")
     parser.add_argument("--save_checkpoint_every", type=int, default=0)
+    parser.add_argument("--reg_mode", type=str, default="mbe", 
+                        help="MBE regularization mode: 'mbe' (mean), 'mbe_variance' (mean + variance), or 'mbe_range' (hinge loss for optimal range)")
     
     parser.add_argument("--model_size", type=str, default="small")
     parser.add_argument("--run_info", type=str, default="")
@@ -231,6 +233,7 @@ class Hyperparameters:
     prior_weight: str = "natural"
     run_info: str = ""
     prune_layers: str = None
+    reg_mode: str = "mbe"  # 'mbe' or 'mbe_var'
 
 cli_args = parse_args()
 args = Hyperparameters()
@@ -243,7 +246,8 @@ model_config = GPTConfig.prior(
     flex_kernel_options={
         "BLOCK_M": 64, "BLOCK_N": 64, # forward
         "BLOCK_M1": 32, "BLOCK_N1": 64, "BLOCK_M2": 64, "BLOCK_N2": 32 # backwards 
-    }
+    },
+    reg_mode=args.reg_mode
 )
 
 assert args.batch_size % (world_size) == 0
@@ -591,4 +595,5 @@ print0(f"-- mbe_schedule: {args.mbe_schedule}", console=True)
 print0(f"-- min_a: {args.min_a}", console=True)
 print0(f"-- use_softplus_gapt: {args.use_softplus_gapt}", console=True)
 print0(f"-- use_eaft: {args.use_eaft}", console=True)
+print0(f"-- reg_mode: {args.reg_mode}", console=True)
 dist.destroy_process_group()

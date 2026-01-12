@@ -39,20 +39,98 @@ MASTER_PORT=29500
 
 # ========================================
 # Exp 4. Log run: probability, entropy, mbe, gradient magnitude, per-token loss 
+# Exp 5. Log run: 
+#        | MBE range regularization (all layer mean MBE) -> Range constrained MBE regularization (0.45 - 0.75)
+#        | MBE variance regularization (all layer mean MBE)
+#        | GAPT + MBE range regularization (bottlneck layer MBE) | 0.45 - 0.75
+#        | GAPT + MBE variance regularization (bottleneck layer MBE)
 # ========================================
 MODEL_SIZE="small"
+
+# ============ Direct MBE Regularization (reg_mbe) ============
+# Comparing: mbe_range vs mbe_variance with same settings
+
 torchrun \
-      --nproc_per_node=$N_GPUS \
-      --master_addr=$MASTER_ADDR \
-      --master_port=$((MASTER_PORT++)) \
-      train_iblm_log.py \
-      --batch_size 32 \
-      --train_seq_len $TRAIN_SEQ_LEN \
-      --val_seq_len $VAL_SEQ_LEN \
-      --num_iterations 1750 \
-      --no_reg \
-      --model_size $MODEL_SIZE \
-      --run_info "Log: ModelSize=$MODEL_SIZE" 
+    --nproc_per_node=$N_GPUS \
+    --master_addr=$MASTER_ADDR \
+    --master_port=$((MASTER_PORT++)) \
+    train_iblm_log.py \
+    --batch_size 32 \
+    --train_seq_len $TRAIN_SEQ_LEN \
+    --val_seq_len $VAL_SEQ_LEN \
+    --num_iterations 1750 \
+    --reg_mode "mbe_range" \
+    --mbe_schedule "all_middle" \
+    --mbe_comp_mode "naive" \
+    --mbe_weight 1.0 \
+    --reg_mbe \
+    --model_size $MODEL_SIZE \
+    --run_info "Log: ModelSize=$MODEL_SIZE | reg_mbe | mbe_range | naive | w=1.0"
+
+torchrun \
+    --nproc_per_node=$N_GPUS \
+    --master_addr=$MASTER_ADDR \
+    --master_port=$((MASTER_PORT++)) \
+    train_iblm_log.py \
+    --batch_size 32 \
+    --train_seq_len $TRAIN_SEQ_LEN \
+    --val_seq_len $VAL_SEQ_LEN \
+    --num_iterations 1750 \
+    --reg_mode "mbe_variance" \
+    --mbe_schedule "all_middle" \
+    --mbe_comp_mode "naive" \
+    --mbe_weight 1.0 \
+    --reg_mbe \
+    --model_size $MODEL_SIZE \
+    --run_info "Log: ModelSize=$MODEL_SIZE | reg_mbe | mbe_variance | naive | w=1.0"
+
+# ============ GAPT-based Regularization ============
+# Comparing: mbe_range vs mbe_variance with GAPT scheduler
+
+torchrun \
+    --nproc_per_node=$N_GPUS \
+    --master_addr=$MASTER_ADDR \
+    --master_port=$((MASTER_PORT++)) \
+    train_iblm_log.py \
+    --batch_size 32 \
+    --train_seq_len $TRAIN_SEQ_LEN \
+    --val_seq_len $VAL_SEQ_LEN \
+    --num_iterations 1750 \
+    --reg_mode "mbe_range" \
+    --mbe_schedule "all_middle" \
+    --mbe_comp_mode "spike" \
+    --use_gapt \
+    --entropy_patience 125 \
+    --entropy_min_delta 0.01 \
+    --mbe_patience 75 \
+    --mbe_min_delta 0.01 \
+    --mbe_weight 20.0 \
+    --use_softplus_gapt \
+    --model_size $MODEL_SIZE \
+    --run_info "Log: ModelSize=$MODEL_SIZE | GAPT | mbe_range | spike | w=20.0"
+
+torchrun \
+    --nproc_per_node=$N_GPUS \
+    --master_addr=$MASTER_ADDR \
+    --master_port=$((MASTER_PORT++)) \
+    train_iblm_log.py \
+    --batch_size 32 \
+    --train_seq_len $TRAIN_SEQ_LEN \
+    --val_seq_len $VAL_SEQ_LEN \
+    --num_iterations 1750 \
+    --reg_mode "mbe_variance" \
+    --mbe_schedule "all_middle" \
+    --mbe_comp_mode "spike" \
+    --use_gapt \
+    --entropy_patience 125 \
+    --entropy_min_delta 0.01 \
+    --mbe_patience 75 \
+    --mbe_min_delta 0.01 \
+    --mbe_weight 20.0 \
+    --use_softplus_gapt \
+    --model_size $MODEL_SIZE \
+    --run_info "Log: ModelSize=$MODEL_SIZE | GAPT | mbe_variance | spike | w=20.0" 
+
 
 # ========================================="
 # Exp 1. FineWeb0.8B (Base, GAPT, MBE, L2)
@@ -65,57 +143,65 @@ torchrun \
 # Exp 4. How does the distribution of token confidence & entropy look like?
 # Exp 5. Does EAFT loss help pre-training? 
 # ========================================="
-MBE_COMP_MODE="spike"
-for MODEL_SIZE in "small"; do
-  torchrun \
-      --nproc_per_node=$N_GPUS \
-      --master_addr=$MASTER_ADDR \
-      --master_port=$((MASTER_PORT++)) \
-      train_iblm.py \
-      --batch_size 32 \
-      --train_seq_len $TRAIN_SEQ_LEN \
-      --val_seq_len $VAL_SEQ_LEN \
-      --num_iterations 1750 \
-      --no_reg \
-      --model_size $MODEL_SIZE \
-      --use_eaft \
-      --run_info "EAFT: ModelSize=$MODEL_SIZE" 
+# MBE_COMP_MODE="spike"
+# for MODEL_SIZE in "small"; do
+#   torchrun \
+#       --nproc_per_node=$N_GPUS \
+#       --master_addr=$MASTER_ADDR \
+#       --master_port=$((MASTER_PORT++)) \
+#       train_iblm.py \
+#       --batch_size 32 \
+#       --train_seq_len $TRAIN_SEQ_LEN \
+#       --val_seq_len $VAL_SEQ_LEN \
+#       --num_iterations 1750 \
+#       --use_gapt \
+#       --entropy_patience 125 \
+#       --entropy_min_delta 0.01 \
+#       --mbe_patience 75 \
+#       --mbe_min_delta 0.01 \
+#       --mbe_weight 20.0 \
+#       --mbe_comp_mode $MBE_COMP_MODE \
+#       --mbe_schedule "all_middle" \
+#       --model_size $MODEL_SIZE \
+#       --use_softplus_gapt \
+#       --reg_mode "mbe_var" \
+#       --run_info "GAPT: ModelSize=$MODEL_SIZE | GAPT | w=20.0 | MBE comp mode: $MBE_COMP_MODE" 
 
-  torchrun \
-      --nproc_per_node=$N_GPUS \
-      --master_addr=$MASTER_ADDR \
-      --master_port=$((MASTER_PORT++)) \
-      train_iblm.py \
-      --batch_size 32 \
-      --train_seq_len $TRAIN_SEQ_LEN \
-      --val_seq_len $VAL_SEQ_LEN \
-      --num_iterations 1750 \
-      --use_gapt \
-      --entropy_patience 125 \
-      --entropy_min_delta 0.01 \
-      --mbe_patience 75 \
-      --mbe_min_delta 0.01 \
-      --mbe_weight 20.0 \
-      --mbe_comp_mode $MBE_COMP_MODE \
-      --mbe_schedule "all_middle" \
-      --model_size $MODEL_SIZE \
-      --use_softplus_gapt \
-      --use_eaft \
-      --run_info "EAFT + GAPT: ModelSize=$MODEL_SIZE | GAPT | w=20.0 | MBE comp mode: $MBE_COMP_MODE" 
+#   torchrun \
+#       --nproc_per_node=$N_GPUS \
+#       --master_addr=$MASTER_ADDR \
+#       --master_port=$((MASTER_PORT++)) \
+#       train_iblm.py \
+#       --batch_size 32 \
+#       --train_seq_len $TRAIN_SEQ_LEN \
+#       --val_seq_len $VAL_SEQ_LEN \
+#       --num_iterations 1750 \
+#       --use_gapt \
+#       --entropy_patience 125 \
+#       --entropy_min_delta 0.01 \
+#       --mbe_patience 75 \
+#       --mbe_min_delta 0.01 \
+#       --mbe_weight 20.0 \
+#       --mbe_comp_mode $MBE_COMP_MODE \
+#       --mbe_schedule "all_middle" \s
+#       --model_size $MODEL_SIZE \
+#       --use_softplus_gapt \
+#       --reg_mode "mbe_var" \
+#       --run_info "GAPT: ModelSize=$MODEL_SIZE | GAPT | w=20.0 | MBE comp mode: $MBE_COMP_MODE" 
 
-  torchrun \
-      --nproc_per_node=$N_GPUS \
-      --master_addr=$MASTER_ADDR \
-      --master_port=$((MASTER_PORT++)) \
-      train_iblm.py \
-      --batch_size 32 \
-      --train_seq_len $TRAIN_SEQ_LEN \
-      --val_seq_len $VAL_SEQ_LEN \
-      --num_iterations 1750 \
-      --no_reg \
-      --model_size $MODEL_SIZE \
-      --run_info "Baseline: ModelSize=$MODEL_SIZE" 
-done
+#   torchrun \
+#       --nproc_per_node=$N_GPUS \
+#       --master_addr=$MASTER_ADDR \
+#       --master_port=$((MASTER_PORT++)) \
+#       train_iblm.py \
+#       --batch_size 32 \
+#       --train_seq_len $TRAIN_SEQ_LEN \
+#       --val_seq_len $VAL_SEQ_LEN \
+#       --num_iterations 1750 \
+#       --no_reg \
+#       --model_size $MODEL_SIZE \
+#       --run_info "Baseline: ModelSize=$MODEL_SIZE" 
+# done
 
 
 # NUM_ITERATIONS=20000

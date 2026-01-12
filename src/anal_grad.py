@@ -568,7 +568,7 @@ def compute_patch_correlations(patch_stats: Dict, step: int) -> Dict[str, float]
     
     n_patches = len(patch_mbe)
     
-    return {
+    result = {
         'step': step,
         'n_patches': n_patches,
         'mbe_loss_corr': np.corrcoef(patch_mbe, patch_loss)[0, 1],
@@ -577,6 +577,16 @@ def compute_patch_correlations(patch_stats: Dict, step: int) -> Dict[str, float]
         'mean_mbe': patch_mbe.mean(),
         'mean_loss': patch_loss.mean(),
     }
+    
+    # Add gradient correlation if available
+    if 'patch_grad' in patch_stats and patch_stats['patch_grad']:
+        patch_grad = torch.cat([p.flatten() for p in patch_stats['patch_grad']]).float().numpy()
+        # Match lengths (grad may have fewer batches)
+        min_len = min(len(patch_mbe), len(patch_grad))
+        result['mbe_grad_corr'] = np.corrcoef(patch_mbe[:min_len], patch_grad[:min_len])[0, 1]
+        result['mean_grad'] = patch_grad.mean()
+    
+    return result
 
 
 def analyze_patch_mbe_dynamics(log_dir: str, 
@@ -603,11 +613,19 @@ def analyze_patch_mbe_dynamics(log_dir: str,
     df = pd.DataFrame(results)
     
     # Print summary
+    has_grad = 'mbe_grad_corr' in df.columns
     print("=== Patch-Level MBE Correlations ===")
-    print(f"{'Step':>6} | {'N Patches':>10} | {'MBE-Loss':>10} | {'MBE-Prob':>10}")
-    print("-" * 45)
-    for _, row in df.iterrows():
-        print(f"{row['step']:>6} | {row['n_patches']:>10} | {row['mbe_loss_corr']:>10.3f} | {row['mbe_prob_corr']:>10.3f}")
+    if has_grad:
+        print(f"{'Step':>6} | {'N Patches':>10} | {'MBE-Grad':>10} | {'MBE-Loss':>10} | {'MBE-Prob':>10}")
+        print("-" * 60)
+        for _, row in df.iterrows():
+            grad_str = f"{row.get('mbe_grad_corr', float('nan')):>10.3f}"
+            print(f"{row['step']:>6} | {row['n_patches']:>10} | {grad_str} | {row['mbe_loss_corr']:>10.3f} | {row['mbe_prob_corr']:>10.3f}")
+    else:
+        print(f"{'Step':>6} | {'N Patches':>10} | {'MBE-Loss':>10} | {'MBE-Prob':>10}")
+        print("-" * 45)
+        for _, row in df.iterrows():
+            print(f"{row['step']:>6} | {row['n_patches']:>10} | {row['mbe_loss_corr']:>10.3f} | {row['mbe_prob_corr']:>10.3f}")
     
     # Plot
     fig, axes = plt.subplots(1, 2, figsize=(14, 5))

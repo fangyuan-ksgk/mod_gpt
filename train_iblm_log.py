@@ -14,7 +14,7 @@ import torch
 from torch import nn, Tensor
 import torch.distributed as dist
 from src.utils import plot_training_losses, compute_loss
-from src.eaft import collect_token_stats, collect_token_stats_with_grads, plot_entropy_vs_prob
+from src.eaft import collect_token_stats, plot_entropy_vs_prob
 
 import argparse
 
@@ -56,6 +56,8 @@ def parse_args():
     parser.add_argument("--use_eaft", action="store_true")
     parser.add_argument("--save_checkpoint", action="store_true")
     parser.add_argument("--save_checkpoint_every", type=int, default=0)
+    parser.add_argument("--reg_mode", type=str, default="mbe", 
+                        help="MBE regularization mode: 'mbe' (mean), 'mbe_variance' (mean + variance), or 'mbe_range' (hinge loss for optimal range)")
     
     parser.add_argument("--model_size", type=str, default="small")
     parser.add_argument("--run_info", type=str, default="")
@@ -231,6 +233,7 @@ class Hyperparameters:
     prior_weight: str = "natural"
     run_info: str = ""
     prune_layers: str = None
+    reg_mode: str = "mbe"  # 'mbe' or 'mbe_variance'
 
 cli_args = parse_args()
 args = Hyperparameters()
@@ -243,7 +246,8 @@ model_config = GPTConfig.prior(
     flex_kernel_options={
         "BLOCK_M": 64, "BLOCK_N": 64, # forward
         "BLOCK_M1": 32, "BLOCK_N1": 64, "BLOCK_M2": 64, "BLOCK_N2": 32 # backwards 
-    }
+    },
+    reg_mode=args.reg_mode
 )
 
 assert args.batch_size % (world_size) == 0
@@ -422,38 +426,32 @@ for step in range(train_steps + 1):
         val_steps = args.val_tokens // val_seq_len
         val_loader = distributed_data_generator(args.val_files, val_seq_len, rank, world_size)
         val_loss = defaultdict(float)
-        all_token_stats = {'probs': [], 'entropies': [], 'grad_magnitudes': [], 'per_token_loss': [], 'mbe': []}
-        all_patch_stats = {'patch_mbe': [], 'patch_loss': [], 'patch_prob': [], 'patch_entropy': [], 'patch_grad': []}
+        all_token_stats = {'probs': [], 'entropies': [], 'mbe': []}
+        all_patch_stats = {'patch_mbe': [], 'patch_loss': [], 'patch_prob': [], 'patch_entropy': []}
 
         for i in range(val_steps):
             inputs, targets = next(val_loader)
             
-            # Collect token stats WITH gradients (limit batches for memory/speed)
-            if master_process and i < 5:  # Fewer batches since grad computation is expensive
-                token_stats = collect_token_stats_with_grads(model, inputs, targets, attn_blocksize, patch_size)
-                if token_stats is not None:
-                    all_token_stats['probs'].append(token_stats['probs'])
-                    all_token_stats['entropies'].append(token_stats['entropies'])
-                    all_token_stats['grad_magnitudes'].append(token_stats['grad_magnitudes'])
-                    all_token_stats['per_token_loss'].append(token_stats['per_token_loss'])
-            
-            # Collect per-patch stats WITH gradients (OUTSIDE no_grad block)
-            if master_process and i < 10 and hasattr(model, '_orig_mod') and hasattr(model._orig_mod, 'forward_with_patch_stats_and_grads'):
-                _, patch_stats = model._orig_mod.forward_with_patch_stats_and_grads(inputs, targets, attn_blocksize, patch_size)
-                all_patch_stats['patch_mbe'].append(patch_stats['patch_mbe'])
-                all_patch_stats['patch_loss'].append(patch_stats['patch_loss'])
-                all_patch_stats['patch_prob'].append(patch_stats['patch_prob'])
-                all_patch_stats['patch_entropy'].append(patch_stats['patch_entropy'])
-                all_patch_stats['patch_grad'].append(patch_stats['patch_grad'])
-            
-            # Standard validation (no grad) for loss computation
             with torch.no_grad():
                 loss_dict = model.forward(inputs, targets, attn_blocksize, patch_size)
                 
-                # Collect per-layer MBE values
+                # Collect token stats (probs, entropies) - no gradients needed
                 if master_process and i < 20:
+                    token_stats = collect_token_stats(loss_dict["logits"], targets)
+                    all_token_stats['probs'].append(token_stats['probs'])
+                    all_token_stats['entropies'].append(token_stats['entropies'])
+                    
+                    # Collect per-layer MBE values
                     mbe_per_layer = {k: v.item() for k, v in loss_dict.items() if k.startswith("mbe_")}
                     all_token_stats['mbe'].append(mbe_per_layer)
+                
+                # Collect per-patch stats (no gradient)
+                if master_process and i < 20 and hasattr(model, '_orig_mod') and hasattr(model._orig_mod, 'forward_with_patch_stats'):
+                    _, patch_stats = model._orig_mod.forward_with_patch_stats(inputs, targets, attn_blocksize, patch_size)
+                    all_patch_stats['patch_mbe'].append(patch_stats['patch_mbe'])
+                    all_patch_stats['patch_loss'].append(patch_stats['patch_loss'])
+                    all_patch_stats['patch_prob'].append(patch_stats['patch_prob'])
+                    all_patch_stats['patch_entropy'].append(patch_stats['patch_entropy'])
                 
                 compute_loss(loss_dict)
                 for name, loss in loss_dict.items():
@@ -631,4 +629,5 @@ print0(f"-- mbe_schedule: {args.mbe_schedule}", console=True)
 print0(f"-- min_a: {args.min_a}", console=True)
 print0(f"-- use_softplus_gapt: {args.use_softplus_gapt}", console=True)
 print0(f"-- use_eaft: {args.use_eaft}", console=True)
+print0(f"-- reg_mode: {args.reg_mode}", console=True)
 dist.destroy_process_group()

@@ -2,7 +2,7 @@
 # -------------------------------------------------------------------
 import torch
 torch.set_float32_matmul_precision('high')
-from src.mbe import patch_mbe
+from src.mbe import patch_mbe, patch_mbe_variance, patch_mbe_range
 RANK_REG_LOSS = "mbe"
 
 # Customized GPT model with low-rank regularization loss 
@@ -24,17 +24,18 @@ class GPTConfig:
     flex_kernel_options: Optional[dict] = None
     device: str = "cuda" if torch.cuda.is_available() else "cpu"
     _compile: bool = True if device == "cuda" else False
+    reg_mode: str = "mbe"
 
     @classmethod
-    def prior(cls, name: str, vocab_size: int = 50304, flex_kernel_options: Optional[dict] = None):
+    def prior(cls, name: str, vocab_size: int = 50304, flex_kernel_options: Optional[dict] = None, reg_mode: str = "mbe"):
         if name == "small": 
-            return cls(n_layer=12, n_head=6, n_embd=768, vocab_size=vocab_size, flex_kernel_options=flex_kernel_options)
+            return cls(n_layer=12, n_head=6, n_embd=768, vocab_size=vocab_size, flex_kernel_options=flex_kernel_options, reg_mode=reg_mode)
         elif name == "medium":
-            return cls(n_layer=24, n_head=16, n_embd=1024, vocab_size=vocab_size, flex_kernel_options=flex_kernel_options)
+            return cls(n_layer=24, n_head=16, n_embd=1024, vocab_size=vocab_size, flex_kernel_options=flex_kernel_options, reg_mode=reg_mode)
         elif name == "large":
-            return cls(n_layer=36, n_head=20, n_embd=1280, vocab_size=vocab_size, flex_kernel_options=flex_kernel_options)
+            return cls(n_layer=36, n_head=20, n_embd=1280, vocab_size=vocab_size, flex_kernel_options=flex_kernel_options, reg_mode=reg_mode)
         elif name == "xl":
-            return cls(n_layer=48, n_head=25, n_embd=1600, vocab_size=vocab_size, flex_kernel_options=flex_kernel_options)
+            return cls(n_layer=48, n_head=25, n_embd=1600, vocab_size=vocab_size, flex_kernel_options=flex_kernel_options, reg_mode=reg_mode)
         else:
             raise ValueError(f"Invalid GPT size: {name}")
 
@@ -119,6 +120,15 @@ class GPT(nn.Module):
         self.device = config.device
         self._compile = config._compile
         self.enable_timing = False  # Toggle for timing
+        self.reg_mode = config.reg_mode
+        if self.reg_mode == "mbe":
+            self.reg_func = patch_mbe
+        elif self.reg_mode == "mbe_variance":
+            self.reg_func = patch_mbe_variance
+        elif self.reg_mode == "mbe_range":
+            self.reg_func = patch_mbe_range
+        else:
+            self.reg_func = patch_mbe  # default
 
     def forward(self, idx, target, attn_blocksize, patch_size, use_eaft: bool = False):
         """Localized Rank Regularization for Each Block"""
@@ -165,7 +175,7 @@ class GPT(nn.Module):
                 timings[f'encoder_layer_{i}_forward'] = (time.perf_counter() - t0) * 1000
                 t0 = time.perf_counter()
             
-            loss_dict[f"{RANK_REG_LOSS}_{i}"] = patch_mbe(x, patch_size)
+            loss_dict[f"{RANK_REG_LOSS}_{i}"] = self.reg_func(x, patch_size)
             
             if self.enable_timing:
                 timings[f'encoder_layer_{i}_mbe'] = (time.perf_counter() - t0) * 1000
@@ -184,7 +194,7 @@ class GPT(nn.Module):
                 timings[f'decoder_layer_{i}_forward'] = (time.perf_counter() - t0) * 1000
                 t0 = time.perf_counter()
             
-            loss_dict[f"{RANK_REG_LOSS}_{self.num_encoder_layers + i}"] = patch_mbe(x, patch_size)
+            loss_dict[f"{RANK_REG_LOSS}_{self.num_encoder_layers + i}"] = self.reg_func(x, patch_size)
             
             if self.enable_timing:
                 timings[f'decoder_layer_{i}_mbe'] = (time.perf_counter() - t0) * 1000
@@ -258,6 +268,17 @@ class GPT_log(nn.Module):
         self.device = config.device
         self._compile = config._compile
         self.enable_timing = False  # Toggle for timing
+        
+        # MBE regularization mode
+        self.reg_mode = config.reg_mode
+        if self.reg_mode == "mbe":
+            self.reg_func = patch_mbe
+        elif self.reg_mode == "mbe_variance":
+            self.reg_func = patch_mbe_variance
+        elif self.reg_mode == "mbe_range":
+            self.reg_func = patch_mbe_range
+        else:
+            self.reg_func = patch_mbe  # default
 
     def forward(self, idx, target, attn_blocksize, patch_size, use_eaft: bool = False):
         """Localized Rank Regularization for Each Block"""
@@ -304,7 +325,7 @@ class GPT_log(nn.Module):
                 timings[f'encoder_layer_{i}_forward'] = (time.perf_counter() - t0) * 1000
                 t0 = time.perf_counter()
             
-            loss_dict[f"{RANK_REG_LOSS}_{i}"] = patch_mbe(x, patch_size)
+            loss_dict[f"{RANK_REG_LOSS}_{i}"] = self.reg_func(x, patch_size)
             
             if self.enable_timing:
                 timings[f'encoder_layer_{i}_mbe'] = (time.perf_counter() - t0) * 1000
@@ -323,7 +344,7 @@ class GPT_log(nn.Module):
                 timings[f'decoder_layer_{i}_forward'] = (time.perf_counter() - t0) * 1000
                 t0 = time.perf_counter()
             
-            loss_dict[f"{RANK_REG_LOSS}_{self.num_encoder_layers + i}"] = patch_mbe(x, patch_size)
+            loss_dict[f"{RANK_REG_LOSS}_{self.num_encoder_layers + i}"] = self.reg_func(x, patch_size)
             
             if self.enable_timing:
                 timings[f'decoder_layer_{i}_mbe'] = (time.perf_counter() - t0) * 1000

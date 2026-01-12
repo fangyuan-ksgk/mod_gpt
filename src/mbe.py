@@ -38,6 +38,34 @@ def patch_mbe(x, patch_size=8):
     return mbe_values.mean()
 
 
+def patch_mbe_variance(x, patch_size=8): 
+    """Minimize Variance of MBE across patches (alleviate over compression)"""
+    B, S, D = x.shape 
+    assert S % patch_size == 0, "Sequence length must be divisible by patch size"
+    num_patches = S // patch_size
+    x_reshaped = x.reshape(B, num_patches, patch_size, D).reshape(-1, patch_size, D)    
+    mbe_values = mbe_alpha2_exact(x_reshaped)
+    return mbe_values.mean() + 1.0 * mbe_values.var()
+
+
+def patch_mbe_range(x, patch_size=8, mbe_min=0.45, mbe_max=0.75):
+    """
+    Range-constrained MBE: penalize values OUTSIDE [mbe_min, mbe_max] sweet spot.
+    """
+    B, S, D = x.shape 
+    assert S % patch_size == 0, "Sequence length must be divisible by patch size"
+    num_patches = S // patch_size
+    x_reshaped = x.reshape(B, num_patches, patch_size, D).reshape(-1, patch_size, D)    
+    mbe_values = mbe_alpha2_exact(x_reshaped)
+    
+    # Hinge loss: penalize outside range, free inside
+    below_floor = torch.relu(mbe_min - mbe_values)  # penalty for < mbe_min
+    above_ceiling = torch.relu(mbe_values - mbe_max)  # penalty for > mbe_max
+    
+    range_loss = (below_floor + above_ceiling).mean()
+    return range_loss
+
+
 def patch_mbe_detailed(x, patch_size=8):
     """
     Compute per-patch MBE values (not averaged).
