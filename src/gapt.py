@@ -198,6 +198,7 @@ class GPT(nn.Module):
         logits = 30 * torch.tanh(logits / 30)
         logits = logits.float()
 
+        loss_dict["logits"] = logits # ToBeRemoved | logging purpose only
         if use_eaft:
             loss = _eaft_cross_entropy(logits, target)
         else:

@@ -14,7 +14,7 @@ import torch
 from torch import nn, Tensor
 import torch.distributed as dist
 from src.utils import plot_training_losses, compute_loss
-from src.eaft import collect_token_stats
+from src.eaft import collect_token_stats, collect_token_stats_with_grads, plot_entropy_vs_prob
 
 import argparse
 
@@ -421,16 +421,40 @@ for step in range(train_steps + 1):
         val_steps = args.val_tokens // val_seq_len
         val_loader = distributed_data_generator(args.val_files, val_seq_len, rank, world_size)
         val_loss = defaultdict(float)
-        all_token_stats = {'probs': [], 'entropies': []}  # Accumulator
+        all_token_stats = {'probs': [], 'entropies': [], 'grad_magnitudes': [], 'per_token_loss': [], 'mbe': []}
 
-        with torch.no_grad():
-            for i in range(val_steps):
-                inputs, targets = next(val_loader)
+        for i in range(val_steps):
+            inputs, targets = next(val_loader)
+            
+            # Collect token stats WITH gradients (limit batches for memory/speed)
+            if master_process and i < 5:  # Fewer batches since grad computation is expensive
+                token_stats = collect_token_stats_with_grads(model, inputs, targets, attn_blocksize, patch_size)
+                if token_stats is not None:
+                    all_token_stats['probs'].append(token_stats['probs'])
+                    all_token_stats['entropies'].append(token_stats['entropies'])
+                    all_token_stats['grad_magnitudes'].append(token_stats['grad_magnitudes'])
+                    all_token_stats['per_token_loss'].append(token_stats['per_token_loss'])
+            
+            # Standard validation (no grad) for loss computation
+            with torch.no_grad():
                 loss_dict = model.forward(inputs, targets, attn_blocksize, patch_size)
-                token_stats = collect_token_stats(loss_dict["logits"], targets)
+                
+                # Collect per-layer MBE values
+                if master_process and i < 20:
+                    mbe_per_layer = {k: v.item() for k, v in loss_dict.items() if k.startswith("mbe_")}
+                    all_token_stats['mbe'].append(mbe_per_layer)
+                
                 compute_loss(loss_dict)
                 for name, loss in loss_dict.items(): 
-                    val_loss[name] += loss                
+                    val_loss[name] += loss
+        
+        # Plot entropy vs probability scatter at each validation step
+        if master_process and all_token_stats['probs']:
+            os.makedirs(f"logs/{run_id}", exist_ok=True)
+            # Save raw data for later analysis
+            torch.save(all_token_stats, f"logs/{run_id}/token_stats_step{step:06d}.pt")
+            plot_entropy_vs_prob(all_token_stats, save_path=f"logs/{run_id}/entropy_prob_step{step:06d}.png")
+                
         for name in val_loss: 
             val_loss[name] /= val_steps
             loss_record[name].append(val_loss[name].item())

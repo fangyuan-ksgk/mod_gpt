@@ -37,6 +37,22 @@ MASTER_PORT=29500
 #   --num_iterations $NUM_ITERATIONS \
 #   --run_info "Sanity-checking baseline"
 
+# ========================================
+# Exp 4. Log run: probability, entropy, mbe, gradient magnitude, per-token loss 
+# ========================================
+MODEL_SIZE="small"
+torchrun \
+      --nproc_per_node=$N_GPUS \
+      --master_addr=$MASTER_ADDR \
+      --master_port=$((MASTER_PORT++)) \
+      train_iblm_log.py \
+      --batch_size 32 \
+      --train_seq_len $TRAIN_SEQ_LEN \
+      --val_seq_len $VAL_SEQ_LEN \
+      --num_iterations 1750 \
+      --no_reg \
+      --model_size $MODEL_SIZE \
+      --run_info "Log: ModelSize=$MODEL_SIZE" 
 
 # ========================================="
 # Exp 1. FineWeb0.8B (Base, GAPT, MBE, L2)
@@ -46,7 +62,8 @@ MASTER_PORT=29500
 #        | therefore it's unfair to compare results at same step across run with different 'num_itrations'
 # Exp 3. What if skip connection are removed, so that bottleneck is "real" bottleneck that can't be bypassed?
 
-# Exp 4. Does EAFT loss help pre-training?
+# Exp 4. How does the distribution of token confidence & entropy look like?
+# Exp 5. Does EAFT loss help pre-training? 
 # ========================================="
 MBE_COMP_MODE="spike"
 for MODEL_SIZE in "small"; do
