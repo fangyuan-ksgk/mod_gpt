@@ -57,7 +57,7 @@ def parse_args():
     parser.add_argument("--save_checkpoint", action="store_true")
     parser.add_argument("--save_checkpoint_every", type=int, default=0)
     parser.add_argument("--reg_mode", type=str, default="mbe", 
-                        help="MBE regularization mode: 'mbe' (mean), 'mbe_variance' (mean + variance), or 'mbe_range' (hinge loss for optimal range)")
+                        help="MBE regularization mode: 'mbe', 'mbe_variance', 'mbe_range', 'mbe_log_barrier', 'mbe_softmin', 'mbe_floor'")
     
     parser.add_argument("--model_size", type=str, default="small")
     parser.add_argument("--run_info", type=str, default="")

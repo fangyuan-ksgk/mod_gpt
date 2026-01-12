@@ -2,7 +2,10 @@
 # -------------------------------------------------------------------
 import torch
 torch.set_float32_matmul_precision('high')
-from src.mbe import patch_mbe, patch_mbe_variance, patch_mbe_range
+from src.mbe import (
+    patch_mbe, patch_mbe_variance, patch_mbe_range,
+    patch_mbe_log_barrier, patch_mbe_softmin, patch_mbe_floor
+)
 RANK_REG_LOSS = "mbe"
 
 # Customized GPT model with low-rank regularization loss 
@@ -127,6 +130,12 @@ class GPT(nn.Module):
             self.reg_func = patch_mbe_variance
         elif self.reg_mode == "mbe_range":
             self.reg_func = patch_mbe_range
+        elif self.reg_mode == "mbe_log_barrier":
+            self.reg_func = patch_mbe_log_barrier
+        elif self.reg_mode == "mbe_softmin":
+            self.reg_func = patch_mbe_softmin
+        elif self.reg_mode == "mbe_floor":
+            self.reg_func = patch_mbe_floor
         else:
             self.reg_func = patch_mbe  # default
 
@@ -277,6 +286,12 @@ class GPT_log(nn.Module):
             self.reg_func = patch_mbe_variance
         elif self.reg_mode == "mbe_range":
             self.reg_func = patch_mbe_range
+        elif self.reg_mode == "mbe_log_barrier":
+            self.reg_func = patch_mbe_log_barrier
+        elif self.reg_mode == "mbe_softmin":
+            self.reg_func = patch_mbe_softmin
+        elif self.reg_mode == "mbe_floor":
+            self.reg_func = patch_mbe_floor
         else:
             self.reg_func = patch_mbe  # default
 
