@@ -112,6 +112,7 @@ class CausalSelfAttention(nn.Module):
         v = (1 - self.lamb) * v + self.lamb * v1.view_as(v)  # @Grad62304977
         q, k = norm(q), norm(k) # QK norm suggested by @Grad62304977
         q, k = self.rotary(q), self.rotary(k)        
+        
         y = flex_attention(
             q.transpose(1, 2),
             k.transpose(1, 2),
@@ -155,7 +156,8 @@ class Block(nn.Module):
 
 class CustomGPTModel(PreTrainedModel, GenerationMixin):
     config_class = CustomGPTConfig
-    _tied_weights_keys = ["lm_head.weight"]  # declare the tie
+    # NOTE: Original model does NOT tie weights (lm_head is separate, zero-init)
+    # _tied_weights_keys = ["lm_head.weight"]  # DISABLED
 
     def __init__(self, config):
         super().__init__(config)
@@ -170,20 +172,39 @@ class CustomGPTModel(PreTrainedModel, GenerationMixin):
         self.post_init()  # important for Hugging Face weight init
 
     def tie_weights(self):
-        self.lm_head.weight = self.embed_tokens.weight
+        # EXPLICITLY DO NOTHING - original model has separate embed and lm_head weights
+        # lm_head is zero-initialized separately, NOT tied to embedding
+        pass
 
     def prepare_inputs_for_generation(self, input_ids, **kwargs):
         return {"input_ids": input_ids}
         
-    def forward(self, input_ids, labels=None, **kwargs):
+    def forward(self, input_ids, labels=None, attn_blocksize=1024, **kwargs):
+        # Create block mask with causal + window constraints
+        S = input_ids.shape[1]
+        def causal_window_mask(b, h, q_idx, kv_idx):
+            causal_mask = q_idx >= kv_idx
+            window_mask = q_idx - kv_idx < attn_blocksize
+            return causal_mask & window_mask
+        
+        from torch.nn.attention.flex_attention import create_block_mask
+        block_mask = create_block_mask(
+            causal_window_mask, None, None, S, S, 
+            device=input_ids.device, _compile=False
+        )
+        
         x = self.embed_tokens(input_ids)
+        x = norm(x)  # norm after embedding (matches local model)
         x0 = x  # save for lambda mixing
         v1 = None  # value residual state
         
         for layer in self.layers:
-            x, v1 = layer(x, v1, x0, block_mask=None)
+            x, v1 = layer(x, v1, x0, block_mask=block_mask)
 
-        logits = self.lm_head(norm(x))
+        x = norm(x)
+        logits = self.lm_head(x)
+        logits = 30 * torch.tanh(logits / 30)  # logit clamping (matches local model)
+        logits = logits.float()
 
         loss = None
         if labels is not None:
@@ -219,10 +240,16 @@ def port_weights(custom_state, hf_state, config):
         new_state[f'layers.{i}.attn.c_k.weight'] = custom_state[f'transformer.h.{i}.attn.c_k.weight']
         new_state[f'layers.{i}.attn.c_v.weight'] = custom_state[f'transformer.h.{i}.attn.c_v.weight']
         new_state[f'layers.{i}.attn.c_proj.weight'] = custom_state[f'transformer.h.{i}.attn.c_proj.weight']
+        
+        # Value residual lambda (CRITICAL!)
+        new_state[f'layers.{i}.attn.lamb'] = custom_state[f'transformer.h.{i}.attn.lamb']
 
         # MLP
         new_state[f'layers.{i}.mlp.c_fc.weight'] = custom_state[f'transformer.h.{i}.mlp.c_fc.weight']
         new_state[f'layers.{i}.mlp.c_proj.weight'] = custom_state[f'transformer.h.{i}.mlp.c_proj.weight']
+        
+        # Block mixing lambdas (CRITICAL!)
+        new_state[f'layers.{i}.lambdas'] = custom_state[f'transformer.h.{i}.lambdas']
 
     return new_state
 
