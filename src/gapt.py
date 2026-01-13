@@ -4,7 +4,8 @@ import torch
 torch.set_float32_matmul_precision('high')
 from src.mbe import (
     patch_mbe, patch_mbe_variance, patch_mbe_range,
-    patch_mbe_log_barrier, patch_mbe_softmin, patch_mbe_floor
+    patch_mbe_log_barrier, patch_mbe_softmin, patch_mbe_floor,
+    patch_mbe_softmin_compress
 )
 RANK_REG_LOSS = "mbe"
 
@@ -136,6 +137,8 @@ class GPT(nn.Module):
             self.reg_func = patch_mbe_softmin
         elif self.reg_mode == "mbe_floor":
             self.reg_func = patch_mbe_floor
+        elif self.reg_mode == "mbe_softmin_compress":
+            self.reg_func = patch_mbe_softmin_compress
         else:
             self.reg_func = patch_mbe  # default
 
@@ -217,7 +220,7 @@ class GPT(nn.Module):
         logits = 30 * torch.tanh(logits / 30)
         logits = logits.float()
 
-        loss_dict["logits"] = logits # ToBeRemoved | logging purpose only
+        # loss_dict["logits"] = logits # ToBeRemoved | logging purpose only
         if use_eaft:
             loss = _eaft_cross_entropy(logits, target)
         else:
@@ -292,6 +295,8 @@ class GPT_log(nn.Module):
             self.reg_func = patch_mbe_softmin
         elif self.reg_mode == "mbe_floor":
             self.reg_func = patch_mbe_floor
+        elif self.reg_mode == "mbe_softmin_compress":
+            self.reg_func = patch_mbe_softmin_compress
         else:
             self.reg_func = patch_mbe  # default
 

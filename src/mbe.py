@@ -127,6 +127,34 @@ def patch_mbe_softmin(x, patch_size=8, temperature=0.1):
     return -soft_min
 
 
+def patch_mbe_softmin_compress(x, patch_size=8, temperature=0.1, compress_weight=1.0):
+    """
+    Softmin + Compression: floor protection + push MBE lower.
+    
+    Loss = -softmin(MBE) + compress_weight * mean(MBE)
+    
+    - First term: prevents collapse (maximizes the minimum)
+    - Second term: encourages compression (pushes MBE toward optimal ~0.2-0.4)
+    
+    compress_weight controls aggressiveness of compression.
+    """
+    B, S, D = x.shape 
+    assert S % patch_size == 0
+    num_patches = S // patch_size
+    x_reshaped = x.reshape(B, num_patches, patch_size, D).reshape(-1, patch_size, D)    
+    mbe_values = mbe_alpha2_exact(x_reshaped)
+    
+    # Softmin: floor protection
+    weights = torch.softmax(-mbe_values / temperature, dim=0)
+    soft_min = (weights * mbe_values).sum()
+    
+    # Mean: compression incentive
+    mean_mbe = mbe_values.mean()
+    
+    # Combine: maximize min (prevent collapse) + minimize mean (compress)
+    return -soft_min + compress_weight * mean_mbe
+
+
 def patch_mbe_floor(x, patch_size=8, mbe_floor=0.3, steepness=10.0):
     """
     Soft floor with exponential penalty below threshold.
