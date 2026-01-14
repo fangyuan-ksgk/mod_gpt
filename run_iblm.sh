@@ -45,7 +45,7 @@ MASTER_PORT=29500
 #        | GAPT + MBE range regularization (bottlneck layer MBE) | 0.45 - 0.75
 #        | GAPT + MBE variance regularization (bottleneck layer MBE)
 # ========================================
-MODEL_SIZE="small"
+MODEL_SIZE="large"
 
 # ============ Direct MBE Regularization (reg_mbe) ============
 # Comparing: mbe_range vs mbe_variance with same settings
@@ -58,42 +58,31 @@ torchrun \
     --batch_size 32 \
     --train_seq_len $TRAIN_SEQ_LEN \
     --val_seq_len $VAL_SEQ_LEN \
-    --num_iterations 1750 \
-    --reg_mode "mbe_softmin_compress" \
-    --mbe_schedule "all_middle" \
-    --mbe_comp_mode "naive" \
-    --mbe_weight 1.0 \
-    --reg_mbe \
+    --num_iterations 10000 \
+    --no_reg \
     --model_size $MODEL_SIZE \
-    --run_info "Log: ModelSize=$MODEL_SIZE | reg_mbe | mbe_softmin_compress | naive | w=1.0"
+    --run_info "Log: ModelSize=$MODEL_SIZE | no reg"
 
-
-# ============ GAPT-based Regularization ============
-# Comparing: mbe_range vs mbe_variance with GAPT scheduler
-
-for REG_MODE in "mbe_softmin_compress"; do
-    torchrun \
-        --nproc_per_node=$N_GPUS \
-        --master_addr=$MASTER_ADDR \
-        --master_port=$((MASTER_PORT++)) \
-        train_iblm_log.py \
-        --batch_size 32 \
-        --train_seq_len $TRAIN_SEQ_LEN \
-        --val_seq_len $VAL_SEQ_LEN \
-        --num_iterations 1750 \
-        --reg_mode $REG_MODE \
-        --mbe_schedule "all_middle" \
-        --mbe_comp_mode "spike" \
-        --use_gapt \
-        --entropy_patience 125 \
-        --entropy_min_delta 0.01 \
-        --mbe_patience 75 \
-        --mbe_min_delta 0.01 \
-        --mbe_weight 20.0 \
-        --use_softplus_gapt \
-        --model_size $MODEL_SIZE \
-        --run_info "Log: ModelSize=$MODEL_SIZE | GAPT | $REG_MODE | spike | w=20.0"
-done
+torchrun \
+    --nproc_per_node=$N_GPUS \
+    --master_addr=$MASTER_ADDR \
+    --master_port=$((MASTER_PORT++)) \
+    train_iblm_log.py \
+    --batch_size 32 \
+    --train_seq_len $TRAIN_SEQ_LEN \
+    --val_seq_len $VAL_SEQ_LEN \
+    --num_iterations 10000 \
+    --use_gapt \
+    --entropy_patience 125 \
+    --entropy_min_delta 0.01 \
+    --mbe_patience 75 \
+    --mbe_min_delta 0.01 \
+    --mbe_weight 20.0 \
+    --mbe_schedule "all_middle" \
+    --mbe_comp_mode "spike" \
+    --model_size $MODEL_SIZE \
+    --use_softplus_gapt \
+    --run_info "Log: ModelSize=$MODEL_SIZE | GAPT | w=20.0 | softplus"
 
 # ========================================="
 # Exp 1. FineWeb0.8B (Base, GAPT, MBE, L2)
