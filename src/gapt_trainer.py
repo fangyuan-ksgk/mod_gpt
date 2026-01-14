@@ -12,7 +12,7 @@ class GaptConfig:
     entropy_patience: int = 125
     mbe_patience: int = 75
     mode: str = "spike"
-    bottleneck_p: float = 0.1
+    mbe_weight: float = 1.0
     patch_size: int = 8
 
 class GaptTrainer(Trainer):
@@ -29,7 +29,7 @@ class GaptTrainer(Trainer):
             )
         self.patch_size = self.gapt_config.patch_size
         self.mbe_comp_mode = self.gapt_config.mode
-        self.bottleneck_p = self.gapt_config.bottleneck_p
+        self.mbe_weight = self.gapt_config.mbe_weight
 
     def compute_loss(self, model, inputs, return_outputs=False, num_items_in_batch=None):
         """
@@ -80,13 +80,6 @@ class GaptTrainer(Trainer):
             if denom > 0:
                 mbe_loss = masked_mbe.sum() / denom
                 
-        elif self.mbe_comp_mode == "bottleneck":
-            if len(masked_mbe) > 1:
-                gradients = masked_mbe[1:] - masked_mbe[:-1]
-                k = max(1, int(len(masked_mbe) * self.bottleneck_p))
-                values, indices = torch.topk(gradients, k, largest=False)
-                mbe_loss = masked_mbe[indices + 1].mean()
-                
         elif self.mbe_comp_mode == "spike":
             if len(masked_mbe) > 1:
                 gradients = masked_mbe[1:] - masked_mbe[:-1]
@@ -100,6 +93,6 @@ class GaptTrainer(Trainer):
                  mbe_loss = active_mbe.min()
 
         #  --- GAPT Integration ---
-        final_loss = self.gapt.step(ce_loss, mbe_loss)
+        final_loss = self.gapt.step(ce_loss, mbe_loss * self.mbe_weight)
         
         return (final_loss, outputs) if return_outputs else final_loss
