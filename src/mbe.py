@@ -19,10 +19,6 @@ def mbe_alpha2_exact(Z, detach=False, epsilon=1e-5):
         gram_trace = torch.diagonal(gram, dim1=1, dim2=2).sum(dim=1)
     gram_sq = gram.pow(2).sum(dim=(1,2))
 
-    # ratio = (gram_sq + epsilon) / (gram_trace.pow(2) + epsilon)
-    # ratio = ratio.clamp(min=0.01, max=0.99999)
-    # mbe = -torch.log(ratio)
-
     log_trace = torch.log(gram_trace.abs() + epsilon)
     log_sq = torch.log(gram_sq + epsilon)
     mbe = 2 * log_trace - log_sq 

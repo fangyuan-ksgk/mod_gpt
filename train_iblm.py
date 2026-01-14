@@ -23,7 +23,7 @@ import argparse
 # -----------------------------------------------------------------------------
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--batch_size", type=int, default=16)
+    parser.add_argument("--batch_size", type=int, default=32)
     parser.add_argument("--train_files", type=str, default="data/fineweb10B/fineweb_train_*.bin")
     parser.add_argument("--val_files", type=str, default="data/fineweb10B/fineweb_val_*.bin")
     parser.add_argument("--test_files", type=str, default="data/multiplication_test_ood*.bin")
@@ -39,9 +39,9 @@ def parse_args():
     parser.add_argument("--mbe_patience", type=int, default=75)
     parser.add_argument("--mbe_min_delta", type=float, default=0.01)
     parser.add_argument("--entropy_spike_tolerance", type=float, default=0.1)
-    parser.add_argument("--mbe_weight", type=float, default=1.0)
+    parser.add_argument("--mbe_weight", type=float, default=20.0)
     parser.add_argument("--mbe_softmax_temp", type=float, default=1.0)
-    parser.add_argument("--mbe_comp_mode", type=str, default="naive") # naive, max, softmax, decay
+    parser.add_argument("--mbe_comp_mode", type=str, default="spike") # naive, max, softmax, decay
     parser.add_argument("--bottleneck_portion", type=float, default=0.1)
     parser.add_argument("--use_gapt", action="store_true")
     parser.add_argument("--no_skip_connections", action="store_true")
