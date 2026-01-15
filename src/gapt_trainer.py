@@ -30,6 +30,11 @@ class GaptTrainer(Trainer):
         self.patch_size = self.gapt_config.patch_size
         self.mbe_comp_mode = self.gapt_config.mode
         self.mbe_weight = self.gapt_config.mbe_weight
+        self._last_ce_loss = None
+        self._last_mbe_loss = None
+        self._last_final_loss = None
+        self._eval_ce_losses = []
+        self._eval_mbe_losses = []
 
     def compute_loss(self, model, inputs, return_outputs=False, num_items_in_batch=None):
         """
@@ -94,5 +99,48 @@ class GaptTrainer(Trainer):
 
         #  --- GAPT Integration ---
         final_loss = self.gapt.step(ce_loss, mbe_loss * self.mbe_weight)
+
+        # Stash for logging
+        self._last_ce_loss = ce_loss.detach()
+        self._last_mbe_loss = mbe_loss.detach()
+        self._last_final_loss = final_loss.detach()
         
         return (final_loss, outputs) if return_outputs else final_loss
+
+    def log(self, logs, start_time=None):
+        logs = dict(logs)
+        # Only inject per-batch metrics into training logs (not eval logs)
+        is_eval_log = any(k.startswith("eval_") for k in logs)
+        if not is_eval_log:
+            if self._last_ce_loss is not None:
+                logs.setdefault("ce_loss", self._last_ce_loss.item())
+            if self._last_mbe_loss is not None:
+                logs.setdefault("mbe_loss", self._last_mbe_loss.item())
+            if self._last_final_loss is not None:
+                logs.setdefault("gapt_loss", self._last_final_loss.item())
+        super().log(logs, start_time=start_time)
+
+    def prediction_step(self, model, inputs, prediction_loss_only, ignore_keys=None):
+        loss, logits, labels = super().prediction_step(
+            model, inputs, prediction_loss_only, ignore_keys=ignore_keys
+        )
+        if self._last_ce_loss is not None:
+            self._eval_ce_losses.append(self._last_ce_loss.float().cpu())
+        if self._last_mbe_loss is not None:
+            self._eval_mbe_losses.append(self._last_mbe_loss.float().cpu())
+        return loss, logits, labels
+
+    def evaluate(self, *args, **kwargs):
+        self._eval_ce_losses = []
+        self._eval_mbe_losses = []
+        metrics = super().evaluate(*args, **kwargs)
+
+        extra = {}
+        if self._eval_ce_losses:
+            extra["eval_ce_loss"] = torch.stack(self._eval_ce_losses).mean().item()
+        if self._eval_mbe_losses:
+            extra["eval_mbe_loss"] = torch.stack(self._eval_mbe_losses).mean().item()
+        if extra:
+            self.log(extra)
+            metrics.update(extra)
+        return metrics
