@@ -58,6 +58,7 @@ torchrun \
     --batch_size 32 \
     --train_seq_len $TRAIN_SEQ_LEN \
     --val_seq_len $VAL_SEQ_LEN \
+    --num_iterations 20000 \
     --reg_mbe \
     --mbe_weight 1.0 \
     --mbe_comp_mode "naive" \

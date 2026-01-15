@@ -14,7 +14,7 @@ import torch
 from torch import nn, Tensor
 import torch.distributed as dist
 from src.utils import plot_training_losses, compute_loss
-from src.eaft import collect_token_stats
+# from src.eaft import collect_token_stats  # Removed: unused
 
 import argparse
 
@@ -425,13 +425,11 @@ for step in range(train_steps + 1):
         val_steps = args.val_tokens // val_seq_len
         val_loader = distributed_data_generator(args.val_files, val_seq_len, rank, world_size)
         val_loss = defaultdict(float)
-        all_token_stats = {'probs': [], 'entropies': []}  # Accumulator
 
         with torch.no_grad():
             for i in range(val_steps):
                 inputs, targets = next(val_loader)
                 loss_dict = model.forward(inputs, targets, attn_blocksize, patch_size)
-                token_stats = collect_token_stats(loss_dict["logits"], targets)
                 compute_loss(loss_dict)
                 for name, loss in loss_dict.items():
                     # Skip non-scalar tensors (like logits)
