@@ -20,6 +20,7 @@ def parse_args():
     parser.add_argument("--ood_digits", type=int, nargs=2, default=[3, 3], help="Min/Max digits for OOD test")
     
     # GAPT Configuration
+    parser.add_argument("--mbe_comp_mode", type=str, default="spike", choices=["naive", "spike", "max"], help="MBE compression mode")
     parser.add_argument("--patch_size", type=int, default=8, help="Patch size for MBE")
     parser.add_argument("--mbe_weight", type=float, default=10.0, help="Weight for MBE loss")
     parser.add_argument("--entropy_patience", type=int, default=1, help="Steps to wait before switching to compression")
@@ -144,7 +145,7 @@ def main():
     # GAPT Config
     gapt_config = GaptConfig(
         patch_size=args.patch_size,
-        mode="spike",
+        mode=args.mbe_comp_mode,
         mbe_weight=args.mbe_weight,
         entropy_patience=args.entropy_patience,
         mbe_patience=args.mbe_patience,
