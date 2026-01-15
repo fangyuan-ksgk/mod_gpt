@@ -1,4 +1,5 @@
 import torch
+import pandas as pd
 from transformers import Trainer
 from src.mbe import patch_mbe
 from src.gapt import GatedPhaseTransition
@@ -126,7 +127,13 @@ class GaptTrainer(Trainer):
                 logs.setdefault("gapt_loss", self._last_final_loss.item())
             # Log GAPT phase: 1=memorization, 2=compression
             logs.setdefault("gapt_phi", self.gapt.phi)
-        super().log(logs, start_time=start_time)
+        
+        # Silently update log history without printing to console
+        if self.state.epoch is not None:
+            logs["epoch"] = round(self.state.epoch, 2)
+        if self.state.global_step is not None:
+            logs["step"] = self.state.global_step
+        self.state.log_history.append(logs)
 
     def prediction_step(self, model, inputs, prediction_loss_only, ignore_keys=None):
         loss, logits, labels = super().prediction_step(

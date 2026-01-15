@@ -2,9 +2,11 @@ import torch
 import argparse
 import pandas as pd
 import os
+import logging
 from transformers import TrainingArguments, AutoTokenizer, AutoModelForCausalLM, TrainerCallback
 from src.gapt_trainer import GaptTrainer, GaptConfig
 from data.symbol_multiply import load_symbol_multiply_dataset
+
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Train CPT on Symbol Multiply with GAPT")
@@ -155,12 +157,13 @@ def main():
             logging_first_step=True,
             eval_strategy="steps",
             eval_steps=args.eval_steps,
-            save_steps=10000, # unlikely to save unless specified
+            save_steps=10000,
             eval_on_start=True,
             report_to=args.report_to,
             bf16=True,
             dataloader_pin_memory=False,
-            seed=args.seed
+            seed=args.seed,
+            log_level="error"
         )
     )
 
