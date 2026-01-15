@@ -97,8 +97,10 @@ class GaptTrainer(Trainer):
                  active_mbe = mbe_per_layer[active_mask]
                  mbe_loss = active_mbe.min()
 
-        #  --- GAPT Integration ---
-        final_loss = self.gapt.step(ce_loss, mbe_loss * self.mbe_weight)
+        if model.training:
+            final_loss = self.gapt.step(ce_loss, mbe_loss * self.mbe_weight, verbose=True)
+        else:
+            final_loss = ce_loss
 
         # Stash for logging
         self._last_ce_loss = ce_loss.detach()
@@ -118,6 +120,8 @@ class GaptTrainer(Trainer):
                 logs.setdefault("mbe_loss", self._last_mbe_loss.item())
             if self._last_final_loss is not None:
                 logs.setdefault("gapt_loss", self._last_final_loss.item())
+            # Log GAPT phase: 1=memorization, 2=compression
+            logs.setdefault("gapt_phi", self.gapt.phi)
         super().log(logs, start_time=start_time)
 
     def prediction_step(self, model, inputs, prediction_loss_only, ignore_keys=None):

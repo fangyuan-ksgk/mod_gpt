@@ -816,6 +816,9 @@ class GatedPhaseTransition:
 
         return self._weight_loss(main_loss, auxiliary_loss)
 
+    # def comp_loss(self, main_loss: torch.Tensor, auxiliary_loss: torch.Tensor) -> torch.Tensor:
+        
+
 
 # ---- mbe layer mask ablation ---- 
 import torch
