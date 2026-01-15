@@ -102,7 +102,7 @@ class GaptTrainer(Trainer):
                  mbe_loss = active_mbe.min()
 
         if model.training:
-            final_loss = self.gapt.step(ce_loss, mbe_loss * self.mbe_weight, verbose=True)
+            final_loss = self.gapt.step(ce_loss, mbe_loss * self.mbe_weight, verbose=False)
         else:
             final_loss = ce_loss
 
@@ -152,3 +152,45 @@ class GaptTrainer(Trainer):
             self.log(extra)
             metrics.update(extra)
         return metrics
+
+
+# ----- Analysis Functions ----
+
+def aggregate_log_history(log_history):
+    """
+    Merge train and eval logs, forward-fill so every row has latest values.
+    """
+    exclude = {'learning_rate', 'grad_norm', 'train_runtime', 'train_samples_per_second',
+               'train_steps_per_second', 'total_flos', 'train_loss',
+               'eval_runtime', 'eval_samples_per_second', 'eval_steps_per_second'}
+    
+    rows = {}
+    
+    for entry in log_history:
+        step = entry.get('step', 0)
+        if step not in rows:
+            rows[step] = {'step': step}
+        for k, v in entry.items():
+            if isinstance(v, (int, float)) and k not in exclude:
+                # Don't overwrite existing values (keeps first non-NaN)
+                if k not in rows[step] or pd.isna(rows[step].get(k)):
+                    rows[step][k] = v
+    
+    df = pd.DataFrame(list(rows.values()))
+    df = df.sort_values('step').reset_index(drop=True)
+    
+    eval_cols = [c for c in df.columns if c.startswith('eval_')]
+    df[eval_cols] = df[eval_cols].ffill()
+    
+    train_cols = ['loss', 'ce_loss', 'mbe_loss', 'gapt_loss', 'gapt_phi']
+    train_cols = [c for c in train_cols if c in df.columns]
+    df[train_cols] = df[train_cols].ffill()
+    
+    df = df.dropna(subset=['loss']).reset_index(drop=True)
+    
+    priority = ['step', 'epoch', 'gapt_phi', 'loss', 'ce_loss', 'mbe_loss', 'gapt_loss',
+            'eval_loss', 'eval_ce_loss', 'eval_mbe_loss']
+    cols = [c for c in priority if c in df.columns]
+    cols += [c for c in df.columns if c not in cols]
+    
+    return df[cols]
