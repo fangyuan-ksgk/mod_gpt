@@ -26,7 +26,7 @@ TRAIN_DIGITS="1 2"
 OOD_DIGITS="3 3"
 LR=5e-5
 BATCH_SIZE=8
-NUM_TRAIN=5000
+NUM_TRAIN=10000
 MBE_WEIGHT=10.0
 SEED=42
 
@@ -94,7 +94,7 @@ run_experiment() {
         --model_name $MODEL_NAME \
         --output_dir $OUTPUT_DIR \
         --num_train $NUM_TRAIN \
-        --num_test 100 \
+        --num_test 1000 \
         --train_digits $TRAIN_DIGITS \
         --ood_digits $OOD_DIGITS \
         --patch_size $PATCH_SIZE \
@@ -109,7 +109,7 @@ run_experiment() {
         --batch_size $BATCH_SIZE \
         --epochs $EPOCHS \
         --logging_steps 10 \
-        --eval_steps 50 \
+        --eval_steps 10 \
         --seed $SEED \
         $STATIC_FLAG
     
