@@ -712,7 +712,7 @@ class GatedPhaseTransition:
     with percentage-based thresholds.
     """
     def __init__(self, tau_plateau_m: float = 0.01, tau_plateau_a: float = 0.01, tau_spike: float = 0.1, 
-                 p_m: int = 5, p_a: int = 5, clamp_a: float = 1e-5, use_softplus: bool = False):
+                 p_m: int = 5, p_a: int = 5, clamp_a: float = 1e-5, use_softplus: bool = False, initial_phase: int = 1, static_phase: bool = False):
         """
         Args:
             tau_plateau: Relative threshold for detecting plateau (e.g., 0.01 = 1% improvement)
@@ -727,7 +727,8 @@ class GatedPhaseTransition:
         self.p_m = p_m
         self.p_a = p_a
 
-        self.phi = 1  # 1 for main phase, 2 for compression phase
+        self.phi = initial_phase  # 1 for main phase, 2 for compression phase
+        self.static_phase = static_phase
         self.s_m = 0  # steps since improvement in main
         self.s_a = 0  # steps since improvement in auxiliary
 
@@ -781,7 +782,7 @@ class GatedPhaseTransition:
 
         prev_phi = self.phi
 
-        if self.phi == 1:  # Main objective phase
+        if self.phi == 1 and not self.static_phase:  # Main objective phase
             if gain_m > self.tau_plateau_m: 
                 self.s_m = 0
             else: 
@@ -791,7 +792,7 @@ class GatedPhaseTransition:
                 self.s_m = 0
                 self.phi = 2
 
-        elif self.phi == 2:  # Main + Auxiliary phase
+        elif self.phi == 2 and not self.static_phase:  # Main + Auxiliary phase
             if gain_m < -self.tau_spike:  
                 if verbose:
                     print(f"  [GAPT] Main loss spiked: {-gain_m*100:.2f}% > {self.tau_spike*100:.2f}%")
@@ -815,6 +816,8 @@ class GatedPhaseTransition:
             print(f"         main_loss={main_val:.4f}, aux_loss={aux_val:.4f}")
 
         return self._weight_loss(main_loss, auxiliary_loss)
+
+    
 
     # def comp_loss(self, main_loss: torch.Tensor, auxiliary_loss: torch.Tensor) -> torch.Tensor:
         

@@ -14,6 +14,8 @@ class GaptConfig:
     mode: str = "spike"
     mbe_weight: float = 1.0
     patch_size: int = 8
+    initial_phase: int = 1
+    static_phase: bool = False
 
 class GaptTrainer(Trainer):
     def __init__(self, gapt_config, *args, **kwargs):
@@ -25,7 +27,9 @@ class GaptTrainer(Trainer):
             tau_plateau_a=self.gapt_config.tau_plateau_a, 
             tau_spike=self.gapt_config.tau_spike, 
             p_m=self.gapt_config.entropy_patience, 
-            p_a=self.gapt_config.mbe_patience
+            p_a=self.gapt_config.mbe_patience,
+            initial_phase=self.gapt_config.initial_phase,
+            static_phase=self.gapt_config.static_phase
             )
         self.patch_size = self.gapt_config.patch_size
         self.mbe_comp_mode = self.gapt_config.mode
