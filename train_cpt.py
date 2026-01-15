@@ -81,17 +81,30 @@ def main():
     args = parse_args()
     print(f"Args: {args}")
     
-    # Device
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    print(f"Using device: {device}")
+    # Device - detect distributed mode
+    local_rank = int(os.environ.get("LOCAL_RANK", -1))
+    is_distributed = local_rank != -1
+    
+    if is_distributed:
+        device = f"cuda:{local_rank}"
+        print(f"[Rank {local_rank}] Using device: {device}")
+    else:
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        print(f"Using device: {device}")
 
-    # Load Model
+    # Load Model (no device_map for distributed training)
     tokenizer = AutoTokenizer.from_pretrained(args.model_name)
-    model = AutoModelForCausalLM.from_pretrained(
-        args.model_name,
-        torch_dtype=torch.bfloat16, 
-        device_map="auto"
-    )
+    if is_distributed:
+        model = AutoModelForCausalLM.from_pretrained(
+            args.model_name,
+            torch_dtype=torch.bfloat16,
+        )
+    else:
+        model = AutoModelForCausalLM.from_pretrained(
+            args.model_name,
+            torch_dtype=torch.bfloat16, 
+            device_map="auto"
+        )
 
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
