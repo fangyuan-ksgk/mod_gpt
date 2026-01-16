@@ -41,13 +41,20 @@ MODELS=(
     "Qwen/Qwen3-0.6B"
     "Qwen/Qwen3-1.7B"
     "Qwen/Qwen3-4B"
-    "Qwen/Qwen3-8B"
+    # "Qwen/Qwen3-8B" # (Out of memory)
     # Other OSS models
     "meta-llama/Llama-3.2-1B"
-    # "meta-llama/Llama-3.2-3B"
-    "google/gemma-2-2b"
+    "google/gemma-3-1b-pt"
+    "google/gemma-3-4b-pt"
     # "mistralai/Mistral-7B-v0.3"
 )
+
+# LORA_MODELS=(
+#     # Qwen family (>4B)
+#     "Qwen/Qwen3-8B"
+#     # other large models
+# )
+
 
 # ============================================================================
 # Key Configurations (5 runs per model)

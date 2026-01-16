@@ -4,6 +4,7 @@ import pandas as pd
 import os
 import logging
 from transformers import TrainingArguments, AutoTokenizer, AutoModelForCausalLM, TrainerCallback
+from peft import LoraConfig, get_peft_model, TaskType
 from src.gapt_trainer import GaptTrainer, GaptConfig
 from data.symbol_multiply import load_symbol_multiply_dataset
 
@@ -18,6 +19,11 @@ def parse_args():
     parser.add_argument("--num_test", type=int, default=100, help="Number of test samples (ID/OOD)")
     parser.add_argument("--train_digits", type=int, nargs=2, default=[1, 2], help="Min/Max digits for train")
     parser.add_argument("--ood_digits", type=int, nargs=2, default=[3, 3], help="Min/Max digits for OOD test")
+    parser.add_argument("--use_lora", action="store_true", default=False, help="Use LoRA")
+    parser.add_argument("--lora_r", type=int, default=16, help="LoRA rank")
+    parser.add_argument("--lora_alpha", type=int, default=32, help="LoRA alpha")
+    parser.add_argument("--lora_dropout", type=float, default=0.05, help="LoRA dropout")
+    parser.add_argument("--lora_target", type=str, default="q_proj,v_proj", help="LoRA target modules (comma-sep)")
     
     # GAPT Configuration
     parser.add_argument("--mbe_comp_mode", type=str, default="spike", choices=["naive", "spike", "max"], help="MBE compression mode")
@@ -111,6 +117,21 @@ def main():
         tokenizer.pad_token = tokenizer.eos_token
         model.config.pad_token_id = model.config.eos_token_id
 
+    # Apply LoRA if requested
+    if args.use_lora:
+        target_modules = [m.strip() for m in args.lora_target.split(",")]
+        lora_config = LoraConfig(
+            task_type=TaskType.CAUSAL_LM,
+            r=args.lora_r,
+            lora_alpha=args.lora_alpha,
+            lora_dropout=args.lora_dropout,
+            target_modules=target_modules,
+        )
+        model = get_peft_model(model, lora_config)
+        model.print_trainable_parameters()
+        # Enable gradient checkpointing for memory efficiency
+        model.gradient_checkpointing_enable()
+
     # Load Data
     dataset, mapper_info = load_symbol_multiply_dataset(
         symbol_set=args.symbol_set,
@@ -137,10 +158,12 @@ def main():
         return tokenized
 
     tokenized_train = dataset["train"].map(tokenize_function, batched=True, remove_columns=dataset["train"].column_names)
-    tokenized_test = dataset["test_ood"].map(tokenize_function, batched=True, remove_columns=dataset["test"].column_names)
+    tokenized_test_id = dataset["test"].map(tokenize_function, batched=True, remove_columns=dataset["test"].column_names)
+    tokenized_test_ood = dataset["test_ood"].map(tokenize_function, batched=True, remove_columns=dataset["test"].column_names)
     
     tokenized_train.set_format("torch")
-    tokenized_test.set_format("torch")
+    tokenized_test_id.set_format("torch")
+    tokenized_test_ood.set_format("torch")
 
     # GAPT Config
     gapt_config = GaptConfig(
@@ -160,7 +183,7 @@ def main():
         gapt_config=gapt_config,
         model=model,
         train_dataset=tokenized_train,
-        eval_dataset=tokenized_test,
+        eval_dataset={"id": tokenized_test_id, "ood": tokenized_test_ood},
         args=TrainingArguments(
             output_dir=args.output_dir,
             per_device_train_batch_size=args.batch_size,
@@ -177,7 +200,8 @@ def main():
             bf16=True,
             dataloader_pin_memory=False,
             seed=args.seed,
-            log_level="error"
+            log_level="error",
+            gradient_checkpointing=args.use_lora,  # Memory-efficient for LoRA
         )
     )
 
