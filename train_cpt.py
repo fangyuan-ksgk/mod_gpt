@@ -171,7 +171,7 @@ def main():
             logging_first_step=True,
             eval_strategy="steps",
             eval_steps=args.eval_steps,
-            save_steps=10000,
+            save_strategy="no",  # No checkpoints
             eval_on_start=True,
             report_to=args.report_to,
             bf16=True,
@@ -184,12 +184,13 @@ def main():
     # Train
     trainer.train()
 
-    # Save Log History
-    log_df = aggregate_log_history(trainer.state.log_history)
-    os.makedirs(args.output_dir, exist_ok=True)
-    csv_path = os.path.join(args.output_dir, "training_log.csv")
-    log_df.to_csv(csv_path, index=False)
-    print(f"Training logs saved to {csv_path}")
+    # Save Log History (only on main process to avoid race conditions)
+    if local_rank <= 0:  # rank 0 or single-GPU (-1)
+        log_df = aggregate_log_history(trainer.state.log_history)
+        os.makedirs(args.output_dir, exist_ok=True)
+        csv_path = os.path.join(args.output_dir, "training_log.csv")
+        log_df.to_csv(csv_path, index=False)
+        print(f"Training logs saved to {csv_path}")
 
 if __name__ == "__main__":
     main()

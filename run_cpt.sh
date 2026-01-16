@@ -20,7 +20,6 @@ MASTER_ADDR=127.0.0.1
 MASTER_PORT=29500
 
 # Fixed params
-MODEL_NAME="Qwen/Qwen3-0.6B"
 EPOCHS=3
 TRAIN_DIGITS="1 2"
 OOD_DIGITS="3 3"
@@ -35,28 +34,47 @@ OUTPUT_BASE="./sweep_results"
 mkdir -p $OUTPUT_BASE
 
 # ============================================================================
-# Sweep Dimensions (60 runs total)
+# Models to Sweep (4x H100 80GB = 320GB total, bf16)
 # ============================================================================
+MODELS=(
+    # Qwen3 family (increasing size)
+    "Qwen/Qwen3-0.6B"
+    "Qwen/Qwen3-1.7B"
+    "Qwen/Qwen3-4B"
+    "Qwen/Qwen3-8B"
+    # Other OSS models
+    "meta-llama/Llama-3.2-1B"
+    # "meta-llama/Llama-3.2-3B"
+    "google/gemma-2-2b"
+    # "mistralai/Mistral-7B-v0.3"
+)
 
-# 4 Variants: gapt_mem_start, gapt_comp_start, static_compress, static_memorize
-VARIANTS=("gapt_mem" "gapt_comp" "static_compress" "static_memorize")
-
-# MBE computation modes
-MBE_COMP_MODES=("naive" "spike" "min")
-
-# Patch sizes
-PATCH_SIZES=(4 8 16 32 64)
+# ============================================================================
+# Key Configurations (5 runs per model)
+# ============================================================================
+# Format: "VARIANT:MODE:PATCH_SIZE"
+CONFIGS=(
+    "static_memorize:naive:4"    # Baseline (no MBE)
+    "static_compress:naive:4"    # Best: MBE always on
+    "static_compress:spike:4"    # MBE spike mode
+    "gapt_comp:naive:8"          # GAPT starting compress
+    "gapt_comp:spike:8"          # GAPT spike mode
+)
 
 # ============================================================================
 # Helper Function
 # ============================================================================
 run_experiment() {
-    local VARIANT=$1
-    local MBE_COMP_MODE=$2
-    local PATCH_SIZE=$3
+    local MODEL_NAME=$1
+    local VARIANT=$2
+    local MBE_COMP_MODE=$3
+    local PATCH_SIZE=$4
+    
+    # Extract short model name (e.g., "Qwen3-0.6B" from "Qwen/Qwen3-0.6B")
+    local MODEL_SHORT=$(basename $MODEL_NAME)
     
     # Build experiment name
-    local EXP_NAME="${VARIANT}_mode${MBE_COMP_MODE}_ps${PATCH_SIZE}"
+    local EXP_NAME="${MODEL_SHORT}/${VARIANT}_mode${MBE_COMP_MODE}_ps${PATCH_SIZE}"
     local OUTPUT_DIR="${OUTPUT_BASE}/${EXP_NAME}"
     
     # Skip if already done
@@ -117,18 +135,24 @@ run_experiment() {
 }
 
 # ============================================================================
-# Main Sweep: 4 Variants x 3 Modes x 5 Patch Sizes = 60 runs
+# Main Sweep: Models x Configs
 # ============================================================================
+TOTAL_RUNS=$((${#MODELS[@]} * ${#CONFIGS[@]}))
 echo "=========================================="
-echo "CORE SWEEP: Variant x MBE_Mode x Patch_Size"
-echo "Total: 4 x 3 x 5 = 60 runs"
+echo "MODEL x CONFIG SWEEP"
+echo "Models: ${#MODELS[@]}, Configs: ${#CONFIGS[@]}"
+echo "Total: $TOTAL_RUNS runs"
 echo "=========================================="
 
-for VARIANT in "${VARIANTS[@]}"; do
-    for MBE_COMP_MODE in "${MBE_COMP_MODES[@]}"; do
-        for PATCH_SIZE in "${PATCH_SIZES[@]}"; do
-            run_experiment $VARIANT $MBE_COMP_MODE $PATCH_SIZE
-        done
+for MODEL_NAME in "${MODELS[@]}"; do
+    MODEL_SHORT=$(basename $MODEL_NAME)
+    echo ""
+    echo ">>> Model: $MODEL_SHORT"
+    echo "-------------------------------------------"
+    
+    for CONFIG in "${CONFIGS[@]}"; do
+        IFS=':' read -r VARIANT MBE_COMP_MODE PATCH_SIZE <<< "$CONFIG"
+        run_experiment "$MODEL_NAME" "$VARIANT" "$MBE_COMP_MODE" "$PATCH_SIZE"
     done
 done
 

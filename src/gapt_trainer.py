@@ -145,16 +145,17 @@ class GaptTrainer(Trainer):
             self._eval_mbe_losses.append(self._last_mbe_loss.float().cpu())
         return loss, logits, labels
 
-    def evaluate(self, *args, **kwargs):
+    def evaluate(self, eval_dataset=None, ignore_keys=None, metric_key_prefix="eval"):
         self._eval_ce_losses = []
         self._eval_mbe_losses = []
-        metrics = super().evaluate(*args, **kwargs)
+        metrics = super().evaluate(eval_dataset=eval_dataset, ignore_keys=ignore_keys, metric_key_prefix=metric_key_prefix)
 
+        # Use the same prefix for our custom metrics
         extra = {}
         if self._eval_ce_losses:
-            extra["eval_ce_loss"] = torch.stack(self._eval_ce_losses).mean().item()
+            extra[f"{metric_key_prefix}_ce_loss"] = torch.stack(self._eval_ce_losses).mean().item()
         if self._eval_mbe_losses:
-            extra["eval_mbe_loss"] = torch.stack(self._eval_mbe_losses).mean().item()
+            extra[f"{metric_key_prefix}_mbe_loss"] = torch.stack(self._eval_mbe_losses).mean().item()
         if extra:
             self.log(extra)
             metrics.update(extra)
@@ -166,10 +167,17 @@ class GaptTrainer(Trainer):
 def aggregate_log_history(log_history):
     """
     Merge train and eval logs, forward-fill so every row has latest values.
+    Excludes runtime/throughput metrics for cleaner output.
     """
-    exclude = {'learning_rate', 'grad_norm', 'train_runtime', 'train_samples_per_second',
-               'train_steps_per_second', 'total_flos', 'train_loss',
-               'eval_runtime', 'eval_samples_per_second', 'eval_steps_per_second'}
+    # Patterns to exclude: runtime, throughput, internal metrics
+    exclude_patterns = ['runtime', 'samples_per_second', 'steps_per_second', 
+                        'total_flos', 'grad_norm', 'learning_rate']
+    exclude_exact = {'train_loss'}
+    
+    def should_exclude(key):
+        if key in exclude_exact:
+            return True
+        return any(p in key for p in exclude_patterns)
     
     rows = {}
     
@@ -178,7 +186,7 @@ def aggregate_log_history(log_history):
         if step not in rows:
             rows[step] = {'step': step}
         for k, v in entry.items():
-            if isinstance(v, (int, float)) and k not in exclude:
+            if isinstance(v, (int, float)) and not should_exclude(k):
                 # Don't overwrite existing values (keeps first non-NaN)
                 if k not in rows[step] or pd.isna(rows[step].get(k)):
                     rows[step][k] = v
@@ -195,8 +203,13 @@ def aggregate_log_history(log_history):
     
     df = df.dropna(subset=['loss']).reset_index(drop=True)
     
-    priority = ['step', 'epoch', 'gapt_phi', 'loss', 'ce_loss', 'mbe_loss', 'gapt_loss',
-            'eval_loss', 'eval_ce_loss', 'eval_mbe_loss']
+    # Priority order for columns (train metrics, then eval metrics)
+    priority = ['step', 'epoch', 'gapt_phi', 'loss', 'ce_loss', 'mbe_loss', 'gapt_loss']
+    # Add eval columns in order: general, id, ood
+    for prefix in ['eval', 'eval_id', 'eval_ood']:
+        for suffix in ['loss', 'ce_loss', 'mbe_loss']:
+            priority.append(f'{prefix}_{suffix}')
+    
     cols = [c for c in priority if c in df.columns]
     cols += [c for c in df.columns if c not in cols]
     
