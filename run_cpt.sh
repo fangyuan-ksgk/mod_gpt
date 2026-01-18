@@ -27,11 +27,9 @@ LR=5e-5
 BATCH_SIZE=8
 NUM_TRAIN=10000
 MBE_WEIGHT=10.0
-SEED=42
 
-# Output base
-OUTPUT_BASE="./sweep_results"
-mkdir -p $OUTPUT_BASE
+# Seeds to run (3x for variance estimation)
+SEEDS=(42 123 456)
 
 # ============================================================================
 # Models to Sweep (4x H100 80GB = 320GB total, bf16)
@@ -142,28 +140,39 @@ run_experiment() {
 }
 
 # ============================================================================
-# Main Sweep: Models x Configs
+# Main Sweep: Seeds x Models x Configs
 # ============================================================================
-TOTAL_RUNS=$((${#MODELS[@]} * ${#CONFIGS[@]}))
+TOTAL_RUNS=$((${#SEEDS[@]} * ${#MODELS[@]} * ${#CONFIGS[@]}))
 echo "=========================================="
-echo "MODEL x CONFIG SWEEP"
-echo "Models: ${#MODELS[@]}, Configs: ${#CONFIGS[@]}"
+echo "SEED x MODEL x CONFIG SWEEP"
+echo "Seeds: ${#SEEDS[@]}, Models: ${#MODELS[@]}, Configs: ${#CONFIGS[@]}"
 echo "Total: $TOTAL_RUNS runs"
 echo "=========================================="
 
-for MODEL_NAME in "${MODELS[@]}"; do
-    MODEL_SHORT=$(basename $MODEL_NAME)
-    echo ""
-    echo ">>> Model: $MODEL_SHORT"
-    echo "-------------------------------------------"
+for SEED in "${SEEDS[@]}"; do
+    OUTPUT_BASE="./sweep_results_seed${SEED}"
+    mkdir -p $OUTPUT_BASE
     
-    for CONFIG in "${CONFIGS[@]}"; do
-        IFS=':' read -r VARIANT MBE_COMP_MODE PATCH_SIZE <<< "$CONFIG"
-        run_experiment "$MODEL_NAME" "$VARIANT" "$MBE_COMP_MODE" "$PATCH_SIZE"
+    echo ""
+    echo "=========================================="
+    echo ">>> SEED: $SEED"
+    echo ">>> Output: $OUTPUT_BASE"
+    echo "=========================================="
+    
+    for MODEL_NAME in "${MODELS[@]}"; do
+        MODEL_SHORT=$(basename $MODEL_NAME)
+        echo ""
+        echo ">>> Model: $MODEL_SHORT (seed=$SEED)"
+        echo "-------------------------------------------"
+        
+        for CONFIG in "${CONFIGS[@]}"; do
+            IFS=':' read -r VARIANT MBE_COMP_MODE PATCH_SIZE <<< "$CONFIG"
+            run_experiment "$MODEL_NAME" "$VARIANT" "$MBE_COMP_MODE" "$PATCH_SIZE"
+        done
     done
 done
 
 echo "=========================================="
 echo "SWEEP COMPLETE"
 echo "=========================================="
-echo "Results saved to: $OUTPUT_BASE"
+echo "Results saved to: ./sweep_results_seed{42,123,456}"

@@ -3,6 +3,8 @@ import argparse
 import pandas as pd
 import os
 import logging
+import random
+import numpy as np
 from transformers import TrainingArguments, AutoTokenizer, AutoModelForCausalLM, TrainerCallback
 from peft import LoraConfig, get_peft_model, TaskType
 from src.gapt_trainer import GaptTrainer, GaptConfig
@@ -87,6 +89,13 @@ def aggregate_log_history(log_history):
 def main():
     args = parse_args()
     print(f"Args: {args}")
+    
+    # Set all random seeds for reproducibility
+    torch.manual_seed(args.seed)
+    random.seed(args.seed)
+    np.random.seed(args.seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(args.seed)
     
     # Device - detect distributed mode
     local_rank = int(os.environ.get("LOCAL_RANK", -1))
