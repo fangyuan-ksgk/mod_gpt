@@ -43,6 +43,7 @@ def parse_args():
     parser.add_argument("--lr", type=float, default=5e-5, help="Learning rate")
     parser.add_argument("--batch_size", type=int, default=8, help="Per device batch size")
     parser.add_argument("--epochs", type=int, default=3, help="Num epochs")
+    parser.add_argument("--weight_decay", type=float, default=0.00, help="Weight decay")
     parser.add_argument("--logging_steps", type=int, default=5, help="Log every N steps")
     parser.add_argument("--eval_steps", type=int, default=20, help="Eval every N steps")
     parser.add_argument("--report_to", type=str, default="none", help="wandb or none")
@@ -203,6 +204,7 @@ def main():
             logging_first_step=True,
             eval_strategy="steps",
             eval_steps=args.eval_steps,
+            weight_decay=args.weight_decay,
             save_strategy="no",  # No checkpoints
             eval_on_start=True,
             report_to=args.report_to,

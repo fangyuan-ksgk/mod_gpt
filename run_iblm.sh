@@ -49,23 +49,23 @@ MASTER_PORT=29500
 #        Why don't we just over compress and see what happens?
 # ========================================
 
-MODEL_SIZE="medium" 
-torchrun \
-    --nproc_per_node=$N_GPUS \
-    --master_addr=$MASTER_ADDR \
-    --master_port=$((MASTER_PORT++)) \
-    train_iblm.py \
-    --batch_size 32 \
-    --train_seq_len $TRAIN_SEQ_LEN \
-    --val_seq_len $VAL_SEQ_LEN \
-    --num_iterations 20000 \
-    --reg_mbe \
-    --mbe_weight 1.0 \
-    --mbe_comp_mode "naive" \
-    --mbe_schedule "all_middle" \
-    --model_size $MODEL_SIZE \
-    --save_checkpoint \
-    --run_info "ModelSize=$MODEL_SIZE | reg_mbe | w=1.0 | MBE comp mode: naive" 
+# MODEL_SIZE="medium" 
+# torchrun \
+#     --nproc_per_node=$N_GPUS \
+#     --master_addr=$MASTER_ADDR \
+#     --master_port=$((MASTER_PORT++)) \
+#     train_iblm.py \
+#     --batch_size 32 \
+#     --train_seq_len $TRAIN_SEQ_LEN \
+#     --val_seq_len $VAL_SEQ_LEN \
+#     --num_iterations 20000 \
+#     --reg_mbe \
+#     --mbe_weight 1.0 \
+#     --mbe_comp_mode "naive" \
+#     --mbe_schedule "all_middle" \
+#     --model_size $MODEL_SIZE \
+#     --save_checkpoint \
+#     --run_info "ModelSize=$MODEL_SIZE | reg_mbe | w=1.0 | MBE comp mode: naive" 
 
 
 # MODEL_SIZE="xl" 
@@ -84,42 +84,24 @@ torchrun \
 #     --model_size $MODEL_SIZE \
 #     --run_info "ModelSize=$MODEL_SIZE | reg_mbe | w=1.0 | MBE comp mode: naive" 
 
-# ============ Direct MBE Regularization (reg_mbe) ============
-# Comparing: mbe_range vs mbe_variance with same settings
+# ============ Log gradient & per-patch stats from base run, acros model sizes ============
 
-# torchrun \
-#     --nproc_per_node=$N_GPUS \
-#     --master_addr=$MASTER_ADDR \
-#     --master_port=$((MASTER_PORT++)) \
-#     train_iblm_log.py \
-#     --batch_size 32 \
-#     --train_seq_len $TRAIN_SEQ_LEN \
-#     --val_seq_len $VAL_SEQ_LEN \
-#     --num_iterations 10000 \
-#     --no_reg \
-#     --model_size $MODEL_SIZE \
-#     --run_info "Log: ModelSize=$MODEL_SIZE | no reg"
+for MODEL_SIZE in "small" "medium" "large"; do
+    torchrun \
+        --nproc_per_node=$N_GPUS \
+        --master_addr=$MASTER_ADDR \
+        --master_port=$((MASTER_PORT++)) \
+        train_iblm_log.py \
+        --batch_size 32 \
+        --train_seq_len $TRAIN_SEQ_LEN \
+        --val_seq_len $VAL_SEQ_LEN \
+        --num_iterations 5000 \
+        --log_grad_info \
+        --no_reg \
+        --model_size $MODEL_SIZE \
+        --run_info "Log: ModelSize=$MODEL_SIZE | base"
+done
 
-# torchrun \
-#     --nproc_per_node=$N_GPUS \
-#     --master_addr=$MASTER_ADDR \
-#     --master_port=$((MASTER_PORT++)) \
-#     train_iblm_log.py \
-#     --batch_size 32 \
-#     --train_seq_len $TRAIN_SEQ_LEN \
-#     --val_seq_len $VAL_SEQ_LEN \
-#     --num_iterations 10000 \
-#     --use_gapt \
-#     --entropy_patience 125 \
-#     --entropy_min_delta 0.01 \
-#     --mbe_patience 75 \
-#     --mbe_min_delta 0.01 \
-#     --mbe_weight 20.0 \
-#     --mbe_schedule "all_middle" \
-#     --mbe_comp_mode "spike" \
-#     --model_size $MODEL_SIZE \
-#     --use_softplus_gapt \
-#     --run_info "Log: ModelSize=$MODEL_SIZE | GAPT | w=20.0 | softplus"
 
 # ========================================="
 # Exp 1. FineWeb0.8B (Base, GAPT, MBE, L2)

@@ -342,10 +342,11 @@ def get_lr(step: int):
 # Projective Non-conflicting Gradient Composer #
 ################################################
 
-from src.gradtracker import GradientTracker
+from src.gradtracker import GradientTracker, GradStatsRecorder, track_gradient_similarity
 from src.gapt import GatedPhaseTransition, get_mbe_layer_mask
 
 grad_tracker = GradientTracker(model)
+grad_stats = GradStatsRecorder()
 gapt = GatedPhaseTransition(p_m = args.entropy_patience, p_a = args.mbe_patience, 
                             tau_plateau_m = args.entropy_min_delta, tau_plateau_a = args.mbe_min_delta, 
                             tau_spike = args.entropy_spike_tolerance, clamp_a = args.min_a, use_softplus = args.use_softplus_gapt)
@@ -438,8 +439,8 @@ for step in range(train_steps + 1):
                 # Collect token stats (probs, entropies) - no gradients needed
                 if master_process and i < 20:
                     token_stats = collect_token_stats(loss_dict["logits"], targets)
-                    all_token_stats['probs'].append(token_stats['probs'])
-                    all_token_stats['entropies'].append(token_stats['entropies'])
+                    all_token_stats['probs'].append(token_stats['probs'].detach().cpu())
+                    all_token_stats['entropies'].append(token_stats['entropies'].detach().cpu())
                     
                     # Collect per-layer MBE values
                     mbe_per_layer = {k: v.item() for k, v in loss_dict.items() if k.startswith("mbe_")}
@@ -448,10 +449,10 @@ for step in range(train_steps + 1):
                 # Collect per-patch stats (no gradient)
                 if master_process and i < 20 and hasattr(model, '_orig_mod') and hasattr(model._orig_mod, 'forward_with_patch_stats'):
                     _, patch_stats = model._orig_mod.forward_with_patch_stats(inputs, targets, attn_blocksize, patch_size)
-                    all_patch_stats['patch_mbe'].append(patch_stats['patch_mbe'])
-                    all_patch_stats['patch_loss'].append(patch_stats['patch_loss'])
-                    all_patch_stats['patch_prob'].append(patch_stats['patch_prob'])
-                    all_patch_stats['patch_entropy'].append(patch_stats['patch_entropy'])
+                    all_patch_stats['patch_mbe'].append(patch_stats['patch_mbe'].detach().cpu())
+                    all_patch_stats['patch_loss'].append(patch_stats['patch_loss'].detach().cpu())
+                    all_patch_stats['patch_prob'].append(patch_stats['patch_prob'].detach().cpu())
+                    all_patch_stats['patch_entropy'].append(patch_stats['patch_entropy'].detach().cpu())
                 
                 compute_loss(loss_dict)
                 for name, loss in loss_dict.items():
@@ -488,8 +489,8 @@ for step in range(train_steps + 1):
     if last_step:
         if master_process: 
             os.makedirs(f"logs/{run_id}", exist_ok=True)
-            if args.log_grad_info: 
-                grad_tracker.save_grad_info(f"logs/{run_id}/grad_step{step:06d}.pkl")
+            if args.log_grad_info:
+                grad_stats.save(f"logs/{run_id}/grad_stats_step{step:06d}.pkl")
             plot_training_losses(loss_record, save_path=f"logs/{run_id}/loss_curve.png")
             
             if args.save_checkpoint:
@@ -520,37 +521,10 @@ for step in range(train_steps + 1):
         masked_mbe = mbe_loss_per_layer * per_layer_mbe_mask
         if args.mbe_comp_mode == "naive": 
             mbe_loss = (masked_mbe.sum() / per_layer_mbe_mask.sum())
-        elif args.mbe_comp_mode == "max": 
-            mbe_loss = masked_mbe.max()
-        elif args.mbe_comp_mode == "decay":
-            gradients = masked_mbe[1:] - masked_mbe[:-1]
-            spike_idx = gradients.argmax()
-            mbe_loss = masked_mbe[spike_idx + 1]
         elif args.mbe_comp_mode == "spike": # maximize diff-mbe bottleneck
             gradients = masked_mbe[1:] - masked_mbe[:-1]
             decay_idx = gradients.argmin()
-            mbe_loss = masked_mbe[decay_idx + 1]
-        elif args.mbe_comp_mode == "bottleneck": 
-            k = max(1, int(len(masked_mbe) * args.bottleneck_portion))
-            gradients = masked_mbe[1:] - masked_mbe[:-1]
-            _, indices = torch.topk(gradients, k, largest=False)
-            mbe_loss = masked_mbe[indices + 1].mean()
-        elif args.mbe_comp_mode == "decrease": # mean diff-mbe bottleneck
-            gradients = masked_mbe[1:] - masked_mbe[:-1]
-            violations = gradients.clamp(min=0)
-            mbe_loss = violations.sum() / (violations>0).sum()
-        elif args.mbe_comp_mode == "min": # absolute mbe bottleneck
-            mbe_loss = masked_mbe.min()
-        elif args.mbe_comp_mode == "spike_is": # doesn't work
-            gradients =  masked_mbe[:-1] - masked_mbe[1:]
-            probs = torch.nn.functional.softmax(gradients / args.mbe_softmax_temp, dim=0)
-            decay_idx = torch.multinomial(probs, 1).item()
-            mbe_loss = masked_mbe[decay_idx + 1]
-        elif args.mbe_comp_mode == "valley": # we don't regularize "collapsed" layers
-            padded_mbe = torch.nn.functional.pad(masked_mbe, (1, 1), value=float('inf'))
-            is_valley = (padded_mbe[1:-1] < padded_mbe[:-2]) & (padded_mbe[1:-1] < padded_mbe[2:])
-            valley_indices = torch.where(is_valley)[0]
-            mbe_loss = padded_mbe[valley_indices + 1].mean()            
+            mbe_loss = masked_mbe[decay_idx + 1]     
         else: 
             assert False, f"Unknown MBE composition mode: {args.mbe_comp_mode}"
 
@@ -577,11 +551,12 @@ for step in range(train_steps + 1):
         else: 
             assert False, "Invalid regularization mode"
 
-        # --- backward ---
         if args.log_grad_info: 
-            grad_tracker.backward_with_tracking(loss_dict)
-        else: 
-            grad_tracker.backward(loss_dict)
+            assert "mbe" in loss_dict, "MBE loss is required for gradient tracking"
+            stats = track_gradient_similarity(model, loss_dict["entropy"], loss_dict["mbe"])
+            grad_stats.record(stats, step)
+        # --- backward ---
+        grad_tracker.backward(loss_dict)
         
         
     for param in model.parameters():
