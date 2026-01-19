@@ -531,6 +531,11 @@ for step in range(train_steps + 1):
         loss_dict = {
             "entropy": loss_dict["entropy"], "mbe": mbe_loss
         }
+        if args.log_grad_info: 
+            assert "mbe" in loss_dict, "MBE loss is required for gradient tracking"
+            stats = track_gradient_similarity(model, loss_dict["entropy"], loss_dict["mbe"])
+            grad_stats.record(stats, step)
+
         if args.no_reg: 
             loss_dict = {"entropy": loss_dict["entropy"]}
         elif args.use_gapt:
@@ -550,11 +555,7 @@ for step in range(train_steps + 1):
             loss_dict = {"combined": loss_dict["entropy"] + args.mbe_weight * l2_norm}
         else: 
             assert False, "Invalid regularization mode"
-
-        if args.log_grad_info: 
-            assert "mbe" in loss_dict, "MBE loss is required for gradient tracking"
-            stats = track_gradient_similarity(model, loss_dict["entropy"], loss_dict["mbe"])
-            grad_stats.record(stats, step)
+            
         # --- backward ---
         grad_tracker.backward(loss_dict)
         
