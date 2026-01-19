@@ -436,23 +436,23 @@ for step in range(train_steps + 1):
             with torch.no_grad():
                 loss_dict = model.forward(inputs, targets, attn_blocksize, patch_size)
                 
-                # Collect token stats (probs, entropies) - no gradients needed
-                if master_process and i < 20:
-                    token_stats = collect_token_stats(loss_dict["logits"], targets)
-                    all_token_stats['probs'].append(token_stats['probs'].detach().cpu())
-                    all_token_stats['entropies'].append(token_stats['entropies'].detach().cpu())
+                # # Collect token stats (probs, entropies) - no gradients needed
+                # if master_process and i < 20:
+                #     token_stats = collect_token_stats(loss_dict["logits"], targets)
+                #     all_token_stats['probs'].append(token_stats['probs'].detach().cpu())
+                #     all_token_stats['entropies'].append(token_stats['entropies'].detach().cpu())
                     
-                    # Collect per-layer MBE values
-                    mbe_per_layer = {k: v.item() for k, v in loss_dict.items() if k.startswith("mbe_")}
-                    all_token_stats['mbe'].append(mbe_per_layer)
+                #     # Collect per-layer MBE values
+                #     mbe_per_layer = {k: v.item() for k, v in loss_dict.items() if k.startswith("mbe_")}
+                #     all_token_stats['mbe'].append(mbe_per_layer)
                 
-                # Collect per-patch stats (no gradient)
-                if master_process and i < 20 and hasattr(model, '_orig_mod') and hasattr(model._orig_mod, 'forward_with_patch_stats'):
-                    _, patch_stats = model._orig_mod.forward_with_patch_stats(inputs, targets, attn_blocksize, patch_size)
-                    all_patch_stats['patch_mbe'].append(patch_stats['patch_mbe'].detach().cpu())
-                    all_patch_stats['patch_loss'].append(patch_stats['patch_loss'].detach().cpu())
-                    all_patch_stats['patch_prob'].append(patch_stats['patch_prob'].detach().cpu())
-                    all_patch_stats['patch_entropy'].append(patch_stats['patch_entropy'].detach().cpu())
+                # # Collect per-patch stats (no gradient)
+                # if master_process and i < 20 and hasattr(model, '_orig_mod') and hasattr(model._orig_mod, 'forward_with_patch_stats'):
+                #     _, patch_stats = model._orig_mod.forward_with_patch_stats(inputs, targets, attn_blocksize, patch_size)
+                #     all_patch_stats['patch_mbe'].append(patch_stats['patch_mbe'].detach().cpu())
+                #     all_patch_stats['patch_loss'].append(patch_stats['patch_loss'].detach().cpu())
+                #     all_patch_stats['patch_prob'].append(patch_stats['patch_prob'].detach().cpu())
+                #     all_patch_stats['patch_entropy'].append(patch_stats['patch_entropy'].detach().cpu())
                 
                 compute_loss(loss_dict)
                 for name, loss in loss_dict.items():
@@ -465,13 +465,13 @@ for step in range(train_steps + 1):
         if master_process and all_token_stats['probs']:
             os.makedirs(f"logs/{run_id}", exist_ok=True)
             # Save raw data for later analysis
-            torch.save(all_token_stats, f"logs/{run_id}/token_stats_step{step:06d}.pt")
-            plot_entropy_vs_prob(all_token_stats, save_path=f"logs/{run_id}/entropy_prob_step{step:06d}.png")
+            # torch.save(all_token_stats, f"logs/{run_id}/token_stats_step{step:06d}.pt")
+            # plot_entropy_vs_prob(all_token_stats, save_path=f"logs/{run_id}/entropy_prob_step{step:06d}.png")
         
         # Save per-patch stats for MBE correlation analysis
-        if master_process and all_patch_stats['patch_mbe']:
+        if master_process:
             os.makedirs(f"logs/{run_id}", exist_ok=True)
-            torch.save(all_patch_stats, f"logs/{run_id}/patch_stats_step{step:06d}.pt")
+            # torch.save(all_patch_stats, f"logs/{run_id}/patch_stats_step{step:06d}.pt")
                 
         for name in val_loss: 
             val_loss[name] /= val_steps
