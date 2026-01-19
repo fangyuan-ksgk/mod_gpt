@@ -352,6 +352,9 @@ gapt = GatedPhaseTransition(p_m = args.entropy_patience, p_a = args.mbe_patience
                             tau_spike = args.entropy_spike_tolerance, clamp_a = args.min_a, use_softplus = args.use_softplus_gapt)
 
 # ---------------------------------------------------------
+import torch._functorch.config
+torch._functorch.config.donated_buffer = False # -> tentative fix for gradient tracking
+
 
 model: nn.Module = torch.compile(model, dynamic=True)
 
@@ -555,7 +558,7 @@ for step in range(train_steps + 1):
             loss_dict = {"combined": loss_dict["entropy"] + args.mbe_weight * l2_norm}
         else: 
             assert False, "Invalid regularization mode"
-            
+
         # --- backward ---
         grad_tracker.backward(loss_dict)
         
