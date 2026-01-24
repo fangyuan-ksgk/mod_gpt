@@ -8,7 +8,7 @@ import numpy as np
 from transformers import TrainingArguments, AutoTokenizer, AutoModelForCausalLM, TrainerCallback
 from peft import LoraConfig, get_peft_model, TaskType
 from src.gapt_trainer import GaptTrainer, GaptConfig
-from data.symbol_multiply import load_symbol_multiply_dataset
+from data.symbol_multiply import load_symbol_multiply_dataset, check_answer
 
 
 def parse_args():
@@ -66,14 +66,12 @@ def aggregate_log_history(log_history):
             rows[step] = {'step': step}
         for k, v in entry.items():
             if isinstance(v, (int, float, str)) and k not in exclude:
-                # Don't overwrite existing values (keeps first non-NaN)
                 if k not in rows[step] or pd.isna(rows[step].get(k)):
                     rows[step][k] = v
     
     df = pd.DataFrame(list(rows.values()))
     df = df.sort_values('step').reset_index(drop=True)
     
-    # Forward-fill
     eval_cols = [c for c in df.columns if c.startswith('eval_')]
     df[eval_cols] = df[eval_cols].ffill()
     
@@ -81,11 +79,56 @@ def aggregate_log_history(log_history):
     train_cols = [c for c in train_cols if c in df.columns]
     df[train_cols] = df[train_cols].ffill()
     
-    # Drop pre-training rows
     if 'loss' in df.columns:
         df = df.dropna(subset=['loss']).reset_index(drop=True)
     
     return df
+
+# ----- Accuracy Evaluation Logic -----
+def evaluate_accuracy(model, tokenizer, dataset, max_samples=100):
+    """
+    Evaluate accuracy on symbol multiply task using exact match or numeric match.
+    """
+    model.eval()
+    correct = 0
+    total = 0
+    
+    # Select samples
+    num_samples = min(max_samples, len(dataset))
+    samples = dataset.select(range(num_samples))
+    
+    print(f"Evaluating {num_samples} samples...")
+    
+    for i, example in enumerate(samples):
+        # Extract prompt: "Input: ...\nOutput:"
+        full_text = example["text"]
+        input_part = full_text.split("\nOutput:")[0] + "\nOutput:"
+        target_output = full_text.split("\nOutput:")[1].strip()
+        
+        inputs = tokenizer(input_part, return_tensors="pt").to(model.device)
+        
+        with torch.no_grad():
+            outputs = model.generate(
+                **inputs,
+                max_new_tokens=64, # Short outputs for symbol multiply
+                do_sample=False,
+                pad_token_id=tokenizer.pad_token_id,
+                eos_token_id=tokenizer.eos_token_id
+            )
+            
+        input_len = inputs["input_ids"].shape[1]
+        generated_tokens = outputs[0][input_len:]
+        prediction = tokenizer.decode(generated_tokens, skip_special_tokens=True).strip()
+        
+        # Use simple string match for now, could use check_answer logic if needed
+        # Assuming dataset target is exact string match
+        if prediction == target_output:
+            correct += 1
+        
+        total += 1
+        
+    accuracy = correct / total if total > 0 else 0.0
+    return accuracy
 
 def main():
     args = parse_args()
@@ -139,7 +182,6 @@ def main():
         )
         model = get_peft_model(model, lora_config)
         model.print_trainable_parameters()
-        # Enable gradient checkpointing for memory efficiency
         model.gradient_checkpointing_enable()
 
     # Load Data
@@ -218,6 +260,26 @@ def main():
 
     # Train
     trainer.train()
+
+    # Final accuracy eval
+    if local_rank <= 0:
+        print("\n" + "="*50)
+        print("Final Accuracy Evaluation")
+        print("="*50)
+        
+        acc_id = evaluate_accuracy(model, tokenizer, dataset["test"], max_samples=200)
+        acc_ood = evaluate_accuracy(model, tokenizer, dataset["test_ood"], max_samples=200)
+        
+        print(f"\nFinal Results:")
+        print(f"ID Accuracy:  {acc_id:.2%}")
+        print(f"OOD Accuracy: {acc_ood:.2%}")
+        
+        trainer.state.log_history.append({
+            "step": trainer.state.global_step,
+            "eval_id_acc": acc_id,
+            "eval_ood_acc": acc_ood,
+            "epoch": args.epochs
+        })
 
     # Save Log History (only on main process to avoid race conditions)
     if local_rank <= 0:  # rank 0 or single-GPU (-1)

@@ -15,7 +15,7 @@ export NCCL_DEBUG=WARN
 # ============================================================================
 # Sweep Configuration
 # ============================================================================
-N_GPUS=4
+N_GPUS=2
 MASTER_ADDR=127.0.0.1
 MASTER_PORT=29500
 
@@ -29,7 +29,7 @@ NUM_TRAIN=10000
 MBE_WEIGHT=10.0
 
 # Seeds to run (3x for variance estimation)
-SEEDS=(42 123 456)
+SEEDS=(42)
 
 # ============================================================================
 # Models to Sweep (4x H100 80GB = 320GB total, bf16)
@@ -61,7 +61,6 @@ MODELS=(
 CONFIGS=(
     "static_memorize:naive:4"    # Baseline (no MBE)
     "static_compress:naive:4"    # Best: MBE always on
-    "static_compress:spike:4"    # MBE spike mode
     "gapt_comp:naive:8"          # GAPT starting compress
     "gapt_comp:spike:8"          # GAPT spike mode
 )
@@ -157,17 +156,17 @@ for SEED in "${SEEDS[@]}"; do
     echo "=========================================="
     echo ">>> SEED: $SEED"
     echo ">>> Output: $OUTPUT_BASE"
-    echo "=========================================="
-    
-    for MODEL_NAME in "${MODELS[@]}"; do
-        MODEL_SHORT=$(basename $MODEL_NAME)
-        echo ""
+echo "=========================================="
+
+for MODEL_NAME in "${MODELS[@]}"; do
+    MODEL_SHORT=$(basename $MODEL_NAME)
+    echo ""
         echo ">>> Model: $MODEL_SHORT (seed=$SEED)"
-        echo "-------------------------------------------"
-        
-        for CONFIG in "${CONFIGS[@]}"; do
-            IFS=':' read -r VARIANT MBE_COMP_MODE PATCH_SIZE <<< "$CONFIG"
-            run_experiment "$MODEL_NAME" "$VARIANT" "$MBE_COMP_MODE" "$PATCH_SIZE"
+    echo "-------------------------------------------"
+    
+    for CONFIG in "${CONFIGS[@]}"; do
+        IFS=':' read -r VARIANT MBE_COMP_MODE PATCH_SIZE <<< "$CONFIG"
+        run_experiment "$MODEL_NAME" "$VARIANT" "$MBE_COMP_MODE" "$PATCH_SIZE"
         done
     done
 done
