@@ -397,6 +397,30 @@ def main():
     # Train
     trainer.train()
 
+    # Final accuracy eval
+    if local_rank <= 0:
+        print("\n" + "="*50)
+        print("Final Accuracy Evaluation")
+        print("="*50)
+        
+        # Use more samples for final eval
+        final_samples = 200
+        
+        acc_id = compute_scan_accuracy(model, tokenizer, test_id, final_samples)
+        acc_ood = compute_scan_accuracy(model, tokenizer, test_ood, final_samples)
+        
+        print(f"\nFinal Results:")
+        print(f"ID Accuracy:  {acc_id:.2%}")
+        print(f"OOD Accuracy: {acc_ood:.2%}")
+        
+        # Append final metrics to log history so they get saved
+        trainer.state.log_history.append({
+            "step": trainer.state.global_step,
+            "eval_id_acc": acc_id,
+            "eval_ood_acc": acc_ood,
+            "epoch": args.epochs
+        })
+
     # Save Log History
     if local_rank <= 0:
         log_df = aggregate_log_history(trainer.state.log_history)

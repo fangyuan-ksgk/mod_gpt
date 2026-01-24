@@ -15,16 +15,16 @@ export NCCL_DEBUG=WARN
 # ============================================================================
 # Sweep Configuration for SCAN
 # ============================================================================
-N_GPUS=2
+N_GPUS=4
 MASTER_ADDR=127.0.0.1
 MASTER_PORT=29501
 
 # Fixed params
 EPOCHS=3
 LR=5e-5
-BATCH_SIZE=8
+BATCH_SIZE=8  # Effective BS = 8 * 4 = 32
 MAX_LENGTH=128
-ACC_EVAL_STEPS=200
+ACC_EVAL_STEPS=100000  # Evaluate only at the end
 ACC_EVAL_SAMPLES=200
 
 # MBE Params (Regularization strength)
@@ -32,8 +32,8 @@ MBE_WEIGHT=1.0
 PATCH_SIZE=4
 MBE_COMP_MODE="naive"
 
-# Single seed for quick run
-SEEDS=(42)
+# Seeds to run
+SEEDS=(42 123 456)
 
 # ============================================================================
 # Models to Sweep
@@ -47,11 +47,13 @@ MODELS=(
 )
 
 # ============================================================================
-# Key Configurations: WD-SFT vs GAPT
+# Key Configurations
 # ============================================================================
 CONFIGS=(
-    "sft_wd"               # SFT with weight decay (Baseline)
-    "gapt"                 # GAPT (Dynamic Phase)
+    "sft"                  # Pure SFT (No WD)
+    "sft_wd"               # SFT with Weight Decay (Baseline)
+    "mbe_regularized"      # MBE Static Phase 2
+    "gapt"                 # MBE Dynamic Phase
 )
 
 # ============================================================================
@@ -78,25 +80,34 @@ run_experiment() {
     echo ">>> Running: $EXP_NAME (Seed: $SEED)"
     
     # Configuration Logic
-    local STATIC_FLAG=""
+    local STATIC_FLAG="--static_phase"
     local INITIAL_PHASE=1
     local CURRENT_MBE_WEIGHT=0.0
-    local CURRENT_WD=0.01  # Default mild WD
+    local CURRENT_WD=0.0  # Default no WD
     
-    if [ "$CONFIG" == "sft_wd" ]; then
-        # Pure SFT + Strong Weight Decay
+    if [ "$CONFIG" == "sft" ]; then
         STATIC_FLAG="--static_phase"
         INITIAL_PHASE=1
         CURRENT_MBE_WEIGHT=0.0
-        CURRENT_WD=0.1     # Stronger WD for baseline comparison
+        CURRENT_WD=0.0
+        
+    elif [ "$CONFIG" == "sft_wd" ]; then
+        STATIC_FLAG="--static_phase"
+        INITIAL_PHASE=1
+        CURRENT_MBE_WEIGHT=0.0
+        CURRENT_WD=0.1     # Stronger WD
+        
+    elif [ "$CONFIG" == "mbe_regularized" ]; then
+        STATIC_FLAG="--static_phase"
+        INITIAL_PHASE=2    # Start in compression
+        CURRENT_MBE_WEIGHT=$MBE_WEIGHT
+        CURRENT_WD=0.0
         
     elif [ "$CONFIG" == "gapt" ]; then
-        # Dynamic GAPT
-        # Starts in Phase 1 (SFT), switches to Phase 2 (MBE) automatically
-        STATIC_FLAG=""     # Dynamic phase transitions enabled
-        INITIAL_PHASE=1
+        STATIC_FLAG=""     # Dynamic phase transitions
+        INITIAL_PHASE=1    # Start in SFT
         CURRENT_MBE_WEIGHT=$MBE_WEIGHT
-        CURRENT_WD=0.0     # No WD for GAPT
+        CURRENT_WD=0.0
     fi
     
     # Run training
@@ -133,7 +144,7 @@ run_experiment() {
 # ============================================================================
 TOTAL_RUNS=$((${#SEEDS[@]} * ${#MODELS[@]} * ${#CONFIGS[@]}))
 echo "=========================================="
-echo "SCAN SWEEP: SFT+WD vs GAPT"
+echo "SCAN SWEEP: 4 CONFIGS"
 echo "GPUs: $N_GPUS"
 echo "Seeds: ${#SEEDS[@]}, Models: ${#MODELS[@]}, Configs: ${#CONFIGS[@]}"
 echo "Total: $TOTAL_RUNS runs"
