@@ -9,6 +9,9 @@ SUPPORTED_MODELS = {
     "qwen3": "qwen3",  # Use AutoModelForCausalLM for both
 }
 
+# Issue #1. pad_token_id needs to be removed, we do NOT do packed training in post-training time
+# Issue #2. bottleneck block mask needs to be implemented, current compression mask is not ideal
+
 class SorlModelWrapper(PreTrainedModel, GenerationMixin):
     config_class = PretrainedConfig
 
@@ -25,10 +28,9 @@ class SorlModelWrapper(PreTrainedModel, GenerationMixin):
         self.model = AutoModelForCausalLM.from_config(config)
         self.memory_span = None
         self.full_vocab_size_list = None
-        self.pad_token_id = None
     
     @classmethod
-    def from_pretrained(cls, model_name_or_path: str, abstract_vocab_size_list: List[int], memory_span: int, pad_token_id: int, **kwargs) -> "SorlModelWrapper":
+    def from_pretrained(cls, model_name_or_path: str, abstract_vocab_size_list: List[int], memory_span: int, **kwargs) -> "SorlModelWrapper":
         config = AutoConfig.from_pretrained(model_name_or_path, **kwargs)
         
         # Fix Qwen weight tying warning - Qwen doesn't tie embeddings to lm_head
@@ -45,7 +47,6 @@ class SorlModelWrapper(PreTrainedModel, GenerationMixin):
         )
 
         wrapper.memory_span = memory_span
-        wrapper.pad_token_id = pad_token_id
         base_vocab_size = config.vocab_size
         wrapper.full_vocab_size_list = [base_vocab_size] + abstract_vocab_size_list
         wrapper._setup_vocabulary()
@@ -63,7 +64,6 @@ class SorlModelWrapper(PreTrainedModel, GenerationMixin):
         """A custom initializer for creating a SORL model from scratch."""
         wrapper = cls(config)
         wrapper.memory_span = memory_span
-        wrapper.pad_token_id = pad_token_id
         wrapper.full_vocab_size_list = full_vocab_size_list
         wrapper._setup_vocabulary()
         
@@ -95,7 +95,6 @@ class SorlModelWrapper(PreTrainedModel, GenerationMixin):
             return levels
         
         # Pre-compute document boundaries and levels
-        docs = (input_ids == self.pad_token_id).cumsum(1)  # Document boundaries
         levels = infer_level(input_ids, self.vocab_sizes)  # Vocabulary levels
         
         def sorl_mask_fn(b, h, q_idx, kv_idx):
@@ -103,15 +102,12 @@ class SorlModelWrapper(PreTrainedModel, GenerationMixin):
             # Causal constraint
             causal_mask = q_idx >= kv_idx
             
-            # Document boundary constraint
-            document_mask = docs[b, q_idx] == docs[b, kv_idx]
-            
             # Memory compression constraint
             is_higher_level = levels[b, kv_idx] > 0
             is_recent = (q_idx - kv_idx) <= self.memory_span
             memory_compression_mask = is_higher_level | is_recent
             
-            return causal_mask & document_mask & memory_compression_mask
+            return causal_mask & memory_compression_mask
         
         # Create block mask using the mask function
         block_mask = create_block_mask(
@@ -151,6 +147,9 @@ class SorlModelWrapper(PreTrainedModel, GenerationMixin):
         self.register_buffer("level_vocab_ends", self.vocab_sizes.cumsum(dim=0))
         self.register_buffer("level_vocab_starts", torch.cat([torch.tensor([0], device=device), self.level_vocab_ends[:-1]]))
 
+        # Why do we need l0_mask_token? We never have the need to have level-0 mask token anywhere ...
+        # We only need abstract mask token at levels >= 1. 
+        
         l0_mask_token = torch.tensor([self.pad_token_id], device=device, dtype=torch.long)
         
         if len(self.vocab_sizes) > 1:
