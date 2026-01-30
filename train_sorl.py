@@ -48,7 +48,7 @@ def parse_args():
     parser.add_argument("--K", type=int, default=8)
     parser.add_argument("--max_iterations", type=int, default=2)
     parser.add_argument("--temperature", type=float, default=5.0) # search temperature
-    parser.add_argument("--min_temperature", type=float, default=0.0) # prediction temperature
+    parser.add_argument("--min_temperature", type=float, defaulft=0.0) # prediction temperature
     
     # Architecture / Vocab
     parser.add_argument("--abstract_vocab_size", type=int, default=256)

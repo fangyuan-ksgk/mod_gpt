@@ -39,47 +39,6 @@ class MutualInformationLoss(nn.Module):
         # --- Return marginal & conditional entropy ---
         return marginal_entropy, conditional_entropy
 
-class SoRLLoss(nn.Module): 
-    """
-    SoRL loss: p(s | a), p(a | s), H(p(a)), H(p(a | s)) 
-    """
-
-    def __init__(self, abs_vocab_size, decay=0.8, target_vocab_util=0.8):
-        super().__init__()
-        self.decay = decay
-        self.mutual_info_loss = MutualInformationLoss(abs_vocab_size, decay, target_vocab_util)
-
-    def forward(self, data, model, memory_span: int, attn_blocksize: int, utility_reward: torch.Tensor):
-
-        ppt, logits = model.forward(data, memory_span, attn_blocksize)
-        ppt = ppt * utility_reward
-        ppt = ppt.reshape(data.shape[0], -1)
-        logits = logits.reshape(data.shape[0], -1, logits.size(-1))
-
-        levels = (data >= model.vocab_sizes[0]).long()[:, 1:]
-        bos_pos_mask = torch.logical_and(
-            data[:, :-1] != BOS_TOKEN_ID, 
-            data[:, 1:] != BOS_TOKEN_ID
-        ).float()
-
-        traj_mask = (levels[0] == 0).float()
-        abs_mask = 1 - traj_mask
-
-        valid_traj_mask = bos_pos_mask * traj_mask
-        valid_abs_mask = bos_pos_mask * abs_mask
-
-        traj_loss = (ppt * valid_traj_mask).sum() / valid_traj_mask.sum().clamp(min=1)
-        abs_loss = (ppt * valid_abs_mask).sum() / valid_abs_mask.sum().clamp(min=1)
-
-        abs_positions = abs_mask.bool()
-        abs_logits = logits[:, :-1][:, abs_positions, model.vocab_sizes[0]:]
-
-        marginal_entropy, _ = self.mutual_info_loss(abs_logits)
-
-        # --- Return: p(s | a), p(a | s), H(p(a)), H(p(a | s)) ---
-        return traj_loss, abs_loss, marginal_entropy
-
-# Zipfian distribution matching loss >> Entropy regularization ? 
 
 # --- Zipfian distribution ---- 
 def get_zipf_prior(total_vocab_size, target_vocab_util: float = 1.0, alpha: float = 1.0):
@@ -101,6 +60,7 @@ def sinkhorn_prob_transform(prob, prior, n_iters=3):
         row_sums = M.sum(dim=1, keepdim=True) + 1e-8
         M = M / row_sums
     return M
+
 
 class ZipfianLoss(nn.Module):
     def __init__(self, vocab_size, decay=0.8, target_vocab_util=0.8):
@@ -150,47 +110,6 @@ class ZipfianLoss(nn.Module):
 
         return kl_div, soft_kl_div
 
-class SoRLLoss_v2(nn.Module): 
-    """
-    SoRL loss: p(s | a), p(a | s), KL(p(a), zipf_prior), KL(p(a), soft_zipf_prior)
-    """
-
-    def __init__(self, abs_vocab_size, decay=0.8, target_vocab_util=0.8):
-        super().__init__()
-        self.decay = decay
-        self.zipf_loss = ZipfianLoss(abs_vocab_size, decay, target_vocab_util)
-
-    def forward(self, data, model, memory_span: int, attn_blocksize: int):
-
-        ppt, logits = model.forward(data, memory_span, attn_blocksize)
-        ppt = ppt.reshape(data.shape[0], -1)
-        logits = logits.reshape(data.shape[0], -1, logits.size(-1))
-
-        levels = (data >= model.vocab_sizes[0]).long()[:, 1:]
-        bos_pos_mask = torch.logical_and(
-            data[:, :-1] != BOS_TOKEN_ID, 
-            data[:, 1:] != BOS_TOKEN_ID
-        ).float()
-
-        traj_mask = (levels[0] == 0).float()
-        abs_mask = 1 - traj_mask
-
-        valid_traj_mask = bos_pos_mask * traj_mask
-        valid_abs_mask = bos_pos_mask * abs_mask
-
-        traj_loss = (ppt * valid_traj_mask).sum() / valid_traj_mask.sum().clamp(min=1)
-        abs_loss = (ppt * valid_abs_mask).sum() / valid_abs_mask.sum().clamp(min=1)
-
-        abs_positions = abs_mask.bool()
-        abs_logits = logits[:, :-1][:, abs_positions, model.vocab_sizes[0]:]
-
-        zipf_kl, soft_zipf_kl = self.zipf_loss(abs_logits)
-
-        # --- Return: p(s | a), p(a | s), KL(p(a), zipf_prior), KL(p(a), soft_zipf_prior) ---
-        return traj_loss, abs_loss, soft_zipf_kl
-
-
-# ----- BiGram Zipfian Regularization (to avoid repetition) ---- 
 
 # --- Hollow Sinkhorn ---- 
 def hollow_sinkhorn_transform(prob_2gram, zipf_prior, n_iters=3, diag_penalty=1e-5):
@@ -258,180 +177,36 @@ class Zipfian2gramLoss(nn.Module):
 
         return soft_kl_div
 
-class SoRLLoss_v3(nn.Module): 
-    """
-    SoRL loss: p(s | a), p(a | s), KL(p(a_t, a_t+1), soft_zipf_prior)
-    """
 
-    def __init__(self, abs_vocab_size, decay=0.8, target_vocab_util=0.8):
+class MarginalEntropyRegularizationLoss(nn.Module):
+    def __init__(self, vocab_size, decay=0.8, target_vocab_util=0.8):
         super().__init__()
-        self.decay = decay
-        self.zipf_loss = Zipfian2gramLoss(abs_vocab_size, decay, target_vocab_util)
-
-    def forward(self, data, model, memory_span: int, attn_blocksize: int):
-
-        ppt, logits = model.forward(data, memory_span, attn_blocksize)
-        ppt = ppt.reshape(data.shape[0], -1)
-        logits = logits.reshape(data.shape[0], -1, logits.size(-1))
-
-        levels = (data >= model.vocab_sizes[0]).long()[:, 1:]
-        bos_pos_mask = torch.logical_and(
-            data[:, :-1] != BOS_TOKEN_ID, 
-            data[:, 1:] != BOS_TOKEN_ID
-        ).float()
-
-        traj_mask = (levels[0] == 0).float()
-        abs_mask = 1 - traj_mask
-
-        valid_traj_mask = bos_pos_mask * traj_mask
-        valid_abs_mask = bos_pos_mask * abs_mask
-
-        traj_loss = (ppt * valid_traj_mask).sum() / valid_traj_mask.sum().clamp(min=1)
-        abs_loss = (ppt * valid_abs_mask).sum() / valid_abs_mask.sum().clamp(min=1)
-
-        abs_positions = abs_mask.bool()
-        abs_logits = logits[:, :-1][:, abs_positions, model.vocab_sizes[0]:]
-
-        soft_zipf_kl = self.zipf_loss(abs_logits)
-
-        # --- Return: p(s | a), p(a | s), KL(p(a_t, a_t+1), soft_zipf_prior) ---
-        return traj_loss, abs_loss, soft_zipf_kl
-
-class SoRLLoss_v4(nn.Module): 
-    """
-    SoRL loss: p(s | a), p(a | s), KL(p(a_t, a_t+1), soft_zipf_prior)
-    """
-
-    def __init__(self, abs_vocab_size, decay=0.8, target_vocab_util=0.8):
-        super().__init__()
-        self.decay = decay
-        self.zipf_loss = Zipfian2gramLoss(abs_vocab_size, decay, target_vocab_util)
-
-    def forward(self, data, model, memory_span: int, attn_blocksize: int, 
-                      utility_reward: torch.Tensor):
-
-        ppt, logits = model.forward(data, memory_span, attn_blocksize)
-        ppt = ppt.reshape(data.shape[0], -1)
-        logits = logits.reshape(data.shape[0], -1, logits.size(-1))
-
-        levels = (data >= model.vocab_sizes[0]).long()[:, 1:]
-        bos_pos_mask = torch.logical_and(
-            data[:, :-1] != BOS_TOKEN_ID, 
-            data[:, 1:] != BOS_TOKEN_ID
-        ).float()
-
-        traj_mask = (levels[0] == 0).float()
-        abs_mask = 1 - traj_mask
-
-        valid_traj_mask = bos_pos_mask * traj_mask
-        valid_abs_mask = bos_pos_mask * abs_mask
-
-        traj_loss = (ppt * valid_traj_mask).sum() / valid_traj_mask.sum().clamp(min=1)
-        abs_loss = (ppt * utility_reward * valid_abs_mask).sum() / valid_abs_mask.sum().clamp(min=1)
-
-        abs_positions = abs_mask.bool()
-        abs_logits = logits[:, :-1][:, abs_positions, model.vocab_sizes[0]:]
-
-        soft_zipf_kl = self.zipf_loss(abs_logits)
-
-        # --- Return: p(s | a), p(a | s), KL(p(a_t, a_t+1), soft_zipf_prior) ---
-        return traj_loss, abs_loss, soft_zipf_kl
-
-
-class SoRLLoss_v5(nn.Module): 
-    """
-    SoRL loss: p(s | a), p(a | s), KL(p(a_t, a_t+1), soft_zipf_prior), corr(d(a), d(r))
-    """
-
-    def __init__(self, abs_vocab_size, decay=0.8, target_vocab_util=0.8):
-        super().__init__()
-        self.decay = decay
-        self.zipf_loss = Zipfian2gramLoss(abs_vocab_size, decay, target_vocab_util)
-
-    def forward(self, data, model, memory_span: int, attn_blocksize: int, 
-                      utility_reward: torch.Tensor):
- 
-        # topo distance on hidden states instead of logits 
-
-        ppt, logits, hidden_states = model.forward_with_hidden_states(data, memory_span, attn_blocksize)
-        ppt = ppt.reshape(data.shape[0], -1)
-        ppt = ppt * utility_reward
-        logits = logits.reshape(data.shape[0], -1, logits.size(-1))
-        hidden_states = hidden_states.reshape(data.shape[0], -1, hidden_states.size(-1))
-
-        levels = (data >= model.vocab_sizes[0]).long()[:, 1:]
-        bos_pos_mask = torch.logical_and(
-            data[:, :-1] != BOS_TOKEN_ID, 
-            data[:, 1:] != BOS_TOKEN_ID
-        ).float()
-
-        traj_mask = (levels[0] == 0).float()
-        abs_mask = 1 - traj_mask
-
-        valid_traj_mask = bos_pos_mask * traj_mask
-        valid_abs_mask = bos_pos_mask * abs_mask
-
-        traj_loss = (ppt * valid_traj_mask).sum() / valid_traj_mask.sum().clamp(min=1)
-        abs_loss = (ppt * valid_abs_mask).sum() / valid_abs_mask.sum().clamp(min=1)
-
-        abs_positions = abs_mask.bool()
-        abs_logits = logits[:, :-1][:, abs_positions, model.vocab_sizes[0]:]
-
-        soft_zipf_kl = self.zipf_loss(abs_logits)
-
-        # --- topo similarity loss --- 
-        levels = (data >= model.vocab_sizes[0])
-        abs_data = data[levels].reshape((data == BOS_TOKEN_ID).sum(), -1)
-        abs_dist = pairwise_hamming_dist(abs_data)
-
-        eos_mask = torch.cat([(data[0, 1:] == BOS_TOKEN_ID), torch.tensor([True], device=data.device)])
-        eos_reps = hidden_states[:, eos_mask, :]
-        # eos_dist = torch.cdist(eos_reps, eos_reps, p=1)
-        # eos_logits = logits[:, eos_mask, :]
-        # eos_dist = torch.cdist(eos_logits, eos_logits, p=1)
-
-        eos_rep_norm = F.normalize(eos_reps, p=2, dim=-1)
-        cosine_sim = torch.bmm(eos_rep_norm, eos_rep_norm.transpose(1, 2))
-        eos_dist = 1 - cosine_sim
-
-        topo_loss = compute_topo_loss(abs_dist, eos_dist, mode=1)
-
-        # --- Return: p(s | a), p(a | s), KL(p(a_t, a_t+1), soft_zipf_prior) ---
-        return traj_loss, abs_loss, soft_zipf_kl, topo_loss
-
-
-class SoRLLoss_v6(nn.Module): 
-    """
-    SoRL loss: p(s | a)/p(s), p(a | s), KL(p(a_t, a_t+1), soft_zipf_prior), corr(d(a), d(r))
-    """
-
-    def __init__(self, abs_vocab_size, decay=0.8, target_vocab_util=0.8):
-        super().__init__()
-        self.decay = decay
-        self.zipf_loss = Zipfian2gramLoss(abs_vocab_size, decay, target_vocab_util)
-
-    def forward(self, data, model, base_traj_ppt, memory_span: int, attn_blocksize: int, 
-                      utility_reward: torch.Tensor):
- 
-        ppt, logits = model.forward(data, memory_span, attn_blocksize)
-        ppt = ppt.reshape(data.shape[0], -1)
-        logits = logits.reshape(data.shape[0], -1, logits.size(-1))
-
-        traj_mask = (data[:, 1:] < model.vocab_sizes[0])
-        traj_ppt = ppt[traj_mask]
-        info_loss = (traj_ppt - base_traj_ppt.detach()[..., :traj_ppt.shape[-1]]).mean() # traj ppt might be truncated
+        self.decay = decay       
+        target_val = torch.log(vocab_size * target_vocab_util) 
+        self.register_buffer('target_marginal_entropy', target_val)
         
-        abs_loss = (ppt * utility_reward)[~traj_mask].mean() # scale on policy gradient only
+        self.register_buffer('running_marginal', torch.ones(vocab_size, device=vocab_size.device) / vocab_size)
 
-        # --- KL(p(a_t, a_t+1), soft_zipf_prior) --- 
-        abs_logits = logits[:, :-1][:, ~traj_mask.squeeze(0), model.vocab_sizes[0]:]
-        soft_zipf_kl = self.zipf_loss(abs_logits)
+    def forward(self, logits):
+        """
+        logits: [Batch, Vocab]
+        """
+        probs = F.softmax(logits, dim=-1)
+        
+        batch_marginal = probs.mean(dim=[0, 1])
+        
+        with torch.no_grad():
+             new_avg = self.decay * self.running_marginal + (1 - self.decay) * batch_marginal
+             self.running_marginal.copy_(new_avg)
 
-        # --- Return: p(s | a)/p(s), p(a | s), KL(p(a_t, a_t+1), soft_zipf_prior) ---
-        return info_loss, abs_loss, soft_zipf_kl 
+        mixed_marginal = self.decay * self.running_marginal + (1 - self.decay) * batch_marginal
+        marginal_entropy = -torch.sum(mixed_marginal * torch.log(mixed_marginal + 1e-10))
+        marginal_entropy = torch.clamp(marginal_entropy - self.target_marginal_entropy, max=0.0) + self.target_marginal_entropy
 
+        return marginal_entropy
 
-class SoRLLoss_v7(nn.Module): 
+# Main Info-Gain formulation of SoRL
+class SoRLLoss(nn.Module): 
     """
     SoRL loss: p(s | a)/p(s), p(a | s), KL(p(a_t, a_t+1), soft_zipf_prior), corr(d(a), d(r))
     """
@@ -471,34 +246,6 @@ class SoRLLoss_v7(nn.Module):
 
         # --- Return: p(s | a)/p(s), p(a | s), KL(p(a_t, a_t+1), soft_zipf_prior) ---
         return info_loss, abs_loss, soft_zipf_kl 
-
-
-class MarginalEntropyRegularizationLoss(nn.Module):
-    def __init__(self, vocab_size, decay=0.8, target_vocab_util=0.8):
-        super().__init__()
-        self.decay = decay       
-        target_val = torch.log(vocab_size * target_vocab_util) 
-        self.register_buffer('target_marginal_entropy', target_val)
-        
-        self.register_buffer('running_marginal', torch.ones(vocab_size, device=vocab_size.device) / vocab_size)
-
-    def forward(self, logits):
-        """
-        logits: [Batch, Vocab]
-        """
-        probs = F.softmax(logits, dim=-1)
-        
-        batch_marginal = probs.mean(dim=[0, 1])
-        
-        with torch.no_grad():
-             new_avg = self.decay * self.running_marginal + (1 - self.decay) * batch_marginal
-             self.running_marginal.copy_(new_avg)
-
-        mixed_marginal = self.decay * self.running_marginal + (1 - self.decay) * batch_marginal
-        marginal_entropy = -torch.sum(mixed_marginal * torch.log(mixed_marginal + 1e-10))
-        marginal_entropy = torch.clamp(marginal_entropy - self.target_marginal_entropy, max=0.0) + self.target_marginal_entropy
-
-        return marginal_entropy
 
 
 class SoRLLoss_v8(nn.Module): 
