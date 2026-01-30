@@ -226,3 +226,106 @@ def check_answer(query_tokens, answer_tokens, tokenizer):
     pred_val = pred_digits.lstrip('0') or '0'
     true_val = true_digits.lstrip('0') or '0'
     return pred_val == true_val, pred_digits if pred_digits else pred, true_digits
+
+
+def comp_accuracy(model, val_loader, max_iterations=2, K=999, memory_span=1792, attn_blocksize=1792, temperatures_eval=torch.tensor([0.0, 5.0], device=model.device)):
+    """
+    Compute accuracy for arithmetic tasks using the generate approach.
+    
+    Args:
+        model: The trained model (baseline or SoRL)
+        val_loader: DataLoader with validation examples
+        max_iterations: Maximum iterations for search (SoRL only)
+        K: Abstraction ratio (999 means no abstraction for baseline)
+        memory_span: Memory span for attention
+        attn_blocksize: Attention block size
+        temperatures_eval: Temperature tensor for evaluation
+        
+    Returns:
+        accuracy: Overall accuracy percentage
+        detailed_results: Dictionary with detailed metrics
+        records: List of detailed records for each example
+    """
+    from collections import defaultdict
+    from sorl.neo_utils import generate
+    
+    model.eval()
+    total_correct = 0
+    total_examples = 0
+    correct_by_length = defaultdict(int)
+    total_by_length = defaultdict(int)
+    
+    # Records for detailed analysis
+    records = []
+    
+    # Determine if this is a SoRL model
+    is_sorl = len(model.vocab_sizes) > 1 and K < 999
+    
+    with torch.no_grad():
+        for i in range(min(100, len(val_loader.examples))):  # Test up to 100 examples
+            tokens, _ = val_loader.get_batch(1)
+            idx, answer_idx = process_query(tokens)
+            
+            # Store original question
+            question_text = val_loader.tokenizer.decode(idx[0].tolist()[1:-1])  # Remove BOS and EOS
+            
+            # Store ground truth answer
+            true_answer = val_loader.tokenizer.decode(answer_idx[0].tolist()[:-1])  # Remove EOS
+            
+            # Generate answer step by step
+            abstract_sequences = []  # Store abstract sequences if SoRL
+            for step in range(len(answer_idx[0])*2): 
+                idx = generate(model, idx, K=K, max_iterations=max_iterations, memory_span=memory_span, attn_blocksize=1792, 
+                               temperature=temperatures_eval[0])
+                
+                # Record abstract sequence for SoRL models
+                if is_sorl and step < len(answer_idx[0]):  # Only record for answer generation steps
+                    abstract_seq = val_loader.tokenizer.decode(idx[0].tolist())
+                    abstract_sequences.append(abstract_seq)
+                
+                idx_without_abstraction = idx[idx < model.vocab_sizes[0]]
+            
+            # Check if answer is correct
+            is_correct, pred_answer, true_answer_clean = check_answer(idx_without_abstraction, answer_idx, val_loader.tokenizer)
+            
+            # Record results
+            total_examples += 1
+            record = {
+                'example_id': i,
+                'question': question_text,
+                'true_answer': true_answer,
+                'pred_answer': pred_answer,
+                'is_correct': is_correct,
+                'abstract_sequences': abstract_sequences if is_sorl else None
+            }
+            records.append(record)
+            
+            if is_correct:
+                total_correct += 1
+                correct_by_length[len(true_answer_clean)] += 1
+            total_by_length[len(true_answer_clean)] += 1
+    
+    # Calculate accuracy
+    accuracy = (total_correct / total_examples) * 100 if total_examples > 0 else 0
+    
+    # Detailed results
+    detailed_results = {
+        'total_correct': total_correct,
+        'total_examples': total_examples,
+        'accuracy': accuracy,
+        'correct_by_length': dict(correct_by_length),
+        'total_by_length': dict(total_by_length),
+        'is_sorl': is_sorl
+    }
+    
+    # Print detailed breakdown
+    print(f"Model: {'SoRL' if is_sorl else 'Baseline'}")
+    print(f"Overall Accuracy: {accuracy:.1f}% ({total_correct}/{total_examples})")
+    
+    if len(correct_by_length) > 0:
+        print("\nAccuracy by answer length:")
+        for length in sorted(correct_by_length.keys()):
+            acc = (correct_by_length[length] / total_by_length[length]) * 100
+            print(f"  {length} digits: {acc:.1f}% ({correct_by_length[length]}/{total_by_length[length]})")
+    
+    return accuracy, detailed_results, records
