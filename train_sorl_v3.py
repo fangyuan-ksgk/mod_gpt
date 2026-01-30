@@ -371,7 +371,7 @@ def get_lr(step: int):
 if args.use_marg_entropy_regularization:
     from sorl.info import SoRLLoss_v8 as SoRLLoss 
 else: 
-    from sorl.info import SoRLLoss_v7 as SoRLLoss
+    from sorl.info import SoRLLoss as SoRLLoss
 
 loss_fn = SoRLLoss(model.vocab_sizes[1], decay=args.decay, target_vocab_util=args.target_vocab_util, min_abs_ppl=args.min_abs_ppl)
 loss_fn = loss_fn.to(device)
