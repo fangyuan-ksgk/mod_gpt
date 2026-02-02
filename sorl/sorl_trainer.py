@@ -39,26 +39,19 @@ def select_best_sequences(
     """
     Select best sequences from rollouts based on loss/perplexity.
     """
-    # Calculate average loss per sequence
     if search_ppt.dim() == 2:
         avg_loss = search_ppt.mean(dim=1)  # [batch_size * n]
     else:
         avg_loss = search_ppt.mean(dim=tuple(range(1, search_ppt.dim())))  # [batch_size * n]
     
-    # Reshape to [batch_size, n]
     avg_loss = avg_loss.view(batch_size, n)
-    
-    # Find best rollout (lowest loss) for each batch item
     best_indices = avg_loss.argmin(dim=1)  # [batch_size]
     
-    # Select best sequences and their losses
     batch_indices = torch.arange(batch_size, device=search_data.device)
     best_data = search_data[batch_indices * n + best_indices]
     
-    # Get the loss values for best sequences
     best_ppt = search_ppt[batch_indices * n + best_indices]
     
-    # Calculate advantage: how much better the best is compared to average
     avg_loss_per_batch = avg_loss.mean(dim=1)
     best_loss_per_batch = avg_loss[batch_indices, best_indices]
     best_ppt_advantage = (avg_loss_per_batch - best_loss_per_batch) / avg_loss_per_batch.clamp(min=1e-8)
@@ -66,34 +59,34 @@ def select_best_sequences(
     return best_data, best_ppt, best_ppt_advantage
 
 
-@torch.no_grad()
-def sorl_rollout(
-    data: torch.Tensor, 
-    model, 
-    n: int, 
-    K: int, 
-    max_iterations: int, 
+def sorl_search(
+    model,
+    tokens: torch.Tensor,
+    n: int = 2,
+    K: int = 4,
+    max_iterations: int = 2,
     memory_span_abs: int = 1792,
     memory_span_traj: int = 1792,
     temperature: Union[float, torch.Tensor] = 0.0
-) -> Tuple[torch.Tensor, torch.Tensor]:
-
-    batch_size, seq_len = data.shape
+) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    """
+    Perform SoRL search: generate rollouts and select best sequences.
+    """
+    batch_size, seq_len = tokens.shape
     
-    # --- insert placeholder tokens ---
-    insert_mask = infer_insert_mask_batch(data, K, model.vocab_sizes[0])
-    placeholder_token = model.vocab_sizes[0].item()  # Convert tensor to int
+    # Insert placeholder tokens
+    insert_mask = infer_insert_mask_batch(tokens, K, model.vocab_sizes[0])
+    placeholder_token = model.vocab_sizes[0].item()
     if isinstance(placeholder_token, torch.Tensor):
         placeholder_token = placeholder_token.item()
     
-    expanded_data = insert_placeholder_tokens_batch(data, insert_mask, placeholder_token)
+    expanded_data = insert_placeholder_tokens_batch(tokens, insert_mask, placeholder_token)
     
-    # --- repeat each sequence n times for parallel search ---
+    # Repeat each sequence n times for parallel search
     repeat_data = expanded_data.repeat_interleave(n, dim=0)  # [batch_size * n, seq_len]
     
-    # --- perform recursion search on batch ---
-    # Use the model's recursion method
-    search_data, search_loss = model.recursion(
+    # Perform recursion search on batch
+    search_data, search_ppt = model.recursion(
         repeat_data, 
         max_iterations=max_iterations,
         memory_span_abs=memory_span_abs,
@@ -101,7 +94,12 @@ def sorl_rollout(
         temperature=temperature
     )
     
-    return search_data, search_loss
+    # Select best sequences using smart indexing
+    best_data, best_ppt, best_ppt_advantage = select_best_sequences(
+        search_data, search_ppt, n, batch_size
+    )
+    
+    return best_data, best_ppt, best_ppt_advantage
 
 
 # Main Info-Gain formulation of SoRL
@@ -243,8 +241,9 @@ class SorlTrainer(Trainer):
         base_traj_loss = loss_fct(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1))
         
         # --- perform SoRL search to get best rollouts ---
-        best_data, best_ppt, _ = self.search(
-            tokens,
+        best_data, best_ppt, _ = sorl_search(
+            model=self.model,
+            tokens=tokens,
             n=self.num_rollouts,
             K=self.K,
             max_iterations=self.max_iterations,
@@ -266,85 +265,3 @@ class SorlTrainer(Trainer):
                 self.alpha_soft_zipf * zipf_bigram_loss)
         
         return (loss, {"loss": loss, "base_traj_loss": base_traj_loss}) if return_outputs else loss
-    
-    def rollout(
-        self, 
-        data: torch.Tensor,
-        n_samples: int = None,
-        K: int = None,
-        max_iterations: int = None,
-        memory_span_abs: int = None,
-        memory_span_traj: int = None,
-        temperature: Union[float, torch.Tensor] = None
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
-        """
-        Perform SoRL rollout with batch-split processing.
-        """
-        # Use defaults if not provided
-        n_samples = n_samples or self.num_rollouts
-        K = K or self.K
-        max_iterations = max_iterations or self.max_iterations
-        memory_span_abs = memory_span_abs or self.memory_span_abs
-        memory_span_traj = memory_span_traj or self.memory_span_traj
-        temperature = temperature or self.temperature
-
-        batch_size, seq_len = data.shape
-    
-        insert_mask = infer_insert_mask_batch(data, K, self.model.vocab_sizes[0])
-        placeholder_token = self.model.vocab_sizes[0].item()  # Convert tensor to int
-        if isinstance(placeholder_token, torch.Tensor):
-            placeholder_token = placeholder_token.item()
-        
-        expanded_data = insert_placeholder_tokens_batch(data, insert_mask, placeholder_token)
-        
-        repeat_data = expanded_data.repeat_interleave(n_samples, dim=0)  # [batch_size * n, seq_len]
-        
-        search_data, search_loss = self.model.recursion(
-            repeat_data, 
-            max_iterations=max_iterations,
-            memory_span_abs=memory_span_abs,
-            memory_span_traj=memory_span_traj,
-            temperature=temperature
-        )
-        
-        return search_data, search_loss
-
-    def search(
-        self,
-        tokens: torch.Tensor,
-        n: int = None,
-        K: int = None,
-        max_iterations: int = None,
-        memory_span_abs: int = None,
-        memory_span_traj: int = None,
-        temperature: Union[float, torch.Tensor] = None
-    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        """
-        Perform SoRL search: generate rollouts and select best sequence.
-        """
-        # Use defaults if not provided
-        n = n or self.num_rollouts
-        K = K or self.K
-        max_iterations = max_iterations or self.max_iterations
-        memory_span_abs = memory_span_abs or self.memory_span_abs
-        memory_span_traj = memory_span_traj or self.memory_span_traj
-        temperature = temperature or self.temperature
-        
-        # Generate rollouts
-        search_data, search_ppt = self.rollout(
-            tokens,
-            n_samples=n,
-            K=K,
-            max_iterations=max_iterations,
-            memory_span_abs=memory_span_abs,
-            memory_span_traj=memory_span_traj,
-            temperature=temperature
-        )
-        
-        # Select best sequences
-        batch_size = tokens.shape[0]
-        best_data, best_ppt, best_ppt_advantage = select_best_sequences(
-            search_data, search_ppt, n, batch_size
-        )
-        
-        return best_data, best_ppt, best_ppt_advantage

@@ -14,7 +14,7 @@ def infer_level(indices: torch.Tensor, vocab_sizes: torch.Tensor):
     if indices.dtype in [torch.uint8, torch.uint16, torch.uint32, torch.uint64]:
         indices = indices.long()
     vocab_sizes = vocab_sizes.to(indices.device)
-    levels = (indices > vocab_sizes[0]).int()
+    levels = (indices >= vocab_sizes[0]).int()  # Fixed: use >= instead of >
     return levels
 
 # Issue #1. pad_token_id needs to be removed, we do NOT do packed training in post-training time
@@ -198,13 +198,11 @@ class SorlModelWrapper(PreTrainedModel, GenerationMixin):
             )
             next_token_logits = outputs.logits[:, -1, :]  # [B, V]
 
-            # next_token_level: 0 => choose l0 token, 1 => choose abstract token
             if K is None:
                 next_token_level = torch.zeros(generated_ids.size(0), dtype=torch.long, device=generated_ids.device)
             else:
                 next_token_level = 1 - (levels_cache[:, -K:] > 0).any(dim=-1).long()  # [B]
 
-            # Apply the right mask per batch item
             mask = masks[next_token_level]                              # [B, V] bool
             next_token_logits = next_token_logits.masked_fill(mask, -float("inf"))
 
