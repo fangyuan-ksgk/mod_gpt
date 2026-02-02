@@ -216,7 +216,7 @@ class SorlTrainer(Trainer):
             min_abs_ppl=min_abs_ppl
         )
     
-    def compute_loss(self, model, inputs, return_outputs=False):
+    def compute_loss(self, model, inputs, return_outputs=False, num_items_in_batch=None):
         """
         Compute SoRL loss with base trajectory loss and auxiliary losses.
         Uses search to get the best rollouts for loss computation.

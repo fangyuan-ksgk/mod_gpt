@@ -40,11 +40,6 @@ class SorlModelWrapper(PreTrainedModel, GenerationMixin):
     @classmethod
     def from_pretrained(cls, model_name_or_path: str, abstract_vocab_size_list: List[int], memory_span: int, **kwargs) -> "SorlModelWrapper":
         config = AutoConfig.from_pretrained(model_name_or_path, **kwargs)
-        
-        # Fix Qwen weight tying warning - Qwen doesn't tie embeddings to lm_head
-        # This prevents the warning: "The tied weights mapping and config for this model 
-        # specifies to tie model.embed_tokens.weight to lm_head.weight, but both are 
-        # present in the checkpoints, so we will NOT tie them"
         config.tie_word_embeddings = False
         
         wrapper = cls(config)
@@ -182,45 +177,39 @@ class SorlModelWrapper(PreTrainedModel, GenerationMixin):
         import torch.nn.functional as F
         
         self.model.eval()
-
         generated_ids = input_ids.clone()
-        levels_cache = infer_level(generated_ids, self.vocab_sizes)   # [B, L]
-
+        levels_cache = infer_level(generated_ids, self.vocab_sizes)
         masks = torch.stack([self.l0_mask, self.abs_mask], dim=0).to(generated_ids.device)
 
-        for step in range(max_new_tokens):
-            sorl_block_mask = self._create_sorl_block_mask(generated_ids, memory_span_abs, memory_span_traj)
-
-            # No KV cache: pass full prefix each step (safe with custom block_mask)
+        for _ in range(max_new_tokens):
+            # Forward pass
             outputs = self.model.forward(
                 input_ids=generated_ids,
-                block_mask=sorl_block_mask,
+                block_mask=self._create_sorl_block_mask(generated_ids, memory_span_abs, memory_span_traj),
             )
-            next_token_logits = outputs.logits[:, -1, :]  # [B, V]
+            next_token_logits = outputs.logits[:, -1, :]
 
+            # Determine next token level
             if K is None:
                 next_token_level = torch.zeros(generated_ids.size(0), dtype=torch.long, device=generated_ids.device)
             else:
-                next_token_level = 1 - (levels_cache[:, -K:] > 0).any(dim=-1).long()  # [B]
+                next_token_level = 1 - (levels_cache[:, -K:] > 0).any(dim=-1).long()
 
-            mask = masks[next_token_level]                              # [B, V] bool
-            next_token_logits = next_token_logits.masked_fill(mask, -float("inf"))
+            # Apply level-based masking
+            allowed_mask = masks[next_token_level]  # True = allowed tokens
+            next_token_logits = next_token_logits.masked_fill(~allowed_mask, -float("inf"))
 
-            # Batch sampling
+            # Sample next token
             if temperature > 0:
-                vocab_size = next_token_logits.size(-1)
-                k = min(top_k, vocab_size)
-
-                probs = F.softmax(next_token_logits / temperature, dim=-1)          # [B, V]
-                topk_probs, topk_idx = torch.topk(probs, k, dim=-1)                 # [B, k], [B, k]
-
-                sampled_in_topk = torch.multinomial(topk_probs, num_samples=1)      # [B, 1]
-                next_token_id = torch.gather(topk_idx, dim=1, index=sampled_in_topk) # [B, 1]
+                probs = F.softmax(next_token_logits / temperature, dim=-1)
+                topk_probs, topk_idx = torch.topk(probs, min(top_k, probs.size(-1)), dim=-1)
+                next_token_id = torch.gather(topk_idx, dim=1, index=torch.multinomial(topk_probs, 1))
             else:
-                next_token_id = torch.argmax(next_token_logits, dim=-1, keepdim=True) # [B, 1]
+                next_token_id = torch.argmax(next_token_logits, dim=-1, keepdim=True)
 
-            generated_ids = torch.cat([generated_ids, next_token_id], dim=1)        # [B, L+1]
-            levels_cache = torch.cat([levels_cache, next_token_level[:, None]], dim=1) # [B, L+1]
+            # Update sequences
+            generated_ids = torch.cat([generated_ids, next_token_id], dim=1)
+            levels_cache = torch.cat([levels_cache, next_token_level[:, None]], dim=1)
         
         return generated_ids
 
