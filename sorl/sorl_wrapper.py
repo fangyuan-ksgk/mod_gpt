@@ -1,6 +1,7 @@
 from transformers import PreTrainedModel, GenerationMixin, PretrainedConfig, AutoConfig
 from transformers import AutoModelForCausalLM, AutoConfig as TransformersAutoConfig
 from typing import List, Optional, Tuple
+import torch.nn.functional as F
 import torch
 from torch.nn.attention.flex_attention import create_block_mask
 
@@ -8,6 +9,13 @@ SUPPORTED_MODELS = {
     "qwen2": "qwen2",
     "qwen3": "qwen3",  # Use AutoModelForCausalLM for both
 }
+
+def infer_level(indices: torch.Tensor, vocab_sizes: torch.Tensor):
+    if indices.dtype in [torch.uint8, torch.uint16, torch.uint32, torch.uint64]:
+        indices = indices.long()
+    vocab_sizes = vocab_sizes.to(indices.device)
+    levels = (indices > vocab_sizes[0]).int()
+    return levels
 
 # Issue #1. pad_token_id needs to be removed, we do NOT do packed training in post-training time
 # Issue #2. bottleneck block mask needs to be implemented, current compression mask is not ideal
@@ -82,17 +90,7 @@ class SorlModelWrapper(PreTrainedModel, GenerationMixin):
     def _create_sorl_block_mask(self, input_ids: torch.Tensor):
         """Create SORL block mask for flex attention"""
         batch_size, seq_len = input_ids.shape
-        device = input_ids.device
-        
-        # Infer vocabulary levels for tokens
-        def infer_level(indices: torch.Tensor, vocab_sizes: torch.Tensor):
-            if indices.dtype in [torch.uint8, torch.uint16, torch.uint32, torch.uint64]:
-                indices = indices.long()
-            
-            vocab_sizes = vocab_sizes.to(indices.device)
-            indices_expanded = indices.unsqueeze(-1)
-            levels = (indices_expanded < vocab_sizes.cumsum(dim=0)).int().argmax(dim=-1)
-            return levels
+        device = input_ids.device        
         
         # Pre-compute document boundaries and levels
         levels = infer_level(input_ids, self.vocab_sizes)  # Vocabulary levels
@@ -122,50 +120,31 @@ class SorlModelWrapper(PreTrainedModel, GenerationMixin):
         return block_mask
 
 
-    def prepare_inputs_for_generation(self, input_ids: torch.LongTensor, past_key_values: Optional[List[Tuple[torch.Tensor, torch.Tensor]]] = None, **kwargs):
-        if past_key_values:
-            input_ids = input_ids[:, -1:]
-        return {
-            "input_ids": input_ids,
-            "past_key_values": past_key_values,
-            "use_cache": kwargs.get("use_cache", True),
-            "attention_mask": kwargs.get("attention_mask"),
-        }
-
     def _setup_vocabulary(self):
         device = self.device
         
+        # Single abstraction level - base + abstract
         base_vocab_size = self.full_vocab_size_list[0]
-        abstract_vocab_sizes = self.full_vocab_size_list[1:]
-
-        vocab_sizes_list = [base_vocab_size] + [size + 1 for size in abstract_vocab_sizes]
-        # Register all derived tensors as buffers. This ensures they are moved
-        # to the correct device when you call .to() on the model.
+        abstract_vocab_size = self.full_vocab_size_list[1] if len(self.full_vocab_size_list) > 1 else 0
+        
+        # Register vocab sizes: [base, abstract+1]
+        vocab_sizes_list = [base_vocab_size, abstract_vocab_size + 1] if abstract_vocab_size > 0 else [base_vocab_size]
         self.register_buffer("vocab_sizes", torch.tensor(vocab_sizes_list, device=device))
-
+        
         self.total_vocab_size = self.vocab_sizes.sum()
-        self.register_buffer("level_vocab_ends", self.vocab_sizes.cumsum(dim=0))
-        self.register_buffer("level_vocab_starts", torch.cat([torch.tensor([0], device=device), self.level_vocab_ends[:-1]]))
-
-        # Why do we need l0_mask_token? We never have the need to have level-0 mask token anywhere ...
-        # We only need abstract mask token at levels >= 1. 
         
-        l0_mask_token = torch.tensor([self.pad_token_id], device=device, dtype=torch.long)
-        
-        if len(self.vocab_sizes) > 1:
-            abstract_mask_tokens = (self.level_vocab_ends - 1)[1:]
-            self.register_buffer("level_mask_tokens", torch.cat([l0_mask_token, abstract_mask_tokens]))
-        else:
-            self.register_buffer("level_mask_tokens", l0_mask_token)
+        # Level starts and ends (skip mask token at position 0 of each level)
+        level_starts = torch.cat([torch.tensor([0]), torch.cumsum(self.vocab_sizes, dim=0)[:-1] + 1])
+        level_ends = torch.cumsum(self.vocab_sizes, dim=0)
+        self.register_buffer("level_starts", level_starts)
+        self.register_buffer("level_ends", level_ends)
 
+        # Masks for base vs abstract tokens
         l0_mask = torch.zeros(self.total_vocab_size.item(), dtype=torch.bool, device=device)
         l0_mask[:self.vocab_sizes[0]] = True
         self.register_buffer("l0_mask", l0_mask)
         
         abs_mask = ~self.l0_mask
-        # Note: self.level_mask_tokens may have length 1 if there are no abstract vocabs
-        if len(self.level_mask_tokens) > 1:
-            abs_mask[self.level_mask_tokens[1:]] = False
         self.register_buffer("abs_mask", abs_mask)
 
     @torch.no_grad()
@@ -175,85 +154,98 @@ class SorlModelWrapper(PreTrainedModel, GenerationMixin):
         max_new_tokens: int,
         temperature: float = 0.7,
         top_k: int = 50,
-        force_abstraction_every_n: Optional[int] = None,
+        K: Optional[int] = None,
     ):
-
+        import torch.nn.functional as F
+        
         self.model.eval()
 
         generated_ids = input_ids.clone()
-        past_key_values = None
-        levels_cache = infer_level(generated_ids, self.vocab_sizes, -1) # Use -1 for pad_token, assuming it won't be in the prompt
+        levels_cache = infer_level(generated_ids, self.vocab_sizes)   # [B, L]
+
+        masks = torch.stack([self.l0_mask, self.abs_mask], dim=0).to(generated_ids.device)
 
         for step in range(max_new_tokens):
-            model_inputs = self.prepare_inputs_for_generation(
-                input_ids=generated_ids, past_key_values=past_key_values
+            sorl_block_mask = self._create_sorl_block_mask(generated_ids)
+
+            # No KV cache: pass full prefix each step (safe with custom block_mask)
+            outputs = self.model.forward(
+                input_ids=generated_ids,
+                block_mask=sorl_block_mask,
             )
-            
-            outputs = self.model.forward(**model_inputs)
-            next_token_logits = outputs.logits[:, -1, :]
-            current_pkv = outputs.past_key_values
+            next_token_logits = outputs.logits[:, -1, :]  # [B, V]
 
-            past_key_values, levels_cache, generated_ids = memory_pruning(current_pkv, levels_cache, generated_ids, self.memory_span)
-
-            if force_abstraction_every_n is not None and (step + 1) % force_abstraction_every_n == 0:
-                next_token_logits.masked_fill_(self.l0_mask, -float("inf"))
-            else: 
-                next_token_logits.masked_fill_(self.abs_mask, -float("inf"))
-
-            if temperature > 0:
-                vocab_size = next_token_logits.shape[-1]
-                top_k = min(top_k, vocab_size)
-
-                probs = F.softmax(next_token_logits / temperature, dim=-1)
-                top_k_probs, top_k_indices = torch.topk(probs, top_k)
-                next_token_id = top_k_indices[0, torch.multinomial(top_k_probs, num_samples=1)[0]]
+            # next_token_level: 0 => choose l0 token, 1 => choose abstract token
+            if K is None:
+                next_token_level = torch.zeros(generated_ids.size(0), dtype=torch.long, device=generated_ids.device)
             else:
-                next_token_id = torch.argmax(next_token_logits, dim=-1)
+                next_token_level = 1 - (levels_cache[:, -K:] > 0).any(dim=-1).long()  # [B]
 
-            next_token_id = next_token_id.unsqueeze(0)
-            
-            generated_ids = torch.cat([generated_ids, next_token_id], dim=1)
-            new_level = infer_level(next_token_id, self.vocab_sizes, -1)
-            levels_cache = torch.cat([levels_cache, new_level], dim=1)
-            
+            # Apply the right mask per batch item
+            mask = masks[next_token_level]                              # [B, V] bool
+            next_token_logits = next_token_logits.masked_fill(mask, -float("inf"))
+
+            # Batch sampling
+            if temperature > 0:
+                vocab_size = next_token_logits.size(-1)
+                k = min(top_k, vocab_size)
+
+                probs = F.softmax(next_token_logits / temperature, dim=-1)          # [B, V]
+                topk_probs, topk_idx = torch.topk(probs, k, dim=-1)                 # [B, k], [B, k]
+
+                sampled_in_topk = torch.multinomial(topk_probs, num_samples=1)      # [B, 1]
+                next_token_id = torch.gather(topk_idx, dim=1, index=sampled_in_topk) # [B, 1]
+            else:
+                next_token_id = torch.argmax(next_token_logits, dim=-1, keepdim=True) # [B, 1]
+
+            generated_ids = torch.cat([generated_ids, next_token_id], dim=1)        # [B, L+1]
+            levels_cache = torch.cat([levels_cache, next_token_level[:, None]], dim=1) # [B, L+1]
+        
         return generated_ids
 
-
-    def _parallel_decode(self, logits: torch.Tensor, levels: Optional[torch.Tensor] = None, temperature: float = 0.0):
-        logits = 30 * torch.tanh(logits / 30)
-        logits = logits.float()
+    def extract_and_sample(self, logits, idx, recursion_mask, temperature):
+        """Extract masked logits and sample new tokens."""
         
-        total_vocab_size = logits.shape[-1]
-        valid_mask_tokens = self.level_mask_tokens[self.level_mask_tokens < total_vocab_size]
-        logits[:, valid_mask_tokens] = float('-inf')
-
-        if levels is not None:
-            assert levels.size(0) == logits.shape[0], f"[Denoise level & mask mismatch] \n - Need to denoise on {logits.shape[0]} tokens, but got {levels.shape[-1]} levels"
-            start_logits = self.level_vocab_starts.to(levels.device)[levels]
-            end_logits = self.level_vocab_ends.to(levels.device)[levels]
-            vocab_indices = torch.arange(logits.size(-1), device=logits.device)
-            mask = (vocab_indices >= start_logits.unsqueeze(-1)) & (vocab_indices < end_logits.unsqueeze(-1))
-            logits = torch.where(mask, logits, torch.tensor(-float('inf'), device=logits.device))
-
-        if temperature == 0.0:
-            next_token = torch.argmax(logits, dim=-1)
+        predict_mask = torch.roll(recursion_mask, -1, dims=1)
+        predict_mask[:, -1] = False
+        recursion_logits = logits[predict_mask]
+        
+        # Mask out base tokens (only allow abstract tokens)
+        abstract_start = self.vocab_sizes[0]
+        recursion_logits[:, :abstract_start + 1] = float('-inf')
+        
+        # Handle temperature
+        if isinstance(temperature, torch.Tensor) and temperature.ndim > 0:
+            recursion_temp = temperature[predict_mask]
         else:
-            next_token = torch.multinomial(F.softmax(logits / temperature, dim=-1), num_samples=1).squeeze(-1)
-        return next_token
+            recursion_temp = temperature
+            
+        temp = torch.clamp(recursion_temp, min=1e-10).view(-1, 1) if isinstance(recursion_temp, torch.Tensor) else max(temperature, 1e-10)
+        
+        probs = F.softmax(recursion_logits / temp, dim=-1)
+        new_tokens = torch.multinomial(probs, num_samples=1).squeeze(-1)
 
+        idx[recursion_mask] = new_tokens.to(idx.dtype)
+        return idx
 
-    def denoise(self, idx: torch.Tensor, denoise_mask: torch.Tensor, denoise_levels: torch.Tensor, temperature: float = 0.0): 
-        self.model.eval()
-        with torch.no_grad():
-            if self.model_type == "minimind":
-                outputs = self.forward(input_ids=idx, use_cache=False, attention_mask=None)
-                hidden_states = outputs.last_hidden_state
-            else: 
-                outputs = self.forward(input_ids=idx, use_cache=False, attention_mask=None, output_hidden_states=True)
-                hidden_states = outputs.hidden_states[-1]
-            rep_mask = torch.roll(denoise_mask, -1, dims=1)
-            new_tokens = self._parallel_decode(self.model.lm_head(hidden_states[rep_mask]), levels=denoise_levels, temperature=temperature)
-            denoised_idx = idx.clone()
-            denoised_idx[denoise_mask] = new_tokens
+    def recursion(self, idx, max_iterations=5, memory_span=1792, attn_blocksize=1792, temperature=0.0):
+        """Perform recursion on abstract tokens."""
+        recursion_mask = (idx >= self.vocab_sizes[0])
+        recursion_mask[:, 0] = False
+        
+        # Expand temperature if needed
+        if isinstance(temperature, torch.Tensor) and temperature.ndim == 1:
+            temp_expanded = temperature.view(-1, 1).expand_as(idx)
+        else:
+            temp_expanded = temperature
 
-        return denoised_idx
+        for _ in range(max_iterations): 
+            outputs = self.model.forward(input_ids=idx, block_mask=self._create_sorl_block_mask(idx))
+            logits = outputs.logits
+            idx = self.extract_and_sample(logits, idx, recursion_mask, temp_expanded)
+        
+        # Evaluation
+        outputs = self.model.forward(input_ids=idx, block_mask=self._create_sorl_block_mask(idx))
+        loss = outputs.logits  # Using logits as loss placeholder like in GAT
+        
+        return idx, loss

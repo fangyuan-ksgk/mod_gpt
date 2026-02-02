@@ -248,6 +248,47 @@ class SoRLLoss(nn.Module):
         return info_loss, abs_loss, soft_zipf_kl 
 
 
+class SoRLLoss_v2(nn.Module): 
+    """
+    SoRL loss: p(s | a), p(a | s), KL(p(a_t, a_t+1), soft_zipf_prior)
+    """
+
+    def __init__(self, abs_vocab_size, decay=0.8, target_vocab_util=0.8, min_abs_ppl=0.0):
+        super().__init__()
+        self.decay = decay
+        self.min_abs_ppl = min_abs_ppl
+        self.zipf_loss = Zipfian2gramLoss(abs_vocab_size, decay, target_vocab_util)
+
+    def forward(self, data, model, memory_span: int, attn_blocksize: int):
+ 
+        ppt, logits = model.forward(data, memory_span, attn_blocksize)
+        ppt = ppt.reshape(data.shape[0], -1)
+        logits = logits.reshape(data.shape[0], -1, logits.size(-1))
+
+        levels = (data >= model.vocab_sizes[0]).long()[:, 1:]
+        bos_pos_mask = torch.logical_and(
+            data[:, :-1] != BOS_TOKEN_ID, 
+            data[:, 1:] != BOS_TOKEN_ID
+        ).float()
+
+        traj_mask = (levels[0] == 0).float()
+        abs_mask = 1 - traj_mask
+
+        valid_traj_mask = bos_pos_mask * traj_mask
+        valid_abs_mask = bos_pos_mask * abs_mask
+
+        traj_loss = (ppt * valid_traj_mask).sum() / valid_traj_mask.sum().clamp(min=1)
+        abs_loss = (ppt * valid_abs_mask).clamp(min=self.min_abs_ppl).sum() / valid_abs_mask.sum().clamp(min=1)
+
+        # --- KL(p(a_t, a_t+1), soft_zipf_prior) --- 
+        abs_positions = abs_mask.bool()
+        abs_logits = logits[:, :-1][:, abs_positions, model.vocab_sizes[0]:]
+        soft_zipf_kl = self.zipf_loss(abs_logits)
+
+        # --- Return: p(s | a)/p(s), p(a | s), KL(p(a_t, a_t+1), soft_zipf_prior) ---
+        return traj_loss, abs_loss, soft_zipf_kl 
+
+
 class SoRLLoss_v8(nn.Module): 
     """
     SoRL loss: p(s | a)/p(s), p(a | s), H(p(a))
