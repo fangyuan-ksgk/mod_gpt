@@ -233,8 +233,8 @@ class SorlModelWrapper(PreTrainedModel, GenerationMixin):
         predict_mask[:, -1] = False
         recursion_logits = logits[predict_mask]
         
-        # Mask out base tokens (only allow abstract tokens)
-        abstract_start = self.vocab_sizes[0]
+        # Mask out base tokens (only allow abstract tokens) - ensure device consistency
+        abstract_start = self.vocab_sizes[0].to(logits.device)
         recursion_logits[:, :abstract_start + 1] = float('-inf')
         
         # Handle temperature
@@ -253,7 +253,9 @@ class SorlModelWrapper(PreTrainedModel, GenerationMixin):
 
     def recursion(self, idx, max_iterations=5, memory_span_abs=1792, memory_span_traj=1792, attn_blocksize=1792, temperature=0.0):
         """Perform recursion on abstract tokens with information bottleneck mask."""
-        recursion_mask = (idx >= self.vocab_sizes[0])
+        # Ensure vocab_sizes is on the same device as idx
+        vocab_size_0 = self.vocab_sizes[0].to(idx.device)
+        recursion_mask = (idx >= vocab_size_0)
         recursion_mask[:, 0] = False
         
         # Expand temperature if needed
