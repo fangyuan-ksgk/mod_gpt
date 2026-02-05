@@ -252,10 +252,12 @@ class SorlModelWrapper(PreTrainedModel, GenerationMixin):
         else:
             temp_expanded = temperature
 
+        block_mask = self._create_sorl_block_mask(idx, memory_span_abs, memory_span_traj)
+
         for _ in range(max_iterations): 
             outputs = self.model.forward(
                 input_ids=idx, 
-                block_mask=self._create_sorl_block_mask(idx, memory_span_abs, memory_span_traj)
+                block_mask=block_mask # why are we passing 'block_mask' here? 
             )
             logits = outputs.logits
             idx = self.extract_and_sample(logits, idx, recursion_mask, temp_expanded)
@@ -266,7 +268,7 @@ class SorlModelWrapper(PreTrainedModel, GenerationMixin):
 
         outputs = self.model.forward(
             input_ids=idx, 
-            block_mask=self._create_sorl_block_mask(idx, memory_span_abs, memory_span_traj),
+            block_mask=block_mask,
         )
 
         shift_logits = outputs.logits[..., :-1, :].contiguous()

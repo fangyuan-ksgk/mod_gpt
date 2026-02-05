@@ -156,7 +156,7 @@ class SoRLLoss(nn.Module):
         self.min_abs_ppl = min_abs_ppl
         self.zipf_loss = VariableZipfian2gramLoss(abs_vocab_size, decay, target_vocab_util)
 
-    def forward(self, data, model, base_traj_loss, memory_span_abs: int, memory_span_traj: int, attention_mask: Optional[torch.Tensor] = None):
+    def forward(self, data, model, base_traj_loss, attention_mask, memory_span_abs: int, memory_span_traj: int):
 
         outputs = model(input_ids=data, memory_span_abs=memory_span_abs, memory_span_traj=memory_span_traj)
         logits = outputs.logits
@@ -236,7 +236,7 @@ class SorlTrainer(Trainer):
         self.memory_span_abs = memory_span_abs
         self.memory_span_traj = memory_span_traj
         self.temperature = temperature
-        
+
         # Loss weights
         self.alpha_info_gain = alpha_info_gain
         self.alpha_abs = alpha_abs
@@ -250,50 +250,44 @@ class SorlTrainer(Trainer):
             target_vocab_util=target_vocab_util,
             min_abs_ppl=min_abs_ppl
         )
-    
+        self.pad_token_id = tokenizer.pad_token_id
+
     def compute_loss(self, model, inputs, return_outputs=False, num_items_in_batch=None):
         """
         Compute SoRL loss with base trajectory loss and auxiliary losses.
         Uses search to get the best rollouts for loss computation.
         """
-        # Extract tokens and attention_mask from inputs
-        if isinstance(inputs, dict):
-            tokens = inputs.get("input_ids", inputs.get("tokens"))
-            attention_mask = inputs.get("attention_mask", None)
-        else:
-            tokens = inputs
-            attention_mask = None
-            
-        if tokens is None:
-            raise ValueError("No input_ids or tokens found in inputs")
+        input_ids = inputs["input_ids"]
+        attention_mask = inputs.get("attention_mask")
         
         # --- compute base trajectory loss ---
         # Create labels with -100 for padding tokens (standard practice)
-        labels = tokens.clone()
+        labels = input_ids.clone()
         if attention_mask is not None:
             labels[attention_mask == 0] = -100
         
-        outputs = model(input_ids=tokens, attention_mask=attention_mask, labels=labels, memory_span_abs=self.memory_span_abs, memory_span_traj=self.memory_span_traj)
+        outputs = model(input_ids=input_ids, attention_mask=attention_mask, labels=labels, memory_span_abs=self.memory_span_abs, memory_span_traj=self.memory_span_traj)
         base_traj_loss = outputs.loss
         
         # --- perform SoRL search to get best rollouts ---
-        best_data, best_ppt, _ = sorl_search(
-            model=self.model,
-            tokens=tokens,
-            n=self.num_rollouts,
-            K=self.K,
-            max_iterations=self.max_iterations,
-            memory_span_abs=self.memory_span_abs,
-            memory_span_traj=self.memory_span_traj,
-            temperature=self.temperature,
-            attention_mask=attention_mask
-        )
+        with torch.no_grad():
+            best_data, best_ppt, best_ppt_advantage, expanded_attn_mask = sorl_search(
+                model=self.model,
+                input_ids=input_ids,
+                attention_mask=attention_mask, 
+                pad_token_id=self.pad_token_id,
+                n=self.num_rollouts,
+                K=self.K,
+                max_iterations=self.max_iterations,
+                memory_span_abs=self.memory_span_abs,
+                memory_span_traj=self.memory_span_traj,
+                temperature=self.temperature,
+            )
         
         # --- compute auxiliary losses on best rollouts ---
         info_gain_loss, abs_loss, zipf_bigram_loss = self.loss_fn(
-            best_data, model, base_traj_loss.detach(), 
+            best_data, model, base_traj_loss.detach(), expanded_attn_mask,
             self.memory_span_abs, self.memory_span_traj,
-            attention_mask=attention_mask
         )
         
         # --- combine losses ---
