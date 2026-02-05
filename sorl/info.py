@@ -141,7 +141,7 @@ class Zipfian2gramLoss(nn.Module):
         zipf_prior = get_zipf_prior(vocab_size, target_vocab_util)
         self.register_buffer('zipf_prior', zipf_prior)
         # Running marginal is a transition matrix [V, V]
-        self.register_buffer('running_marginal', torch.ones(vocab_size, vocab_size, device=vocab_size.device) / vocab_size)
+        self.register_buffer('running_marginal', torch.ones(vocab_size, vocab_size, device=vocab_size.device) / vocab_size**2)
 
     def forward(self, logits):
         """

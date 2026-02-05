@@ -8,7 +8,7 @@ import torch.nn.functional as F
 from typing import Optional, List, Tuple, Union
 from transformers import Trainer, TrainingArguments
 from transformers.trainer_utils import EvalPrediction
-from sorl.info import hollow_sinkhorn_transform
+from sorl.info import hollow_sinkhorn_transform, get_zipf_prior
 
 # ----- infer insertion mask -----
 def infer_insert_mask(data, K, vocab_size, attention_mask):
@@ -102,7 +102,7 @@ def sorl_search(
         search_data, search_ppt, n, expanded_data.shape[0]
     )
     
-    return best_data, best_ppt, best_ppt_advantage
+    return best_data, best_ppt, best_ppt_advantage, expanded_mask
 
 class VariableZipfian2gramLoss(nn.Module):
     """
@@ -113,17 +113,9 @@ class VariableZipfian2gramLoss(nn.Module):
     def __init__(self, vocab_size, decay=0.8, target_vocab_util=0.8):
         super().__init__()
         self.decay = decay   
-        
-        # compute zipfian prior
-        actual_vocab_size = int(vocab_size * target_vocab_util)
-        ranks = torch.arange(1, actual_vocab_size + 1, dtype=torch.float32)
-        freqs = 1.0 / (ranks ** 1.0)  # alpha = 1.0
-        zipf_prior = torch.zeros(vocab_size, dtype=torch.float32)
-        zipf_prior[:actual_vocab_size] = (freqs / freqs.sum())
+        zipf_prior = get_zipf_prior(vocab_size, target_vocab_util)
         self.register_buffer('zipf_prior', zipf_prior)
-
-        # Running marginal is a transition matrix [V, V]
-        self.register_buffer('running_marginal', torch.ones(vocab_size, vocab_size, device=zipf_prior.device) / vocab_size)
+        self.register_buffer('running_marginal', torch.ones(vocab_size, vocab_size, device=zipf_prior.device) / vocab_size**2)
 
     def forward(self, abs_logits):
         """
@@ -132,26 +124,20 @@ class VariableZipfian2gramLoss(nn.Module):
         """
         if abs_logits.shape[0] < 2:  # Need at least 2 tokens for 2-gram
             return torch.tensor(0.0, device=self.zipf_prior.device)
-        
+
         probs = F.softmax(abs_logits, dim=-1)  # [num_abs, vocab_size]
-        
-        # Compute joint probs P(a_t, a_{t+1}) = P(a_t) * P(a_{t+1}), avg over all positions
         probs_2gram = (probs[:-1].unsqueeze(2) * probs[1:].unsqueeze(1)).mean(dim=0)  # [V, V]
-        
-        # EMA Update
+
         if self.training:
             with torch.no_grad():
                 new_avg = self.decay * self.running_marginal + (1 - self.decay) * probs_2gram
                 self.running_marginal.copy_(new_avg)
-        
-        # Soft Zipfian (Hollow Sinkhorn)
+
         group_marginals = self.decay * self.running_marginal.unsqueeze(0) + (1 - self.decay) * probs_2gram.unsqueeze(0)
-        
-        # Target: Hollow Matrix with Zipfian Marginals
+
         soft_sinkhorn = hollow_sinkhorn_transform(group_marginals, self.zipf_prior, n_iters=3)
-        
-        # Loss
         p_safe = torch.clamp(group_marginals, min=1e-10)
+
         term1 = p_safe * torch.log(p_safe)
         term2 = p_safe * torch.log(soft_sinkhorn.detach() + 1e-10)
         soft_kl_div = torch.sum(term1 - term2) / group_marginals.shape[0]
@@ -172,52 +158,34 @@ class SoRLLoss(nn.Module):
 
     def forward(self, data, model, base_traj_loss, memory_span_abs: int, memory_span_traj: int, attention_mask: Optional[torch.Tensor] = None):
 
-        outputs = model(input_ids=data, attention_mask=attention_mask, memory_span_abs=memory_span_abs, memory_span_traj=memory_span_traj)
+        outputs = model(input_ids=data, memory_span_abs=memory_span_abs, memory_span_traj=memory_span_traj)
         logits = outputs.logits
-        
-        # Compute perplexity for each position
+
+        # --- cond loss --- 
         shift_logits = logits[..., :-1, :].contiguous()
         shift_labels = data[..., 1:].contiguous()
-        
-        # Compute cross entropy loss per position
         loss_fct = nn.CrossEntropyLoss(reduction='none')
         losses = loss_fct(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1))
-        
-        # Apply attention_mask to exclude padding tokens from per-token losses
-        if attention_mask is not None:
-            shift_attention_mask = attention_mask[..., 1:].contiguous()
-            valid_positions = shift_attention_mask.view(-1) == 1
-            losses = losses * valid_positions.float()
-        
-        # Reshape back to [batch_size, seq_len-1]
+        shift_attention_mask = attention_mask[..., 1:].contiguous()
+        valid_positions = shift_attention_mask.view(-1) == 1
+        losses = losses * valid_positions.float()
         ppt = losses.view(data.shape[0], -1)
 
+        # --- info gain, abs loss ---
         levels = (data >= model.vocab_sizes[0]).long()[:, 1:]
-
-        # Create base trajectory and abstract masks
-        traj_mask = (levels[0] == 0).float() # obviously this is wrong now -- we can't assume same sequence traj/abs pattern
-        abs_mask = 1 - traj_mask
-        
-        # Apply attention_mask to exclude padding tokens from traj/abs masks
-        if attention_mask is not None:
-            shift_attention_mask = attention_mask[..., 1:].contiguous()
-            traj_mask = traj_mask * shift_attention_mask.float()
-            abs_mask = abs_mask * shift_attention_mask.float()
-
+        traj_mask = (levels == 0).float() * shift_attention_mask.float() 
+        abs_mask = (1 - traj_mask) * shift_attention_mask.float()
         traj_loss = (ppt * traj_mask).sum() / traj_mask.sum().clamp(min=1)
         abs_loss = (ppt * abs_mask).clamp(min=self.min_abs_ppl).sum() / abs_mask.sum().clamp(min=1)
         info_loss = traj_loss - base_traj_loss
 
-        # --- KL(p(a_t, a_t+1), soft_zipf_prior) --- 
+        # --- bigram zipfian loss ---
         abs_positions = abs_mask.bool()
         abs_logits = logits[:, :-1][abs_positions][..., model.vocab_sizes[0]:]
         soft_zipf_kl = self.zipf_loss(abs_logits)
 
         # --- Return: p(s | a)/p(s), p(a | s), KL(p(a_t, a_t+1), soft_zipf_prior) ---
         return info_loss, abs_loss, soft_zipf_kl 
-
-
-
 
 
 class SorlTrainer(Trainer):
