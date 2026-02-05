@@ -124,14 +124,15 @@ class SorlModelWrapper(PreTrainedModel, GenerationMixin):
             
             return causal_mask & document_mask & window_mask & memory_compression_mask
         
-        # Create block mask using the mask function
+        # Create block mask using the mask function (compiled to avoid materializing full seq x seq tensor)
         block_mask = create_block_mask(
             sorl_mask_fn, 
             B=batch_size, 
             H=self.model.config.num_attention_heads,
             Q_LEN=seq_len, 
             KV_LEN=seq_len, 
-            device=device
+            device=device,
+            _compile=True if "cuda" in device else False,
         )
         
         return block_mask
@@ -257,7 +258,7 @@ class SorlModelWrapper(PreTrainedModel, GenerationMixin):
         for _ in range(max_iterations): 
             outputs = self.model.forward(
                 input_ids=idx, 
-                block_mask=block_mask # why are we passing 'block_mask' here? 
+                block_mask=block_mask
             )
             logits = outputs.logits
             idx = self.extract_and_sample(logits, idx, recursion_mask, temp_expanded)
