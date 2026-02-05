@@ -18,22 +18,22 @@ def infer_insert_mask(data, K, vocab_size, attention_mask):
     return insert_mask
 
 # ----- insert tokens / mask into data / attention mask ----- 
-def insert_tokens_with_padding(tokens, insert_mask, placeholder_token, pad_token_id):
-
-    batch_size, seq_len = tokens.shape    
-    shift = torch.cumsum(insert_mask.long(), dim=1)
-    original_positions = torch.arange(seq_len, device=tokens.device).unsqueeze(0).expand(batch_size, -1)
-    new_positions = original_positions + shift
-
-    max_new_len = seq_len + shift[:, -1].max().item()
-    expanded_tokens = tokens.new_full((batch_size, max_new_len), placeholder_token)
-    expanded_tokens.scatter_(1, new_positions, tokens)
-
-    pad_mask = torch.arange(max_new_len, device=tokens.device) > new_positions.max(dim=1).values.unsqueeze(1)
-    expanded_tokens = expanded_tokens.masked_fill_(pad_mask, pad_token_id)
-
-    expanded_mask = 1 - pad_mask.long()
-    expanded_mask[batch_indices, new_positions] = attention_mask
+def insert_tokens_with_padding(input_ids, attention_mask, insert_mask, placeholder_token, pad_token_id):
+    batch_size, seq_len = input_ids.shape
+    
+    shift = insert_mask.long().cumsum(1)
+    new_positions = torch.arange(seq_len, device=input_ids.device) + shift
+    
+    max_new_len = new_positions[:, -1].max().item() + 1
+    expanded_tokens = input_ids.new_full((batch_size, max_new_len), placeholder_token)
+    expanded_tokens.scatter_(1, new_positions, input_ids)
+    expanded_mask = attention_mask.new_ones(batch_size, max_new_len)
+    expanded_mask.scatter_(1, new_positions, attention_mask)
+    
+    pad_mask = torch.arange(max_new_len, device=input_ids.device) > new_positions.max(1).values[:, None]
+    expanded_tokens.masked_fill_(pad_mask, pad_token_id)
+    expanded_mask.masked_fill_(pad_mask, 0)
+    
     return expanded_tokens, expanded_mask
     
 
@@ -68,44 +68,38 @@ def select_best_sequences(
 
 def sorl_search(
     model,
-    tokens: torch.Tensor,
+    input_ids: torch.Tensor,
+    attention_mask: torch.Tensor,
+    pad_token_id: int,
     n: int = 2,
     K: int = 4,
     max_iterations: int = 2,
     memory_span_abs: int = 1792,
     memory_span_traj: int = 1792,
     temperature: Union[float, torch.Tensor] = 0.0,
-    attention_mask: Optional[torch.Tensor] = None,
     truncate_seq: bool = True
 ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """
     Perform SoRL search: generate rollouts and select best sequences.
     """
-    batch_size, seq_len = tokens.shape
-    
-    # Insert placeholder tokens
-    insert_mask = infer_insert_mask_batch(tokens, K, model.vocab_sizes[0], attention_mask)
-    placeholder_token = model.vocab_sizes[0].item()
-    if isinstance(placeholder_token, torch.Tensor):
-        placeholder_token = placeholder_token.item()
-    
-    expanded_data = insert_placeholder_tokens_batch(tokens, insert_mask, placeholder_token, truncate_seq)
-    
-    # Repeat each sequence n times for parallel search
-    repeat_data = expanded_data.repeat_interleave(n, dim=0)  # [batch_size * n, seq_len]
-    
-    # Perform recursion search on batch
+
+    insert_mask = infer_insert_mask(input_ids, K, model.vocab_sizes[0], attention_mask)
+    expanded_data, expanded_mask = insert_tokens_with_padding(input_ids, attention_mask, insert_mask, model.vocab_sizes[0], pad_token_id)
+
+    repeat_data = expanded_data.repeat_interleave(n, dim=0)
+    repeat_mask = expanded_mask.repeat_interleave(n, dim=0)
+
     search_data, search_ppt = model.recursion(
         repeat_data, 
+        repeat_mask,
         max_iterations=max_iterations,
         memory_span_abs=memory_span_abs,
         memory_span_traj=memory_span_traj,
         temperature=temperature
     )
-    
-    # Select best sequences using smart indexing
+
     best_data, best_ppt, best_ppt_advantage = select_best_sequences(
-        search_data, search_ppt, n, batch_size
+        search_data, search_ppt, n, expanded_data.shape[0]
     )
     
     return best_data, best_ppt, best_ppt_advantage

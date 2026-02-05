@@ -2,6 +2,7 @@ from transformers import PreTrainedModel, GenerationMixin, PretrainedConfig, Aut
 from transformers import AutoModelForCausalLM, AutoConfig as TransformersAutoConfig
 from typing import List, Optional, Tuple
 import torch.nn.functional as F
+import torch.nn as nn
 import torch
 from torch.nn.attention.flex_attention import create_block_mask
 
@@ -238,7 +239,7 @@ class SorlModelWrapper(PreTrainedModel, GenerationMixin):
         idx[recursion_mask] = new_tokens.to(idx.dtype)
         return idx
 
-    def recursion(self, idx, max_iterations=5, memory_span_abs=1792, memory_span_traj=1792, attn_blocksize=1792, temperature=0.0):
+    def recursion(self, idx, attention_mask, max_iterations=5, memory_span_abs=1792, memory_span_traj=1792, attn_blocksize=1792, temperature=0.0):
         """Perform recursion on abstract tokens with information bottleneck mask."""
         # Ensure vocab_sizes is on the same device as idx
         vocab_size_0 = self.vocab_sizes[0].to(idx.device)
@@ -260,10 +261,19 @@ class SorlModelWrapper(PreTrainedModel, GenerationMixin):
             idx = self.extract_and_sample(logits, idx, recursion_mask, temp_expanded)
         
         # Evaluation
+        labels = idx.clone()
+        labels[attention_mask == 0] = -100
+
         outputs = self.model.forward(
             input_ids=idx, 
-            block_mask=self._create_sorl_block_mask(idx, memory_span_abs, memory_span_traj)
+            block_mask=self._create_sorl_block_mask(idx, memory_span_abs, memory_span_traj),
         )
-        loss = outputs.logits  # Using logits as loss placeholder like in GAT
+
+        shift_logits = outputs.logits[..., :-1, :].contiguous()
+        shift_labels = labels[..., 1:].contiguous()
         
-        return idx, loss
+        loss_fct = nn.CrossEntropyLoss(reduction='none', ignore_index=-100)
+        per_token_loss = loss_fct(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1))
+        per_token_loss = per_token_loss.view(idx.shape[0], -1)  # [batch_size, seq_len-1]
+                    
+        return idx, per_token_loss
