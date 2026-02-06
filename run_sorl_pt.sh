@@ -29,7 +29,7 @@ ABSTRACT_VOCAB_SIZE=128
 
 # Data
 DATASET="gsm8k"
-MAX_LENGTH=256
+MAX_LENGTH=512
 
 # SoRL search
 NUM_ROLLOUTS=4
@@ -38,11 +38,6 @@ MAX_ITERATIONS=2
 MEMORY_SPAN_ABS=1792
 MEMORY_SPAN_TRJ=1792
 TEMPERATURE=1.0
-
-# Loss weights
-ALPHA_INFO_GAIN=10.0
-ALPHA_ABS=0.1
-ALPHA_SOFT_ZIPF=1.0
 
 # Loss function
 DECAY=0.8
@@ -64,42 +59,65 @@ SAVE_EVERY=500
 EVAL_SAMPLES=50
 LOG_SAMPLES_EVERY=100
 NUM_LOG_SAMPLES=3
-MAX_NEW_TOKENS=128
-OUTPUT_DIR="./ckpt/sorl_pt"
+MAX_NEW_TOKENS=256
+BASE_OUTPUT_DIR="./ckpt/sorl_pt"
 
 # ============================================================================
-# Run
+# Sweep: loss weight configurations
+# Format: ALPHA_INFO_GAIN ALPHA_ABS ALPHA_SOFT_ZIPF
 # ============================================================================
-torchrun \
-  --nproc_per_node=$N_GPUS \
-  --master_addr=$MASTER_ADDR \
-  --master_port=$MASTER_PORT \
-  train_sorl_pt.py \
-  --model_name $MODEL_NAME \
-  --abstract_vocab_size $ABSTRACT_VOCAB_SIZE \
-  --dataset $DATASET \
-  --max_length $MAX_LENGTH \
-  --num_rollouts $NUM_ROLLOUTS \
-  --K $K \
-  --max_iterations $MAX_ITERATIONS \
-  --memory_span_abs $MEMORY_SPAN_ABS \
-  --memory_span_traj $MEMORY_SPAN_TRJ \
-  --temperature $TEMPERATURE \
-  --alpha_info_gain $ALPHA_INFO_GAIN \
-  --alpha_abs $ALPHA_ABS \
-  --alpha_soft_zipf $ALPHA_SOFT_ZIPF \
-  --decay $DECAY \
-  --target_vocab_util $TARGET_VOCAB_UTIL \
-  --lr $LR \
-  --warmup_steps $WARMUP_STEPS \
-  --batch_size $BATCH_SIZE \
-  --gradient_accumulation_steps $GRAD_ACCUM \
-  --num_epochs $NUM_EPOCHS \
-  --log_every $LOG_EVERY \
-  --eval_every $EVAL_EVERY \
-  --save_every $SAVE_EVERY \
-  --eval_samples $EVAL_SAMPLES \
-  --log_samples_every $LOG_SAMPLES_EVERY \
-  --num_log_samples $NUM_LOG_SAMPLES \
-  --max_new_tokens $MAX_NEW_TOKENS \
-  --output_dir $OUTPUT_DIR
+CONFIGS=(
+  "10.0 0.1 1.0"    # baseline
+  "10.0 0.1 5.0"    # 5x zipf (anti-stutter)
+  "10.0 0.1 10.0"   # 10x zipf (strong anti-stutter)
+  "10.0 0.5 5.0"    # higher abs + 5x zipf
+  "5.0  0.1 10.0"   # lower info + 10x zipf
+  "10.0 0.5 10.0"   # higher abs + 10x zipf
+)
+
+for CONFIG in "${CONFIGS[@]}"; do
+  read -r ALPHA_INFO_GAIN ALPHA_ABS ALPHA_SOFT_ZIPF <<< "$CONFIG"
+  RUN_NAME="info${ALPHA_INFO_GAIN}_abs${ALPHA_ABS}_zipf${ALPHA_SOFT_ZIPF}"
+  OUTPUT_DIR="${BASE_OUTPUT_DIR}/${RUN_NAME}"
+
+  echo "============================================================"
+  echo "Running: $RUN_NAME"
+  echo "  alpha_info_gain=$ALPHA_INFO_GAIN  alpha_abs=$ALPHA_ABS  alpha_soft_zipf=$ALPHA_SOFT_ZIPF"
+  echo "  output_dir=$OUTPUT_DIR"
+  echo "============================================================"
+
+  torchrun \
+    --nproc_per_node=$N_GPUS \
+    --master_addr=$MASTER_ADDR \
+    --master_port=$MASTER_PORT \
+    train_sorl_pt.py \
+    --model_name $MODEL_NAME \
+    --abstract_vocab_size $ABSTRACT_VOCAB_SIZE \
+    --dataset $DATASET \
+    --max_length $MAX_LENGTH \
+    --num_rollouts $NUM_ROLLOUTS \
+    --K $K \
+    --max_iterations $MAX_ITERATIONS \
+    --memory_span_abs $MEMORY_SPAN_ABS \
+    --memory_span_traj $MEMORY_SPAN_TRJ \
+    --temperature $TEMPERATURE \
+    --alpha_info_gain $ALPHA_INFO_GAIN \
+    --alpha_abs $ALPHA_ABS \
+    --alpha_soft_zipf $ALPHA_SOFT_ZIPF \
+    --decay $DECAY \
+    --target_vocab_util $TARGET_VOCAB_UTIL \
+    --lr $LR \
+    --warmup_steps $WARMUP_STEPS \
+    --batch_size $BATCH_SIZE \
+    --gradient_accumulation_steps $GRAD_ACCUM \
+    --num_epochs $NUM_EPOCHS \
+    --log_every $LOG_EVERY \
+    --eval_every $EVAL_EVERY \
+    --save_every $SAVE_EVERY \
+    --eval_samples $EVAL_SAMPLES \
+    --log_samples_every $LOG_SAMPLES_EVERY \
+    --num_log_samples $NUM_LOG_SAMPLES \
+    --max_new_tokens $MAX_NEW_TOKENS \
+    --output_dir $OUTPUT_DIR
+
+done
