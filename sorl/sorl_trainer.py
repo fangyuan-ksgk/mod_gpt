@@ -11,11 +11,19 @@ from transformers.trainer_utils import EvalPrediction
 from sorl.info import hollow_sinkhorn_transform, get_zipf_prior
 
 # ----- infer insertion mask -----
-def infer_insert_mask(data, K, vocab_size, attention_mask):
+def infer_insert_mask(data, K, attention_mask):
     batch_size, seq_len = data.shape
     positions = torch.arange(seq_len, device=data.device).unsqueeze(0).expand(batch_size, -1)
-    insert_mask = (positions % K == 0) & (positions > 0) & (attention_mask)
+    insert_mask = (positions % K == 0) & (positions > 0) & attention_mask
     return insert_mask
+
+# ----- expand prompt len ----- 
+def expand_prompt_len(prompt_len, insert_mask):
+    """Map prompt_len from original to expanded sequence space."""
+    shift = insert_mask.long().cumsum(1)  # (B, L)
+    clamped = (prompt_len - 1).clamp(min=0)  # (B,)
+    prompt_shift = shift.gather(1, clamped.unsqueeze(1)).squeeze(1)  # (B,)
+    return prompt_len + prompt_shift  # (B,)
 
 # ----- insert tokens / mask into data / attention mask ----- 
 def insert_tokens_with_padding(input_ids, attention_mask, insert_mask, placeholder_token, pad_token_id):
@@ -70,6 +78,7 @@ def sorl_search(
     model,
     input_ids: torch.Tensor,
     attention_mask: torch.Tensor,
+    prompt_len: torch.Tensor,
     pad_token_id: int,
     n: int = 2,
     K: int = 4,
@@ -83,11 +92,14 @@ def sorl_search(
     Perform SoRL search: generate rollouts and select best sequences.
     """
 
-    insert_mask = infer_insert_mask(input_ids, K, model.vocab_sizes[0], attention_mask)
+    # we insert abs tokens on full sequences
+    insert_mask = infer_insert_mask(input_ids, K, attention_mask)
+    expanded_prompt_len = expand_prompt_len(prompt_len, insert_mask)
     expanded_data, expanded_mask = insert_tokens_with_padding(input_ids, attention_mask, insert_mask, model.vocab_sizes[0], pad_token_id)
 
     repeat_data = expanded_data.repeat_interleave(n, dim=0)
     repeat_mask = expanded_mask.repeat_interleave(n, dim=0)
+    repeat_prompt_len = expanded_prompt_len.repeat_interleave(n, dim=0)
 
     search_data, search_ppt = model.recursion(
         repeat_data, 
@@ -95,14 +107,17 @@ def sorl_search(
         max_iterations=max_iterations,
         memory_span_abs=memory_span_abs,
         memory_span_traj=memory_span_traj,
-        temperature=temperature
+        temperature=temperature,
+        prompt_len=repeat_prompt_len,
     )
 
+    # selection must be informed by 'loss_mask' or 'prompt_len' (B,) shaped prompt_len
+    # however, on the extended sequence, even prompt_len needs to be extended
     best_data, best_ppt, best_ppt_advantage = select_best_sequences(
         search_data, search_ppt, n, expanded_data.shape[0]
     )
     
-    return best_data, best_ppt, best_ppt_advantage, expanded_mask
+    return best_data, best_ppt, best_ppt_advantage, expanded_mask, expanded_prompt_len
 
 class VariableZipfian2gramLoss(nn.Module):
     """
@@ -156,9 +171,9 @@ class SoRLLoss(nn.Module):
         self.min_abs_ppl = min_abs_ppl
         self.zipf_loss = VariableZipfian2gramLoss(abs_vocab_size, decay, target_vocab_util)
 
-    def forward(self, data, model, base_traj_loss, attention_mask, memory_span_abs: int, memory_span_traj: int):
+    def forward(self, data, model, base_traj_loss, attention_mask, memory_span_abs: int, memory_span_traj: int, prompt_len=None):
 
-        outputs = model(input_ids=data, memory_span_abs=memory_span_abs, memory_span_traj=memory_span_traj)
+        outputs = model(input_ids=data, attention_mask=attention_mask, memory_span_abs=memory_span_abs, memory_span_traj=memory_span_traj)
         logits = outputs.logits
 
         # --- cond loss --- 
@@ -167,6 +182,11 @@ class SoRLLoss(nn.Module):
         loss_fct = nn.CrossEntropyLoss(reduction='none')
         losses = loss_fct(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1))
         shift_attention_mask = attention_mask[..., 1:].contiguous()
+        # Mask question tokens so they don't contribute to any loss term
+        if prompt_len is not None:
+            seq_idx = torch.arange(shift_attention_mask.size(1), device=shift_attention_mask.device).unsqueeze(0)
+            shift_attention_mask = shift_attention_mask.clone()
+            shift_attention_mask[seq_idx < (prompt_len.unsqueeze(1) - 1)] = 0
         valid_positions = shift_attention_mask.view(-1) == 1
         losses = losses * valid_positions.float()
         ppt = losses.view(data.shape[0], -1)
@@ -259,22 +279,27 @@ class SorlTrainer(Trainer):
         """
         input_ids = inputs["input_ids"]
         attention_mask = inputs.get("attention_mask")
+        prompt_len = inputs.get("prompt_len")
         
         # --- compute base trajectory loss ---
-        # Create labels with -100 for padding tokens (standard practice)
+        # Create labels with -100 for padding AND question tokens
         labels = input_ids.clone()
         if attention_mask is not None:
             labels[attention_mask == 0] = -100
+        if prompt_len is not None:
+            seq_idx = torch.arange(labels.size(1), device=labels.device).unsqueeze(0)
+            labels[seq_idx < prompt_len.unsqueeze(1)] = -100
         
         outputs = model(input_ids=input_ids, attention_mask=attention_mask, labels=labels, memory_span_abs=self.memory_span_abs, memory_span_traj=self.memory_span_traj)
         base_traj_loss = outputs.loss
         
         # --- perform SoRL search to get best rollouts ---
         with torch.no_grad():
-            best_data, best_ppt, best_ppt_advantage, expanded_attn_mask = sorl_search(
+            best_data, best_ppt, best_ppt_advantage, expanded_attn_mask, expanded_prompt_len = sorl_search(
                 model=self.model,
                 input_ids=input_ids,
-                attention_mask=attention_mask, 
+                attention_mask=attention_mask,
+                prompt_len=prompt_len,
                 pad_token_id=self.pad_token_id,
                 n=self.num_rollouts,
                 K=self.K,
@@ -288,6 +313,7 @@ class SorlTrainer(Trainer):
         info_gain_loss, abs_loss, zipf_bigram_loss = self.loss_fn(
             best_data, model, base_traj_loss.detach(), expanded_attn_mask,
             self.memory_span_abs, self.memory_span_traj,
+            prompt_len=expanded_prompt_len,
         )
         
         # --- combine losses ---

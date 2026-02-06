@@ -31,12 +31,16 @@ class GSM8KDataset(Dataset):
 
     def __getitem__(self, idx):
         ex = self.dataset[idx]
-        text = f"Question: {ex['question']}\nAnswer: {ex['answer']}"
+        prompt = f"Question: {ex['question']}\nAnswer:"
+        text = f"{prompt} {ex['answer']}"
+        prompt_len = len(self.tokenizer(prompt, add_special_tokens=False)["input_ids"])
         enc = self.tokenizer(text, truncation=True, max_length=self.max_length,
                              padding="max_length", return_tensors="pt")
+        prompt_len = min(prompt_len, self.max_length)
         return {
             "input_ids": enc["input_ids"].squeeze(0),
             "attention_mask": enc["attention_mask"].squeeze(0),
+            "prompt_len": prompt_len,
         }
 
     @staticmethod
@@ -61,12 +65,16 @@ class MathQADataset(Dataset):
 
     def __getitem__(self, idx):
         ex = self.dataset[idx]
-        text = f"Problem: {ex['Problem']}\nAnswer: {ex['correct']}"
+        prompt = f"Problem: {ex['Problem']}\nAnswer:"
+        text = f"{prompt} {ex['correct']}"
+        prompt_len = len(self.tokenizer(prompt, add_special_tokens=False)["input_ids"])
         enc = self.tokenizer(text, truncation=True, max_length=self.max_length,
                              padding="max_length", return_tensors="pt")
+        prompt_len = min(prompt_len, self.max_length)
         return {
             "input_ids": enc["input_ids"].squeeze(0),
             "attention_mask": enc["attention_mask"].squeeze(0),
+            "prompt_len": prompt_len,
         }
 
     @staticmethod
@@ -100,6 +108,7 @@ def collate_fn(batch):
     return {
         "input_ids": torch.stack([x["input_ids"] for x in batch]),
         "attention_mask": torch.stack([x["attention_mask"] for x in batch]),
+        "prompt_len": torch.tensor([x["prompt_len"] for x in batch], dtype=torch.long),
     }
 
 
@@ -107,34 +116,46 @@ def collate_fn(batch):
 # Accuracy evaluation
 # =====================================================================
 
+def _filter_traj_tokens(generated_ids, base_vocab_size):
+    """Filter out abstract tokens, keeping only trajectory (base vocab) tokens."""
+    filtered = []
+    for seq in generated_ids:
+        traj_mask = seq < base_vocab_size
+        filtered.append(seq[traj_mask])
+    return filtered
+
+
 @torch.no_grad()
 def evaluate_accuracy(model, tokenizer, dataset, device, num_samples=100, max_new_tokens=256):
     """
     Generate answers and compute accuracy by comparing extracted answers.
-    Works with any dataset that has an `extract_answer` static method.
+    Uses SorlModelWrapper.generate (not the base HF model).
+    Filters out abstract tokens before decoding.
     """
     model.eval()
     correct = 0
     total = 0
     extract_fn = dataset.extract_answer
+    base_vocab_size = model.vocab_sizes[0].item()
 
     for i in range(min(num_samples, len(dataset))):
         item = dataset[i]
         input_ids = item["input_ids"].unsqueeze(0).to(device)
         attention_mask = item["attention_mask"].unsqueeze(0).to(device)
 
-        prompt_len = attention_mask.sum().item()
+        prompt_len = item["prompt_len"]
 
-        generated = model.model.generate(
+        generated = model.generate(
             input_ids=input_ids[:, :prompt_len],
-            attention_mask=attention_mask[:, :prompt_len],
             max_new_tokens=max_new_tokens,
-            do_sample=False,
-            pad_token_id=tokenizer.pad_token_id,
+            temperature=0.0,
         )
 
-        full_text = tokenizer.decode(generated[0], skip_special_tokens=True)
-        ref_text = tokenizer.decode(input_ids[0], skip_special_tokens=True)
+        traj_tokens = _filter_traj_tokens(generated, base_vocab_size)
+        full_text = tokenizer.decode(traj_tokens[0], skip_special_tokens=True)
+
+        ref_ids = input_ids[0][input_ids[0] < base_vocab_size]
+        ref_text = tokenizer.decode(ref_ids, skip_special_tokens=True)
 
         pred_answer = extract_fn(full_text)
         gold_answer = extract_fn(ref_text)

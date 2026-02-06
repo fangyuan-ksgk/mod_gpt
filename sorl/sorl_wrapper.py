@@ -77,7 +77,7 @@ class SorlModelWrapper(PreTrainedModel, GenerationMixin):
         # Create SORL block mask for flex attention with information bottleneck
         sorl_block_mask = self._create_sorl_block_mask(input_ids, memory_span_abs, memory_span_traj)
         
-        # Use flex attention with block_mask instead of materialized attention_mask
+        # attention_mask: masks padding tokens; block_mask: handles SoRL-specific attention
         return self.model.forward(input_ids=input_ids, attention_mask=attention_mask, block_mask=sorl_block_mask, **kwargs)
 
     def _create_sorl_block_mask(self, input_ids: torch.Tensor, memory_span_abs: int = 1792, memory_span_traj: int = 1792):
@@ -237,7 +237,7 @@ class SorlModelWrapper(PreTrainedModel, GenerationMixin):
         idx[recursion_mask] = new_tokens.to(idx.dtype)
         return idx
 
-    def recursion(self, idx, attention_mask, max_iterations=5, memory_span_abs=1792, memory_span_traj=1792, attn_blocksize=1792, temperature=0.0):
+    def recursion(self, idx, attention_mask, max_iterations=5, memory_span_abs=1792, memory_span_traj=1792, attn_blocksize=1792, temperature=0.0, prompt_len=None):
         """Perform recursion on abstract tokens with information bottleneck mask."""
         # Ensure vocab_sizes is on the same device as idx
         vocab_size_0 = self.vocab_sizes[0].to(idx.device)
@@ -255,17 +255,22 @@ class SorlModelWrapper(PreTrainedModel, GenerationMixin):
         for _ in range(max_iterations): 
             outputs = self.model.forward(
                 input_ids=idx, 
+                attention_mask=attention_mask,
                 block_mask=block_mask
             )
             logits = outputs.logits
             idx = self.extract_and_sample(logits, idx, recursion_mask, temp_expanded)
         
-        # Evaluation
+        # Evaluation — mask padding AND question tokens in labels
         labels = idx.clone()
         labels[attention_mask == 0] = -100
+        if prompt_len is not None:
+            seq_idx = torch.arange(labels.size(1), device=labels.device).unsqueeze(0)
+            labels[seq_idx < prompt_len.unsqueeze(1)] = -100
 
         outputs = self.model.forward(
             input_ids=idx, 
+            attention_mask=attention_mask,
             block_mask=block_mask,
         )
 

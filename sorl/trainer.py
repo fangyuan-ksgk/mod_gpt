@@ -204,10 +204,13 @@ class SoRLTrainer:
         cfg = self.config
         input_ids = batch["input_ids"].to(self.device)
         attention_mask = batch["attention_mask"].to(self.device)
+        prompt_len = batch["prompt_len"].to(self.device)  # (B,)
 
-        # 1. Base trajectory loss
+        # 1. Base trajectory loss — mask padding AND question tokens in labels
         labels = input_ids.clone()
         labels[attention_mask == 0] = -100
+        seq_idx = torch.arange(labels.size(1), device=self.device).unsqueeze(0)
+        labels[seq_idx < prompt_len.unsqueeze(1)] = -100
         outputs = self.raw_model(
             input_ids=input_ids, attention_mask=attention_mask, labels=labels,
             memory_span_abs=cfg.memory_span_abs, memory_span_traj=cfg.memory_span_traj,
@@ -217,8 +220,8 @@ class SoRLTrainer:
 
         # 2. SoRL search (no grad)
         with torch.no_grad():
-            best_data, best_ppt, best_ppt_adv, expanded_attn_mask = sorl_search(
-                self.raw_model, input_ids, attention_mask, self.pad_token_id,
+            best_data, best_ppt, best_ppt_adv, expanded_attn_mask, expanded_prompt_len = sorl_search(
+                self.raw_model, input_ids, attention_mask, prompt_len, self.pad_token_id,
                 n=cfg.num_rollouts, K=cfg.K,
                 max_iterations=cfg.max_iterations,
                 memory_span_abs=cfg.memory_span_abs,
@@ -230,6 +233,7 @@ class SoRLTrainer:
         info_gain_loss, abs_loss, zipf_bigram_loss = self.loss_fn(
             best_data, self.raw_model, base_traj_loss.detach(),
             expanded_attn_mask, cfg.memory_span_abs, cfg.memory_span_traj,
+            prompt_len=expanded_prompt_len,
         )
 
         # 4. Combined loss
@@ -358,14 +362,20 @@ class SoRLTrainer:
                 total_loss = loss.item() * cfg.gradient_accumulation_steps
                 if self.is_master and (batch_idx + 1) % cfg.log_every == 0:
                     elapsed = time.time() - t_start
-                    mem = _gpu_mem("train", self.device)
+                    frac_done = max(global_step, 1) / max(total_steps, 1)
+                    epoch_frac = epoch + (batch_idx + 1) / len(dataloader)
+                    eta = elapsed / frac_done * (1 - frac_done) if frac_done > 0 else 0
+                    eta_m, eta_s = divmod(int(eta), 60)
+                    eta_h, eta_m = divmod(eta_m, 60)
+                    eta_str = f"{eta_h}h{eta_m:02d}m{eta_s:02d}s" if eta_h else f"{eta_m}m{eta_s:02d}s"
+                    peak = f"Memory :{torch.cuda.max_memory_allocated(self.device)/1024**3:.2f}GB" if torch.cuda.is_available() else ""
                     self._log(
-                        f"E{epoch+1} S{global_step}/{total_steps} | "
+                        f"epoch {epoch_frac:.3f}/{cfg.num_epochs} | remain: {eta_str} | "
                         f"loss={total_loss:.4f} base={step_out['base_traj_loss'].item():.4f} "
                         f"info={step_out['info_gain_loss'].item():.4f} "
                         f"abs={step_out['abs_loss'].item():.4f} "
                         f"zipf={step_out['zipf_bigram_loss'].item():.4f} | "
-                        f"lr={lr:.2e} | {elapsed:.0f}s {mem}"
+                        f"{peak}"
                     )
                     self.history["step"].append(global_step)
                     self.history["loss"].append(total_loss)
