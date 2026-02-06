@@ -35,11 +35,10 @@ class SorlModelWrapper(PreTrainedModel, GenerationMixin):
         
         # Use AutoModelForCausalLM to load the correct model class
         self.model = AutoModelForCausalLM.from_config(config)
-        self.memory_span = None
         self.full_vocab_size_list = None
     
     @classmethod
-    def from_pretrained(cls, model_name_or_path: str, abstract_vocab_size_list: List[int], memory_span: int, **kwargs) -> "SorlModelWrapper":
+    def from_pretrained(cls, model_name_or_path: str, abstract_vocab_size_list: List[int], **kwargs) -> "SorlModelWrapper":
         config = AutoConfig.from_pretrained(model_name_or_path, **kwargs)
         config.tie_word_embeddings = False
         
@@ -50,7 +49,6 @@ class SorlModelWrapper(PreTrainedModel, GenerationMixin):
             **kwargs
         )
 
-        wrapper.memory_span = memory_span
         base_vocab_size = config.vocab_size
         wrapper.full_vocab_size_list = [base_vocab_size] + abstract_vocab_size_list
         wrapper._setup_vocabulary()
@@ -64,10 +62,9 @@ class SorlModelWrapper(PreTrainedModel, GenerationMixin):
         return wrapper
     
     @classmethod
-    def from_scratch(cls, config: PretrainedConfig, full_vocab_size_list: List[int], memory_span: int, pad_token_id: int) -> "SorlModelWrapper":
+    def from_scratch(cls, config: PretrainedConfig, full_vocab_size_list: List[int], pad_token_id: int) -> "SorlModelWrapper":
         """A custom initializer for creating a SORL model from scratch."""
         wrapper = cls(config)
-        wrapper.memory_span = memory_span
         wrapper.full_vocab_size_list = full_vocab_size_list
         wrapper._setup_vocabulary()
         
@@ -132,7 +129,7 @@ class SorlModelWrapper(PreTrainedModel, GenerationMixin):
             Q_LEN=seq_len, 
             KV_LEN=seq_len, 
             device=device,
-            _compile=True if "cuda" in str(device) else False,
+            # _compile=True if "cuda" in str(device) else False,
         )
         
         return block_mask

@@ -1,0 +1,149 @@
+"""
+Post-training datasets and accuracy evaluators for SoRL.
+
+Usage:
+    from data.pt_dataset import get_dataset, evaluate_accuracy, collate_fn
+
+    train_ds = get_dataset("gsm8k", split="train", tokenizer=tokenizer, max_length=128)
+    result = evaluate_accuracy(model, tokenizer, train_ds, device, num_samples=50)
+"""
+
+import re
+import torch
+from torch.utils.data import Dataset
+from datasets import load_dataset
+
+
+# =====================================================================
+# Dataset classes
+# =====================================================================
+
+class GSM8KDataset(Dataset):
+    """GSM8K math reasoning dataset."""
+
+    def __init__(self, split="train", tokenizer=None, max_length=128):
+        self.dataset = load_dataset("gsm8k", "main", split=split)
+        self.tokenizer = tokenizer
+        self.max_length = max_length
+
+    def __len__(self):
+        return len(self.dataset)
+
+    def __getitem__(self, idx):
+        ex = self.dataset[idx]
+        text = f"Question: {ex['question']}\nAnswer: {ex['answer']}"
+        enc = self.tokenizer(text, truncation=True, max_length=self.max_length,
+                             padding="max_length", return_tensors="pt")
+        return {
+            "input_ids": enc["input_ids"].squeeze(0),
+            "attention_mask": enc["attention_mask"].squeeze(0),
+        }
+
+    @staticmethod
+    def extract_answer(text):
+        """Extract final numeric answer from GSM8K format: #### <number>"""
+        match = re.search(r"####\s*(-?[\d,]+\.?\d*)", text)
+        if match:
+            return match.group(1).replace(",", "").strip()
+        return None
+
+
+class MathQADataset(Dataset):
+    """MathQA multiple-choice dataset."""
+
+    def __init__(self, split="train", tokenizer=None, max_length=128):
+        self.dataset = load_dataset("math_qa", split=split)
+        self.tokenizer = tokenizer
+        self.max_length = max_length
+
+    def __len__(self):
+        return len(self.dataset)
+
+    def __getitem__(self, idx):
+        ex = self.dataset[idx]
+        text = f"Problem: {ex['Problem']}\nAnswer: {ex['correct']}"
+        enc = self.tokenizer(text, truncation=True, max_length=self.max_length,
+                             padding="max_length", return_tensors="pt")
+        return {
+            "input_ids": enc["input_ids"].squeeze(0),
+            "attention_mask": enc["attention_mask"].squeeze(0),
+        }
+
+    @staticmethod
+    def extract_answer(text):
+        match = re.search(r"Answer:\s*([a-e])", text, re.IGNORECASE)
+        return match.group(1).lower() if match else None
+
+
+# =====================================================================
+# Registry
+# =====================================================================
+
+DATASET_REGISTRY = {
+    "gsm8k": GSM8KDataset,
+    "math_qa": MathQADataset,
+}
+
+
+def get_dataset(name, split="train", tokenizer=None, max_length=128):
+    """Factory: instantiate a registered dataset by name."""
+    if name not in DATASET_REGISTRY:
+        raise ValueError(f"Unknown dataset: {name}. Available: {list(DATASET_REGISTRY.keys())}")
+    return DATASET_REGISTRY[name](split=split, tokenizer=tokenizer, max_length=max_length)
+
+
+# =====================================================================
+# Collate
+# =====================================================================
+
+def collate_fn(batch):
+    return {
+        "input_ids": torch.stack([x["input_ids"] for x in batch]),
+        "attention_mask": torch.stack([x["attention_mask"] for x in batch]),
+    }
+
+
+# =====================================================================
+# Accuracy evaluation
+# =====================================================================
+
+@torch.no_grad()
+def evaluate_accuracy(model, tokenizer, dataset, device, num_samples=100, max_new_tokens=256):
+    """
+    Generate answers and compute accuracy by comparing extracted answers.
+    Works with any dataset that has an `extract_answer` static method.
+    """
+    model.eval()
+    correct = 0
+    total = 0
+    extract_fn = dataset.extract_answer
+
+    for i in range(min(num_samples, len(dataset))):
+        item = dataset[i]
+        input_ids = item["input_ids"].unsqueeze(0).to(device)
+        attention_mask = item["attention_mask"].unsqueeze(0).to(device)
+
+        prompt_len = attention_mask.sum().item()
+
+        generated = model.model.generate(
+            input_ids=input_ids[:, :prompt_len],
+            attention_mask=attention_mask[:, :prompt_len],
+            max_new_tokens=max_new_tokens,
+            do_sample=False,
+            pad_token_id=tokenizer.pad_token_id,
+        )
+
+        full_text = tokenizer.decode(generated[0], skip_special_tokens=True)
+        ref_text = tokenizer.decode(input_ids[0], skip_special_tokens=True)
+
+        pred_answer = extract_fn(full_text)
+        gold_answer = extract_fn(ref_text)
+
+        if pred_answer is not None and gold_answer is not None:
+            if pred_answer.strip() == gold_answer.strip():
+                correct += 1
+            total += 1
+
+    accuracy = correct / max(total, 1)
+    model.train()
+    return {"accuracy": accuracy, "correct": correct, "total": total}

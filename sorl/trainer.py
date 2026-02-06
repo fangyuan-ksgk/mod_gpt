@@ -1,0 +1,404 @@
+"""
+Standalone SoRL Trainer — no HuggingFace Trainer dependency.
+DDP-compatible, modular dataset/accuracy support.
+
+Usage (single GPU / notebook):
+    trainer = SoRLTrainer(model, tokenizer, train_dataset, ...)
+    trainer.train()
+
+Usage (DDP):
+    torchrun --nproc_per_node=4 my_script.py
+    # inside my_script.py:
+    trainer = SoRLTrainer(model, tokenizer, train_dataset, ..., ddp=True)
+    trainer.train()
+"""
+
+import os
+import time
+from dataclasses import dataclass, field
+from typing import Optional, Callable, Dict, Any
+
+import torch
+import torch.nn as nn
+import torch.distributed as dist
+from torch.nn.parallel import DistributedDataParallel as DDP
+from torch.utils.data import DataLoader, DistributedSampler
+
+from sorl.sorl_trainer import sorl_search, SoRLLoss
+from data.pt_dataset import collate_fn as default_collate_fn
+
+
+# ---------------------------------------------------------------------------
+# Config
+# ---------------------------------------------------------------------------
+@dataclass
+class SoRLConfig:
+    # SoRL search
+    num_rollouts: int = 4
+    K: int = 4
+    max_iterations: int = 2
+    memory_span_abs: int = 1792
+    memory_span_traj: int = 1792
+    temperature: float = 1.0
+
+    # Loss weights
+    alpha_info_gain: float = 10.0
+    alpha_abs: float = 0.1
+    alpha_soft_zipf: float = 1.0
+
+    # Loss function
+    decay: float = 0.8
+    target_vocab_util: float = 0.8
+    min_abs_ppl: float = 0.0
+
+    # Optimizer
+    lr: float = 1e-5
+    weight_decay: float = 0.01
+    warmup_steps: int = 50
+    cooldown_frac: float = 0.4
+    max_grad_norm: float = 1.0
+
+    # Training
+    batch_size: int = 2
+    gradient_accumulation_steps: int = 1
+    num_epochs: int = 3
+
+    # Logging / Eval / Checkpoint
+    log_every: int = 10
+    eval_every: int = 500
+    save_every: int = 500
+    eval_samples: int = 50
+    output_dir: str = "./ckpt/sorl"
+
+
+# ---------------------------------------------------------------------------
+# LR schedule
+# ---------------------------------------------------------------------------
+def _get_lr(step, total_steps, warmup_steps, cooldown_frac, base_lr):
+    if step < warmup_steps:
+        return base_lr * step / max(warmup_steps, 1)
+    progress = (step - warmup_steps) / max(total_steps - warmup_steps, 1)
+    if progress < 1 - cooldown_frac:
+        return base_lr
+    w = (1 - progress) / cooldown_frac
+    return base_lr * (w * 1.0 + (1 - w) * 0.1)
+
+
+# ---------------------------------------------------------------------------
+# Memory helper
+# ---------------------------------------------------------------------------
+def _gpu_mem(tag="", device=None):
+    if torch.cuda.is_available() and device is not None:
+        a = torch.cuda.memory_allocated(device) / 1024**3
+        r = torch.cuda.memory_reserved(device) / 1024**3
+        p = torch.cuda.max_memory_allocated(device) / 1024**3
+        return f"[{tag}] Alloc:{a:.2f}GB Res:{r:.2f}GB Peak:{p:.2f}GB"
+    return ""
+
+
+# ---------------------------------------------------------------------------
+# Trainer
+# ---------------------------------------------------------------------------
+class SoRLTrainer:
+    """
+    Standalone SoRL trainer. No HuggingFace Trainer inheritance.
+
+    Args:
+        model:            SorlModelWrapper instance (unwrapped).
+        tokenizer:        HuggingFace tokenizer.
+        train_dataset:    torch Dataset returning {"input_ids", "attention_mask"}.
+        val_dataset:      (optional) torch Dataset for evaluation.
+        compute_accuracy: (optional) fn(model, tokenizer, dataset, device, num_samples) -> dict
+                          Must return a dict with at least {"accuracy": float}.
+        collate_fn:       (optional) custom collate function.
+        config:           SoRLConfig dataclass.
+        device:           (optional) torch.device or str, e.g. "cuda". If None, inferred
+                          from model parameters (single-GPU) or LOCAL_RANK (DDP).
+        ddp:              If True, initialise DDP wrapping (expects torchrun env vars).
+    """
+
+    def __init__(
+        self,
+        model,
+        tokenizer,
+        train_dataset,
+        val_dataset=None,
+        compute_accuracy: Optional[Callable] = None,
+        collate_fn: Optional[Callable] = None,
+        config: Optional[SoRLConfig] = None,
+        device: Optional[str] = None,
+        ddp: bool = False,
+    ):
+        self.config = config or SoRLConfig()
+        self.tokenizer = tokenizer
+        self.compute_accuracy = compute_accuracy
+        self.collate_fn = collate_fn or default_collate_fn
+        self.train_dataset = train_dataset
+        self.val_dataset = val_dataset
+
+        # --- DDP setup ---
+        self.ddp = ddp
+        if ddp:
+            if not dist.is_initialized():
+                dist.init_process_group(backend="nccl")
+            self.rank = dist.get_rank()
+            self.world_size = dist.get_world_size()
+            self.local_rank = int(os.environ.get("LOCAL_RANK", 0))
+            self.device = torch.device("cuda", self.local_rank)
+            torch.cuda.set_device(self.device)
+            self.is_master = (self.rank == 0)
+        else:
+            self.rank = 0
+            self.world_size = 1
+            self.local_rank = 0
+            if device is not None:
+                self.device = torch.device(device)
+            else:
+                self.device = next(model.parameters()).device
+            self.is_master = True
+
+        # --- Model ---
+        self.raw_model = model.to(self.device)
+        if ddp:
+            self.model = DDP(self.raw_model, device_ids=[self.local_rank], find_unused_parameters=True)
+        else:
+            self.model = self.raw_model
+
+        # --- Loss ---
+        self.loss_fn = SoRLLoss(
+            abs_vocab_size=self.raw_model.vocab_sizes[-1],
+            decay=self.config.decay,
+            target_vocab_util=self.config.target_vocab_util,
+            min_abs_ppl=self.config.min_abs_ppl,
+        ).to(self.device)
+
+        self.pad_token_id = tokenizer.pad_token_id
+        self.history: Dict[str, list] = {
+            "step": [], "loss": [], "base_loss": [],
+            "info_loss": [], "abs_loss": [], "zipf_loss": [], "lr": [],
+        }
+
+    # ------------------------------------------------------------------
+    # Dataloader
+    # ------------------------------------------------------------------
+    def _make_dataloader(self, dataset, shuffle=True):
+        if self.ddp:
+            sampler = DistributedSampler(dataset, num_replicas=self.world_size,
+                                         rank=self.rank, shuffle=shuffle)
+        else:
+            sampler = None
+        return DataLoader(
+            dataset,
+            batch_size=self.config.batch_size,
+            shuffle=(shuffle and sampler is None),
+            sampler=sampler,
+            collate_fn=self.collate_fn,
+            num_workers=0,
+            pin_memory=False,
+        )
+
+    # ------------------------------------------------------------------
+    # Single training step (returns loss dict)
+    # ------------------------------------------------------------------
+    def _training_step(self, batch):
+        cfg = self.config
+        input_ids = batch["input_ids"].to(self.device)
+        attention_mask = batch["attention_mask"].to(self.device)
+
+        # 1. Base trajectory loss
+        labels = input_ids.clone()
+        labels[attention_mask == 0] = -100
+        outputs = self.raw_model(
+            input_ids=input_ids, attention_mask=attention_mask, labels=labels,
+            memory_span_abs=cfg.memory_span_abs, memory_span_traj=cfg.memory_span_traj,
+        )
+        base_traj_loss = outputs.loss
+        del outputs
+
+        # 2. SoRL search (no grad)
+        with torch.no_grad():
+            best_data, best_ppt, best_ppt_adv, expanded_attn_mask = sorl_search(
+                self.raw_model, input_ids, attention_mask, self.pad_token_id,
+                n=cfg.num_rollouts, K=cfg.K,
+                max_iterations=cfg.max_iterations,
+                memory_span_abs=cfg.memory_span_abs,
+                memory_span_traj=cfg.memory_span_traj,
+                temperature=cfg.temperature,
+            )
+
+        # 3. Auxiliary losses
+        info_gain_loss, abs_loss, zipf_bigram_loss = self.loss_fn(
+            best_data, self.raw_model, base_traj_loss.detach(),
+            expanded_attn_mask, cfg.memory_span_abs, cfg.memory_span_traj,
+        )
+
+        # 4. Combined loss
+        loss = (
+            base_traj_loss
+            + cfg.alpha_info_gain * info_gain_loss
+            + cfg.alpha_abs * abs_loss
+            + cfg.alpha_soft_zipf * zipf_bigram_loss
+        )
+
+        # Cleanup search tensors
+        del best_data, best_ppt, best_ppt_adv, expanded_attn_mask
+
+        return {
+            "loss": loss,
+            "base_traj_loss": base_traj_loss,
+            "info_gain_loss": info_gain_loss,
+            "abs_loss": abs_loss,
+            "zipf_bigram_loss": zipf_bigram_loss,
+        }
+
+    # ------------------------------------------------------------------
+    # Logging helper
+    # ------------------------------------------------------------------
+    def _log(self, msg):
+        if self.is_master:
+            print(msg)
+
+    # ------------------------------------------------------------------
+    # Save checkpoint
+    # ------------------------------------------------------------------
+    def save_checkpoint(self, path, epoch, global_step, optimizer):
+        if not self.is_master:
+            return
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        torch.save({
+            "step": global_step,
+            "epoch": epoch,
+            "model": self.raw_model.state_dict(),
+            "optimizer": optimizer.state_dict(),
+            "loss_fn": self.loss_fn.state_dict(),
+            "config": self.config.__dict__,
+        }, path)
+        self._log(f"Saved: {path}")
+
+    # ------------------------------------------------------------------
+    # Evaluate
+    # ------------------------------------------------------------------
+    @torch.no_grad()
+    def evaluate(self):
+        if self.compute_accuracy is None or self.val_dataset is None:
+            return None
+        self.raw_model.eval()
+        result = self.compute_accuracy(
+            self.raw_model, self.tokenizer, self.val_dataset,
+            self.device, self.config.eval_samples,
+        )
+        self.raw_model.train()
+        return result
+
+    # ------------------------------------------------------------------
+    # Main training loop
+    # ------------------------------------------------------------------
+    def train(self, resume_from: Optional[str] = None):
+        cfg = self.config
+        os.makedirs(cfg.output_dir, exist_ok=True)
+
+        dataloader = self._make_dataloader(self.train_dataset, shuffle=True)
+        total_steps = len(dataloader) * cfg.num_epochs // cfg.gradient_accumulation_steps
+
+        # Optimizer
+        optimizer = torch.optim.AdamW(
+            self.model.parameters(), lr=cfg.lr, weight_decay=cfg.weight_decay,
+        )
+
+        start_epoch, start_step = 0, 0
+        if resume_from and os.path.exists(resume_from):
+            ckpt = torch.load(resume_from, map_location=self.device)
+            self.raw_model.load_state_dict(ckpt["model"])
+            optimizer.load_state_dict(ckpt["optimizer"])
+            if "loss_fn" in ckpt:
+                self.loss_fn.load_state_dict(ckpt["loss_fn"])
+            start_epoch = ckpt.get("epoch", 0)
+            start_step = ckpt.get("step", 0)
+            self._log(f"Resumed from {resume_from} (epoch={start_epoch}, step={start_step})")
+
+        self._log(f"Total steps: {total_steps} | Steps/epoch: {len(dataloader)} | "
+                   f"Effective batch: {cfg.batch_size * cfg.gradient_accumulation_steps * self.world_size}")
+
+        self.model.train()
+        global_step = start_step
+        if torch.cuda.is_available():
+            torch.cuda.reset_peak_memory_stats(self.device)
+
+        t_start = time.time()
+
+        for epoch in range(start_epoch, cfg.num_epochs):
+            if self.ddp and hasattr(dataloader.sampler, "set_epoch"):
+                dataloader.sampler.set_epoch(epoch)
+
+            for batch_idx, batch in enumerate(dataloader):
+                # Skip already-done steps on resume
+                effective_step = epoch * len(dataloader) + batch_idx
+                if effective_step < start_step * cfg.gradient_accumulation_steps:
+                    continue
+
+                # LR schedule
+                lr = _get_lr(global_step, total_steps, cfg.warmup_steps, cfg.cooldown_frac, cfg.lr)
+                for pg in optimizer.param_groups:
+                    pg["lr"] = lr
+
+                # Forward + loss
+                step_out = self._training_step(batch)
+                loss = step_out["loss"] / cfg.gradient_accumulation_steps
+                loss.backward()
+
+                # Optimizer step
+                if (batch_idx + 1) % cfg.gradient_accumulation_steps == 0:
+                    if cfg.max_grad_norm > 0:
+                        torch.nn.utils.clip_grad_norm_(self.model.parameters(), cfg.max_grad_norm)
+                    optimizer.step()
+                    optimizer.zero_grad(set_to_none=True)
+                    global_step += 1
+
+                # Logging
+                total_loss = loss.item() * cfg.gradient_accumulation_steps
+                if self.is_master and (batch_idx + 1) % cfg.log_every == 0:
+                    elapsed = time.time() - t_start
+                    mem = _gpu_mem("train", self.device)
+                    self._log(
+                        f"E{epoch+1} S{global_step}/{total_steps} | "
+                        f"loss={total_loss:.4f} base={step_out['base_traj_loss'].item():.4f} "
+                        f"info={step_out['info_gain_loss'].item():.4f} "
+                        f"abs={step_out['abs_loss'].item():.4f} "
+                        f"zipf={step_out['zipf_bigram_loss'].item():.4f} | "
+                        f"lr={lr:.2e} | {elapsed:.0f}s {mem}"
+                    )
+                    self.history["step"].append(global_step)
+                    self.history["loss"].append(total_loss)
+                    self.history["base_loss"].append(step_out["base_traj_loss"].item())
+                    self.history["info_loss"].append(step_out["info_gain_loss"].item())
+                    self.history["abs_loss"].append(step_out["abs_loss"].item())
+                    self.history["zipf_loss"].append(step_out["zipf_bigram_loss"].item())
+                    self.history["lr"].append(lr)
+
+                # Cleanup
+                del loss, step_out
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+
+                # Eval
+                if global_step > 0 and global_step % cfg.eval_every == 0:
+                    result = self.evaluate()
+                    if result is not None:
+                        self._log(f"--- Eval step {global_step}: {result} ---")
+
+                # Checkpoint
+                if global_step > 0 and global_step % cfg.save_every == 0:
+                    ckpt_path = os.path.join(cfg.output_dir, f"step_{global_step}.pt")
+                    self.save_checkpoint(ckpt_path, epoch, global_step, optimizer)
+
+            self._log(f"=== Epoch {epoch+1} complete ===")
+
+        # Final save
+        final_path = os.path.join(cfg.output_dir, "final.pt")
+        self.save_checkpoint(final_path, cfg.num_epochs, global_step, optimizer)
+        self._log("Training complete!")
+
+        if self.ddp:
+            dist.destroy_process_group()
+
+        return self.history
