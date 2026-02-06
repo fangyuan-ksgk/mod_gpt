@@ -132,7 +132,7 @@ class SorlModelWrapper(PreTrainedModel, GenerationMixin):
             Q_LEN=seq_len, 
             KV_LEN=seq_len, 
             device=device,
-            _compile=True if "cuda" in device else False,
+            _compile=True if "cuda" in str(device) else False,
         )
         
         return block_mask
