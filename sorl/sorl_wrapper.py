@@ -160,6 +160,7 @@ class SorlModelWrapper(PreTrainedModel, GenerationMixin):
         self.register_buffer("l0_mask", l0_mask)
         
         abs_mask = ~self.l0_mask
+        abs_mask[self.vocab_sizes[0]] = False  # exclude placeholder/mask token
         self.register_buffer("abs_mask", abs_mask)
 
     @torch.no_grad()
