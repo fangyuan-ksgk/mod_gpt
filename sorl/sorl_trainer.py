@@ -309,12 +309,16 @@ class SorlTrainer(Trainer):
         outputs = model(input_ids=input_ids, attention_mask=attention_mask, labels=labels, memory_span_abs=self.memory_span_abs, memory_span_traj=self.memory_span_traj)
         base_traj_loss = outputs.loss
         
+        # Free search intermediates we no longer need
+        del best_ppt, best_ppt_advantage
+
         # --- compute auxiliary losses on best rollouts ---
         info_gain_loss, abs_loss, zipf_bigram_loss = self.loss_fn(
             best_data, model, base_traj_loss.detach(), expanded_attn_mask,
             self.memory_span_abs, self.memory_span_traj,
             prompt_len=expanded_prompt_len,
         )
+        del best_data, expanded_attn_mask, expanded_prompt_len
         
         # --- combine losses ---
         loss = (base_traj_loss + 
@@ -323,3 +327,11 @@ class SorlTrainer(Trainer):
                 self.alpha_soft_zipf * zipf_bigram_loss)
         
         return (loss, {"loss": loss, "base_traj_loss": base_traj_loss}) if return_outputs else loss
+
+    def training_step(self, model, inputs, num_items_in_batch=None):
+        """Override HF training_step to do manual backward — avoids OOM from accelerator overhead."""
+        model.train()
+        inputs = self._prepare_inputs(inputs)
+        loss = self.compute_loss(model, inputs)
+        loss.backward()
+        return loss.detach()
