@@ -97,19 +97,23 @@ def sorl_search(
     expanded_prompt_len = expand_prompt_len(prompt_len, insert_mask)
     expanded_data, expanded_mask = insert_tokens_with_padding(input_ids, attention_mask, insert_mask, model.vocab_sizes[0], pad_token_id)
 
-    repeat_data = expanded_data.repeat_interleave(n, dim=0)
-    repeat_mask = expanded_mask.repeat_interleave(n, dim=0)
-    repeat_prompt_len = expanded_prompt_len.repeat_interleave(n, dim=0)
-
-    search_data, search_ppt = model.recursion(
-        repeat_data, 
-        repeat_mask,
-        max_iterations=max_iterations,
-        memory_span_abs=memory_span_abs,
-        memory_span_traj=memory_span_traj,
-        temperature=temperature,
-        prompt_len=repeat_prompt_len,
-    )
+    # Process rollouts one at a time to keep peak memory at batch_size
+    chunks_data, chunks_ppt = [], []
+    for _ in range(n):
+        rd, rp = model.recursion(
+            expanded_data.clone(),
+            expanded_mask,
+            max_iterations=max_iterations,
+            memory_span_abs=memory_span_abs,
+            memory_span_traj=memory_span_traj,
+            temperature=temperature,
+            prompt_len=expanded_prompt_len,
+        )
+        chunks_data.append(rd)
+        chunks_ppt.append(rp)
+    # Interleave so layout matches select_best_sequences expectation: [b0_r0, b0_r1, ..., b1_r0, ...]
+    search_data = torch.stack(chunks_data, dim=1).reshape(-1, chunks_data[0].shape[-1])
+    search_ppt = torch.stack(chunks_ppt, dim=1).reshape(-1, chunks_ppt[0].shape[-1])
 
     # selection must be informed by 'loss_mask' or 'prompt_len' (B,) shaped prompt_len
     # however, on the extended sequence, even prompt_len needs to be extended
@@ -296,6 +300,9 @@ class SorlTrainer(Trainer):
                 memory_span_traj=self.memory_span_traj,
                 temperature=self.temperature,
             )
+        # Release reserved memory from search phase to avoid fragmentation OOM
+        del best_ppt, best_ppt_advantage
+        torch.cuda.empty_cache()
         
         # --- compute base trajectory loss ---
         # Create labels with -100 for padding AND question tokens
@@ -309,9 +316,6 @@ class SorlTrainer(Trainer):
         outputs = model(input_ids=input_ids, attention_mask=attention_mask, labels=labels, memory_span_abs=self.memory_span_abs, memory_span_traj=self.memory_span_traj)
         base_traj_loss = outputs.loss
         
-        # Free search intermediates we no longer need
-        del best_ppt, best_ppt_advantage
-
         # --- compute auxiliary losses on best rollouts ---
         info_gain_loss, abs_loss, zipf_bigram_loss = self.loss_fn(
             best_data, model, base_traj_loss.detach(), expanded_attn_mask,
