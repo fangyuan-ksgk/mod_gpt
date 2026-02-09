@@ -323,11 +323,3 @@ class SorlTrainer(Trainer):
                 self.alpha_soft_zipf * zipf_bigram_loss)
         
         return (loss, {"loss": loss, "base_traj_loss": base_traj_loss}) if return_outputs else loss
-
-    def training_step(self, model, inputs, num_items_in_batch=None): 
-        """Overwrite traing step to avoid OOM issue"""
-        model.train()
-        inputs = self._prepare_inputs(inputs)
-        loss = self.compute_loss(model, inputs)
-        loss.backward()
-        return loss.detach()
