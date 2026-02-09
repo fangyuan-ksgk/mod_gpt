@@ -281,18 +281,6 @@ class SorlTrainer(Trainer):
         attention_mask = inputs.get("attention_mask")
         prompt_len = inputs.get("prompt_len")
         
-        # --- compute base trajectory loss ---
-        # Create labels with -100 for padding AND question tokens
-        labels = input_ids.clone()
-        if attention_mask is not None:
-            labels[attention_mask == 0] = -100
-        if prompt_len is not None:
-            seq_idx = torch.arange(labels.size(1), device=labels.device).unsqueeze(0)
-            labels[seq_idx < prompt_len.unsqueeze(1)] = -100
-        
-        outputs = model(input_ids=input_ids, attention_mask=attention_mask, labels=labels, memory_span_abs=self.memory_span_abs, memory_span_traj=self.memory_span_traj)
-        base_traj_loss = outputs.loss
-        
         # --- perform SoRL search to get best rollouts ---
         with torch.no_grad():
             best_data, best_ppt, best_ppt_advantage, expanded_attn_mask, expanded_prompt_len = sorl_search(
@@ -308,6 +296,18 @@ class SorlTrainer(Trainer):
                 memory_span_traj=self.memory_span_traj,
                 temperature=self.temperature,
             )
+        
+        # --- compute base trajectory loss ---
+        # Create labels with -100 for padding AND question tokens
+        labels = input_ids.clone()
+        if attention_mask is not None:
+            labels[attention_mask == 0] = -100
+        if prompt_len is not None:
+            seq_idx = torch.arange(labels.size(1), device=labels.device).unsqueeze(0)
+            labels[seq_idx < prompt_len.unsqueeze(1)] = -100
+        
+        outputs = model(input_ids=input_ids, attention_mask=attention_mask, labels=labels, memory_span_abs=self.memory_span_abs, memory_span_traj=self.memory_span_traj)
+        base_traj_loss = outputs.loss
         
         # --- compute auxiliary losses on best rollouts ---
         info_gain_loss, abs_loss, zipf_bigram_loss = self.loss_fn(
