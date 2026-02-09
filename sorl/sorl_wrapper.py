@@ -40,12 +40,10 @@ class SorlModelWrapper(PreTrainedModel, GenerationMixin):
     @classmethod
     def from_pretrained(cls, model_name_or_path: str, abstract_vocab_size_list: List[int], **kwargs) -> "SorlModelWrapper":
         config = AutoConfig.from_pretrained(model_name_or_path, **kwargs)
-        config.tie_word_embeddings = False
         
         wrapper = cls(config)
         wrapper.model = AutoModelForCausalLM.from_pretrained(
             model_name_or_path, 
-            tie_word_embeddings=False,  # Also pass to model loading
             **kwargs
         )
 
@@ -76,6 +74,10 @@ class SorlModelWrapper(PreTrainedModel, GenerationMixin):
     def forward(self, input_ids, attention_mask=None, memory_span_abs=1792, memory_span_traj=1792, **kwargs):
         # Create SORL block mask for flex attention with information bottleneck
         sorl_block_mask = self._create_sorl_block_mask(input_ids, memory_span_abs, memory_span_traj)
+
+        # Training does not benefit from KV cache and it inflates memory usage.
+        if self.training:
+            kwargs.setdefault("use_cache", False)
         
         # attention_mask: masks padding tokens; block_mask: handles SoRL-specific attention
         return self.model.forward(input_ids=input_ids, attention_mask=attention_mask, block_mask=sorl_block_mask, **kwargs)
@@ -186,6 +188,7 @@ class SorlModelWrapper(PreTrainedModel, GenerationMixin):
             outputs = self.model.forward(
                 input_ids=generated_ids,
                 block_mask=self._create_sorl_block_mask(generated_ids, memory_span_abs, memory_span_traj),
+                use_cache=False,
             )
             next_token_logits = outputs.logits[:, -1, :]
 
@@ -257,7 +260,8 @@ class SorlModelWrapper(PreTrainedModel, GenerationMixin):
             outputs = self.model.forward(
                 input_ids=idx, 
                 attention_mask=attention_mask,
-                block_mask=block_mask
+                block_mask=block_mask,
+                use_cache=False,
             )
             logits = outputs.logits
             idx = self.extract_and_sample(logits, idx, recursion_mask, temp_expanded)
@@ -273,6 +277,7 @@ class SorlModelWrapper(PreTrainedModel, GenerationMixin):
             input_ids=idx, 
             attention_mask=attention_mask,
             block_mask=block_mask,
+            use_cache=False,
         )
 
         shift_logits = outputs.logits[..., :-1, :].contiguous()
