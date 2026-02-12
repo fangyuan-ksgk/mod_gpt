@@ -173,6 +173,7 @@ class SorlModelWrapper(PreTrainedModel, GenerationMixin):
         temperature: float = 0.7,
         top_k: int = 50,
         K: Optional[int] = None,
+        free_form: bool = False,
         memory_span_abs: int = 1792,
         memory_span_traj: int = 1792,
     ):
@@ -192,15 +193,20 @@ class SorlModelWrapper(PreTrainedModel, GenerationMixin):
             )
             next_token_logits = outputs.logits[:, -1, :]
 
-            # Determine next token level
-            if K is None:
-                next_token_level = torch.zeros(generated_ids.size(0), dtype=torch.long, device=generated_ids.device)
-            else:
-                next_token_level = 1 - (levels_cache[:, -K:] > 0).any(dim=-1).long()
+            if not free_form:
+                # Periodic: force abstract token every K trajectory tokens
+                if K is None:
+                    next_token_level = torch.zeros(generated_ids.size(0), dtype=torch.long, device=generated_ids.device)
+                else:
+                    next_token_level = 1 - (levels_cache[:, -K:] > 0).any(dim=-1).long()
 
-            # Apply level-based masking
-            allowed_mask = masks[next_token_level]  # True = allowed tokens
-            next_token_logits = next_token_logits.masked_fill(~allowed_mask, -float("inf"))
+                # Apply level-based masking
+                allowed_mask = masks[next_token_level]  # True = allowed tokens
+                next_token_logits = next_token_logits.masked_fill(~allowed_mask, -float("inf"))
+            else:
+                # Free-form: only mask out the placeholder token at vocab_sizes[0]
+                placeholder_id = self.vocab_sizes[0].item()
+                next_token_logits[:, placeholder_id] = -float("inf")
 
             # Sample next token
             if temperature > 0:
@@ -209,6 +215,10 @@ class SorlModelWrapper(PreTrainedModel, GenerationMixin):
                 next_token_id = torch.gather(topk_idx, dim=1, index=torch.multinomial(topk_probs, 1))
             else:
                 next_token_id = torch.argmax(next_token_logits, dim=-1, keepdim=True)
+
+            # Infer level from sampled token for levels_cache
+            if free_form:
+                next_token_level = (next_token_id.squeeze(-1) > self.vocab_sizes[0].item()).long()
 
             # Update sequences
             generated_ids = torch.cat([generated_ids, next_token_id], dim=1)
