@@ -88,27 +88,41 @@ class SorlModelWrapper(PreTrainedModel, GenerationMixin):
         device = input_ids.device        
         
         # Pre-compute document boundaries and levels
+        doc_boundary_token_id = self._get_doc_boundary_token_id()
+        docs = (input_ids == doc_boundary_token_id).cumsum(1)
         levels = infer_level(input_ids, self.vocab_sizes)  # Vocabulary levels
         accum_levels = levels.cumsum(1)
+
+        max_idx = seq_len - 1
+
+        def _safe_idx(i):
+            # create_block_mask may probe indices at block boundaries (e.g. one-past-end).
+            # Clamp before tensor indexing to avoid out-of-bounds while gating with in_bounds.
+            if torch.is_tensor(i):
+                return torch.clamp(i, min=0, max=max_idx)
+            return max(0, min(i, max_idx))
         
         def sorl_mask_fn(b, h, q_idx, kv_idx):
             """SORL mask function with information bottleneck"""
+            in_bounds = (q_idx >= 0) & (q_idx < seq_len) & (kv_idx >= 0) & (kv_idx < seq_len)
+            q_safe = _safe_idx(q_idx)
+            kv_safe = _safe_idx(kv_idx)
+
             # Causal constraint
             causal_mask = q_idx >= kv_idx
             
             # Document constraint
-            docs = (input_ids == 50256).cumsum(1)  # Assuming BOS_TOKEN_ID=50256 for Qwen
-            document_mask = docs[b, q_idx] == docs[b, kv_idx]
+            document_mask = docs[b, q_safe] == docs[b, kv_safe]
             
             # Window constraint
             window_mask = q_idx - kv_idx < 1792  # attn_blocksize
             
             # Level-based memory compression (information bottleneck)
-            to_abstract = levels[b, kv_idx] > 0
-            from_abstract = levels[b, q_idx] > 0
+            to_abstract = levels[b, kv_safe] > 0
+            from_abstract = levels[b, q_safe] > 0
             
             # Skip accumulated abstract levels
-            skip_abs = accum_levels[b, q_idx] > accum_levels[b, kv_idx]
+            skip_abs = accum_levels[b, q_safe] > accum_levels[b, kv_safe]
             
             # Different memory spans for abstract vs trajectory tokens
             traj_memory_span = (q_idx - kv_idx) <= memory_span_traj
@@ -121,7 +135,7 @@ class SorlModelWrapper(PreTrainedModel, GenerationMixin):
                 (~from_abstract & traj_memory_span & ~skip_abs)  # From trajectory: use traj memory span, skip accumulated abs
             )
             
-            return causal_mask & document_mask & window_mask & memory_compression_mask
+            return in_bounds & causal_mask & document_mask & window_mask & memory_compression_mask
         
         # Create block mask using the mask function (compiled to avoid materializing full seq x seq tensor)
         block_mask = create_block_mask(
@@ -135,6 +149,21 @@ class SorlModelWrapper(PreTrainedModel, GenerationMixin):
         )
         
         return block_mask
+
+    def _get_doc_boundary_token_id(self) -> int:
+        # Prefer explicit override, then model config defaults.
+        doc_id = getattr(self.config, "doc_boundary_token_id", None)
+        if doc_id is None:
+            doc_id = getattr(self.model.config, "bos_token_id", None)
+        if doc_id is None:
+            doc_id = getattr(self.model.config, "eos_token_id", None)
+
+        # Keep backward-compatible behavior if config is missing this info.
+        if isinstance(doc_id, (list, tuple)):
+            doc_id = doc_id[0] if len(doc_id) > 0 else None
+        if doc_id is None:
+            doc_id = 50256
+        return int(doc_id)
 
 
     def _setup_vocabulary(self):
