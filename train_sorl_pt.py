@@ -38,6 +38,15 @@ from data.pt_dataset import get_dataset, evaluate_accuracy, _filter_traj_tokens,
 
 
 # ---------------------------------------------------------------------------
+# LoRA helper: zero gradients for base vocab rows in embed/lm_head
+# ---------------------------------------------------------------------------
+def _zero_base_grad(grad, base_vocab):
+    """Zero out grad rows for base vocab tokens, keep only abstract rows."""
+    grad[:base_vocab] = 0
+    return grad
+
+
+# ---------------------------------------------------------------------------
 # Argument parsing
 # ---------------------------------------------------------------------------
 def parse_args():
@@ -48,6 +57,12 @@ def parse_args():
     p.add_argument("--abstract_vocab_size", type=int, default=128)
     p.add_argument("--resume_from", type=str, default=None,
                    help="Path to checkpoint .pt file to resume from")
+
+    # LoRA
+    p.add_argument("--use_lora", action="store_true", help="Apply LoRA to the base model")
+    p.add_argument("--lora_r", type=int, default=16, help="LoRA rank")
+    p.add_argument("--lora_alpha", type=int, default=32, help="LoRA alpha")
+    p.add_argument("--lora_dropout", type=float, default=0.05, help="LoRA dropout")
 
     # Data
     p.add_argument("--dataset", type=str, default="gsm8k",
@@ -288,6 +303,36 @@ def main():
         abstract_vocab_size_list=[args.abstract_vocab_size],
     )
     tokenizer = AutoTokenizer.from_pretrained(args.model_name)
+
+    # ---- LoRA ----
+    if args.use_lora:
+        from peft import LoraConfig, get_peft_model
+        lora_config = LoraConfig(
+            r=args.lora_r,
+            lora_alpha=args.lora_alpha,
+            lora_dropout=args.lora_dropout,
+            target_modules=["q_proj", "k_proj", "v_proj", "o_proj",
+                            "gate_proj", "up_proj", "down_proj"],
+            bias="none",
+            task_type="CAUSAL_LM",
+        )
+        model.model = get_peft_model(model.model, lora_config)
+        # Only train abstract token rows in embed_tokens & lm_head
+        base_vocab = model.vocab_sizes[0].item()
+        hf_model = model.model.base_model.model  # Qwen2ForCausalLM
+        for p in hf_model.model.embed_tokens.parameters():
+            p.requires_grad = True
+            p.register_hook(lambda grad, bv=base_vocab: _zero_base_grad(grad, bv))
+        for p in hf_model.lm_head.parameters():
+            p.requires_grad = True
+            p.register_hook(lambda grad, bv=base_vocab: _zero_base_grad(grad, bv))
+        n_train = sum(p.numel() for p in model.parameters() if p.requires_grad)
+        n_total = sum(p.numel() for p in model.parameters())
+        log(f"LoRA enabled: {n_train/1e6:.1f}M / {n_total/1e6:.1f}M params trainable "
+            f"(r={args.lora_r}, alpha={args.lora_alpha})\n"
+            f"  embed/lm_head: only abstract rows [{base_vocab}:] are trained")
+    else:
+        log(f"Full fine-tuning: {sum(p.numel() for p in model.parameters())/1e6:.1f}M params")
 
     # ---- Datasets ----
     log(f"Loading dataset: {args.dataset} (max_length={args.max_length})")

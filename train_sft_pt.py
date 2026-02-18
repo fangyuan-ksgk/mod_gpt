@@ -88,6 +88,12 @@ def parse_args():
     p.add_argument("--resume_from", type=str, default=None,
                    help="Path to checkpoint .pt file to resume from")
 
+    # LoRA
+    p.add_argument("--use_lora", action="store_true", help="Apply LoRA to the model")
+    p.add_argument("--lora_r", type=int, default=16, help="LoRA rank")
+    p.add_argument("--lora_alpha", type=int, default=32, help="LoRA alpha")
+    p.add_argument("--lora_dropout", type=float, default=0.05, help="LoRA dropout")
+
     # Data
     p.add_argument("--dataset", type=str, default="gsm8k",
                    choices=["gsm8k", "math_qa"])
@@ -286,6 +292,26 @@ def main():
     tokenizer = AutoTokenizer.from_pretrained(args.model_name)
     if tokenizer.pad_token_id is None:
         tokenizer.pad_token_id = tokenizer.eos_token_id
+
+    # ---- LoRA ----
+    if args.use_lora:
+        from peft import LoraConfig, get_peft_model
+        lora_config = LoraConfig(
+            r=args.lora_r,
+            lora_alpha=args.lora_alpha,
+            lora_dropout=args.lora_dropout,
+            target_modules=["q_proj", "k_proj", "v_proj", "o_proj",
+                            "gate_proj", "up_proj", "down_proj"],
+            bias="none",
+            task_type="CAUSAL_LM",
+        )
+        model = get_peft_model(model, lora_config)
+        n_train = sum(p.numel() for p in model.parameters() if p.requires_grad)
+        n_total = sum(p.numel() for p in model.parameters())
+        log(f"LoRA enabled: {n_train/1e6:.1f}M / {n_total/1e6:.1f}M params trainable "
+            f"(r={args.lora_r}, alpha={args.lora_alpha})")
+    else:
+        log(f"Full fine-tuning: {sum(p.numel() for p in model.parameters())/1e6:.1f}M params")
 
     raw_model = model.to(device)
     if ddp:
