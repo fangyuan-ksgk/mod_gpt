@@ -71,6 +71,7 @@ def parse_args():
     p.add_argument("--decay", type=float, default=0.8)
     p.add_argument("--target_vocab_util", type=float, default=0.8)
     p.add_argument("--min_abs_ppl", type=float, default=0.0)
+    p.add_argument("--zipf_alpha", type=float, default=1.0)
 
     # Optimizer
     p.add_argument("--lr", type=float, default=1e-5)
@@ -312,6 +313,7 @@ def main():
         decay=args.decay,
         target_vocab_util=args.target_vocab_util,
         min_abs_ppl=args.min_abs_ppl,
+        zipf_alpha=args.zipf_alpha,
         lr=args.lr,
         weight_decay=args.weight_decay,
         warmup_steps=args.warmup_steps,

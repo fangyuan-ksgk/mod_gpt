@@ -134,11 +134,11 @@ def hollow_sinkhorn_transform(prob_2gram, zipf_prior, n_iters=3, diag_penalty=1e
     return M
 
 class Zipfian2gramLoss(nn.Module):
-    def __init__(self, vocab_size, decay=0.8, target_vocab_util=0.8):
+    def __init__(self, vocab_size, decay=0.8, target_vocab_util=0.8, zipf_alpha=1.0):
         super().__init__()
         self.decay = decay   
         
-        zipf_prior = get_zipf_prior(vocab_size, target_vocab_util)
+        zipf_prior = get_zipf_prior(vocab_size, target_vocab_util, alpha=zipf_alpha)
         self.register_buffer('zipf_prior', zipf_prior)
         # Running marginal is a transition matrix [V, V]
         self.register_buffer('running_marginal', torch.ones(vocab_size, vocab_size, device=vocab_size.device) / vocab_size**2)

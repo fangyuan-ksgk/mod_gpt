@@ -50,6 +50,7 @@ class SoRLConfig:
     decay: float = 0.8
     target_vocab_util: float = 0.8
     min_abs_ppl: float = 0.0
+    zipf_alpha: float = 1.0
 
     # Optimizer
     lr: float = 1e-5
@@ -170,6 +171,7 @@ class SoRLTrainer:
             decay=self.config.decay,
             target_vocab_util=self.config.target_vocab_util,
             min_abs_ppl=self.config.min_abs_ppl,
+            zipf_alpha=self.config.zipf_alpha,
         ).to(self.device)
 
         self.pad_token_id = tokenizer.pad_token_id
@@ -241,7 +243,7 @@ class SoRLTrainer:
             base_traj_loss
             + cfg.alpha_info_gain * info_gain_loss
             + cfg.alpha_abs * abs_loss
-            + cfg.alpha_soft_zipf * zipf_bigram_loss
+            + cfg.alpha_soft_zipf * zipf_bigram_loss # we need stronger H(A) regularization force to avoid collapse
         )
 
         # Cleanup search tensors

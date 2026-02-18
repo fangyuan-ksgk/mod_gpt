@@ -125,10 +125,10 @@ class VariableZipfian2gramLoss(nn.Module):
     Works with flattened abstract logits from all sequences.
     """
     
-    def __init__(self, vocab_size, decay=0.8, target_vocab_util=0.8):
+    def __init__(self, vocab_size, decay=0.8, target_vocab_util=0.8, zipf_alpha=1.0):
         super().__init__()
         self.decay = decay   
-        zipf_prior = get_zipf_prior(vocab_size, target_vocab_util)
+        zipf_prior = get_zipf_prior(vocab_size, target_vocab_util, alpha=zipf_alpha)
         self.register_buffer('zipf_prior', zipf_prior)
         self.register_buffer('running_marginal', torch.ones(vocab_size, vocab_size, device=zipf_prior.device) / vocab_size**2)
 
@@ -165,11 +165,11 @@ class SoRLLoss(nn.Module):
     SoRL loss: p(s | a)/p(s), p(a | s), KL(p(a_t, a_t+1), soft_zipf_prior), corr(d(a), d(r))
     """
 
-    def __init__(self, abs_vocab_size, decay=0.8, target_vocab_util=0.8, min_abs_ppl=0.0):
+    def __init__(self, abs_vocab_size, decay=0.8, target_vocab_util=0.8, min_abs_ppl=0.0, zipf_alpha=1.0):
         super().__init__()
         self.decay = decay
         self.min_abs_ppl = min_abs_ppl
-        self.zipf_loss = VariableZipfian2gramLoss(abs_vocab_size, decay, target_vocab_util)
+        self.zipf_loss = VariableZipfian2gramLoss(abs_vocab_size, decay, target_vocab_util, zipf_alpha=zipf_alpha)
 
     def forward(self, data, model, base_traj_loss, attention_mask, memory_span_abs: int, memory_span_traj: int, prompt_len=None):
 
