@@ -43,6 +43,17 @@ def insert_tokens_with_padding(input_ids, attention_mask, insert_mask, placehold
     expanded_mask.masked_fill_(pad_mask, 0)
     
     return expanded_tokens, expanded_mask
+
+# ------ Drop token ------
+def drop_tokens(expanded_data, expanded_mask, remove_prob: float, placeholder_token: int):
+    abs_1d = (expanded_data[0] >= placeholder_token)
+    candidates = ~abs_1d & (expanded_mask[0] == 1)
+    remove_1d = candidates & (torch.rand_like(candidates.float()) < remove_prob)
+    remove_1d &= abs_1d.flip(dims=(0,)).cumsum(dim=0).flip(dims=(0,)).bool()
+    expanded_data = expanded_data[:, ~remove_1d]
+    expanded_mask = expanded_mask[:, ~remove_1d]
+    traj_remove_1d = remove_1d[~abs_1d]
+    return expanded_data, expanded_mask, traj_remove_1d
     
 
 def select_best_sequences(
@@ -206,132 +217,3 @@ class SoRLLoss(nn.Module):
 
         # --- Return: p(s | a)/p(s), p(a | s), KL(p(a_t, a_t+1), soft_zipf_prior) ---
         return info_loss, abs_loss, soft_zipf_kl 
-
-
-class SorlTrainer(Trainer):
-    """
-    SoRL Trainer inheriting from HuggingFace Trainer.
-    Supports batch-split rollout and SoRL-specific loss computation.
-    """
-    
-    def __init__(
-        self,
-        model,
-        args: TrainingArguments,
-        train_dataset=None,
-        eval_dataset=None,
-        tokenizer=None,
-        data_collator=None,
-        # SoRL-specific parameters
-        num_rollouts: int = 2,
-        K: int = 4,
-        max_iterations: int = 2,
-        memory_span_abs: int = 1792,
-        memory_span_traj: int = 1792,
-        temperature: Union[float, torch.Tensor] = 1.0,
-        # Loss weights
-        alpha_info_gain: float = 10.0,
-        alpha_abs: float = 0.1,
-        alpha_soft_zipf: float = 1.0,
-        # Loss function parameters
-        loss_decay: float = 0.8,
-        target_vocab_util: float = 0.8,
-        min_abs_ppl: float = 0.0,
-        **kwargs
-    ):
-        super().__init__(
-            model=model,
-            args=args,
-            train_dataset=train_dataset,
-            eval_dataset=eval_dataset,
-            tokenizer=tokenizer,
-            data_collator=data_collator,
-            **kwargs
-        )
-        
-        # SoRL-specific parameters
-        self.num_rollouts = num_rollouts
-        self.K = K
-        self.max_iterations = max_iterations
-        self.memory_span_abs = memory_span_abs
-        self.memory_span_traj = memory_span_traj
-        self.temperature = temperature
-
-        # Loss weights
-        self.alpha_info_gain = alpha_info_gain
-        self.alpha_abs = alpha_abs
-        self.alpha_soft_zipf = alpha_soft_zipf
-        
-        # Initialize loss function with internal state
-        abs_vocab_size = model.total_vocab_size - model.vocab_sizes[0]
-        self.loss_fn = SoRLLoss(
-            abs_vocab_size=abs_vocab_size,  # This is already a tensor from the model
-            decay=loss_decay,
-            target_vocab_util=target_vocab_util,
-            min_abs_ppl=min_abs_ppl
-        )
-        self.pad_token_id = tokenizer.pad_token_id
-
-    def compute_loss(self, model, inputs, return_outputs=False, num_items_in_batch=None):
-        """
-        Compute SoRL loss with base trajectory loss and auxiliary losses.
-        Uses search to get the best rollouts for loss computation.
-        """
-        input_ids = inputs["input_ids"]
-        attention_mask = inputs.get("attention_mask")
-        prompt_len = inputs.get("prompt_len")
-        
-        # --- perform SoRL search to get best rollouts ---
-        with torch.no_grad():
-            best_data, best_ppt, best_ppt_advantage, expanded_attn_mask, expanded_prompt_len = sorl_search(
-                model=self.model,
-                input_ids=input_ids,
-                attention_mask=attention_mask,
-                prompt_len=prompt_len,
-                pad_token_id=self.pad_token_id,
-                n=self.num_rollouts,
-                K=self.K,
-                max_iterations=self.max_iterations,
-                memory_span_abs=self.memory_span_abs,
-                memory_span_traj=self.memory_span_traj,
-                temperature=self.temperature,
-            )
-        # Release reserved memory from search phase to avoid fragmentation OOM
-        del best_ppt, best_ppt_advantage
-        torch.cuda.empty_cache()
-        
-        # --- compute base trajectory loss ---
-        # Create labels with -100 for padding AND question tokens
-        labels = input_ids.clone()
-        if attention_mask is not None:
-            labels[attention_mask == 0] = -100
-        if prompt_len is not None:
-            seq_idx = torch.arange(labels.size(1), device=labels.device).unsqueeze(0)
-            labels[seq_idx < prompt_len.unsqueeze(1)] = -100
-        
-        outputs = model(input_ids=input_ids, attention_mask=attention_mask, labels=labels, memory_span_abs=self.memory_span_abs, memory_span_traj=self.memory_span_traj)
-        base_traj_loss = outputs.loss
-        
-        # --- compute auxiliary losses on best rollouts ---
-        info_gain_loss, abs_loss, zipf_bigram_loss = self.loss_fn(
-            best_data, model, base_traj_loss.detach(), expanded_attn_mask,
-            self.memory_span_abs, self.memory_span_traj,
-            prompt_len=expanded_prompt_len,
-        )
-        del best_data, expanded_attn_mask, expanded_prompt_len
-        
-        # --- combine losses ---
-        loss = (base_traj_loss + 
-                self.alpha_info_gain * info_gain_loss + 
-                self.alpha_abs * abs_loss + 
-                self.alpha_soft_zipf * zipf_bigram_loss)
-        
-        return (loss, {"loss": loss, "base_traj_loss": base_traj_loss}) if return_outputs else loss
-
-    def training_step(self, model, inputs, num_items_in_batch=None):
-        """Override HF training_step to do manual backward — avoids OOM from accelerator overhead."""
-        model.train()
-        inputs = self._prepare_inputs(inputs)
-        loss = self.compute_loss(model, inputs)
-        loss.backward()
-        return loss.detach()
