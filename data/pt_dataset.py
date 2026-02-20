@@ -83,6 +83,67 @@ class MathQADataset(Dataset):
         return match.group(1).lower() if match else None
 
 
+class ARCDataset(Dataset):
+    """ARC-Challenge science reasoning dataset (multiple choice)."""
+
+    # Map numeric labels to letters for consistency
+    _NUM_TO_LETTER = {"1": "A", "2": "B", "3": "C", "4": "D", "5": "E"}
+
+    def __init__(self, split="train", tokenizer=None, max_length=256):
+        self.dataset = load_dataset("ai2_arc", "ARC-Challenge", split=split)
+        self.tokenizer = tokenizer
+        self.max_length = max_length
+
+    def __len__(self):
+        return len(self.dataset)
+
+    def _format_choices(self, choices):
+        """Format choices dict into 'A) text B) text ...' string."""
+        parts = []
+        for label, text in zip(choices["label"], choices["text"]):
+            # Normalize numeric labels to letters
+            label = self._NUM_TO_LETTER.get(label, label)
+            parts.append(f"{label}) {text}")
+        return "\n".join(parts)
+
+    def _normalize_key(self, key):
+        """Normalize answer key: numeric -> letter."""
+        return self._NUM_TO_LETTER.get(key, key).upper()
+
+    def __getitem__(self, idx):
+        ex = self.dataset[idx]
+        choices_str = self._format_choices(ex["choices"])
+        answer_key = self._normalize_key(ex["answerKey"])
+        # Find answer text
+        labels = [self._NUM_TO_LETTER.get(l, l) for l in ex["choices"]["label"]]
+        answer_idx = labels.index(answer_key) if answer_key in labels else 0
+        answer_text = ex["choices"]["text"][answer_idx]
+
+        prompt = f"Question: {ex['question']}\n{choices_str}\nAnswer:"
+        text = f"{prompt} {answer_key}) {answer_text}\n#### {answer_key}"
+        prompt_len = len(self.tokenizer(prompt, add_special_tokens=False)["input_ids"])
+        enc = self.tokenizer(text, truncation=True, max_length=self.max_length,
+                             padding="max_length", return_tensors="pt")
+        prompt_len = min(prompt_len, self.max_length)
+        return {
+            "input_ids": enc["input_ids"].squeeze(0),
+            "attention_mask": enc["attention_mask"].squeeze(0),
+            "prompt_len": prompt_len,
+        }
+
+    @staticmethod
+    def extract_answer(text):
+        """Extract answer letter from #### A format."""
+        match = re.search(r"####\s*([A-Ea-e])", text)
+        if match:
+            return match.group(1).upper()
+        # Fallback: look for 'Answer: X)' pattern
+        match = re.search(r"Answer:\s*([A-Ea-e])\)", text)
+        if match:
+            return match.group(1).upper()
+        return None
+
+
 # =====================================================================
 # Registry
 # =====================================================================
@@ -90,6 +151,7 @@ class MathQADataset(Dataset):
 DATASET_REGISTRY = {
     "gsm8k": GSM8KDataset,
     "math_qa": MathQADataset,
+    "arc": ARCDataset,
 }
 
 

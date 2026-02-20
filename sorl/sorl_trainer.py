@@ -54,7 +54,41 @@ def drop_tokens(expanded_data, expanded_mask, remove_prob: float, placeholder_to
     expanded_mask = expanded_mask[:, ~remove_1d]
     traj_remove_1d = remove_1d[~abs_1d]
     return expanded_data, expanded_mask, traj_remove_1d
-    
+
+# ----- Inner CoT -----
+def get_answer_start_index(data, answer_token_id=820):
+    match = (data == answer_token_id)
+    idx = match.float().argmax(dim=1)
+    return torch.where(match.any(dim=1), idx, torch.tensor(data.shape[1], device=data.device))
+
+def replace_reasoning_with_abstract(expanded_data, expanded_mask, expanded_prompt_len, placeholder_token, n_inner_cot_tokens, pad_token_id):
+    B, L = expanded_data.shape
+    ans_start = get_answer_start_index(expanded_data)
+    ans_dst = expanded_prompt_len + n_inner_cot_tokens
+    new_L = int((ans_dst + L - ans_start).max().item())
+
+    pos = torch.arange(L, device=expanded_data.device).unsqueeze(0).expand(B, -1)
+    is_q = pos < expanded_prompt_len.unsqueeze(1)
+    is_a = pos >= ans_start.unsqueeze(1)
+    keep = is_q | is_a
+    dst = torch.where(is_a, pos + (ans_dst - ans_start).unsqueeze(1), pos)
+    safe_dst = torch.where(keep, dst, new_L - 1).clamp(0, new_L - 1)
+
+    new_data = expanded_data.new_full((B, new_L), pad_token_id)
+    new_mask = expanded_mask.new_zeros((B, new_L))
+    new_data.scatter_(1, safe_dst, torch.where(keep, expanded_data, pad_token_id))
+    new_mask.scatter_(1, safe_dst, expanded_mask * keep.long())
+
+    ip = expanded_prompt_len.unsqueeze(1) + torch.arange(n_inner_cot_tokens, device=expanded_data.device)
+    new_data.scatter_(1, ip, int(placeholder_token) * torch.ones_like(ip))
+    new_mask.scatter_(1, ip, torch.ones_like(ip))
+
+    abs_1d = (expanded_data[0] >= placeholder_token)
+    is_reasoning_1d = (torch.arange(L, device=expanded_data.device) >= expanded_prompt_len[0]) & \
+                      (torch.arange(L, device=expanded_data.device) < ans_start[0])
+    removed_1d = is_reasoning_1d & ~abs_1d
+    traj_remove_1d = removed_1d[~abs_1d]
+    return new_data, new_mask, traj_remove_1d
 
 def select_best_sequences(
     search_data: torch.Tensor,
@@ -129,6 +163,53 @@ def sorl_search(
     )
     
     return best_data, best_ppt, best_ppt_advantage, expanded_mask, expanded_prompt_len
+
+def sorl_search_ar(
+    model,
+    input_ids: torch.Tensor,
+    attention_mask: torch.Tensor,
+    prompt_len: torch.Tensor,
+    pad_token_id: int,
+    n: int = 2,
+    K: int = 4,
+    memory_span_abs: int = 1792,
+    memory_span_traj: int = 1792,
+    temperature: Union[float, torch.Tensor] = 0.0,
+) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    """
+    AR-based SoRL search: generate abstract tokens left-to-right with causal conditioning.
+    
+    Same interface as sorl_search but uses generate_abstract_only instead of recursion.
+    Cost: O(n_abs_positions) forward passes per rollout (vs O(max_iterations) for recursion).
+    Still >>K times cheaper than GRPO which rolls out NL tokens too.
+    """
+    # Insert placeholder abstract tokens
+    insert_mask = infer_insert_mask(input_ids, K, attention_mask)
+    expanded_prompt_len = expand_prompt_len(prompt_len, insert_mask)
+    expanded_data, expanded_mask = insert_tokens_with_padding(
+        input_ids, attention_mask, insert_mask, model.vocab_sizes[0], pad_token_id
+    )
+
+    # Batch all rollouts together
+    repeated_data = expanded_data.repeat_interleave(n, dim=0)
+    repeated_mask = expanded_mask.repeat_interleave(n, dim=0)
+    repeated_prompt_len = expanded_prompt_len.repeat_interleave(n, dim=0)
+
+    search_data, search_ppt = model.generate_abstract_only(
+        repeated_data,
+        repeated_mask,
+        memory_span_abs=memory_span_abs,
+        memory_span_traj=memory_span_traj,
+        temperature=temperature,
+        prompt_len=repeated_prompt_len,
+    )
+
+    best_data, best_ppt, best_ppt_advantage = select_best_sequences(
+        search_data, search_ppt, n, expanded_data.shape[0]
+    )
+
+    return best_data, best_ppt, best_ppt_advantage, expanded_mask, expanded_prompt_len
+
 
 class VariableZipfian2gramLoss(nn.Module):
     """
@@ -217,3 +298,31 @@ class SoRLLoss(nn.Module):
 
         # --- Return: p(s | a)/p(s), p(a | s), KL(p(a_t, a_t+1), soft_zipf_prior) ---
         return info_loss, abs_loss, soft_zipf_kl 
+
+    def denoising_loss(self, best_data, model, attention_mask, memory_span_abs: int, memory_span_traj: int):
+        """Masked infill loss: train model to predict searched abstract tokens from placeholders.
+        
+        Given best_data (with searched [a] tokens), replace abstract tokens with placeholder,
+        forward pass, compute CE at abstract positions against the searched targets.
+        """
+        placeholder = model.vocab_sizes[0]
+        abs_mask = (best_data >= placeholder)  # (B, L)
+
+        denoised_input = best_data.clone()
+        denoised_input[abs_mask] = placeholder
+
+        outputs = model(input_ids=denoised_input, attention_mask=attention_mask,
+                        memory_span_abs=memory_span_abs, memory_span_traj=memory_span_traj)
+        logits = outputs.logits  # (B, L, V)
+
+        shift_logits = logits[..., :-1, :].contiguous()
+        shift_labels = best_data[..., 1:].contiguous()
+        shift_abs_mask = abs_mask[..., 1:]  # abstract positions in labels
+
+        loss_fct = nn.CrossEntropyLoss(reduction='none')
+        losses = loss_fct(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1))
+        losses = losses.view(best_data.shape[0], -1)
+
+        abs_losses = losses * shift_abs_mask.float()
+        denoise_loss = abs_losses.sum() / shift_abs_mask.float().sum().clamp(min=1)
+        return denoise_loss

@@ -8,7 +8,8 @@ import torch
 
 from sorl.sorl_trainer import (
     infer_insert_mask, expand_prompt_len, insert_tokens_with_padding,
-    drop_tokens, select_best_sequences, SoRLLoss,
+    drop_tokens, replace_reasoning_with_abstract,
+    select_best_sequences, SoRLLoss,
 )
 from sorl.trainer import SoRLTrainer, SoRLConfig
 
@@ -19,6 +20,8 @@ from sorl.trainer import SoRLTrainer, SoRLConfig
 @dataclass
 class SoRLCompressConfig(SoRLConfig):
     remove_prob: float = 0.3
+    inner_cot: bool = False
+    n_inner_cot_tokens: int = 8
 
 
 # ---------------------------------------------------------------------------
@@ -37,6 +40,7 @@ def sorl_search_compress(
     memory_span_abs: int = 1792,
     memory_span_traj: int = 1792,
     temperature: Union[float, torch.Tensor] = 0.0,
+    ar_search: bool = False,
 ) -> Tuple[torch.Tensor, ...]:
     """
     SoRL search with NL token dropping.
@@ -67,15 +71,84 @@ def sorl_search_compress(
     repeated_mask = expanded_mask.repeat_interleave(n, dim=0)
     repeated_prompt_len = expanded_prompt_len.repeat_interleave(n, dim=0)
 
-    # Step 4: recursion
-    search_data, search_ppt = model.recursion(
-        repeated_data, repeated_mask,
-        max_iterations=max_iterations,
-        memory_span_abs=memory_span_abs,
-        memory_span_traj=memory_span_traj,
-        temperature=temperature,
-        prompt_len=repeated_prompt_len,
+    # Step 4: search (recursion or AR)
+    if ar_search:
+        search_data, search_ppt = model.generate_abstract_only(
+            repeated_data, repeated_mask,
+            memory_span_abs=memory_span_abs,
+            memory_span_traj=memory_span_traj,
+            temperature=temperature,
+            prompt_len=repeated_prompt_len,
+        )
+    else:
+        search_data, search_ppt = model.recursion(
+            repeated_data, repeated_mask,
+            max_iterations=max_iterations,
+            memory_span_abs=memory_span_abs,
+            memory_span_traj=memory_span_traj,
+            temperature=temperature,
+            prompt_len=repeated_prompt_len,
+        )
+
+    # Step 5: select best
+    best_data, best_ppt, best_ppt_advantage = select_best_sequences(
+        search_data, search_ppt, n, expanded_data.shape[0],
     )
+
+    return best_data, best_ppt, best_ppt_advantage, expanded_mask, expanded_prompt_len, traj_remove_1d
+
+
+def sorl_search_inner_cot(
+    model,
+    input_ids: torch.Tensor,
+    attention_mask: torch.Tensor,
+    prompt_len: torch.Tensor,
+    pad_token_id: int,
+    n_inner_cot_tokens: int = 8,
+    n: int = 2,
+    K: int = 4,
+    max_iterations: int = 2,
+    memory_span_abs: int = 1792,
+    memory_span_traj: int = 1792,
+    temperature: Union[float, torch.Tensor] = 0.0,
+    ar_search: bool = False,
+) -> Tuple[torch.Tensor, ...]:
+    # Step 1: periodic insertion
+    insert_mask = infer_insert_mask(input_ids, K, attention_mask)
+    expanded_prompt_len = expand_prompt_len(prompt_len, insert_mask)
+    expanded_data, expanded_mask = insert_tokens_with_padding(
+        input_ids, attention_mask, insert_mask, model.vocab_sizes[0], pad_token_id,
+    )
+
+    # Step 2: replace reasoning NL with inner CoT abstract block
+    expanded_data, expanded_mask, traj_remove_1d = replace_reasoning_with_abstract(
+        expanded_data, expanded_mask, expanded_prompt_len,
+        model.vocab_sizes[0], n_inner_cot_tokens, pad_token_id,
+    )
+
+    # Step 3: repeat for n rollouts
+    repeated_data = expanded_data.repeat_interleave(n, dim=0)
+    repeated_mask = expanded_mask.repeat_interleave(n, dim=0)
+    repeated_prompt_len = expanded_prompt_len.repeat_interleave(n, dim=0)
+
+    # Step 4: search (recursion or AR)
+    if ar_search:
+        search_data, search_ppt = model.generate_abstract_only(
+            repeated_data, repeated_mask,
+            memory_span_abs=memory_span_abs,
+            memory_span_traj=memory_span_traj,
+            temperature=temperature,
+            prompt_len=repeated_prompt_len,
+        )
+    else:
+        search_data, search_ppt = model.recursion(
+            repeated_data, repeated_mask,
+            max_iterations=max_iterations,
+            memory_span_abs=memory_span_abs,
+            memory_span_traj=memory_span_traj,
+            temperature=temperature,
+            prompt_len=repeated_prompt_len,
+        )
 
     # Step 5: select best
     best_data, best_ppt, best_ppt_advantage = select_best_sequences(
@@ -107,16 +180,30 @@ class SoRLCompressTrainer(SoRLTrainer):
 
         # 1. Compress search (no grad) — get traj_remove_1d
         with torch.no_grad():
-            best_data, best_ppt, best_ppt_adv, expanded_mask, expanded_prompt_len, traj_remove_1d = \
-                sorl_search_compress(
-                    self.raw_model, input_ids, attention_mask, prompt_len, self.pad_token_id,
-                    remove_prob=cfg.remove_prob,
-                    n=cfg.num_rollouts, K=cfg.K,
-                    max_iterations=cfg.max_iterations,
-                    memory_span_abs=cfg.memory_span_abs,
-                    memory_span_traj=cfg.memory_span_traj,
-                    temperature=cfg.temperature,
-                )
+            if cfg.inner_cot:
+                best_data, best_ppt, best_ppt_adv, expanded_mask, expanded_prompt_len, traj_remove_1d = \
+                    sorl_search_inner_cot(
+                        self.raw_model, input_ids, attention_mask, prompt_len, self.pad_token_id,
+                        n_inner_cot_tokens=cfg.n_inner_cot_tokens,
+                        n=cfg.num_rollouts, K=cfg.K,
+                        max_iterations=cfg.max_iterations,
+                        memory_span_abs=cfg.memory_span_abs,
+                        memory_span_traj=cfg.memory_span_traj,
+                        temperature=cfg.temperature,
+                        ar_search=cfg.ar_search,
+                    )
+            else:
+                best_data, best_ppt, best_ppt_adv, expanded_mask, expanded_prompt_len, traj_remove_1d = \
+                    sorl_search_compress(
+                        self.raw_model, input_ids, attention_mask, prompt_len, self.pad_token_id,
+                        remove_prob=cfg.remove_prob,
+                        n=cfg.num_rollouts, K=cfg.K,
+                        max_iterations=cfg.max_iterations,
+                        memory_span_abs=cfg.memory_span_abs,
+                        memory_span_traj=cfg.memory_span_traj,
+                        temperature=cfg.temperature,
+                        ar_search=cfg.ar_search,
+                    )
 
         # 2. Base trajectory loss — mask padding, question tokens, AND dropped traj tokens
         labels = input_ids.clone()
@@ -141,12 +228,22 @@ class SoRLCompressTrainer(SoRLTrainer):
             prompt_len=expanded_prompt_len,
         )
 
-        # 4. Combined loss
+        # 4. Denoising loss (optional)
+        if cfg.alpha_denoise > 0:
+            denoise_loss = self.loss_fn.denoising_loss(
+                best_data, self.raw_model, expanded_mask,
+                cfg.memory_span_abs, cfg.memory_span_traj,
+            )
+        else:
+            denoise_loss = torch.tensor(0.0, device=self.device)
+
+        # 5. Combined loss
         loss = (
             base_traj_loss
             + cfg.alpha_info_gain * info_gain_loss
             + cfg.alpha_abs * abs_loss
             + cfg.alpha_soft_zipf * zipf_bigram_loss
+            + cfg.alpha_denoise * denoise_loss
         )
 
         # Cleanup search tensors
@@ -158,4 +255,5 @@ class SoRLCompressTrainer(SoRLTrainer):
             "info_gain_loss": info_gain_loss,
             "abs_loss": abs_loss,
             "zipf_bigram_loss": zipf_bigram_loss,
+            "denoise_loss": denoise_loss,
         }

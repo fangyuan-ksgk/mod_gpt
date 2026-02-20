@@ -255,6 +255,57 @@ class SorlModelWrapper(PreTrainedModel, GenerationMixin):
         
         return generated_ids
 
+    def generate_abstract_only(self, idx, attention_mask, memory_span_abs=1792, memory_span_traj=1792, temperature=0.0, prompt_len=None):
+
+        vocab_size_0 = self.vocab_sizes[0].to(idx.device)
+        abs_mask = (idx >= vocab_size_0)  # (B, L)
+        abs_mask[:, 0] = False
+
+        abs_cols = abs_mask[0].nonzero(as_tuple=True)[0]  # (n_abs,)
+
+        if isinstance(temperature, torch.Tensor) and temperature.ndim == 1:
+            temp_batch = temperature.float().clamp(min=1e-10)  # (B,)
+        else:
+            temp_batch = None
+            scalar_temp = max(float(temperature), 1e-10)
+
+        for col in abs_cols:
+            block_mask = self._create_sorl_block_mask(idx, memory_span_abs, memory_span_traj)
+            outputs = self.model.forward(
+                input_ids=idx, attention_mask=attention_mask,
+                block_mask=block_mask, use_cache=False,
+            )
+            pred_pos = col - 1  # next-token prediction: logits[t] predicts token[t+1]
+            logits_at = outputs.logits[:, pred_pos, :]  # (B, V)
+
+            logits_at[:, :vocab_size_0 + 1] = float('-inf')
+
+            if temp_batch is not None:
+                probs = F.softmax(logits_at / temp_batch.unsqueeze(1), dim=-1)
+            else:
+                probs = F.softmax(logits_at / scalar_temp, dim=-1)
+            new_token = torch.multinomial(probs, num_samples=1).squeeze(-1)  # (B,)
+            idx[:, col] = new_token.to(idx.dtype)
+
+        block_mask = self._create_sorl_block_mask(idx, memory_span_abs, memory_span_traj)
+        labels = idx.clone()
+        labels[attention_mask == 0] = -100
+        if prompt_len is not None:
+            seq_idx = torch.arange(labels.size(1), device=labels.device).unsqueeze(0)
+            labels[seq_idx < prompt_len.unsqueeze(1)] = -100
+
+        outputs = self.model.forward(
+            input_ids=idx, attention_mask=attention_mask,
+            block_mask=block_mask, use_cache=False,
+        )
+        shift_logits = outputs.logits[..., :-1, :].contiguous()
+        shift_labels = labels[..., 1:].contiguous()
+        loss_fct = nn.CrossEntropyLoss(reduction='none', ignore_index=-100)
+        per_token_loss = loss_fct(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1))
+        per_token_loss = per_token_loss.view(idx.shape[0], -1)
+
+        return idx, per_token_loss
+
     def extract_and_sample(self, logits, idx, recursion_mask, temperature):
         """Extract masked logits and sample new tokens."""
         

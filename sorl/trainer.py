@@ -24,7 +24,7 @@ import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data import DataLoader, DistributedSampler
 
-from sorl.sorl_trainer import sorl_search, SoRLLoss
+from sorl.sorl_trainer import sorl_search, sorl_search_ar, SoRLLoss
 from data.pt_dataset import collate_fn as default_collate_fn
 
 
@@ -40,11 +40,13 @@ class SoRLConfig:
     memory_span_abs: int = 1792
     memory_span_traj: int = 1792
     temperature: float = 1.0
+    ar_search: bool = False  # Use AR generation instead of parallel recursion for abstract tokens
 
     # Loss weights
     alpha_info_gain: float = 10.0
     alpha_abs: float = 0.1
     alpha_soft_zipf: float = 1.0
+    alpha_denoise: float = 0.0
 
     # Loss function
     decay: float = 0.8
@@ -177,7 +179,7 @@ class SoRLTrainer:
         self.pad_token_id = tokenizer.pad_token_id
         self.history: Dict[str, list] = {
             "step": [], "loss": [], "base_loss": [],
-            "info_loss": [], "abs_loss": [], "zipf_loss": [], "lr": [],
+            "info_loss": [], "abs_loss": [], "zipf_loss": [], "denoise_loss": [], "lr": [],
         }
 
     # ------------------------------------------------------------------
@@ -222,14 +224,23 @@ class SoRLTrainer:
 
         # 2. SoRL search (no grad)
         with torch.no_grad():
-            best_data, best_ppt, best_ppt_adv, expanded_attn_mask, expanded_prompt_len = sorl_search(
-                self.raw_model, input_ids, attention_mask, prompt_len, self.pad_token_id,
-                n=cfg.num_rollouts, K=cfg.K,
-                max_iterations=cfg.max_iterations,
-                memory_span_abs=cfg.memory_span_abs,
-                memory_span_traj=cfg.memory_span_traj,
-                temperature=cfg.temperature,
-            )
+            if cfg.ar_search:
+                best_data, best_ppt, best_ppt_adv, expanded_attn_mask, expanded_prompt_len = sorl_search_ar(
+                    self.raw_model, input_ids, attention_mask, prompt_len, self.pad_token_id,
+                    n=cfg.num_rollouts, K=cfg.K,
+                    memory_span_abs=cfg.memory_span_abs,
+                    memory_span_traj=cfg.memory_span_traj,
+                    temperature=cfg.temperature,
+                )
+            else:
+                best_data, best_ppt, best_ppt_adv, expanded_attn_mask, expanded_prompt_len = sorl_search(
+                    self.raw_model, input_ids, attention_mask, prompt_len, self.pad_token_id,
+                    n=cfg.num_rollouts, K=cfg.K,
+                    max_iterations=cfg.max_iterations,
+                    memory_span_abs=cfg.memory_span_abs,
+                    memory_span_traj=cfg.memory_span_traj,
+                    temperature=cfg.temperature,
+                )
 
         # 3. Auxiliary losses
         info_gain_loss, abs_loss, zipf_bigram_loss = self.loss_fn(
@@ -238,12 +249,22 @@ class SoRLTrainer:
             prompt_len=expanded_prompt_len,
         )
 
-        # 4. Combined loss
+        # 4. Denoising loss (optional)
+        if cfg.alpha_denoise > 0:
+            denoise_loss = self.loss_fn.denoising_loss(
+                best_data, self.raw_model, expanded_attn_mask,
+                cfg.memory_span_abs, cfg.memory_span_traj,
+            )
+        else:
+            denoise_loss = torch.tensor(0.0, device=self.device)
+
+        # 5. Combined loss
         loss = (
             base_traj_loss
             + cfg.alpha_info_gain * info_gain_loss
             + cfg.alpha_abs * abs_loss
-            + cfg.alpha_soft_zipf * zipf_bigram_loss # we need stronger H(A) regularization force to avoid collapse
+            + cfg.alpha_soft_zipf * zipf_bigram_loss
+            + cfg.alpha_denoise * denoise_loss
         )
 
         # Cleanup search tensors
@@ -255,6 +276,7 @@ class SoRLTrainer:
             "info_gain_loss": info_gain_loss,
             "abs_loss": abs_loss,
             "zipf_bigram_loss": zipf_bigram_loss,
+            "denoise_loss": denoise_loss,
         }
 
     # ------------------------------------------------------------------
@@ -380,13 +402,14 @@ class SoRLTrainer:
                     eta_h, eta_m = divmod(eta_m, 60)
                     eta_str = f"{eta_h}h{eta_m:02d}m{eta_s:02d}s" if eta_h else f"{eta_m}m{eta_s:02d}s"
                     peak = f"Memory :{torch.cuda.max_memory_allocated(self.device)/1024**3:.2f}GB" if torch.cuda.is_available() else ""
+                    denoise_str = f"denoise={step_out['denoise_loss'].item():.4f} " if cfg.alpha_denoise > 0 else ""
                     self._log(
                         f"epoch {epoch_frac:.3f}/{cfg.num_epochs} | remain: {eta_str} | "
                         f"loss={total_loss:.4f} base={step_out['base_traj_loss'].item():.4f} "
                         f"info={step_out['info_gain_loss'].item():.4f} "
                         f"abs={step_out['abs_loss'].item():.4f} "
-                        f"zipf={step_out['zipf_bigram_loss'].item():.4f} | "
-                        f"{peak}"
+                        f"zipf={step_out['zipf_bigram_loss'].item():.4f} "
+                        f"{denoise_str}| {peak}"
                     )
                     self.history["step"].append(global_step)
                     self.history["loss"].append(total_loss)
@@ -394,6 +417,7 @@ class SoRLTrainer:
                     self.history["info_loss"].append(step_out["info_gain_loss"].item())
                     self.history["abs_loss"].append(step_out["abs_loss"].item())
                     self.history["zipf_loss"].append(step_out["zipf_bigram_loss"].item())
+                    self.history["denoise_loss"].append(step_out["denoise_loss"].item())
                     self.history["lr"].append(lr)
 
                 # Cleanup
