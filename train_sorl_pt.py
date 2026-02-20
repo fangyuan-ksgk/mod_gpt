@@ -511,16 +511,31 @@ def main():
                         log(f"--- Eval step {global_step}: acc={result['accuracy']*100:.1f}% "
                             f"({result['correct']}/{result['total']}) ---")
 
-                # Checkpoint
-                if global_step > 0 and global_step % cfg.save_every == 0:
-                    ckpt_path = os.path.join(cfg.output_dir, f"step_{global_step}.pt")
-                    trainer.save_checkpoint(ckpt_path, epoch, global_step, optimizer)
+                # (intermediate checkpoints disabled to save disk space)
 
             log(f"=== Epoch {epoch+1} complete ===")
 
-        # Final save
-        final_path = os.path.join(cfg.output_dir, "final.pt")
-        trainer.save_checkpoint(final_path, cfg.num_epochs, global_step, optimizer)
+        # Final save — adapter + abstract embeddings only
+        if trainer.is_master:
+            save_dir = os.path.join(cfg.output_dir, "final")
+            os.makedirs(save_dir, exist_ok=True)
+            base_vocab = trainer.raw_model.vocab_sizes[0].item()
+            hf_model = trainer.raw_model.model  # may be PeftModel or raw HF model
+            # Save LoRA adapter if present
+            if hasattr(hf_model, "save_pretrained"):
+                hf_model.save_pretrained(save_dir)
+                log(f"Saved adapter to {save_dir}")
+            # Save abstract embedding rows + loss_fn state (always small)
+            abs_state = {}
+            unwrapped = hf_model.base_model.model if hasattr(hf_model, "base_model") else hf_model
+            abs_state["embed_tokens"] = unwrapped.model.embed_tokens.weight.data[base_vocab:].cpu()
+            abs_state["lm_head"] = unwrapped.lm_head.weight.data[base_vocab:].cpu()
+            abs_state["loss_fn"] = trainer.loss_fn.state_dict()
+            abs_state["step"] = global_step
+            abs_state["epoch"] = cfg.num_epochs
+            abs_state["config"] = cfg.__dict__
+            torch.save(abs_state, os.path.join(save_dir, "abs_embeddings.pt"))
+            log(f"Saved abstract embeddings to {save_dir}/abs_embeddings.pt")
 
         # Final eval
         if trainer.is_master:

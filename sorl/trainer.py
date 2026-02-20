@@ -270,16 +270,25 @@ class SoRLTrainer:
     def save_checkpoint(self, path, epoch, global_step, optimizer):
         if not self.is_master:
             return
-        os.makedirs(os.path.dirname(path), exist_ok=True)
+        save_dir = path.replace(".pt", "")
+        os.makedirs(save_dir, exist_ok=True)
+        base_vocab = self.raw_model.vocab_sizes[0].item()
+        hf_model = self.raw_model.model
+        # Save LoRA adapter if present
+        if hasattr(hf_model, "save_pretrained"):
+            hf_model.save_pretrained(save_dir)
+        # Save abstract embedding rows + loss_fn + optimizer (always small)
+        unwrapped = hf_model.base_model.model if hasattr(hf_model, "base_model") else hf_model
         torch.save({
             "step": global_step,
             "epoch": epoch,
-            "model": self.raw_model.state_dict(),
+            "embed_tokens": unwrapped.model.embed_tokens.weight.data[base_vocab:].cpu(),
+            "lm_head": unwrapped.lm_head.weight.data[base_vocab:].cpu(),
             "optimizer": optimizer.state_dict(),
             "loss_fn": self.loss_fn.state_dict(),
             "config": self.config.__dict__,
-        }, path)
-        self._log(f"Saved: {path}")
+        }, os.path.join(save_dir, "abs_embeddings.pt"))
+        self._log(f"Saved: {save_dir}")
 
     # ------------------------------------------------------------------
     # Evaluate
