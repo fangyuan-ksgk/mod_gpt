@@ -34,9 +34,9 @@ MAX_LENGTH=256
 LR=1e-5
 WARMUP_STEPS=50
 
-# Training
+# Training (effective batch size of 8)
 BATCH_SIZE=2
-GRAD_ACCUM=1
+GRAD_ACCUM=$((8 / (BATCH_SIZE * N_GPUS)))
 NUM_EPOCHS=3
 
 # Logging / Eval / Checkpoint
