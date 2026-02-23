@@ -300,7 +300,8 @@ class SoRLTrainer:
         if hasattr(hf_model, "save_pretrained"):
             hf_model.save_pretrained(save_dir)
         # Save abstract embedding rows + loss_fn + optimizer (always small)
-        unwrapped = hf_model.base_model.model if hasattr(hf_model, "base_model") else hf_model
+        # Check for LoRA/peft specifically (all HF models have base_model property)
+        unwrapped = hf_model.base_model.model if hasattr(hf_model, "peft_config") else hf_model
         torch.save({
             "step": global_step,
             "epoch": epoch,
