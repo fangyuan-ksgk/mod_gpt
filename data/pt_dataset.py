@@ -144,14 +144,412 @@ class ARCDataset(Dataset):
         return None
 
 
+class HellaSwagDataset(Dataset):
+    """HellaSwag commonsense sentence completion (4-way)."""
+
+    def __init__(self, split="train", tokenizer=None, max_length=256):
+        self.dataset = load_dataset("Rowan/hellaswag", split=split)
+        self.tokenizer = tokenizer
+        self.max_length = max_length
+
+    def __len__(self):
+        return len(self.dataset)
+
+    def __getitem__(self, idx):
+        ex = self.dataset[idx]
+        endings = ex["endings"]
+        label = int(ex["label"])
+        choices_str = "\n".join(f"{i}) {e}" for i, e in enumerate(endings))
+        answer_text = endings[label]
+
+        prompt = f"Context: {ex['ctx']}\n{choices_str}\nAnswer:"
+        text = f"{prompt} {label}) {answer_text}\n#### {label}"
+        prompt_len = len(self.tokenizer(prompt, add_special_tokens=False)["input_ids"])
+        enc = self.tokenizer(text, truncation=True, max_length=self.max_length,
+                             padding="max_length", return_tensors="pt")
+        prompt_len = min(prompt_len, self.max_length)
+        return {
+            "input_ids": enc["input_ids"].squeeze(0),
+            "attention_mask": enc["attention_mask"].squeeze(0),
+            "prompt_len": prompt_len,
+        }
+
+    @staticmethod
+    def extract_answer(text):
+        match = re.search(r"####\s*([0-3])", text)
+        if match:
+            return match.group(1)
+        match = re.search(r"Answer:\s*([0-3])\)", text)
+        return match.group(1) if match else None
+
+
+class WinoGrandeDataset(Dataset):
+    """WinoGrande coreference/commonsense (binary choice)."""
+
+    def __init__(self, split="train", tokenizer=None, max_length=256):
+        self.dataset = load_dataset("allenai/winogrande", "winogrande_xl", split=split)
+        self.tokenizer = tokenizer
+        self.max_length = max_length
+
+    def __len__(self):
+        return len(self.dataset)
+
+    def __getitem__(self, idx):
+        ex = self.dataset[idx]
+        prompt = (f"Sentence: {ex['sentence']}\n"
+                  f"1) {ex['option1']}\n2) {ex['option2']}\nAnswer:")
+        text = f"{prompt} {ex['answer']}\n#### {ex['answer']}"
+        prompt_len = len(self.tokenizer(prompt, add_special_tokens=False)["input_ids"])
+        enc = self.tokenizer(text, truncation=True, max_length=self.max_length,
+                             padding="max_length", return_tensors="pt")
+        prompt_len = min(prompt_len, self.max_length)
+        return {
+            "input_ids": enc["input_ids"].squeeze(0),
+            "attention_mask": enc["attention_mask"].squeeze(0),
+            "prompt_len": prompt_len,
+        }
+
+    @staticmethod
+    def extract_answer(text):
+        match = re.search(r"####\s*([12])", text)
+        if match:
+            return match.group(1)
+        match = re.search(r"Answer:\s*([12])", text)
+        return match.group(1) if match else None
+
+
+class BoolQDataset(Dataset):
+    """BoolQ yes/no question answering."""
+
+    def __init__(self, split="train", tokenizer=None, max_length=512):
+        hf_split = "validation" if split == "test" else split
+        self.dataset = load_dataset("google/boolq", split=hf_split)
+        self.tokenizer = tokenizer
+        self.max_length = max_length
+
+    def __len__(self):
+        return len(self.dataset)
+
+    def __getitem__(self, idx):
+        ex = self.dataset[idx]
+        answer = "yes" if ex["answer"] else "no"
+        prompt = f"Passage: {ex['passage']}\nQuestion: {ex['question']}\nAnswer:"
+        text = f"{prompt} {answer}\n#### {answer}"
+        prompt_len = len(self.tokenizer(prompt, add_special_tokens=False)["input_ids"])
+        enc = self.tokenizer(text, truncation=True, max_length=self.max_length,
+                             padding="max_length", return_tensors="pt")
+        prompt_len = min(prompt_len, self.max_length)
+        return {
+            "input_ids": enc["input_ids"].squeeze(0),
+            "attention_mask": enc["attention_mask"].squeeze(0),
+            "prompt_len": prompt_len,
+        }
+
+    @staticmethod
+    def extract_answer(text):
+        match = re.search(r"####\s*(yes|no)", text, re.IGNORECASE)
+        if match:
+            return match.group(1).lower()
+        match = re.search(r"Answer:\s*(yes|no)", text, re.IGNORECASE)
+        return match.group(1).lower() if match else None
+
+
+class OpenBookQADataset(Dataset):
+    """OpenBookQA science reasoning (4-way multiple choice)."""
+
+    def __init__(self, split="train", tokenizer=None, max_length=256):
+        self.dataset = load_dataset("allenai/openbookqa", "main", split=split)
+        self.tokenizer = tokenizer
+        self.max_length = max_length
+
+    def __len__(self):
+        return len(self.dataset)
+
+    def __getitem__(self, idx):
+        ex = self.dataset[idx]
+        choices = ex["choices"]
+        answer_key = ex["answerKey"].upper()
+        choices_str = "\n".join(
+            f"{l}) {t}" for l, t in zip(choices["label"], choices["text"])
+        )
+        labels = [l.upper() for l in choices["label"]]
+        answer_idx = labels.index(answer_key) if answer_key in labels else 0
+        answer_text = choices["text"][answer_idx]
+
+        prompt = f"Question: {ex['question_stem']}\n{choices_str}\nAnswer:"
+        text = f"{prompt} {answer_key}) {answer_text}\n#### {answer_key}"
+        prompt_len = len(self.tokenizer(prompt, add_special_tokens=False)["input_ids"])
+        enc = self.tokenizer(text, truncation=True, max_length=self.max_length,
+                             padding="max_length", return_tensors="pt")
+        prompt_len = min(prompt_len, self.max_length)
+        return {
+            "input_ids": enc["input_ids"].squeeze(0),
+            "attention_mask": enc["attention_mask"].squeeze(0),
+            "prompt_len": prompt_len,
+        }
+
+    @staticmethod
+    def extract_answer(text):
+        match = re.search(r"####\s*([A-Da-d])", text)
+        if match:
+            return match.group(1).upper()
+        match = re.search(r"Answer:\s*([A-Da-d])\)", text)
+        return match.group(1).upper() if match else None
+
+
+class CommonsenseQADataset(Dataset):
+    """CommonsenseQA 5-way multiple choice."""
+
+    def __init__(self, split="train", tokenizer=None, max_length=256):
+        hf_split = "validation" if split == "test" else split
+        self.dataset = load_dataset("tau/commonsense_qa", split=hf_split)
+        self.tokenizer = tokenizer
+        self.max_length = max_length
+
+    def __len__(self):
+        return len(self.dataset)
+
+    def __getitem__(self, idx):
+        ex = self.dataset[idx]
+        choices = ex["choices"]
+        answer_key = ex["answerKey"].upper()
+        choices_str = "\n".join(
+            f"{l}) {t}" for l, t in zip(choices["label"], choices["text"])
+        )
+        labels = [l.upper() for l in choices["label"]]
+        answer_idx = labels.index(answer_key) if answer_key in labels else 0
+        answer_text = choices["text"][answer_idx]
+
+        prompt = f"Question: {ex['question']}\n{choices_str}\nAnswer:"
+        text = f"{prompt} {answer_key}) {answer_text}\n#### {answer_key}"
+        prompt_len = len(self.tokenizer(prompt, add_special_tokens=False)["input_ids"])
+        enc = self.tokenizer(text, truncation=True, max_length=self.max_length,
+                             padding="max_length", return_tensors="pt")
+        prompt_len = min(prompt_len, self.max_length)
+        return {
+            "input_ids": enc["input_ids"].squeeze(0),
+            "attention_mask": enc["attention_mask"].squeeze(0),
+            "prompt_len": prompt_len,
+        }
+
+    @staticmethod
+    def extract_answer(text):
+        match = re.search(r"####\s*([A-Ea-e])", text)
+        if match:
+            return match.group(1).upper()
+        match = re.search(r"Answer:\s*([A-Ea-e])\)", text)
+        return match.group(1).upper() if match else None
+
+
+class MMLUDataset(Dataset):
+    """MMLU broad knowledge benchmark (4-way multiple choice)."""
+
+    _IDX_TO_LETTER = {0: "A", 1: "B", 2: "C", 3: "D"}
+
+    def __init__(self, split="train", tokenizer=None, max_length=256):
+        # MMLU uses 'auxiliary_train' for training, 'test' for eval
+        hf_split = "auxiliary_train" if split == "train" else split
+        self.dataset = load_dataset("cais/mmlu", "all", split=hf_split)
+        self.tokenizer = tokenizer
+        self.max_length = max_length
+
+    def __len__(self):
+        return len(self.dataset)
+
+    def __getitem__(self, idx):
+        ex = self.dataset[idx]
+        choices = ex["choices"]
+        answer_idx = ex["answer"]
+        answer_letter = self._IDX_TO_LETTER[answer_idx]
+        choices_str = "\n".join(
+            f"{self._IDX_TO_LETTER[i]}) {c}" for i, c in enumerate(choices)
+        )
+        answer_text = choices[answer_idx]
+
+        prompt = f"Question: {ex['question']}\n{choices_str}\nAnswer:"
+        text = f"{prompt} {answer_letter}) {answer_text}\n#### {answer_letter}"
+        prompt_len = len(self.tokenizer(prompt, add_special_tokens=False)["input_ids"])
+        enc = self.tokenizer(text, truncation=True, max_length=self.max_length,
+                             padding="max_length", return_tensors="pt")
+        prompt_len = min(prompt_len, self.max_length)
+        return {
+            "input_ids": enc["input_ids"].squeeze(0),
+            "attention_mask": enc["attention_mask"].squeeze(0),
+            "prompt_len": prompt_len,
+        }
+
+    @staticmethod
+    def extract_answer(text):
+        match = re.search(r"####\s*([A-Da-d])", text)
+        if match:
+            return match.group(1).upper()
+        match = re.search(r"Answer:\s*([A-Da-d])\)", text)
+        return match.group(1).upper() if match else None
+
+
+class AQuADataset(Dataset):
+    """AQuA-RAT math reasoning with rationale (5-way multiple choice)."""
+
+    def __init__(self, split="train", tokenizer=None, max_length=512):
+        self.dataset = load_dataset("aqua_rat", "raw", split=split)
+        self.tokenizer = tokenizer
+        self.max_length = max_length
+
+    def __len__(self):
+        return len(self.dataset)
+
+    def __getitem__(self, idx):
+        ex = self.dataset[idx]
+        options_str = " ".join(ex["options"])
+        prompt = f"Question: {ex['question']}\n{options_str}\nAnswer:"
+        text = f"{prompt} {ex['rationale']}\n#### {ex['correct']}"
+        prompt_len = len(self.tokenizer(prompt, add_special_tokens=False)["input_ids"])
+        enc = self.tokenizer(text, truncation=True, max_length=self.max_length,
+                             padding="max_length", return_tensors="pt")
+        prompt_len = min(prompt_len, self.max_length)
+        return {
+            "input_ids": enc["input_ids"].squeeze(0),
+            "attention_mask": enc["attention_mask"].squeeze(0),
+            "prompt_len": prompt_len,
+        }
+
+    @staticmethod
+    def extract_answer(text):
+        match = re.search(r"####\s*([A-Ea-e])", text)
+        if match:
+            return match.group(1).upper()
+        match = re.search(r"[Tt]he answer is\s*\(?([A-Ea-e])\)?", text)
+        return match.group(1).upper() if match else None
+
+
+class MATHDataset(Dataset):
+    """MATH competition problems with LaTeX solutions (hendrycks)."""
+
+    # Collect all 7 subjects
+    _SUBJECTS = [
+        "algebra", "counting_and_probability", "geometry",
+        "intermediate_algebra", "number_theory", "prealgebra", "precalculus",
+    ]
+
+    def __init__(self, split="train", tokenizer=None, max_length=512):
+        from datasets import concatenate_datasets
+        parts = []
+        for subj in self._SUBJECTS:
+            parts.append(load_dataset("EleutherAI/hendrycks_math", subj, split=split))
+        self.dataset = concatenate_datasets(parts)
+        self.tokenizer = tokenizer
+        self.max_length = max_length
+
+    def __len__(self):
+        return len(self.dataset)
+
+    @staticmethod
+    def _extract_boxed(solution):
+        """Extract content from \\boxed{...} in LaTeX solution."""
+        # Handle nested braces
+        idx = solution.rfind("\\boxed{")
+        if idx == -1:
+            return None
+        depth = 0
+        start = idx + 7  # len("\\boxed{")
+        for i in range(start, len(solution)):
+            if solution[i] == "{":
+                depth += 1
+            elif solution[i] == "}":
+                if depth == 0:
+                    return solution[start:i].strip()
+                depth -= 1
+        return None
+
+    def __getitem__(self, idx):
+        ex = self.dataset[idx]
+        boxed = self._extract_boxed(ex["solution"]) or ""
+        prompt = f"Problem: {ex['problem']}\nSolution:"
+        text = f"{prompt} {ex['solution']}\n#### {boxed}"
+        prompt_len = len(self.tokenizer(prompt, add_special_tokens=False)["input_ids"])
+        enc = self.tokenizer(text, truncation=True, max_length=self.max_length,
+                             padding="max_length", return_tensors="pt")
+        prompt_len = min(prompt_len, self.max_length)
+        return {
+            "input_ids": enc["input_ids"].squeeze(0),
+            "attention_mask": enc["attention_mask"].squeeze(0),
+            "prompt_len": prompt_len,
+        }
+
+    @staticmethod
+    def extract_answer(text):
+        match = re.search(r"####\s*(.+?)(?:\n|$)", text)
+        if match:
+            return match.group(1).strip()
+        return None
+
+
+class ScienceQADataset(Dataset):
+    """ScienceQA with lecture + solution reasoning traces."""
+
+    def __init__(self, split="train", tokenizer=None, max_length=512):
+        self.dataset = load_dataset("derek-thomas/ScienceQA", split=split)
+        self.tokenizer = tokenizer
+        self.max_length = max_length
+
+    def __len__(self):
+        return len(self.dataset)
+
+    def __getitem__(self, idx):
+        ex = self.dataset[idx]
+        choices = ex["choices"]
+        answer_idx = ex["answer"]
+        answer_letter = chr(ord("A") + answer_idx)
+        choices_str = "\n".join(f"{chr(ord('A')+i)}) {c}" for i, c in enumerate(choices))
+
+        # Build reasoning from lecture + solution
+        reasoning_parts = []
+        if ex.get("lecture"):
+            reasoning_parts.append(ex["lecture"])
+        if ex.get("solution"):
+            reasoning_parts.append(ex["solution"])
+        reasoning = " ".join(reasoning_parts) if reasoning_parts else answer_letter
+
+        prompt = f"Question: {ex['question']}\n{choices_str}\nAnswer:"
+        text = f"{prompt} {reasoning}\n#### {answer_letter}"
+        prompt_len = len(self.tokenizer(prompt, add_special_tokens=False)["input_ids"])
+        enc = self.tokenizer(text, truncation=True, max_length=self.max_length,
+                             padding="max_length", return_tensors="pt")
+        prompt_len = min(prompt_len, self.max_length)
+        return {
+            "input_ids": enc["input_ids"].squeeze(0),
+            "attention_mask": enc["attention_mask"].squeeze(0),
+            "prompt_len": prompt_len,
+        }
+
+    @staticmethod
+    def extract_answer(text):
+        match = re.search(r"####\s*([A-Ea-e])", text)
+        if match:
+            return match.group(1).upper()
+        match = re.search(r"Answer:\s*([A-Ea-e])\)", text)
+        return match.group(1).upper() if match else None
+
+
 # =====================================================================
 # Registry
 # =====================================================================
 
 DATASET_REGISTRY = {
+    # Answer-only benchmarks
     "gsm8k": GSM8KDataset,
     "math_qa": MathQADataset,
     "arc": ARCDataset,
+    "hellaswag": HellaSwagDataset,
+    "winogrande": WinoGrandeDataset,
+    "boolq": BoolQDataset,
+    "openbookqa": OpenBookQADataset,
+    "commonsenseqa": CommonsenseQADataset,
+    "mmlu": MMLUDataset,
+    # CoT reasoning datasets
+    "aqua": AQuADataset,
+    "math": MATHDataset,
+    "scienceqa": ScienceQADataset,
 }
 
 
