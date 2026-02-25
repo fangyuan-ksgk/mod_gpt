@@ -139,7 +139,6 @@ def parse_args():
 def evaluate_accuracy_with_logging(
     model, tokenizer, dataset, device, num_samples=50,
     max_new_tokens=128, num_log_samples=3, log_fn=None,
-    inner_cot=False, n_inner_cot_tokens=8,
 ):
     """
     Evaluate accuracy AND log sample responses with abstract token sequences.
@@ -158,20 +157,12 @@ def evaluate_accuracy_with_logging(
         prompt_len = item["prompt_len"]
 
         # Generate
-        if inner_cot:
-            generated = model.generate_inner_cot(
-                input_ids=input_ids[:, :prompt_len],
-                n_inner_cot_tokens=n_inner_cot_tokens,
-                max_new_tokens=max_new_tokens,
-                temperature=0.0,
-            )
-        else:
-            generated = model.generate(
-                input_ids=input_ids[:, :prompt_len],
-                max_new_tokens=max_new_tokens,
-                temperature=0.0,
-                K=4,
-            )
+        generated = model.generate(
+            input_ids=input_ids[:, :prompt_len],
+            max_new_tokens=max_new_tokens,
+            temperature=0.0,
+            K=4,
+        )
 
         # Filter abstract tokens for decoding
         traj_tokens = _filter_traj_tokens(generated, base_vocab_size)
@@ -246,7 +237,6 @@ def evaluate_accuracy_with_logging(
 def log_sample_generations(
     model, tokenizer, dataset, device,
     num_samples=3, max_new_tokens=128, log_fn=None,
-    inner_cot=False, n_inner_cot_tokens=8,
 ):
     """Quick sample generation for periodic logging (no accuracy computation)."""
     model.eval()
@@ -255,28 +245,19 @@ def log_sample_generations(
     if log_fn is None:
         log_fn = print
 
-    mode_str = f"Inner-CoT ({n_inner_cot_tokens} abs tokens)" if inner_cot else "Periodic"
-    log_fn(f"\n{'~'*50} Sample Generations ({mode_str}) {'~'*50}")
+    log_fn(f"\n{'~'*50} Sample Generations {'~'*50}")
 
     for i in range(min(num_samples, len(dataset))):
         item = dataset[i]
         input_ids = item["input_ids"].unsqueeze(0).to(device)
         prompt_len = item["prompt_len"]
 
-        if inner_cot:
-            generated = model.generate_inner_cot(
-                input_ids=input_ids[:, :prompt_len],
-                n_inner_cot_tokens=n_inner_cot_tokens,
-                max_new_tokens=max_new_tokens,
-                temperature=0.0,
-            )
-        else:
-            generated = model.generate(
-                input_ids=input_ids[:, :prompt_len],
-                max_new_tokens=max_new_tokens,
-                temperature=0.0,
-                K=4,
-            )
+        generated = model.generate(
+            input_ids=input_ids[:, :prompt_len],
+            max_new_tokens=max_new_tokens,
+            temperature=0.0,
+            K=4,
+        )
 
         gen_ids = generated[0]
 
@@ -429,8 +410,6 @@ def main():
             max_new_tokens=args.max_new_tokens,
             num_log_samples=args.num_log_samples,
             log_fn=log,
-            inner_cot=args.inner_cot,
-            n_inner_cot_tokens=args.n_inner_cot_tokens,
         )
 
     # ---- Trainer ----
@@ -504,6 +483,7 @@ def main():
 
                 # Optimizer step
                 if (batch_idx + 1) % cfg.gradient_accumulation_steps == 0:
+                    trainer._sync_gradients()
                     if cfg.max_grad_norm > 0:
                         torch.nn.utils.clip_grad_norm_(trainer.model.parameters(), cfg.max_grad_norm)
                     optimizer.step()
@@ -539,8 +519,6 @@ def main():
 
                 # Cleanup
                 del loss, step_out
-                if torch.cuda.is_available():
-                    torch.cuda.empty_cache()
 
                 # --- Periodic sample generation logging ---
                 if (trainer.is_master
@@ -551,8 +529,6 @@ def main():
                         num_samples=args.num_log_samples,
                         max_new_tokens=args.max_new_tokens,
                         log_fn=log,
-                        inner_cot=args.inner_cot,
-                        n_inner_cot_tokens=args.n_inner_cot_tokens,
                     )
 
                 # Eval (accuracy + sample responses)
