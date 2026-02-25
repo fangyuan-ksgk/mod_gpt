@@ -139,6 +139,7 @@ def parse_args():
 def evaluate_accuracy_with_logging(
     model, tokenizer, dataset, device, num_samples=50,
     max_new_tokens=128, num_log_samples=3, log_fn=None,
+    inner_cot=False, n_inner_cot_tokens=8,
 ):
     """
     Evaluate accuracy AND log sample responses with abstract token sequences.
@@ -157,12 +158,20 @@ def evaluate_accuracy_with_logging(
         prompt_len = item["prompt_len"]
 
         # Generate
-        generated = model.generate(
-            input_ids=input_ids[:, :prompt_len],
-            max_new_tokens=max_new_tokens,
-            temperature=0.0,
-            K=4,
-        )
+        if inner_cot:
+            generated = model.generate_inner_cot(
+                input_ids=input_ids[:, :prompt_len],
+                n_inner_cot_tokens=n_inner_cot_tokens,
+                max_new_tokens=max_new_tokens,
+                temperature=0.0,
+            )
+        else:
+            generated = model.generate(
+                input_ids=input_ids[:, :prompt_len],
+                max_new_tokens=max_new_tokens,
+                temperature=0.0,
+                K=4,
+            )
 
         # Filter abstract tokens for decoding
         traj_tokens = _filter_traj_tokens(generated, base_vocab_size)
@@ -237,6 +246,7 @@ def evaluate_accuracy_with_logging(
 def log_sample_generations(
     model, tokenizer, dataset, device,
     num_samples=3, max_new_tokens=128, log_fn=None,
+    inner_cot=False, n_inner_cot_tokens=8,
 ):
     """Quick sample generation for periodic logging (no accuracy computation)."""
     model.eval()
@@ -245,19 +255,28 @@ def log_sample_generations(
     if log_fn is None:
         log_fn = print
 
-    log_fn(f"\n{'~'*50} Sample Generations {'~'*50}")
+    mode_str = f"Inner-CoT ({n_inner_cot_tokens} abs tokens)" if inner_cot else "Periodic"
+    log_fn(f"\n{'~'*50} Sample Generations ({mode_str}) {'~'*50}")
 
     for i in range(min(num_samples, len(dataset))):
         item = dataset[i]
         input_ids = item["input_ids"].unsqueeze(0).to(device)
         prompt_len = item["prompt_len"]
 
-        generated = model.generate(
-            input_ids=input_ids[:, :prompt_len],
-            max_new_tokens=max_new_tokens,
-            temperature=0.0,
-            K=4,
-        )
+        if inner_cot:
+            generated = model.generate_inner_cot(
+                input_ids=input_ids[:, :prompt_len],
+                n_inner_cot_tokens=n_inner_cot_tokens,
+                max_new_tokens=max_new_tokens,
+                temperature=0.0,
+            )
+        else:
+            generated = model.generate(
+                input_ids=input_ids[:, :prompt_len],
+                max_new_tokens=max_new_tokens,
+                temperature=0.0,
+                K=4,
+            )
 
         gen_ids = generated[0]
 
@@ -410,6 +429,8 @@ def main():
             max_new_tokens=args.max_new_tokens,
             num_log_samples=args.num_log_samples,
             log_fn=log,
+            inner_cot=args.inner_cot,
+            n_inner_cot_tokens=args.n_inner_cot_tokens,
         )
 
     # ---- Trainer ----
@@ -530,6 +551,8 @@ def main():
                         num_samples=args.num_log_samples,
                         max_new_tokens=args.max_new_tokens,
                         log_fn=log,
+                        inner_cot=args.inner_cot,
+                        n_inner_cot_tokens=args.n_inner_cot_tokens,
                     )
 
                 # Eval (accuracy + sample responses)

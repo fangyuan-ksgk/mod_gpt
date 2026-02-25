@@ -205,13 +205,15 @@ class SoRLCompressTrainer(SoRLTrainer):
                         ar_search=cfg.ar_search,
                     )
 
-        # 2. Base trajectory loss — mask padding, question tokens, AND dropped traj tokens
+        # 2. Base trajectory loss — on the FULL original NL sequence (no abstract tokens)
         labels = input_ids.clone()
         labels[attention_mask == 0] = -100
         seq_idx = torch.arange(labels.size(1), device=self.device).unsqueeze(0)
         labels[seq_idx < prompt_len.unsqueeze(1)] = -100
 
-        if traj_remove_1d is not None and traj_remove_1d.any():
+        # Only mask dropped tokens for compress mode (random NL dropping).
+        # For inner_cot, base_traj_loss should reflect the full NL baseline.
+        if not cfg.inner_cot and traj_remove_1d is not None and traj_remove_1d.any():
             labels[:, traj_remove_1d] = -100
 
         outputs = self.raw_model(

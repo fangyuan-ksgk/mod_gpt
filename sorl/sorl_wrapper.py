@@ -255,6 +255,66 @@ class SorlModelWrapper(PreTrainedModel, GenerationMixin):
         
         return generated_ids
 
+    @torch.no_grad()
+    def generate_inner_cot(
+        self,
+        input_ids: torch.LongTensor,
+        n_inner_cot_tokens: int = 8,
+        max_new_tokens: int = 128,
+        temperature: float = 0.0,
+        top_k: int = 50,
+        memory_span_abs: int = 1792,
+        memory_span_traj: int = 1792,
+    ):
+        """
+        Inner-CoT generation: two-phase autoregressive decoding.
+        """
+        self.model.eval()
+        generated_ids = input_ids.clone()
+        vocab_size_0 = self.vocab_sizes[0].item()
+        eos_token_id = getattr(self.model.config, "eos_token_id", None)
+        if isinstance(eos_token_id, (list, tuple)):
+            eos_token_id = eos_token_id[0] if eos_token_id else None
+
+        # Phase 1: generate abstract tokens
+        for _ in range(n_inner_cot_tokens):
+            block_mask = self._create_sorl_block_mask(generated_ids, memory_span_abs, memory_span_traj)
+            outputs = self.model.forward(
+                input_ids=generated_ids, block_mask=block_mask, use_cache=False,
+            )
+            logits = outputs.logits[:, -1, :]
+            # Mask base vocab — only allow abstract tokens
+            logits[:, :vocab_size_0 + 1] = -float("inf")
+            if temperature > 0:
+                probs = F.softmax(logits / temperature, dim=-1)
+                topk_probs, topk_idx = torch.topk(probs, min(top_k, probs.size(-1)), dim=-1)
+                next_id = torch.gather(topk_idx, dim=1, index=torch.multinomial(topk_probs, 1))
+            else:
+                next_id = torch.argmax(logits, dim=-1, keepdim=True)
+            generated_ids = torch.cat([generated_ids, next_id], dim=1)
+
+        # Phase 2: generate NL answer tokens
+        for _ in range(max_new_tokens):
+            block_mask = self._create_sorl_block_mask(generated_ids, memory_span_abs, memory_span_traj)
+            outputs = self.model.forward(
+                input_ids=generated_ids, block_mask=block_mask, use_cache=False,
+            )
+            logits = outputs.logits[:, -1, :]
+            # Mask abstract vocab — only allow base (NL) tokens
+            logits[:, vocab_size_0:] = -float("inf")
+            if temperature > 0:
+                probs = F.softmax(logits / temperature, dim=-1)
+                topk_probs, topk_idx = torch.topk(probs, min(top_k, probs.size(-1)), dim=-1)
+                next_id = torch.gather(topk_idx, dim=1, index=torch.multinomial(topk_probs, 1))
+            else:
+                next_id = torch.argmax(logits, dim=-1, keepdim=True)
+            generated_ids = torch.cat([generated_ids, next_id], dim=1)
+            # Stop on EOS
+            if eos_token_id is not None and (next_id == eos_token_id).all():
+                break
+
+        return generated_ids
+
     def generate_abstract_only(self, idx, attention_mask, memory_span_abs=1792, memory_span_traj=1792, temperature=0.0, prompt_len=None):
 
         vocab_size_0 = self.vocab_sizes[0].to(idx.device)
