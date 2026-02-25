@@ -379,9 +379,17 @@ class SoRLTrainer:
                     pg["lr"] = lr
 
                 # Forward + loss
-                step_out = self._training_step(batch)
-                loss = step_out["loss"] / cfg.gradient_accumulation_steps
-                loss.backward()
+                is_accumulating = (batch_idx + 1) % cfg.gradient_accumulation_steps != 0
+                
+                if self.ddp and is_accumulating:
+                    with self.model.no_sync():
+                        step_out = self._training_step(batch)
+                        loss = step_out["loss"] / cfg.gradient_accumulation_steps
+                        loss.backward()
+                else:
+                    step_out = self._training_step(batch)
+                    loss = step_out["loss"] / cfg.gradient_accumulation_steps
+                    loss.backward()
 
                 # Optimizer step
                 if (batch_idx + 1) % cfg.gradient_accumulation_steps == 0:
