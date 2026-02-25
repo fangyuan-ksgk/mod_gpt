@@ -21,6 +21,7 @@ from typing import Optional, Callable, Dict, Any
 import torch
 import torch.nn as nn
 import torch.distributed as dist
+from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data import DataLoader, DistributedSampler
 
 from sorl.sorl_trainer import sorl_search, sorl_search_ar, SoRLLoss
@@ -160,11 +161,11 @@ class SoRLTrainer:
             self.is_master = True
 
         # --- Model ---
-        # NOTE: We intentionally skip DDP wrapping because forward passes
-        # need direct access to raw_model attributes (vocab_sizes, recursion,
-        # generate, etc.).  Gradient sync is done manually after backward().
         self.raw_model = model.to(self.device)
-        self.model = self.raw_model
+        if ddp:
+            self.model = DDP(self.raw_model, device_ids=[self.local_rank], find_unused_parameters=True)
+        else:
+            self.model = self.raw_model
 
         # --- Loss ---
         self.loss_fn = SoRLLoss(
@@ -182,17 +183,6 @@ class SoRLTrainer:
         }
 
     # ------------------------------------------------------------------
-    # Gradient sync (replaces DDP all-reduce)
-    # ------------------------------------------------------------------
-    def _sync_gradients(self):
-        """Average gradients across all DDP ranks."""
-        if not self.ddp:
-            return
-        for p in self.model.parameters():
-            if p.grad is not None:
-                dist.all_reduce(p.grad, op=dist.ReduceOp.AVG)
-
-    # ------------------------------------------------------------------
     # Dataloader
     # ------------------------------------------------------------------
     def _make_dataloader(self, dataset, shuffle=True):
@@ -207,8 +197,8 @@ class SoRLTrainer:
             shuffle=(shuffle and sampler is None),
             sampler=sampler,
             collate_fn=self.collate_fn,
-            num_workers=2,
-            pin_memory=True,
+            num_workers=0,
+            pin_memory=False,
         )
 
     # ------------------------------------------------------------------
@@ -310,8 +300,7 @@ class SoRLTrainer:
         if hasattr(hf_model, "save_pretrained"):
             hf_model.save_pretrained(save_dir)
         # Save abstract embedding rows + loss_fn + optimizer (always small)
-        # Check for LoRA/peft specifically (all HF models have base_model property)
-        unwrapped = hf_model.base_model.model if hasattr(hf_model, "peft_config") else hf_model
+        unwrapped = hf_model.base_model.model if hasattr(hf_model, "base_model") else hf_model
         torch.save({
             "step": global_step,
             "epoch": epoch,
@@ -396,7 +385,6 @@ class SoRLTrainer:
 
                 # Optimizer step
                 if (batch_idx + 1) % cfg.gradient_accumulation_steps == 0:
-                    self._sync_gradients()
                     if cfg.max_grad_norm > 0:
                         torch.nn.utils.clip_grad_norm_(self.model.parameters(), cfg.max_grad_norm)
                     optimizer.step()
@@ -434,15 +422,14 @@ class SoRLTrainer:
 
                 # Cleanup
                 del loss, step_out
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
 
-                # Eval (master only, barrier to keep ranks in sync)
+                # Eval
                 if global_step > 0 and global_step % cfg.eval_every == 0:
-                    if self.is_master:
-                        result = self.evaluate()
-                        if result is not None:
-                            self._log(f"--- Eval step {global_step}: {result} ---")
-                    if self.ddp:
-                        dist.barrier()
+                    result = self.evaluate()
+                    if result is not None:
+                        self._log(f"--- Eval step {global_step}: {result} ---")
 
                 # Checkpoint
                 if global_step > 0 and global_step % cfg.save_every == 0:

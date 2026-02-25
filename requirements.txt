@@ -1,10 +1,15 @@
 numpy
 tqdm
 torch
+torchvision
 huggingface-hub
-tiktoken 
+transformers
+peft
+accelerate
+tiktoken
 datasets
 matplotlib
 seaborn
 pandas
-metaworld
+typing_extensions>=4.12
+filelock>=3.13

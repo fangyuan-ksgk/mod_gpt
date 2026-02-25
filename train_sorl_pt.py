@@ -34,7 +34,6 @@ from transformers import AutoTokenizer
 
 from sorl.sorl_wrapper import SorlModelWrapper
 from sorl.trainer import SoRLTrainer, SoRLConfig
-from sorl.trainer_compress import SoRLCompressTrainer, SoRLCompressConfig
 from data.pt_dataset import get_dataset, evaluate_accuracy, _filter_traj_tokens, collate_fn
 
 
@@ -69,8 +68,8 @@ def parse_args():
     p.add_argument("--dataset", type=str, default="gsm8k",
                    choices=["gsm8k", "math_qa", "arc", "hellaswag",
                             "winogrande", "boolq", "openbookqa",
-                            "commonsenseqa", "mmlu", "aqua", "math",
-                            "scienceqa"])
+                            "commonsenseqa", "mmlu",
+                            "aqua", "math", "scienceqa"])
     p.add_argument("--max_length", type=int, default=256)
 
     # SoRL search
@@ -80,16 +79,6 @@ def parse_args():
     p.add_argument("--memory_span_abs", type=int, default=1792)
     p.add_argument("--memory_span_traj", type=int, default=1792)
     p.add_argument("--temperature", type=float, default=1.0)
-
-    # Compress mode
-    p.add_argument("--compress", action="store_true",
-                   help="Use SoRLCompressTrainer (NL token dropping or inner CoT)")
-    p.add_argument("--inner_cot", action="store_true",
-                   help="Use inner CoT (replace reasoning with abstract tokens) instead of random NL dropping")
-    p.add_argument("--remove_prob", type=float, default=0.3,
-                   help="Probability of dropping NL tokens (compress mode only)")
-    p.add_argument("--n_inner_cot_tokens", type=int, default=8,
-                   help="Number of inner CoT abstract tokens (inner_cot mode only)")
 
     # Loss weights
     p.add_argument("--alpha_info_gain", type=float, default=10.0)
@@ -359,7 +348,7 @@ def main():
     log(f"Train: {len(train_ds)} | Val: {len(val_ds)}")
 
     # ---- Config ----
-    shared_cfg_kwargs = dict(
+    config = SoRLConfig(
         num_rollouts=args.num_rollouts,
         K=args.K,
         max_iterations=args.max_iterations,
@@ -388,20 +377,6 @@ def main():
         output_dir=args.output_dir,
     )
 
-    if args.compress:
-        config = SoRLCompressConfig(
-            **shared_cfg_kwargs,
-            remove_prob=args.remove_prob,
-            inner_cot=args.inner_cot,
-            n_inner_cot_tokens=args.n_inner_cot_tokens,
-        )
-        trainer_cls = SoRLCompressTrainer
-        mode = "inner_cot" if args.inner_cot else f"compress (remove_prob={args.remove_prob})"
-        log(f"Compress mode: {mode}")
-    else:
-        config = SoRLConfig(**shared_cfg_kwargs)
-        trainer_cls = SoRLTrainer
-
     # ---- Accuracy evaluator with logging ----
     def compute_accuracy_fn(model, tokenizer, dataset, device, num_samples):
         return evaluate_accuracy_with_logging(
@@ -413,7 +388,7 @@ def main():
         )
 
     # ---- Trainer ----
-    trainer = trainer_cls(
+    trainer = SoRLTrainer(
         model=model,
         tokenizer=tokenizer,
         train_dataset=train_ds,
@@ -483,7 +458,6 @@ def main():
 
                 # Optimizer step
                 if (batch_idx + 1) % cfg.gradient_accumulation_steps == 0:
-                    trainer._sync_gradients()
                     if cfg.max_grad_norm > 0:
                         torch.nn.utils.clip_grad_norm_(trainer.model.parameters(), cfg.max_grad_norm)
                     optimizer.step()
@@ -519,29 +493,25 @@ def main():
 
                 # Cleanup
                 del loss, step_out
+                # torch.cuda.empty_cache() removed — benchmarked at ~3% overhead per step
 
-                # --- Periodic sample generation logging (master only) ---
-                if (global_step > 0
+                # --- Periodic sample generation logging ---
+                if (trainer.is_master
+                    and global_step > 0
                     and global_step % args.log_samples_every == 0):
-                    if trainer.is_master:
-                        log_sample_generations(
-                            trainer.raw_model, tokenizer, val_ds, trainer.device,
-                            num_samples=args.num_log_samples,
-                            max_new_tokens=args.max_new_tokens,
-                            log_fn=log,
-                        )
-                    if trainer.ddp:
-                        dist.barrier()
+                    log_sample_generations(
+                        trainer.raw_model, tokenizer, val_ds, trainer.device,
+                        num_samples=args.num_log_samples,
+                        max_new_tokens=args.max_new_tokens,
+                        log_fn=log,
+                    )
 
                 # Eval (accuracy + sample responses)
                 if global_step > 0 and global_step % cfg.eval_every == 0:
-                    if trainer.is_master:
-                        result = trainer.evaluate()
-                        if result is not None:
-                            log(f"--- Eval step {global_step}: acc={result['accuracy']*100:.1f}% "
-                                f"({result['correct']}/{result['total']}) ---")
-                    if trainer.ddp:
-                        dist.barrier()
+                    result = trainer.evaluate()
+                    if result is not None and trainer.is_master:
+                        log(f"--- Eval step {global_step}: acc={result['accuracy']*100:.1f}% "
+                            f"({result['correct']}/{result['total']}) ---")
 
                 # (intermediate checkpoints disabled to save disk space)
 
@@ -569,15 +539,13 @@ def main():
             torch.save(abs_state, os.path.join(save_dir, "abs_embeddings.pt"))
             log(f"Saved abstract embeddings to {save_dir}/abs_embeddings.pt")
 
-        # Final eval (master only, others wait)
+        # Final eval
         if trainer.is_master:
             log("--- Final evaluation ---")
             result = trainer.evaluate()
             if result is not None:
                 log(f"Final accuracy: {result['accuracy']*100:.1f}% "
                     f"({result['correct']}/{result['total']})")
-        if trainer.ddp:
-            dist.barrier()
 
         log("Training complete!")
 
