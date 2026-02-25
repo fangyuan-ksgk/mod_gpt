@@ -520,23 +520,28 @@ def main():
                 # Cleanup
                 del loss, step_out
 
-                # --- Periodic sample generation logging ---
-                if (trainer.is_master
-                    and global_step > 0
+                # --- Periodic sample generation logging (master only) ---
+                if (global_step > 0
                     and global_step % args.log_samples_every == 0):
-                    log_sample_generations(
-                        trainer.raw_model, tokenizer, val_ds, trainer.device,
-                        num_samples=args.num_log_samples,
-                        max_new_tokens=args.max_new_tokens,
-                        log_fn=log,
-                    )
+                    if trainer.is_master:
+                        log_sample_generations(
+                            trainer.raw_model, tokenizer, val_ds, trainer.device,
+                            num_samples=args.num_log_samples,
+                            max_new_tokens=args.max_new_tokens,
+                            log_fn=log,
+                        )
+                    if trainer.ddp:
+                        dist.barrier()
 
                 # Eval (accuracy + sample responses)
                 if global_step > 0 and global_step % cfg.eval_every == 0:
-                    result = trainer.evaluate()
-                    if result is not None and trainer.is_master:
-                        log(f"--- Eval step {global_step}: acc={result['accuracy']*100:.1f}% "
-                            f"({result['correct']}/{result['total']}) ---")
+                    if trainer.is_master:
+                        result = trainer.evaluate()
+                        if result is not None:
+                            log(f"--- Eval step {global_step}: acc={result['accuracy']*100:.1f}% "
+                                f"({result['correct']}/{result['total']}) ---")
+                    if trainer.ddp:
+                        dist.barrier()
 
                 # (intermediate checkpoints disabled to save disk space)
 
@@ -564,13 +569,15 @@ def main():
             torch.save(abs_state, os.path.join(save_dir, "abs_embeddings.pt"))
             log(f"Saved abstract embeddings to {save_dir}/abs_embeddings.pt")
 
-        # Final eval
+        # Final eval (master only, others wait)
         if trainer.is_master:
             log("--- Final evaluation ---")
             result = trainer.evaluate()
             if result is not None:
                 log(f"Final accuracy: {result['accuracy']*100:.1f}% "
                     f"({result['correct']}/{result['total']})")
+        if trainer.ddp:
+            dist.barrier()
 
         log("Training complete!")
 

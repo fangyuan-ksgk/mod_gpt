@@ -435,11 +435,14 @@ class SoRLTrainer:
                 # Cleanup
                 del loss, step_out
 
-                # Eval
+                # Eval (master only, barrier to keep ranks in sync)
                 if global_step > 0 and global_step % cfg.eval_every == 0:
-                    result = self.evaluate()
-                    if result is not None:
-                        self._log(f"--- Eval step {global_step}: {result} ---")
+                    if self.is_master:
+                        result = self.evaluate()
+                        if result is not None:
+                            self._log(f"--- Eval step {global_step}: {result} ---")
+                    if self.ddp:
+                        dist.barrier()
 
                 # Checkpoint
                 if global_step > 0 and global_step % cfg.save_every == 0:
