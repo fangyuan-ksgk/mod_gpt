@@ -214,7 +214,8 @@ class SoRLCompressTrainer(SoRLTrainer):
         # Only mask dropped tokens for compress mode (random NL dropping).
         # For inner_cot, base_traj_loss should reflect the full NL baseline.
         if not cfg.inner_cot and traj_remove_1d is not None and traj_remove_1d.any():
-            labels[:, traj_remove_1d] = -100
+            L = labels.size(1)
+            labels[:, traj_remove_1d[:L]] = -100
 
         outputs = self.raw_model(
             input_ids=input_ids, attention_mask=attention_mask, labels=labels,
