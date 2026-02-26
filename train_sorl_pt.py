@@ -34,6 +34,7 @@ from transformers import AutoTokenizer
 
 from sorl.sorl_wrapper import SorlModelWrapper
 from sorl.trainer import SoRLTrainer, SoRLConfig
+from sorl.trainer_compress import SoRLCompressTrainer, SoRLCompressConfig
 from data.pt_dataset import get_dataset, evaluate_accuracy, _filter_traj_tokens, collate_fn
 
 
@@ -51,6 +52,11 @@ def _zero_base_grad(grad, base_vocab):
 # ---------------------------------------------------------------------------
 def parse_args():
     p = argparse.ArgumentParser(description="SoRL Post-Training")
+
+    # Mode
+    p.add_argument("--mode", type=str, default="sorl",
+                   choices=["sorl", "compress", "inner_cot"],
+                   help="Training mode: sorl (standard), compress (NL token dropping), inner_cot (replace NL with abstract block)")
 
     # Model
     p.add_argument("--model_name", type=str, default="Qwen/Qwen2.5-0.5B")
@@ -84,6 +90,14 @@ def parse_args():
     p.add_argument("--alpha_info_gain", type=float, default=10.0)
     p.add_argument("--alpha_abs", type=float, default=0.1)
     p.add_argument("--alpha_soft_zipf", type=float, default=1.0)
+    p.add_argument("--alpha_denoise", type=float, default=0.0,
+                   help="Denoising loss weight (compress/inner_cot modes)")
+
+    # Compress / Inner-CoT specific
+    p.add_argument("--remove_prob", type=float, default=0.3,
+                   help="Fraction of NL tokens to drop (compress mode)")
+    p.add_argument("--n_inner_cot_tokens", type=int, default=8,
+                   help="Number of abstract tokens to replace NL reasoning (inner_cot mode)")
 
     # Loss function
     p.add_argument("--decay", type=float, default=0.8)
@@ -348,7 +362,7 @@ def main():
     log(f"Train: {len(train_ds)} | Val: {len(val_ds)}")
 
     # ---- Config ----
-    config = SoRLConfig(
+    shared_cfg = dict(
         num_rollouts=args.num_rollouts,
         K=args.K,
         max_iterations=args.max_iterations,
@@ -358,6 +372,7 @@ def main():
         alpha_info_gain=args.alpha_info_gain,
         alpha_abs=args.alpha_abs,
         alpha_soft_zipf=args.alpha_soft_zipf,
+        alpha_denoise=args.alpha_denoise,
         decay=args.decay,
         target_vocab_util=args.target_vocab_util,
         min_abs_ppl=args.min_abs_ppl,
@@ -377,6 +392,16 @@ def main():
         output_dir=args.output_dir,
     )
 
+    if args.mode in ("compress", "inner_cot"):
+        config = SoRLCompressConfig(
+            **shared_cfg,
+            remove_prob=args.remove_prob,
+            inner_cot=(args.mode == "inner_cot"),
+            n_inner_cot_tokens=args.n_inner_cot_tokens,
+        )
+    else:
+        config = SoRLConfig(**shared_cfg)
+
     # ---- Accuracy evaluator with logging ----
     def compute_accuracy_fn(model, tokenizer, dataset, device, num_samples):
         return evaluate_accuracy_with_logging(
@@ -388,7 +413,8 @@ def main():
         )
 
     # ---- Trainer ----
-    trainer = SoRLTrainer(
+    TrainerClass = SoRLCompressTrainer if args.mode in ("compress", "inner_cot") else SoRLTrainer
+    trainer = TrainerClass(
         model=model,
         tokenizer=tokenizer,
         train_dataset=train_ds,
@@ -398,6 +424,7 @@ def main():
         config=config,
         ddp=ddp,
     )
+    log(f"Mode: {args.mode} | Trainer: {TrainerClass.__name__}")
 
     # ---- Monkey-patch the training loop to add periodic sample logging ----
     _original_train = trainer.train
