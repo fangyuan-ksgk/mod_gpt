@@ -65,7 +65,10 @@ def replace_reasoning_with_abstract(expanded_data, expanded_mask, expanded_promp
     B, L = expanded_data.shape
     ans_start = get_answer_start_index(expanded_data)
     ans_dst = expanded_prompt_len + n_inner_cot_tokens
-    new_L = int((ans_dst + L - ans_start).max().item())
+    # new_L = int((ans_dst + L - ans_start).max().item())
+    valid_len = expanded_mask.sum(dim=1)  # (B,) per-sample real length
+    new_L = int((ans_dst + valid_len - ans_start).clamp(min=0).max().item())
+    
 
     pos = torch.arange(L, device=expanded_data.device).unsqueeze(0).expand(B, -1)
     is_q = pos < expanded_prompt_len.unsqueeze(1)
@@ -298,6 +301,77 @@ class SoRLLoss(nn.Module):
 
         # --- Return: p(s | a)/p(s), p(a | s), KL(p(a_t, a_t+1), soft_zipf_prior) ---
         return info_loss, abs_loss, soft_zipf_kl 
+
+    def distillation_loss(
+        self,
+        base_logits: torch.Tensor,
+        input_ids: torch.Tensor,
+        input_ids_mask: torch.Tensor,
+        best_data: torch.Tensor,
+        model,
+        expanded_mask: torch.Tensor,
+        memory_span_abs: int,
+        memory_span_traj: int,
+        temperature: float = 2.0,
+    ):
+        """KL distillation: full-CoT answer logits → inner-CoT answer logits.
+
+        Skips abstract-token positions in the student answer region so that
+        teacher and student logits are aligned 1:1 on NL answer tokens only.
+
+        Args:
+            base_logits:    (B, L, V)  teacher logits from full-CoT forward.
+            input_ids:      (B, L)     original (full-CoT) token ids.
+            input_ids_mask: (B, L)     attention mask for input_ids.
+            best_data:      (B, L')    expanded sequence with abstract tokens.
+            expanded_mask:  (B, L')    mask for best_data.
+            temperature:    softmax temperature for distillation.
+
+        Returns:
+            Scalar KL divergence loss (mean over valid answer tokens).
+        """
+        dev = best_data.device
+        B, L_s, V = base_logits.shape
+        L_p = best_data.shape[1]
+        abs_th = model.vocab_sizes[0]
+
+        # Answer start indices
+        ans_start = get_answer_start_index(input_ids)        # (B,) teacher
+        ans_start_exp = get_answer_start_index(best_data)    # (B,) student
+
+        # Teacher answer length (no abstract tokens in teacher)
+        ans_len = (input_ids_mask.sum(1) - ans_start).clamp(min=0)  # (B,)
+        A = int(ans_len.max().item())
+        if A == 0:
+            return torch.tensor(0.0, device=dev)
+
+        # Teacher gather: logit at (ans_start + k - 1) predicts answer token k
+        idx_t = (ans_start[:, None] + torch.arange(A, device=dev) - 1).clamp(0, L_s - 1)
+        teacher_ans_logits = base_logits.gather(1, idx_t[..., None].expand(-1, -1, V)).detach()
+
+        # Student forward
+        stu_logits = model(
+            input_ids=best_data, attention_mask=expanded_mask,
+            memory_span_abs=memory_span_abs, memory_span_traj=memory_span_traj,
+        ).logits[..., :V]  # (B, L', V)
+
+        # Student: rank NL-only answer positions via cumsum, gather by rank
+        pos = torch.arange(L_p, device=dev).expand(B, -1)
+        nl_ans = (pos >= ans_start_exp[:, None]) & (best_data < abs_th) & expanded_mask.bool()
+        nl_rank = nl_ans.long().cumsum(1) * nl_ans.long()  # 1-indexed
+        idx_s = ((nl_rank.unsqueeze(2) == torch.arange(1, A + 1, device=dev)).float().argmax(1) - 1).clamp(0, L_p - 1)
+        student_ans_logits = stu_logits.gather(1, idx_s[..., None].expand(-1, -1, V))
+
+        # Per-sample mask
+        ans_mask = torch.arange(A, device=dev) < ans_len[:, None]  # (B, A)
+
+        # KL(teacher || student) with temperature scaling
+        teacher_log_p = F.log_softmax(teacher_ans_logits / temperature, dim=-1)
+        student_log_p = F.log_softmax(student_ans_logits / temperature, dim=-1)
+        kl = F.kl_div(student_log_p, teacher_log_p, log_target=True, reduction='none').sum(-1)  # (B, A)
+
+        kl = (kl * ans_mask.float()).sum() / ans_mask.float().sum().clamp(min=1)
+        return kl * (temperature ** 2)
 
     def denoising_loss(self, best_data, model, attention_mask, memory_span_abs: int, memory_span_traj: int):
         """Masked infill loss: train model to predict searched abstract tokens from placeholders.

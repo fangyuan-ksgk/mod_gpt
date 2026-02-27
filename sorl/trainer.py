@@ -403,13 +403,14 @@ class SoRLTrainer:
                     eta_str = f"{eta_h}h{eta_m:02d}m{eta_s:02d}s" if eta_h else f"{eta_m}m{eta_s:02d}s"
                     peak = f"Memory :{torch.cuda.max_memory_allocated(self.device)/1024**3:.2f}GB" if torch.cuda.is_available() else ""
                     denoise_str = f"denoise={step_out['denoise_loss'].item():.4f} " if cfg.alpha_denoise > 0 else ""
+                    distill_str = f"distill={step_out['distill_loss'].item():.4f} " if 'distill_loss' in step_out and step_out['distill_loss'].item() > 0 else ""
                     self._log(
                         f"epoch {epoch_frac:.3f}/{cfg.num_epochs} | remain: {eta_str} | "
                         f"loss={total_loss:.4f} base={step_out['base_traj_loss'].item():.4f} "
                         f"info={step_out['info_gain_loss'].item():.4f} "
                         f"abs={step_out['abs_loss'].item():.4f} "
                         f"zipf={step_out['zipf_bigram_loss'].item():.4f} "
-                        f"{denoise_str}| {peak}"
+                        f"{denoise_str}{distill_str}| {peak}"
                     )
                     self.history["step"].append(global_step)
                     self.history["loss"].append(total_loss)
@@ -418,6 +419,8 @@ class SoRLTrainer:
                     self.history["abs_loss"].append(step_out["abs_loss"].item())
                     self.history["zipf_loss"].append(step_out["zipf_bigram_loss"].item())
                     self.history["denoise_loss"].append(step_out["denoise_loss"].item())
+                    if "distill_loss" in step_out:
+                        self.history.setdefault("distill_loss", []).append(step_out["distill_loss"].item())
                     self.history["lr"].append(lr)
 
                 # Cleanup

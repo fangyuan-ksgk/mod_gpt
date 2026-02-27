@@ -9,7 +9,7 @@ import torch
 from sorl.sorl_trainer import (
     infer_insert_mask, expand_prompt_len, insert_tokens_with_padding,
     drop_tokens, replace_reasoning_with_abstract,
-    select_best_sequences, SoRLLoss,
+    select_best_sequences, get_answer_start_index, SoRLLoss,
 )
 from sorl.trainer import SoRLTrainer, SoRLConfig
 
@@ -22,6 +22,8 @@ class SoRLCompressConfig(SoRLConfig):
     remove_prob: float = 0.3
     inner_cot: bool = False
     n_inner_cot_tokens: int = 8
+    alpha_distill: float = 0.0
+    distill_temperature: float = 2.0
 
 
 # ---------------------------------------------------------------------------
@@ -211,8 +213,6 @@ class SoRLCompressTrainer(SoRLTrainer):
         seq_idx = torch.arange(labels.size(1), device=self.device).unsqueeze(0)
         labels[seq_idx < prompt_len.unsqueeze(1)] = -100
 
-        # Only mask dropped tokens for compress mode (random NL dropping).
-        # For inner_cot, base_traj_loss should reflect the full NL baseline.
         if not cfg.inner_cot and traj_remove_1d is not None and traj_remove_1d.any():
             L = labels.size(1)
             labels[:, traj_remove_1d[:L]] = -100
@@ -222,6 +222,12 @@ class SoRLCompressTrainer(SoRLTrainer):
             memory_span_abs=cfg.memory_span_abs, memory_span_traj=cfg.memory_span_traj,
         )
         base_traj_loss = outputs.loss
+
+        # Extract base (full-CoT) logits for distillation
+        if cfg.alpha_distill > 0 and cfg.inner_cot:
+            base_logits = outputs.logits  # (B, L, V)
+        else:
+            base_logits = None
         del outputs
 
         # 3. Auxiliary losses
@@ -240,13 +246,25 @@ class SoRLCompressTrainer(SoRLTrainer):
         else:
             denoise_loss = torch.tensor(0.0, device=self.device)
 
-        # 5. Combined loss
+        # 5. Distillation loss (inner_cot only): KL(full-CoT answer → inner-CoT answer)
+        if base_logits is not None:
+            distill_loss = self.loss_fn.distillation_loss(
+                base_logits, input_ids, attention_mask,
+                best_data, self.raw_model,
+                expanded_mask, cfg.memory_span_abs, cfg.memory_span_traj,
+                temperature=cfg.distill_temperature,
+            )
+        else:
+            distill_loss = torch.tensor(0.0, device=self.device)
+
+        # 6. Combined loss
         loss = (
             base_traj_loss
             + cfg.alpha_info_gain * info_gain_loss
             + cfg.alpha_abs * abs_loss
             + cfg.alpha_soft_zipf * zipf_bigram_loss
             + cfg.alpha_denoise * denoise_loss
+            + cfg.alpha_distill * distill_loss
         )
 
         # Cleanup search tensors
@@ -259,4 +277,5 @@ class SoRLCompressTrainer(SoRLTrainer):
             "abs_loss": abs_loss,
             "zipf_bigram_loss": zipf_bigram_loss,
             "denoise_loss": denoise_loss,
+            "distill_loss": distill_loss,
         }

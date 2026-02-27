@@ -98,6 +98,10 @@ def parse_args():
                    help="Fraction of NL tokens to drop (compress mode)")
     p.add_argument("--n_inner_cot_tokens", type=int, default=8,
                    help="Number of abstract tokens to replace NL reasoning (inner_cot mode)")
+    p.add_argument("--alpha_distill", type=float, default=0.0,
+                   help="Answer-logit distillation loss weight (inner_cot mode)")
+    p.add_argument("--distill_temperature", type=float, default=2.0,
+                   help="Temperature for distillation KL divergence")
 
     # Loss function
     p.add_argument("--decay", type=float, default=0.8)
@@ -398,6 +402,8 @@ def main():
             remove_prob=args.remove_prob,
             inner_cot=(args.mode == "inner_cot"),
             n_inner_cot_tokens=args.n_inner_cot_tokens,
+            alpha_distill=args.alpha_distill,
+            distill_temperature=args.distill_temperature,
         )
     else:
         config = SoRLConfig(**shared_cfg)
