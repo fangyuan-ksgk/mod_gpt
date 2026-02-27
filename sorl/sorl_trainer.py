@@ -75,12 +75,14 @@ def replace_reasoning_with_abstract(expanded_data, expanded_mask, expanded_promp
     is_a = pos >= ans_start.unsqueeze(1)
     keep = is_q | is_a
     dst = torch.where(is_a, pos + (ans_dst - ans_start).unsqueeze(1), pos)
-    safe_dst = torch.where(keep, dst, new_L - 1).clamp(0, new_L - 1)
+    safe_dst = torch.where(keep, dst, torch.tensor(new_L, device=expanded_data.device)).clamp(0, new_L)
 
-    new_data = expanded_data.new_full((B, new_L), pad_token_id)
-    new_mask = expanded_mask.new_zeros((B, new_L))
+    new_data = expanded_data.new_full((B, new_L + 1), pad_token_id)
+    new_mask = expanded_mask.new_zeros((B, new_L + 1))
     new_data.scatter_(1, safe_dst, torch.where(keep, expanded_data, pad_token_id))
     new_mask.scatter_(1, safe_dst, expanded_mask * keep.long())
+    new_data = new_data[:, :new_L]
+    new_mask = new_mask[:, :new_L]
 
     ip = expanded_prompt_len.unsqueeze(1) + torch.arange(n_inner_cot_tokens, device=expanded_data.device)
     new_data.scatter_(1, ip, int(placeholder_token) * torch.ones_like(ip))
