@@ -531,6 +531,57 @@ class ScienceQADataset(Dataset):
         return match.group(1).upper() if match else None
 
 
+class HumanEvalDataset(Dataset):
+    """HumanEval Python coding problems (OpenAI)."""
+
+    def __init__(self, split="train", tokenizer=None, max_length=1024):
+        # HumanEval only has test split, use it for both train/eval
+        hf_split = "test"
+        self.dataset = load_dataset("openai_humaneval", split=hf_split)
+        self.tokenizer = tokenizer
+        self.max_length = max_length
+
+    def __len__(self):
+        return len(self.dataset)
+
+    def __getitem__(self, idx):
+        ex = self.dataset[idx]
+        # Format: function signature + docstring + solution
+        prompt = ex["prompt"].strip()  # Function signature + docstring
+        solution = ex["canonical_solution"].strip()  # Reference implementation
+        
+        # Add function definition if not in prompt
+        if not prompt.startswith("def"):
+            # Extract function name from solution
+            func_match = re.search(r"def\s+(\w+)\s*\(", solution)
+            if func_match:
+                func_name = func_match.group(1)
+                prompt = f"def {func_name}:\n    {prompt}"
+        
+        text = f"{prompt}\n{solution}"
+        prompt_len = len(self.tokenizer(prompt, add_special_tokens=False)["input_ids"])
+        enc = self.tokenizer(text, truncation=True, max_length=self.max_length,
+                             padding="max_length", return_tensors="pt")
+        prompt_len = min(prompt_len, self.max_length)
+        return {
+            "input_ids": enc["input_ids"].squeeze(0),
+            "attention_mask": enc["attention_mask"].squeeze(0),
+            "prompt_len": prompt_len,
+        }
+
+    @staticmethod
+    def extract_answer(text):
+        """For code generation, we typically use pass@k metrics, but for consistency return the generated code."""
+        # Extract everything after the prompt (function signature)
+        lines = text.split('\n')
+        # Find first non-empty line that's not the prompt
+        for i, line in enumerate(lines):
+            if line.strip() and not line.strip().startswith('#'):
+                # Return the rest of the code
+                return '\n'.join(lines[i:]).strip()
+        return text.strip()
+
+
 # =====================================================================
 # Registry
 # =====================================================================
@@ -550,6 +601,8 @@ DATASET_REGISTRY = {
     "aqua": AQuADataset,
     "math": MATHDataset,
     "scienceqa": ScienceQADataset,
+    # Code generation
+    "humaneval": HumanEvalDataset,
 }
 
 
