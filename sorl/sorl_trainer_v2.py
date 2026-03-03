@@ -28,6 +28,7 @@ from sorl.sorl_trainer import (
     sorl_search,
     sorl_search_ar,
     VariableZipfian2gramLoss,
+    SoRLLoss,
 )
 
 
@@ -102,3 +103,7 @@ class SoRLLossV2(nn.Module):
         soft_zipf_kl = self.zipf_loss(zipf_abs_logits)
 
         return info_loss, abs_loss, soft_zipf_kl
+
+    # Delegate denoising_loss and distillation_loss to V1 (no split-softmax change needed)
+    denoising_loss = SoRLLoss.denoising_loss
+    distillation_loss = SoRLLoss.distillation_loss
