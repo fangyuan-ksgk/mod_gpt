@@ -641,7 +641,9 @@ def _filter_traj_tokens(generated_ids, base_vocab_size):
 @torch.no_grad()
 def evaluate_accuracy(model, tokenizer, dataset, device, num_samples=100, max_new_tokens=256):
     """
-    Generate answers and compute accuracy by comparing extracted answers.
+    Generate answers and compute accuracy.
+    For code datasets (humaneval), returns syntax validity rate.
+    For other datasets, uses exact string matching of extracted answers.
     Uses SorlModelWrapper.generate (not the base HF model).
     Filters out abstract tokens before decoding.
     """
@@ -650,6 +652,9 @@ def evaluate_accuracy(model, tokenizer, dataset, device, num_samples=100, max_ne
     total = 0
     extract_fn = dataset.extract_answer
     base_vocab_size = model.vocab_sizes[0].item()
+
+    # Check if this is a code generation dataset
+    is_code_dataset = hasattr(dataset, '__class__') and dataset.__class__.__name__ == 'HumanEvalDataset'
 
     for i in range(min(num_samples, len(dataset))):
         item = dataset[i]
