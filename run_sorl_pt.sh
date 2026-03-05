@@ -26,6 +26,8 @@ MASTER_PORT=29500
 # Model
 MODEL_NAME="Qwen/Qwen2.5-0.5B"
 ABSTRACT_VOCAB_SIZE=128
+# MODE="sorl_v2"
+MODE="sorl"
 
 # Data
 DATASET="gsm8k"
@@ -92,6 +94,7 @@ for CONFIG in "${CONFIGS[@]}"; do
     --master_port=$MASTER_PORT \
     train_sorl_pt.py \
     --model_name $MODEL_NAME \
+    --mode $MODE \
     --abstract_vocab_size $ABSTRACT_VOCAB_SIZE \
     --dataset $DATASET \
     --max_length $MAX_LENGTH \
