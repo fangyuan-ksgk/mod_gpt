@@ -34,6 +34,7 @@ from transformers import AutoTokenizer
 
 from sorl.sorl_wrapper import SorlModelWrapper
 from sorl.trainer import SoRLTrainer, SoRLConfig
+from sorl.trainer_v2 import SoRLTrainerV2
 from sorl.trainer_compress import SoRLCompressTrainer, SoRLCompressConfig
 from data.pt_dataset import get_dataset, evaluate_accuracy, _filter_traj_tokens, collate_fn
 
@@ -55,7 +56,7 @@ def parse_args():
 
     # Mode
     p.add_argument("--mode", type=str, default="sorl",
-                   choices=["sorl", "compress", "inner_cot"],
+                   choices=["sorl", "compress", "inner_cot", "sorl_v2"],
                    help="Training mode: sorl (standard), compress (NL token dropping), inner_cot (replace NL with abstract block)")
 
     # Model
@@ -419,7 +420,12 @@ def main():
         )
 
     # ---- Trainer ----
-    TrainerClass = SoRLCompressTrainer if args.mode in ("compress", "inner_cot") else SoRLTrainer
+    if args.mode in ("compress", "inner_cot"):
+        TrainerClass = SoRLCompressTrainer
+    elif args.mode == "sorl_v2":
+        TrainerClass = SoRLTrainerV2
+    else:
+        TrainerClass = SoRLTrainer
     trainer = TrainerClass(
         model=model,
         tokenizer=tokenizer,
