@@ -93,6 +93,8 @@ def parse_args():
     p.add_argument("--alpha_soft_zipf", type=float, default=1.0)
     p.add_argument("--alpha_denoise", type=float, default=0.0,
                    help="Denoising loss weight (compress/inner_cot modes)")
+    p.add_argument("--ortho_reg", type=float, default=0.0,
+                   help="Orthogonalization regularization weight for abstract embeddings")
 
     # Compress / Inner-CoT specific
     p.add_argument("--remove_prob", type=float, default=0.3,
@@ -112,6 +114,8 @@ def parse_args():
 
     # Optimizer
     p.add_argument("--lr", type=float, default=1e-5)
+    p.add_argument("--emb_lr_mult", type=float, default=1.0,
+                   help="LR multiplier for embed_tokens & lm_head (abstract rows need higher LR)")
     p.add_argument("--weight_decay", type=float, default=0.01)
     p.add_argument("--warmup_steps", type=int, default=50)
     p.add_argument("--cooldown_frac", type=float, default=0.4)
@@ -121,6 +125,8 @@ def parse_args():
     p.add_argument("--batch_size", type=int, default=2)
     p.add_argument("--gradient_accumulation_steps", type=int, default=1)
     p.add_argument("--num_epochs", type=int, default=3)
+    p.add_argument("--emb_warmup_steps", type=int, default=0,
+                   help="Phase-1 steps: train only abstract emb/proj, freeze everything else")
 
     # Logging / Eval / Checkpoint
     p.add_argument("--log_every", type=int, default=10)
@@ -378,11 +384,13 @@ def main():
         alpha_abs=args.alpha_abs,
         alpha_soft_zipf=args.alpha_soft_zipf,
         alpha_denoise=args.alpha_denoise,
+        ortho_reg=args.ortho_reg,
         decay=args.decay,
         target_vocab_util=args.target_vocab_util,
         min_abs_ppl=args.min_abs_ppl,
         zipf_alpha=args.zipf_alpha,
         lr=args.lr,
+        emb_lr_mult=args.emb_lr_mult,
         weight_decay=args.weight_decay,
         warmup_steps=args.warmup_steps,
         cooldown_frac=args.cooldown_frac,
@@ -390,6 +398,7 @@ def main():
         batch_size=args.batch_size,
         gradient_accumulation_steps=args.gradient_accumulation_steps,
         num_epochs=args.num_epochs,
+        emb_warmup_steps=args.emb_warmup_steps,
         log_every=args.log_every,
         eval_every=args.eval_every,
         save_every=args.save_every,
