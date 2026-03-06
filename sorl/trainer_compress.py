@@ -237,7 +237,10 @@ class SoRLCompressTrainer(SoRLTrainer):
             prompt_len=expanded_prompt_len,
         )
 
-        # 4. Denoising loss (optional)
+        # 4. Orthogonalization loss (always computed for logging)
+        orth_loss = self.loss_fn.ortho_loss(self.raw_model)
+
+        # 5. Denoising loss (optional)
         if cfg.alpha_denoise > 0:
             denoise_loss = self.loss_fn.denoising_loss(
                 best_data, self.raw_model, expanded_mask,
@@ -257,7 +260,7 @@ class SoRLCompressTrainer(SoRLTrainer):
         else:
             distill_loss = torch.tensor(0.0, device=self.device)
 
-        # 6. Combined loss
+        # 7. Combined loss
         loss = (
             base_traj_loss
             + cfg.alpha_info_gain * info_gain_loss
@@ -265,6 +268,7 @@ class SoRLCompressTrainer(SoRLTrainer):
             + cfg.alpha_soft_zipf * zipf_bigram_loss
             + cfg.alpha_denoise * denoise_loss
             + cfg.alpha_distill * distill_loss
+            + cfg.ortho_reg * orth_loss
         )
 
         # Cleanup search tensors
@@ -278,4 +282,5 @@ class SoRLCompressTrainer(SoRLTrainer):
             "zipf_bigram_loss": zipf_bigram_loss,
             "denoise_loss": denoise_loss,
             "distill_loss": distill_loss,
+            "ortho_loss": orth_loss,
         }

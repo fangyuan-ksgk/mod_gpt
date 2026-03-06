@@ -104,6 +104,7 @@ class SoRLLossV2(nn.Module):
 
         return info_loss, abs_loss, soft_zipf_kl
 
-    # Delegate denoising_loss and distillation_loss to V1 (no split-softmax change needed)
+    # Delegate to V1 (no split-softmax change needed)
+    ortho_loss = SoRLLoss.ortho_loss
     denoising_loss = SoRLLoss.denoising_loss
     distillation_loss = SoRLLoss.distillation_loss
