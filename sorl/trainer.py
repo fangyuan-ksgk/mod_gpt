@@ -57,6 +57,7 @@ class SoRLConfig:
 
     # Optimizer
     lr: float = 1e-5
+    emb_lr_mult: float = 1.0  # LR multiplier for embed_tokens & lm_head (abstract rows need higher LR)
     weight_decay: float = 0.01
     warmup_steps: int = 50
     cooldown_frac: float = 0.4
@@ -391,10 +392,17 @@ class SoRLTrainer:
         dataloader = self._make_dataloader(self.train_dataset, shuffle=True)
         total_steps = len(dataloader) * cfg.num_epochs // cfg.gradient_accumulation_steps
 
-        # Optimizer
-        optimizer = torch.optim.AdamW(
-            self.model.parameters(), lr=cfg.lr, weight_decay=cfg.weight_decay,
-        )
+        # Optimizer — separate param group for embed/lm_head (higher LR)
+        emb_params, other_params = [], []
+        for name, p in self.model.named_parameters():
+            if "embed_tokens" in name or "lm_head" in name:
+                emb_params.append(p)
+            else:
+                other_params.append(p)
+        optimizer = torch.optim.AdamW([
+            {"params": other_params, "lr": cfg.lr},
+            {"params": emb_params, "lr": cfg.lr * cfg.emb_lr_mult},
+        ], weight_decay=cfg.weight_decay)
 
         start_epoch, start_step = 0, 0
         if resume_from and os.path.exists(resume_from):
@@ -431,10 +439,10 @@ class SoRLTrainer:
                 if effective_step < start_step * cfg.gradient_accumulation_steps:
                     continue
 
-                # LR schedule
+                # LR schedule (respect emb_lr_mult for embed/lm_head group)
                 lr = _get_lr(global_step, total_steps, cfg.warmup_steps, cfg.cooldown_frac, cfg.lr)
-                for pg in optimizer.param_groups:
-                    pg["lr"] = lr
+                optimizer.param_groups[0]["lr"] = lr
+                optimizer.param_groups[1]["lr"] = lr * cfg.emb_lr_mult
 
                 # Forward + loss
                 step_out = self._training_step(batch)
