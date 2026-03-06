@@ -317,6 +317,12 @@ class SoRLLoss(nn.Module):
         # --- Return: p(s | a)/p(s), p(a | s), KL(p(a_t, a_t+1), soft_zipf_prior) ---
         return info_loss, abs_loss, soft_zipf_kl 
 
+    def ortho_loss(
+        self, 
+        model,
+    ):
+        return ortho_loss(model, model.vocab_sizes[0])
+
     def distillation_loss(
         self,
         base_logits: torch.Tensor,

@@ -47,6 +47,7 @@ class SoRLConfig:
     alpha_abs: float = 0.1
     alpha_soft_zipf: float = 1.0
     alpha_denoise: float = 0.0
+    ortho_reg: float = 0.0
 
     # Loss function
     decay: float = 0.8
@@ -65,6 +66,7 @@ class SoRLConfig:
     batch_size: int = 2
     gradient_accumulation_steps: int = 1
     num_epochs: int = 3
+    emb_warmup_steps: int = 0  # Phase-1 steps: train only abstract emb/proj, freeze everything else
 
     # Logging / Eval / Checkpoint
     log_every: int = 10
@@ -179,8 +181,55 @@ class SoRLTrainer:
         self.pad_token_id = tokenizer.pad_token_id
         self.history: Dict[str, list] = {
             "step": [], "loss": [], "base_loss": [],
-            "info_loss": [], "abs_loss": [], "zipf_loss": [], "denoise_loss": [], "lr": [],
+            "info_loss": [], "abs_loss": [], "zipf_loss": [], "denoise_loss": [], "ortho_loss": [], "lr": [],
         }
+
+    # ------------------------------------------------------------------
+    # Embedding warm-up: freeze / unfreeze helpers
+    # ------------------------------------------------------------------
+    def _freeze_non_abstract(self):
+        """Freeze everything; only abstract rows of embed_tokens/lm_head get gradients.
+
+        embed_tokens and lm_head contain both NL rows [:base_vocab] and abstract
+        rows [base_vocab:].  We can't set requires_grad per-row, so we keep
+        requires_grad=True on those params and register hooks that zero the NL rows.
+        Everything else is simply frozen via requires_grad=False.
+        """
+        base_vocab = int(self.raw_model.vocab_sizes[0].item())
+        self._saved_requires_grad = {}
+        self._warmup_hooks = []
+
+        for name, p in self.model.named_parameters():
+            self._saved_requires_grad[name] = p.requires_grad
+            if "embed_tokens" in name or "lm_head" in name:
+                # Keep grad on, but zero NL rows via hook
+                p.requires_grad = True
+                def _zero_nl(grad, bv=base_vocab):
+                    grad[:bv] = 0
+                    return grad
+                handle = p.register_hook(_zero_nl)
+                self._warmup_hooks.append(handle)
+            else:
+                p.requires_grad = False
+
+        n_abs = sum(self.raw_model.vocab_sizes[1:]).item()
+        d = self.raw_model.model.config.hidden_size
+        self._log(f"[emb_warmup] Froze all except abstract emb/proj rows. "
+                  f"Trainable: {n_abs} × {d} × 2 = {2*n_abs*d/1e6:.2f}M")
+
+    def _unfreeze_all(self):
+        """Restore requires_grad state and remove warmup hooks."""
+        # Remove NL-zeroing hooks
+        for h in self._warmup_hooks:
+            h.remove()
+        del self._warmup_hooks
+        # Restore original requires_grad
+        for name, p in self.model.named_parameters():
+            if name in self._saved_requires_grad:
+                p.requires_grad = self._saved_requires_grad[name]
+        n_train = sum(p.numel() for p in self.model.parameters() if p.requires_grad)
+        self._log(f"[emb_warmup] Restored param state. Trainable: {n_train/1e6:.2f}M")
+        del self._saved_requires_grad
 
     # ------------------------------------------------------------------
     # Dataloader
@@ -249,6 +298,12 @@ class SoRLTrainer:
             prompt_len=expanded_prompt_len,
         )
 
+        # 4. Orthogonalization loss (optional)
+        if cfg.ortho_reg > 0: 
+            orth_loss = self.loss_fn.ortho_loss(self.raw_model)
+        else:
+            orth_loss = torch.tensor(0.0, device=self.device)
+
         # 4. Denoising loss (optional)
         if cfg.alpha_denoise > 0:
             denoise_loss = self.loss_fn.denoising_loss(
@@ -265,6 +320,7 @@ class SoRLTrainer:
             + cfg.alpha_abs * abs_loss
             + cfg.alpha_soft_zipf * zipf_bigram_loss
             + cfg.alpha_denoise * denoise_loss
+            + cfg.ortho_reg * orth_loss
         )
 
         # Cleanup search tensors
@@ -277,6 +333,7 @@ class SoRLTrainer:
             "abs_loss": abs_loss,
             "zipf_bigram_loss": zipf_bigram_loss,
             "denoise_loss": denoise_loss,
+            "ortho_loss": orth_loss,
         }
 
     # ------------------------------------------------------------------
@@ -358,6 +415,10 @@ class SoRLTrainer:
 
         self.model.train()
         global_step = start_step
+
+        # Embedding warm-up: freeze non-abstract params for phase 1
+        if cfg.emb_warmup_steps > 0 and global_step < cfg.emb_warmup_steps:
+            self._freeze_non_abstract()
         if torch.cuda.is_available():
             torch.cuda.reset_peak_memory_stats(self.device)
 
@@ -391,6 +452,10 @@ class SoRLTrainer:
                     optimizer.zero_grad(set_to_none=True)
                     global_step += 1
 
+                    # Phase transition: emb warmup → full training
+                    if cfg.emb_warmup_steps > 0 and global_step == cfg.emb_warmup_steps:
+                        self._unfreeze_all()
+
                 # Logging
                 total_loss = loss.item() * cfg.gradient_accumulation_steps
                 if self.is_master and (batch_idx + 1) % cfg.log_every == 0:
@@ -410,6 +475,7 @@ class SoRLTrainer:
                         f"info={step_out['info_gain_loss'].item():.4f} "
                         f"abs={step_out['abs_loss'].item():.4f} "
                         f"zipf={step_out['zipf_bigram_loss'].item():.4f} "
+                        f"orth={step_out['ortho_loss'].item():.4f} "
                         f"{denoise_str}{distill_str}| {peak}"
                     )
                     self.history["step"].append(global_step)
@@ -419,6 +485,7 @@ class SoRLTrainer:
                     self.history["abs_loss"].append(step_out["abs_loss"].item())
                     self.history["zipf_loss"].append(step_out["zipf_bigram_loss"].item())
                     self.history["denoise_loss"].append(step_out["denoise_loss"].item())
+                    self.history["ortho_loss"].append(step_out["ortho_loss"].item())
                     if "distill_loss" in step_out:
                         self.history.setdefault("distill_loss", []).append(step_out["distill_loss"].item())
                     self.history["lr"].append(lr)
