@@ -298,11 +298,8 @@ class SoRLTrainer:
             prompt_len=expanded_prompt_len,
         )
 
-        # 4. Orthogonalization loss (optional)
-        if cfg.ortho_reg > 0: 
-            orth_loss = self.loss_fn.ortho_loss(self.raw_model)
-        else:
-            orth_loss = torch.tensor(0.0, device=self.device)
+        # 4. Orthogonalization loss (always computed for logging)
+        orth_loss = self.loss_fn.ortho_loss(self.raw_model)
 
         # 4. Denoising loss (optional)
         if cfg.alpha_denoise > 0:
