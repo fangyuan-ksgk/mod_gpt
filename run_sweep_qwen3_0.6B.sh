@@ -114,39 +114,43 @@ MASTER_PORT=$((MASTER_PORT + 1))
 # ============================================================================
 # 2. SoRL Sweep
 # ============================================================================
-# Format: ALPHA_INFO_GAIN  ALPHA_ABS  ALPHA_SOFT_ZIPF  ORTHO_REG  MODE
+# Format: ALPHA_INFO_GAIN  ALPHA_ABS  ALPHA_SOFT_ZIPF  ORTHO_REG  EMB_LR_M  EMB_WARMUP
+#
+# Priority 1: emb_warmup_steps (does warmup alone diversify embeddings?)
+# Priority 2: emb_lr_mult (does high emb LR alone suffice?)
+# Priority 3: loss alpha sweep (info/abs/zipf)
+# Low priority: ortho_reg (just 1 run for comparison)
 CONFIGS=(
-  # --- Baseline (no ortho, standard weights) ---
-  "10.0  0.1  1.0   0.0   sorl_v2"
+  # --- A. emb_warmup_steps sweep (emb_lr_mult=10, no ortho) ---
+  "10.0  1.0  5.0   0.0   10.0   500"    # warmup=100
+  "10.0  1.0  5.0   0.0   10.0   1000"    # warmup=200
+  "10.0  1.0  5.0   0.0   10.0   1500"    # warmup=500
 
-  # --- Ortho reg sweep (key: does ortho break embedding symmetry?) ---
-  "10.0  0.1  1.0   0.5   sorl_v2"
-  "10.0  0.1  1.0   1.0   sorl_v2"
+  # --- B. emb_lr_mult sweep (no warmup, no ortho) ---
+  "10.0  1.0  5.0   0.0   1.0    0"      # baseline: emb_lr_mult=1 (no boost)
+  "10.0  1.0  5.0   0.0   5.0    0"      # emb_lr_mult=5
+  "10.0  1.0  5.0   0.0   10.0   0"      # emb_lr_mult=10
 
-  # --- Higher alpha_abs (with ortho) ---
-  "10.0  1.0  1.0   1.0   sorl_v2"
-  "10.0  5.0  1.0   1.0   sorl_v2"
+  # --- C. Loss alpha sweep (emb_lr_mult=10, no warmup, no ortho) ---
+  "10.0  0.1  1.0   0.0   10.0   0"      # low abs, low zipf
+  "10.0  5.0  5.0   0.0   10.0   0"      # high abs, high zipf
+  "5.0   1.0  10.0  0.0   10.0   0"      # lower info, strong anti-stutter
 
-  # --- Zipf sweep (anti-stutter) ---
-  "10.0  1.0  5.0   1.0   sorl_v2"
-  "10.0  1.0  10.0  1.0   sorl_v2"
-
-  # --- Lower info gain (let abs/ortho dominate early) ---
-  "5.0   1.0  5.0   1.0   sorl_v2"
-  "1.0   5.0  5.0   1.0   sorl_v2"
+  # --- D. Ortho comparison (1 run only) ---
+  "10.0  1.0  5.0   1.0   10.0   0"      # ortho=1.0 for reference
 )
 
 RUN_IDX=2
 for CONFIG in "${CONFIGS[@]}"; do
-  read -r ALPHA_INFO_GAIN ALPHA_ABS ALPHA_SOFT_ZIPF ORTHO_REG MODE <<< "$CONFIG"
-  RUN_NAME="info${ALPHA_INFO_GAIN}_abs${ALPHA_ABS}_zipf${ALPHA_SOFT_ZIPF}_orth${ORTHO_REG}_${MODE}"
+  read -r ALPHA_INFO_GAIN ALPHA_ABS ALPHA_SOFT_ZIPF ORTHO_REG THIS_EMB_LR_MULT EMB_WARMUP <<< "$CONFIG"
+  RUN_NAME="info${ALPHA_INFO_GAIN}_abs${ALPHA_ABS}_zipf${ALPHA_SOFT_ZIPF}_orth${ORTHO_REG}_emblr${THIS_EMB_LR_MULT}_wu${EMB_WARMUP}"
   OUTPUT_DIR="${BASE_OUTPUT_DIR}/${RUN_NAME}"
 
   echo ""
   echo ">>>>>>>>>> [${RUN_IDX}/N] ${RUN_NAME} <<<<<<<<<<"
   echo "  alpha_info_gain=${ALPHA_INFO_GAIN}  alpha_abs=${ALPHA_ABS}"
   echo "  alpha_soft_zipf=${ALPHA_SOFT_ZIPF}  ortho_reg=${ORTHO_REG}"
-  echo "  mode=${MODE}  emb_lr_mult=${EMB_LR_MULT}"
+  echo "  emb_lr_mult=${THIS_EMB_LR_MULT}  emb_warmup_steps=${EMB_WARMUP}"
   echo "  output_dir=${OUTPUT_DIR}"
 
   torchrun \
@@ -155,7 +159,7 @@ for CONFIG in "${CONFIGS[@]}"; do
     --master_port=$MASTER_PORT \
     train_sorl_pt.py \
     --model_name $MODEL_NAME \
-    --mode $MODE \
+    --mode sorl_v2 \
     --abstract_vocab_size $ABSTRACT_VOCAB_SIZE \
     --dataset $DATASET \
     --max_length $MAX_LENGTH \
@@ -172,7 +176,8 @@ for CONFIG in "${CONFIGS[@]}"; do
     --decay $DECAY \
     --target_vocab_util $TARGET_VOCAB_UTIL \
     --lr $LR \
-    --emb_lr_mult $EMB_LR_MULT \
+    --emb_lr_mult $THIS_EMB_LR_MULT \
+    --emb_warmup_steps $EMB_WARMUP \
     --warmup_steps $WARMUP_STEPS \
     --batch_size $BATCH_SIZE \
     --gradient_accumulation_steps $GRAD_ACCUM \
