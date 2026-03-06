@@ -354,12 +354,12 @@ class SoRLTrainer:
         if hasattr(hf_model, "save_pretrained"):
             hf_model.save_pretrained(save_dir)
         # Save abstract embedding rows + loss_fn + optimizer (always small)
-        unwrapped = hf_model.base_model.model if hasattr(hf_model, "base_model") else hf_model
+        unwrapped = hf_model.model
         torch.save({
             "step": global_step,
             "epoch": epoch,
-            "embed_tokens": unwrapped.model.embed_tokens.weight.data[base_vocab:].cpu(),
-            "lm_head": unwrapped.lm_head.weight.data[base_vocab:].cpu(),
+            "embed_tokens": unwrapped.embed_tokens.weight.data[base_vocab:].cpu(),
+            "lm_head": hf_model.lm_head.weight.data[base_vocab:].cpu(),
             "optimizer": optimizer.state_dict(),
             "loss_fn": self.loss_fn.state_dict(),
             "config": self.config.__dict__,
