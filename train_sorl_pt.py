@@ -572,18 +572,17 @@ def main():
         if trainer.is_master:
             save_dir = os.path.join(cfg.output_dir, "final")
             os.makedirs(save_dir, exist_ok=True)
-            base_vocab = trainer.raw_model.vocab_sizes[0].item()
-            hf_model = trainer.raw_model.model  # may be PeftModel or raw HF model
+            sorl_wrapper = trainer.raw_model
+            base_vocab = sorl_wrapper.vocab_sizes[0].item()
             # Save LoRA adapter if present
-            if hasattr(hf_model, "save_pretrained"):
-                hf_model.save_pretrained(save_dir)
+            if hasattr(sorl_wrapper, "save_pretrained"):
+                sorl_wrapper.save_pretrained(save_dir)
                 log(f"Saved adapter to {save_dir}")
             # Save abstract embedding rows + loss_fn state (always small)
             abs_state = {}
-            sorl_wrapper = trainer.raw_model
 
-            abs_state["embed_tokens"] = sorl_wrapper.model.embed_tokens.weight.data[base_vocab:].cpu()
-            abs_state["lm_head"] = sorl_wrapper.lm_head.weight.data[base_vocab:].cpu()
+            abs_state["embed_tokens"] = sorl_wrapper.model.model.embed_tokens.weight.data[base_vocab:].cpu()
+            abs_state["lm_head"] = sorl_wrapper.model.lm_head.weight.data[base_vocab:].cpu()
             abs_state["loss_fn"] = trainer.loss_fn.state_dict()
             abs_state["step"] = global_step
             abs_state["epoch"] = cfg.num_epochs
