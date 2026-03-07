@@ -178,6 +178,8 @@ class SoRLTrainer:
             self.local_rank = 0
             if device is not None:
                 self.device = torch.device(device)
+            elif torch.cuda.is_available():
+                self.device = torch.device("cuda")
             else:
                 self.device = next(model.parameters()).device
             self.is_master = True

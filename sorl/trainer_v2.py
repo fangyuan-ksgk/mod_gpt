@@ -16,7 +16,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from sorl.sorl_trainer_v2 import SoRLLossV2
-from sorl.trainer import SoRLTrainer, SoRLConfig
+from sorl.trainer import SoRLTrainer, SoRLConfig, _DDPForwardProxy
 from sorl.trainer_compress import (
     SoRLCompressTrainer, SoRLCompressConfig,
     sorl_search_compress, sorl_search_inner_cot,
@@ -73,6 +73,8 @@ class SoRLTrainerV2(SoRLTrainer):
         attention_mask = batch["attention_mask"].to(self.device)
         prompt_len = batch["prompt_len"].to(self.device)
 
+        # Use DDP-aware proxy so forward passes trigger gradient allreduce
+        model = _DDPForwardProxy(self.model, self.raw_model) if self.ddp else self.raw_model
         base_vocab = int(self.raw_model.vocab_sizes[0].item())
 
         # 1. Base trajectory loss — NL-only softmax (no abstract logit inflation)
@@ -81,14 +83,14 @@ class SoRLTrainerV2(SoRLTrainer):
         seq_idx = torch.arange(labels.size(1), device=self.device).unsqueeze(0)
         labels[seq_idx < prompt_len.unsqueeze(1)] = -100
 
-        outputs = self.raw_model(
+        outputs = model(
             input_ids=input_ids, attention_mask=attention_mask,
             memory_span_abs=cfg.memory_span_abs, memory_span_traj=cfg.memory_span_traj,
         )
         base_traj_loss = _compute_nl_only_loss(outputs, labels, base_vocab)
         del outputs
 
-        # 2. SoRL search (no grad)
+        # 2. SoRL search (no grad) — uses raw_model directly (no grads needed)
         with torch.no_grad():
             if cfg.ar_search:
                 best_data, best_ppt, best_ppt_adv, expanded_attn_mask, expanded_prompt_len = sorl_search_ar(
@@ -108,20 +110,20 @@ class SoRLTrainerV2(SoRLTrainer):
                     temperature=cfg.temperature,
                 )
 
-        # 3. Auxiliary losses (split softmax)
+        # 3. Auxiliary losses (forward passes go through DDP via proxy)
         info_gain_loss, abs_loss, zipf_bigram_loss = self.loss_fn(
-            best_data, self.raw_model, base_traj_loss.detach(),
+            best_data, model, base_traj_loss.detach(),
             expanded_attn_mask, cfg.memory_span_abs, cfg.memory_span_traj,
             prompt_len=expanded_prompt_len,
         )
 
-        # 4. Orthogonalization loss (always computed for logging)
+        # 4. Orthogonalization loss (no forward pass, just weight access)
         orth_loss = self.loss_fn.ortho_loss(self.raw_model)
 
-        # 5. Denoising loss (optional)
+        # 5. Denoising loss (optional, forward pass goes through DDP via proxy)
         if cfg.alpha_denoise > 0:
             denoise_loss = self.loss_fn.denoising_loss(
-                best_data, self.raw_model, expanded_attn_mask,
+                best_data, model, expanded_attn_mask,
                 cfg.memory_span_abs, cfg.memory_span_traj,
             )
         else:
@@ -180,9 +182,11 @@ class SoRLCompressTrainerV2(SoRLCompressTrainer):
         attention_mask = batch["attention_mask"].to(self.device)
         prompt_len = batch["prompt_len"].to(self.device)
 
+        # Use DDP-aware proxy so forward passes trigger gradient allreduce
+        model = _DDPForwardProxy(self.model, self.raw_model) if self.ddp else self.raw_model
         base_vocab = int(self.raw_model.vocab_sizes[0].item())
 
-        # 1. Compress search (no grad)
+        # 1. Compress search (no grad) — uses raw_model directly (no grads needed)
         with torch.no_grad():
             if cfg.inner_cot:
                 best_data, best_ppt, best_ppt_adv, expanded_mask, expanded_prompt_len, traj_remove_1d = \
@@ -219,7 +223,7 @@ class SoRLCompressTrainerV2(SoRLCompressTrainer):
             L = labels.size(1)
             labels[:, traj_remove_1d[:L]] = -100
 
-        outputs = self.raw_model(
+        outputs = model(
             input_ids=input_ids, attention_mask=attention_mask,
             memory_span_abs=cfg.memory_span_abs, memory_span_traj=cfg.memory_span_traj,
         )
@@ -232,30 +236,30 @@ class SoRLCompressTrainerV2(SoRLCompressTrainer):
             base_logits = None
         del outputs
 
-        # 3. Auxiliary losses (split softmax)
+        # 3. Auxiliary losses (forward passes go through DDP via proxy)
         info_gain_loss, abs_loss, zipf_bigram_loss = self.loss_fn(
-            best_data, self.raw_model, base_traj_loss.detach(),
+            best_data, model, base_traj_loss.detach(),
             expanded_mask, cfg.memory_span_abs, cfg.memory_span_traj,
             prompt_len=expanded_prompt_len,
         )
 
-        # 4. Orthogonalization loss (always computed for logging)
+        # 4. Orthogonalization loss (no forward pass, just weight access)
         orth_loss = self.loss_fn.ortho_loss(self.raw_model)
 
-        # 5. Denoising loss (optional)
+        # 5. Denoising loss (optional, forward pass goes through DDP via proxy)
         if cfg.alpha_denoise > 0:
             denoise_loss = self.loss_fn.denoising_loss(
-                best_data, self.raw_model, expanded_mask,
+                best_data, model, expanded_mask,
                 cfg.memory_span_abs, cfg.memory_span_traj,
             )
         else:
             denoise_loss = torch.tensor(0.0, device=self.device)
 
-        # 6. Distillation loss (inner_cot only)
+        # 6. Distillation loss (inner_cot only, forward pass goes through DDP via proxy)
         if base_logits is not None:
             distill_loss = self.loss_fn.distillation_loss(
                 base_logits, input_ids, attention_mask,
-                best_data, self.raw_model,
+                best_data, model,
                 expanded_mask, cfg.memory_span_abs, cfg.memory_span_traj,
                 temperature=cfg.distill_temperature,
             )
