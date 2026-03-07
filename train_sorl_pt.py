@@ -528,8 +528,9 @@ def main():
                         f"loss={total_loss:.4f} base={step_out['base_traj_loss'].item():.4f} "
                         f"info={step_out['info_gain_loss'].item():.4f} "
                         f"abs={step_out['abs_loss'].item():.4f} "
-                        f"zipf={step_out['zipf_bigram_loss'].item():.4f} | "
-                        f"lr={lr:.2e} | {peak}"
+                        f"zipf={step_out['zipf_bigram_loss'].item():.4f} "
+                        f"orth={step_out['ortho_loss'].item():.4f} | "
+                        f"lr={lr:.2e} emb_lr={lr * cfg.emb_lr_mult:.2e} | {peak}"
                     )
                     trainer.history["step"].append(global_step)
                     trainer.history["loss"].append(total_loss)
@@ -537,7 +538,9 @@ def main():
                     trainer.history["info_loss"].append(step_out["info_gain_loss"].item())
                     trainer.history["abs_loss"].append(step_out["abs_loss"].item())
                     trainer.history["zipf_loss"].append(step_out["zipf_bigram_loss"].item())
+                    trainer.history["ortho_loss"].append(step_out["ortho_loss"].item())
                     trainer.history["lr"].append(lr)
+                    trainer.history["emb_lr"].append(lr * cfg.emb_lr_mult)
 
                 # Cleanup
                 del loss, step_out
