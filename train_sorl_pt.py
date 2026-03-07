@@ -458,10 +458,20 @@ def main():
         dataloader = trainer._make_dataloader(trainer.train_dataset, shuffle=True)
         total_steps = len(dataloader) * cfg.num_epochs // cfg.gradient_accumulation_steps
 
-        # Optimizer
-        optimizer = torch.optim.AdamW(
-            trainer.model.parameters(), lr=cfg.lr, weight_decay=cfg.weight_decay,
-        )
+        # Optimizer — separate param groups for async embedding LR
+        emb_params = []
+        other_params = []
+        for name, p in trainer.model.named_parameters():
+            if not p.requires_grad:
+                continue
+            if "embed_tokens" in name or "lm_head" in name:
+                emb_params.append(p)
+            else:
+                other_params.append(p)
+        optimizer = torch.optim.AdamW([
+            {"params": other_params, "lr": cfg.lr},
+            {"params": emb_params, "lr": cfg.lr * cfg.emb_lr_mult},
+        ], weight_decay=cfg.weight_decay)
 
         start_epoch, start_step = 0, 0
         if resume_from and os.path.exists(resume_from):
@@ -479,6 +489,11 @@ def main():
 
         trainer.model.train()
         global_step = start_step
+
+        # Embedding warm-up: freeze non-abstract params for phase 1
+        if cfg.emb_warmup_steps > 0 and global_step < cfg.emb_warmup_steps:
+            trainer._freeze_non_abstract()
+
         if torch.cuda.is_available():
             torch.cuda.reset_peak_memory_stats(trainer.device)
 
@@ -493,11 +508,11 @@ def main():
                 if effective_step < start_step * cfg.gradient_accumulation_steps:
                     continue
 
-                # LR schedule
+                # LR schedule (respect emb_lr_mult for embed/lm_head group)
                 from sorl.trainer import _get_lr
                 lr = _get_lr(global_step, total_steps, cfg.warmup_steps, cfg.cooldown_frac, cfg.lr)
-                for pg in optimizer.param_groups:
-                    pg["lr"] = lr
+                optimizer.param_groups[0]["lr"] = lr                    # other params
+                optimizer.param_groups[1]["lr"] = lr * cfg.emb_lr_mult  # embed/lm_head
 
                 # Forward + loss
                 step_out = trainer._training_step(batch)
@@ -511,6 +526,10 @@ def main():
                     optimizer.step()
                     optimizer.zero_grad(set_to_none=True)
                     global_step += 1
+
+                    # Phase transition: emb warmup → full training
+                    if cfg.emb_warmup_steps > 0 and global_step == cfg.emb_warmup_steps:
+                        trainer._unfreeze_all()
 
                 # Logging
                 total_loss = loss.item() * cfg.gradient_accumulation_steps
