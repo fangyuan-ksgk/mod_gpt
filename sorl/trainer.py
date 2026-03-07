@@ -182,7 +182,8 @@ class SoRLTrainer:
         self.pad_token_id = tokenizer.pad_token_id
         self.history: Dict[str, list] = {
             "step": [], "loss": [], "base_loss": [],
-            "info_loss": [], "abs_loss": [], "zipf_loss": [], "denoise_loss": [], "ortho_loss": [], "lr": [],
+            "info_loss": [], "abs_loss": [], "zipf_loss": [], "denoise_loss": [], "ortho_loss": [],
+            "lr": [], "emb_lr": [],
         }
 
     # ------------------------------------------------------------------
@@ -360,7 +361,7 @@ class SoRLTrainer:
             "step": global_step,
             "epoch": epoch,
             "embed_tokens": unwrapped.embed_tokens.weight.data[base_vocab:].cpu(),
-            "lm_head": hf_model.lm_head.weight.data[base_vocab:].cpu(),
+            "lm_head": unwrapped.lm_head.weight.data[base_vocab:].cpu(),
             "optimizer": optimizer.state_dict(),
             "loss_fn": self.loss_fn.state_dict(),
             "config": self.config.__dict__,
