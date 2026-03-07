@@ -577,9 +577,10 @@ def main():
                 log(f"Saved adapter to {save_dir}")
             # Save abstract embedding rows + loss_fn state (always small)
             abs_state = {}
-            unwrapped = hf_model.base_model.model if hasattr(hf_model, "base_model") else hf_model
-            abs_state["embed_tokens"] = unwrapped.model.embed_tokens.weight.data[base_vocab:].cpu()
-            abs_state["lm_head"] = unwrapped.lm_head.weight.data[base_vocab:].cpu()
+            sorl_wrapper = trainer.raw_model
+
+            abs_state["embed_tokens"] = sorl_wrapper.model.embed_tokens.weight.data[base_vocab:].cpu()
+            abs_state["lm_head"] = sorl_wrapper.lm_head.weight.data[base_vocab:].cpu()
             abs_state["loss_fn"] = trainer.loss_fn.state_dict()
             abs_state["step"] = global_step
             abs_state["epoch"] = cfg.num_epochs
