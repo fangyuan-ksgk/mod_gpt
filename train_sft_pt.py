@@ -444,7 +444,7 @@ def main():
             seq_idx = torch.arange(labels.size(1), device=device).unsqueeze(0)
             labels[seq_idx < prompt_len.unsqueeze(1)] = -100
 
-            outputs = raw_model(
+            outputs = model(
                 input_ids=input_ids,
                 attention_mask=attention_mask,
                 labels=labels,
