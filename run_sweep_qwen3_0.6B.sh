@@ -57,7 +57,7 @@ WARMUP_STEPS=50
 
 # Training
 BATCH_SIZE=2
-GRAD_ACCUM=$((8 / (BATCH_SIZE * N_GPUS)))
+GRAD_ACCUM=$((4 / (BATCH_SIZE * N_GPUS)))
 NUM_EPOCHS=3
 
 # Logging / Eval / Checkpoint
