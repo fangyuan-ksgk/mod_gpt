@@ -39,6 +39,10 @@ from sorl.trainer_compress import SoRLCompressTrainer, SoRLCompressConfig
 from data.pt_dataset import get_dataset, evaluate_accuracy, _filter_traj_tokens, collate_fn
 
 
+CHECKPOINT_FILE = "checkpoint.pt"
+LEGACY_ABS_FILE = "abs_embeddings.pt"
+
+
 # ---------------------------------------------------------------------------
 # LoRA helper: zero gradients for base vocab rows in embed/lm_head
 # ---------------------------------------------------------------------------
@@ -46,6 +50,65 @@ def _zero_base_grad(grad, base_vocab):
     """Zero out grad rows for base vocab tokens, keep only abstract rows."""
     grad[:base_vocab] = 0
     return grad
+
+
+def _resolve_init_path(path: str) -> str:
+    """Accept either a checkpoint file or a directory containing one."""
+    if os.path.isdir(path):
+        for candidate in (CHECKPOINT_FILE, LEGACY_ABS_FILE):
+            candidate_path = os.path.join(path, candidate)
+            if os.path.exists(candidate_path):
+                return candidate_path
+        raise FileNotFoundError(
+            f"No checkpoint found in {path} "
+            f"(expected {CHECKPOINT_FILE} or {LEGACY_ABS_FILE})"
+        )
+    return path
+
+
+def _load_model_init(model, init_from: str, log_fn):
+    """
+    Initialize model weights from a previous SoRL checkpoint without resuming
+    optimizer/step state. Supports both new full-model checkpoints and legacy
+    abstract-only checkpoints.
+    """
+    ckpt_path = _resolve_init_path(init_from)
+    ckpt = torch.load(ckpt_path, map_location="cpu", weights_only=False)
+
+    if isinstance(ckpt, dict) and "model" in ckpt:
+        incompat = model.load_state_dict(ckpt["model"], strict=False)
+        missing = list(getattr(incompat, "missing_keys", []))
+        unexpected = list(getattr(incompat, "unexpected_keys", []))
+        if missing or unexpected:
+            log_fn(
+                f"Initialized from full checkpoint {ckpt_path} "
+                f"(missing={len(missing)}, unexpected={len(unexpected)})"
+            )
+        else:
+            log_fn(f"Initialized from full checkpoint {ckpt_path}")
+        return ckpt
+
+    if isinstance(ckpt, dict) and "embed_tokens" in ckpt and "lm_head" in ckpt:
+        base_vocab = model.vocab_sizes[0].item()
+        hf_model = model.model
+        unwrapped = hf_model.base_model.model if hasattr(hf_model, "base_model") else hf_model
+
+        embed_slice = ckpt["embed_tokens"].to(
+            dtype=unwrapped.model.embed_tokens.weight.dtype,
+            device=unwrapped.model.embed_tokens.weight.device,
+        )
+        lm_head_slice = ckpt["lm_head"].to(
+            dtype=unwrapped.lm_head.weight.dtype,
+            device=unwrapped.lm_head.weight.device,
+        )
+
+        end_vocab = base_vocab + embed_slice.shape[0]
+        unwrapped.model.embed_tokens.weight.data[base_vocab:end_vocab].copy_(embed_slice)
+        unwrapped.lm_head.weight.data[base_vocab:end_vocab].copy_(lm_head_slice)
+        log_fn(f"Initialized abstract rows from legacy checkpoint {ckpt_path}")
+        return ckpt
+
+    raise ValueError(f"Unsupported initialization checkpoint format: {ckpt_path}")
 
 
 # ---------------------------------------------------------------------------
@@ -62,6 +125,8 @@ def parse_args():
     # Model
     p.add_argument("--model_name", type=str, default="Qwen/Qwen2.5-0.5B")
     p.add_argument("--abstract_vocab_size", type=int, default=128)
+    p.add_argument("--init_from", type=str, default=None,
+                   help="Initialize model from a CPT / SoRL checkpoint without resuming optimizer or step state")
     p.add_argument("--resume_from", type=str, default=None,
                    help="Path to checkpoint .pt file to resume from")
 
@@ -331,6 +396,9 @@ def main():
         abstract_vocab_size_list=[args.abstract_vocab_size],
     )
     tokenizer = AutoTokenizer.from_pretrained(args.model_name)
+    init_ckpt = None
+    if args.init_from:
+        init_ckpt = _load_model_init(model, args.init_from, log)
 
     # ---- LoRA ----
     if args.use_lora:
@@ -445,6 +513,9 @@ def main():
         config=config,
         ddp=ddp,
     )
+    if init_ckpt is not None and "loss_fn" in init_ckpt:
+        trainer.loss_fn.load_state_dict(init_ckpt["loss_fn"])
+        log("Initialized loss_fn state from init checkpoint")
     log(f"Mode: {args.mode} | Trainer: {TrainerClass.__name__}")
 
     # ---- Monkey-patch the training loop to add periodic sample logging ----
