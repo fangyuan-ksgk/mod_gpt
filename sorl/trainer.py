@@ -31,23 +31,23 @@ from data.pt_dataset import collate_fn as default_collate_fn
 # ---------------------------------------------------------------------------
 # DDP proxy (commented out - can be re-enabled for testing)
 # ---------------------------------------------------------------------------
-# class _DDPForwardProxy:
-#     """Routes __call__ through the DDP wrapper (so allreduce hooks fire),
-#     but forwards attribute access to the unwrapped model.
-#
-#     This lets existing code like ``model.vocab_sizes`` and
-#     ``model.model.model.embed_tokens`` keep working while
-#     ``model(input_ids=...)`` goes through DDP for gradient sync.
-#     """
-#     def __init__(self, ddp_model, raw_model):
-#         object.__setattr__(self, '_ddp', ddp_model)
-#         object.__setattr__(self, '_raw', raw_model)
-#
-#     def __call__(self, *args, **kwargs):
-#         return object.__getattribute__(self, '_ddp')(*args, **kwargs)
-#
-#     def __getattr__(self, name):
-#         return getattr(object.__getattribute__(self, '_raw'), name)
+class _DDPForwardProxy:
+    """Routes __call__ through the DDP wrapper (so allreduce hooks fire),
+    but forwards attribute access to the unwrapped model.
+
+    This lets existing code like ``model.vocab_sizes`` and
+    ``model.model.model.embed_tokens`` keep working while
+    ``model(input_ids=...)`` goes through DDP for gradient sync.
+    """
+    def __init__(self, ddp_model, raw_model):
+        object.__setattr__(self, '_ddp', ddp_model)
+        object.__setattr__(self, '_raw', raw_model)
+
+    def __call__(self, *args, **kwargs):
+        return object.__getattribute__(self, '_ddp')(*args, **kwargs)
+
+    def __getattr__(self, name):
+        return getattr(object.__getattribute__(self, '_raw'), name)
 
 
 # ---------------------------------------------------------------------------
