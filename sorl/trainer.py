@@ -285,15 +285,15 @@ class SoRLTrainer:
         attention_mask = batch["attention_mask"].to(self.device)
         prompt_len = batch["prompt_len"].to(self.device)  # (B,)
 
-        # DDP proxy (uncomment to enable gradient sync via DDP wrapper)
-        # model = _DDPForwardProxy(self.model, self.raw_model) if self.ddp else self.raw_model
+        # DDP proxy
+        model = _DDPForwardProxy(self.model, self.raw_model) if self.ddp else self.raw_model
 
         # 1. Base trajectory loss — mask padding AND question tokens in labels
         labels = input_ids.clone()
         labels[attention_mask == 0] = -100
         seq_idx = torch.arange(labels.size(1), device=self.device).unsqueeze(0)
         labels[seq_idx < prompt_len.unsqueeze(1)] = -100
-        outputs = self.raw_model(
+        outputs = model(
             input_ids=input_ids, attention_mask=attention_mask, labels=labels,
             memory_span_abs=cfg.memory_span_abs, memory_span_traj=cfg.memory_span_traj,
         )
@@ -322,7 +322,7 @@ class SoRLTrainer:
 
         # 3. Auxiliary losses
         info_gain_loss, abs_loss, zipf_bigram_loss = self.loss_fn(
-            best_data, self.raw_model, base_traj_loss.detach(),
+            best_data, model, base_traj_loss.detach(),
             expanded_attn_mask, cfg.memory_span_abs, cfg.memory_span_traj,
             prompt_len=expanded_prompt_len,
         )
@@ -333,7 +333,7 @@ class SoRLTrainer:
         # 5. Denoising loss (optional)
         if cfg.alpha_denoise > 0:
             denoise_loss = self.loss_fn.denoising_loss(
-                best_data, self.raw_model, expanded_attn_mask,
+                best_data, model, expanded_attn_mask,
                 cfg.memory_span_abs, cfg.memory_span_traj,
             )
         else:
