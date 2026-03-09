@@ -28,23 +28,26 @@ from sorl.sorl_trainer import sorl_search, sorl_search_ar, SoRLLoss
 from data.pt_dataset import collate_fn as default_collate_fn
 
 
-class _DDPForwardProxy:
-    """Routes __call__ through the DDP wrapper (so allreduce hooks fire),
-    but forwards attribute access to the unwrapped model.
-
-    This lets existing code like ``model.vocab_sizes`` and
-    ``model.model.model.embed_tokens`` keep working while
-    ``model(input_ids=...)`` goes through DDP for gradient sync.
-    """
-    def __init__(self, ddp_model, raw_model):
-        object.__setattr__(self, '_ddp', ddp_model)
-        object.__setattr__(self, '_raw', raw_model)
-
-    def __call__(self, *args, **kwargs):
-        return object.__getattribute__(self, '_ddp')(*args, **kwargs)
-
-    def __getattr__(self, name):
-        return getattr(object.__getattribute__(self, '_raw'), name)
+# ---------------------------------------------------------------------------
+# DDP proxy (commented out - can be re-enabled for testing)
+# ---------------------------------------------------------------------------
+# class _DDPForwardProxy:
+#     """Routes __call__ through the DDP wrapper (so allreduce hooks fire),
+#     but forwards attribute access to the unwrapped model.
+#
+#     This lets existing code like ``model.vocab_sizes`` and
+#     ``model.model.model.embed_tokens`` keep working while
+#     ``model(input_ids=...)`` goes through DDP for gradient sync.
+#     """
+#     def __init__(self, ddp_model, raw_model):
+#         object.__setattr__(self, '_ddp', ddp_model)
+#         object.__setattr__(self, '_raw', raw_model)
+#
+#     def __call__(self, *args, **kwargs):
+#         return object.__getattribute__(self, '_ddp')(*args, **kwargs)
+#
+#     def __getattr__(self, name):
+#         return getattr(object.__getattribute__(self, '_raw'), name)
 
 
 # ---------------------------------------------------------------------------
@@ -282,22 +285,22 @@ class SoRLTrainer:
         attention_mask = batch["attention_mask"].to(self.device)
         prompt_len = batch["prompt_len"].to(self.device)  # (B,)
 
-        # Use DDP-aware proxy so forward passes trigger gradient allreduce
-        model = _DDPForwardProxy(self.model, self.raw_model) if self.ddp else self.raw_model
+        # DDP proxy (uncomment to enable gradient sync via DDP wrapper)
+        # model = _DDPForwardProxy(self.model, self.raw_model) if self.ddp else self.raw_model
 
         # 1. Base trajectory loss — mask padding AND question tokens in labels
         labels = input_ids.clone()
         labels[attention_mask == 0] = -100
         seq_idx = torch.arange(labels.size(1), device=self.device).unsqueeze(0)
         labels[seq_idx < prompt_len.unsqueeze(1)] = -100
-        outputs = model(
+        outputs = self.raw_model(
             input_ids=input_ids, attention_mask=attention_mask, labels=labels,
             memory_span_abs=cfg.memory_span_abs, memory_span_traj=cfg.memory_span_traj,
         )
         base_traj_loss = outputs.loss
         del outputs
 
-        # 2. SoRL search (no grad) — uses raw_model directly (no grads needed)
+        # 2. SoRL search (no grad)
         with torch.no_grad():
             if cfg.ar_search:
                 best_data, best_ppt, best_ppt_adv, expanded_attn_mask, expanded_prompt_len = sorl_search_ar(
@@ -317,9 +320,9 @@ class SoRLTrainer:
                     temperature=cfg.temperature,
                 )
 
-        # 3. Auxiliary losses (forward passes go through DDP via proxy)
+        # 3. Auxiliary losses
         info_gain_loss, abs_loss, zipf_bigram_loss = self.loss_fn(
-            best_data, model, base_traj_loss.detach(),
+            best_data, self.raw_model, base_traj_loss.detach(),
             expanded_attn_mask, cfg.memory_span_abs, cfg.memory_span_traj,
             prompt_len=expanded_prompt_len,
         )
@@ -327,10 +330,10 @@ class SoRLTrainer:
         # 4. Orthogonalization loss (no forward pass, just weight access)
         orth_loss = self.loss_fn.ortho_loss(self.raw_model)
 
-        # 5. Denoising loss (optional, forward pass goes through DDP via proxy)
+        # 5. Denoising loss (optional)
         if cfg.alpha_denoise > 0:
             denoise_loss = self.loss_fn.denoising_loss(
-                best_data, model, expanded_attn_mask,
+                best_data, self.raw_model, expanded_attn_mask,
                 cfg.memory_span_abs, cfg.memory_span_traj,
             )
         else:
