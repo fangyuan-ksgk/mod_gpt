@@ -225,12 +225,13 @@ def evaluate_accuracy_with_logging(
     """
     model.eval()
     correct = 0
-    total = 0
+    parsed_count = 0
+    attempted = min(num_samples, len(dataset))
     extract_fn = dataset.extract_answer
     base_vocab_size = model.vocab_sizes[0].item()
     samples = []
 
-    for i in range(min(num_samples, len(dataset))):
+    for i in range(attempted):
         item = dataset[i]
         input_ids = item["input_ids"].unsqueeze(0).to(device)
         prompt_len = item["prompt_len"]
@@ -254,15 +255,16 @@ def evaluate_accuracy_with_logging(
         pred_answer = extract_fn(full_text)
         gold_answer = extract_fn(ref_text)
 
-        if gold_answer is not None:
-            # Count only cases where reference has extractable answer
-            total += 1
-            is_correct = (
-                pred_answer is not None
-                and pred_answer.strip() == gold_answer.strip()
-            )
-            if is_correct:
-                correct += 1
+        if pred_answer is not None:
+            parsed_count += 1
+
+        is_correct = (
+            pred_answer is not None
+            and gold_answer is not None
+            and pred_answer.strip() == gold_answer.strip()
+        )
+        if is_correct:
+            correct += 1
 
         # Log sample responses with abstract token sequences
         if i < num_log_samples:
@@ -284,25 +286,43 @@ def evaluate_accuracy_with_logging(
                 "gold": gold_answer,
                 "pred": pred_answer,
                 "correct": is_correct,
+                "parse_failed": pred_answer is None,
             }
             samples.append(sample)
 
-    accuracy = correct / max(total, 1)
+    strict_accuracy = correct / max(attempted, 1)
+    parsed_accuracy = correct / max(parsed_count, 1)
+    parse_rate = parsed_count / max(attempted, 1)
     model.train()
 
-    result = {"accuracy": accuracy, "correct": correct, "total": total}
+    result = {
+        "accuracy": strict_accuracy,
+        "strict_accuracy": strict_accuracy,
+        "parsed_accuracy": parsed_accuracy,
+        "parse_rate": parse_rate,
+        "correct": correct,
+        "total": attempted,
+        "attempted": attempted,
+        "parsed_count": parsed_count,
+    }
 
     # Print samples on master
     if log_fn is not None:
         log_fn(f"\n{'='*60}")
-        log_fn(f"  Accuracy: {correct}/{total} = {accuracy*100:.1f}%")
+        log_fn(
+            f"  Strict accuracy: {correct}/{attempted} = {strict_accuracy*100:.1f}% | "
+            f"Parsed accuracy: {correct}/{max(parsed_count, 1)} = {parsed_accuracy*100:.1f}% | "
+            f"Parse rate: {parsed_count}/{attempted} = {parse_rate*100:.1f}%"
+        )
         log_fn(f"{'='*60}")
         for s in samples:
             log_fn(f"\n--- Sample {s['idx']} ---")
             log_fn(f"  Q: {s['question']}")
             log_fn(f"  Response: {s['response']}")
             log_fn(f"  Abs seq ({s['num_abs_tokens']} tokens): {s['abs_seq']}")
-            log_fn(f"  Gold: {s['gold']} | Pred: {s['pred']} | {'CORRECT' if s['correct'] else 'WRONG'}")
+            pred_label = s["pred"] if s["pred"] is not None else "PARSE_FAIL"
+            verdict = "CORRECT" if s["correct"] else ("PARSE_FAIL" if s["parse_failed"] else "WRONG")
+            log_fn(f"  Gold: {s['gold']} | Pred: {pred_label} | {verdict}")
         log_fn(f"{'='*60}\n")
 
     result["samples"] = samples
@@ -517,6 +537,13 @@ def main():
         trainer.loss_fn.load_state_dict(init_ckpt["loss_fn"])
         log("Initialized loss_fn state from init checkpoint")
     log(f"Mode: {args.mode} | Trainer: {TrainerClass.__name__}")
+    trainer.history.setdefault("eval_step", [])
+    trainer.history.setdefault("strict_accuracy", [])
+    trainer.history.setdefault("parsed_accuracy", [])
+    trainer.history.setdefault("parse_rate", [])
+    trainer.history.setdefault("eval_correct", [])
+    trainer.history.setdefault("eval_attempted", [])
+    trainer.history.setdefault("eval_parsed_count", [])
 
     # ---- Monkey-patch the training loop to add periodic sample logging ----
     _original_train = trainer.train
@@ -651,8 +678,19 @@ def main():
                 if global_step > 0 and global_step % cfg.eval_every == 0:
                     result = trainer.evaluate()
                     if result is not None and trainer.is_master:
-                        log(f"--- Eval step {global_step}: acc={result['accuracy']*100:.1f}% "
-                            f"({result['correct']}/{result['total']}) ---")
+                        log(
+                            f"--- Eval step {global_step}: strict_acc={result['strict_accuracy']*100:.1f}% "
+                            f"({result['correct']}/{result['attempted']}) | "
+                            f"parsed_acc={result['parsed_accuracy']*100:.1f}% "
+                            f"| parse_rate={result['parse_rate']*100:.1f}% ---"
+                        )
+                        trainer.history["eval_step"].append(global_step)
+                        trainer.history["strict_accuracy"].append(result["strict_accuracy"])
+                        trainer.history["parsed_accuracy"].append(result["parsed_accuracy"])
+                        trainer.history["parse_rate"].append(result["parse_rate"])
+                        trainer.history["eval_correct"].append(result["correct"])
+                        trainer.history["eval_attempted"].append(result["attempted"])
+                        trainer.history["eval_parsed_count"].append(result["parsed_count"])
 
                 # (intermediate checkpoints disabled to save disk space)
 
@@ -685,8 +723,12 @@ def main():
             log("--- Final evaluation ---")
             result = trainer.evaluate()
             if result is not None:
-                log(f"Final accuracy: {result['accuracy']*100:.1f}% "
-                    f"({result['correct']}/{result['total']})")
+                log(
+                    f"Final accuracy: {result['strict_accuracy']*100:.1f}% "
+                    f"({result['correct']}/{result['attempted']}) | "
+                    f"parsed_acc={result['parsed_accuracy']*100:.1f}% "
+                    f"| parse_rate={result['parse_rate']*100:.1f}%"
+                )
 
         log("Training complete!")
 

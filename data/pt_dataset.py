@@ -649,18 +649,17 @@ def evaluate_accuracy(model, tokenizer, dataset, device, num_samples=100, max_ne
     """
     model.eval()
     correct = 0
-    total = 0
+    parsed_count = 0
+    attempted = min(num_samples, len(dataset))
     extract_fn = dataset.extract_answer
     base_vocab_size = model.vocab_sizes[0].item()
 
     # Check if this is a code generation dataset
     is_code_dataset = hasattr(dataset, '__class__') and dataset.__class__.__name__ == 'HumanEvalDataset'
 
-    for i in range(min(num_samples, len(dataset))):
+    for i in range(attempted):
         item = dataset[i]
         input_ids = item["input_ids"].unsqueeze(0).to(device)
-        attention_mask = item["attention_mask"].unsqueeze(0).to(device)
-
         prompt_len = item["prompt_len"]
 
         generated = model.generate(
@@ -678,11 +677,27 @@ def evaluate_accuracy(model, tokenizer, dataset, device, num_samples=100, max_ne
         pred_answer = extract_fn(full_text)
         gold_answer = extract_fn(ref_text)
 
-        if pred_answer is not None and gold_answer is not None:
-            if pred_answer.strip() == gold_answer.strip():
-                correct += 1
-            total += 1
+        if pred_answer is not None:
+            parsed_count += 1
 
-    accuracy = correct / max(total, 1)
+        if (
+            pred_answer is not None
+            and gold_answer is not None
+            and pred_answer.strip() == gold_answer.strip()
+        ):
+            correct += 1
+
+    strict_accuracy = correct / max(attempted, 1)
+    parsed_accuracy = correct / max(parsed_count, 1)
+    parse_rate = parsed_count / max(attempted, 1)
     model.train()
-    return {"accuracy": accuracy, "correct": correct, "total": total}
+    return {
+        "accuracy": strict_accuracy,
+        "strict_accuracy": strict_accuracy,
+        "parsed_accuracy": parsed_accuracy,
+        "parse_rate": parse_rate,
+        "correct": correct,
+        "total": attempted,
+        "attempted": attempted,
+        "parsed_count": parsed_count,
+    }
