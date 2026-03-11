@@ -378,17 +378,16 @@ class SoRLTrainer:
         save_dir = path.replace(".pt", "")
         os.makedirs(save_dir, exist_ok=True)
         base_vocab = self.raw_model.vocab_sizes[0].item()
-        hf_model = self.raw_model.model
         # Save LoRA adapter if present
-        if hasattr(hf_model, "save_pretrained"):
-            hf_model.save_pretrained(save_dir)
+        if hasattr(self.raw_model, "save_pretrained"):
+            self.raw_model.save_pretrained(save_dir)
         # Save abstract embedding rows + loss_fn + optimizer (always small)
-        unwrapped = hf_model.model
+        from sorl.sorl_trainer import _get_embed_tokens, _get_lm_head
         torch.save({
             "step": global_step,
             "epoch": epoch,
-            "embed_tokens": unwrapped.embed_tokens.weight.data[base_vocab:].cpu(),
-            "lm_head": hf_model.lm_head.weight.data[base_vocab:].cpu(),
+            "embed_tokens": _get_embed_tokens(self.raw_model).weight.data[base_vocab:].cpu(),
+            "lm_head": _get_lm_head(self.raw_model).weight.data[base_vocab:].cpu(),
             "optimizer": optimizer.state_dict(),
             "loss_fn": self.loss_fn.state_dict(),
             "config": self.config.__dict__,

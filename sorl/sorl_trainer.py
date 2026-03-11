@@ -259,17 +259,10 @@ class VariableZipfian2gramLoss(nn.Module):
 # ---------------------------------------------------------------------------
 # Ortho regularization
 # ---------------------------------------------------------------------------
-def _get_embed_tokens(model):
-    """Unwrap SorlWrapper / LoRA / PeftModel to find embed_tokens."""
-    hf_model = model.model  # SorlWrapper -> HF or PeftModel
-    unwrapped = hf_model.base_model.model if hasattr(hf_model, "base_model") else hf_model
-    return unwrapped.model.embed_tokens
-
-
 def ortho_loss(model, base_vocab):
     """Squared off-diagonal cosine similarity between abstract embedding rows.
     Penalizes collapsed embeddings by pushing abstract tokens apart."""
-    abs_embed = _get_embed_tokens(model).weight[base_vocab + 1:]
+    abs_embed = model.model.model.embed_tokens.weight[base_vocab + 1:]
     abs_norm = F.normalize(abs_embed, dim=1)
     gram = abs_norm @ abs_norm.T
     n = gram.size(0)
