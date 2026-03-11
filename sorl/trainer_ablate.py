@@ -348,12 +348,15 @@ class SoRLTrainer:
         if hasattr(self.raw_model, "save_pretrained"):
             self.raw_model.save_pretrained(save_dir)
         # Save abstract embedding rows + loss_fn + optimizer (always small)
-        from sorl.sorl_trainer import _get_embed_tokens, _get_lm_head
+        # Access embed_tokens / lm_head through the HF model inside SorlModelWrapper
+        hf = self.raw_model.model  # Qwen3ForCausalLM (or PeftModel wrapping it)
+        embed_w = hf.model.embed_tokens.weight if hasattr(hf, "model") else hf.transformer.wte.weight
+        lm_head_w = hf.lm_head.weight
         torch.save({
             "step": global_step,
             "epoch": epoch,
-            "embed_tokens": _get_embed_tokens(self.raw_model).weight.data[base_vocab:].cpu(),
-            "lm_head": _get_lm_head(self.raw_model).weight.data[base_vocab:].cpu(),
+            "embed_tokens": embed_w.data[base_vocab:].cpu(),
+            "lm_head": lm_head_w.data[base_vocab:].cpu(),
             "optimizer": optimizer.state_dict(),
             "loss_fn": self.loss_fn.state_dict(),
             "config": self.config.__dict__,
