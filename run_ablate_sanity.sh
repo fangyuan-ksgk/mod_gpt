@@ -26,7 +26,7 @@ export NCCL_DEBUG=WARN
 # ============================================================================
 # Configuration — match SFT baseline exactly
 # ============================================================================
-N_GPUS=4
+N_GPUS=1  # sft_mode bypasses DDP — use single GPU to avoid desync
 MASTER_ADDR=127.0.0.1
 MASTER_PORT=29501
 
@@ -37,7 +37,7 @@ MAX_LENGTH=512
 LR=1e-5
 WARMUP_STEPS=50
 BATCH_SIZE=2
-GRAD_ACCUM=$((8 / (BATCH_SIZE * N_GPUS)))
+GRAD_ACCUM=$((8 / (BATCH_SIZE * N_GPUS)))  # =4, effective batch=8
 NUM_EPOCHS=3
 
 LOG_EVERY=10
