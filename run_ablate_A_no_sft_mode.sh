@@ -1,15 +1,9 @@
 #!/bin/bash
-# SoRL Ablate Sanity Check — should match SFT baseline performance
+# Ablation A: NO sft_mode, zero aux weights, full SoRL path (block_mask + full vocab CE)
+# Tests whether sft_mode is necessary or if zeroing aux weights is sufficient.
+# Uses 1 GPU to keep DDP out of the equation.
 #
-# Uses trainer_ablate.SoRLTrainer in sft_mode:
-#   - Abstract logits masked to -inf in CE loss (no softmax dilution)
-#   - No SoRL search (skipped entirely)
-#   - NL-only greedy generation for eval (no block_mask, no abstract tokens)
-#
-# If this doesn't match SFT, there's a bug in the model wrapper plumbing.
-#
-# Usage:
-#   bash run_ablate_sanity.sh
+# Compare against: run_ablate_sanity.sh (sft_mode=True, 1 GPU)
 
 # --- nvidia pod specifics ------
 DUMMY_CONFIG_PATH="/workspace/mod_gpt/dummy_tuner_config.txt"
@@ -26,9 +20,9 @@ export NCCL_DEBUG=WARN
 # ============================================================================
 # Configuration — match SFT baseline exactly
 # ============================================================================
-N_GPUS=1  # sft_mode bypasses DDP — use single GPU to avoid desync
+N_GPUS=1
 MASTER_ADDR=127.0.0.1
-MASTER_PORT=29501
+MASTER_PORT=29502
 
 MODEL_NAME="Qwen/Qwen3-0.6B"
 DATASET="gsm8k"
@@ -47,13 +41,14 @@ EVAL_SAMPLES=50
 MAX_NEW_TOKENS=256
 
 TIMESTAMP=$(date +%Y%m%d_%H%M)
-OUTPUT_DIR="./ckpt/ablate_sanity_${TIMESTAMP}"
+OUTPUT_DIR="./ckpt/ablate_A_no_sft_mode_${TIMESTAMP}"
 
 echo "============================================================"
-echo "SoRL Ablate Sanity Check (sft_mode): ${MODEL_NAME}"
-echo "  - Abstract logits masked from CE loss"
-echo "  - No SoRL search"
-echo "  - NL-only greedy generation for eval"
+echo "Ablation A: NO sft_mode, zero aux weights: ${MODEL_NAME}"
+echo "  - Full SoRL path (block_mask + full vocab CE)"
+echo "  - All aux loss weights = 0"
+echo "  - NL-only eval (eval_K=None)"
+echo "  - 1 GPU (no DDP)"
 echo "  Output: ${OUTPUT_DIR}"
 echo "============================================================"
 
@@ -75,10 +70,9 @@ torchrun \
   --save_every $SAVE_EVERY \
   --eval_samples $EVAL_SAMPLES \
   --max_new_tokens $MAX_NEW_TOKENS \
-  --output_dir $OUTPUT_DIR \
-  --sft_mode
+  --output_dir $OUTPUT_DIR
 
 echo "============================================================"
-echo "Ablate Sanity Check complete: ${MODEL_NAME}"
+echo "Ablation A complete: ${MODEL_NAME}"
 echo "  Output: ${OUTPUT_DIR}"
 echo "============================================================"

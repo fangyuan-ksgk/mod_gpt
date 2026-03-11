@@ -1,15 +1,10 @@
 #!/bin/bash
-# SoRL Ablate Sanity Check — should match SFT baseline performance
+# Ablation B: sft_mode=True with 2 GPUs (DDP)
+# Tests whether DDP desync is a problem for sft_mode (bypasses DDP allreduce).
+# sft_mode calls raw_model.model directly — no DDP gradient sync.
+# If accuracy drops vs 1-GPU sft_mode, DDP desync is real.
 #
-# Uses trainer_ablate.SoRLTrainer in sft_mode:
-#   - Abstract logits masked to -inf in CE loss (no softmax dilution)
-#   - No SoRL search (skipped entirely)
-#   - NL-only greedy generation for eval (no block_mask, no abstract tokens)
-#
-# If this doesn't match SFT, there's a bug in the model wrapper plumbing.
-#
-# Usage:
-#   bash run_ablate_sanity.sh
+# Compare against: run_ablate_sanity.sh (sft_mode=True, 1 GPU)
 
 # --- nvidia pod specifics ------
 DUMMY_CONFIG_PATH="/workspace/mod_gpt/dummy_tuner_config.txt"
@@ -24,11 +19,11 @@ export NCCL_IB_DISABLE=1
 export NCCL_DEBUG=WARN
 
 # ============================================================================
-# Configuration — match SFT baseline exactly
+# Configuration — same effective batch as SFT baseline
 # ============================================================================
-N_GPUS=1  # sft_mode bypasses DDP — use single GPU to avoid desync
+N_GPUS=2  # DDP — each GPU gets different data, but sft_mode bypasses allreduce
 MASTER_ADDR=127.0.0.1
-MASTER_PORT=29501
+MASTER_PORT=29503
 
 MODEL_NAME="Qwen/Qwen3-0.6B"
 DATASET="gsm8k"
@@ -37,7 +32,7 @@ MAX_LENGTH=512
 LR=1e-5
 WARMUP_STEPS=50
 BATCH_SIZE=2
-GRAD_ACCUM=$((8 / (BATCH_SIZE * N_GPUS)))  # =4, effective batch=8
+GRAD_ACCUM=$((8 / (BATCH_SIZE * N_GPUS)))  # =2, effective batch=8
 NUM_EPOCHS=3
 
 LOG_EVERY=10
@@ -47,13 +42,13 @@ EVAL_SAMPLES=50
 MAX_NEW_TOKENS=256
 
 TIMESTAMP=$(date +%Y%m%d_%H%M)
-OUTPUT_DIR="./ckpt/ablate_sanity_${TIMESTAMP}"
+OUTPUT_DIR="./ckpt/ablate_B_sft_ddp_${TIMESTAMP}"
 
 echo "============================================================"
-echo "SoRL Ablate Sanity Check (sft_mode): ${MODEL_NAME}"
-echo "  - Abstract logits masked from CE loss"
-echo "  - No SoRL search"
-echo "  - NL-only greedy generation for eval"
+echo "Ablation B: sft_mode + DDP (2 GPUs): ${MODEL_NAME}"
+echo "  - sft_mode=True (abstract logits masked, no SoRL search)"
+echo "  - 2 GPUs — tests DDP desync impact"
+echo "  - NL-only eval"
 echo "  Output: ${OUTPUT_DIR}"
 echo "============================================================"
 
@@ -79,6 +74,6 @@ torchrun \
   --sft_mode
 
 echo "============================================================"
-echo "Ablate Sanity Check complete: ${MODEL_NAME}"
+echo "Ablation B complete: ${MODEL_NAME}"
 echo "  Output: ${OUTPUT_DIR}"
 echo "============================================================"

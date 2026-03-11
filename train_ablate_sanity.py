@@ -66,6 +66,18 @@ def parse_args():
     p.add_argument("--num_log_samples", type=int, default=3)
     p.add_argument("--output_dir", type=str, default="./ckpt/ablate_sanity")
 
+    # Ablation flags
+    p.add_argument("--sft_mode", action="store_true", default=False,
+                   help="If set: mask abstract logits from CE, skip SoRL search")
+    p.add_argument("--eval_K", type=int, default=None,
+                   help="K for eval generation. None=NL-only, 4=periodic abstract")
+
+    # SoRL search params (only used when sft_mode is False)
+    p.add_argument("--K", type=int, default=4, help="Abstract token insertion period")
+    p.add_argument("--num_rollouts", type=int, default=4)
+    p.add_argument("--max_iterations", type=int, default=2)
+    p.add_argument("--temperature", type=float, default=1.0)
+
     return p.parse_args()
 
 
@@ -192,7 +204,7 @@ def main():
             with open(logfile, "a") as f:
                 f.write(msg + "\n")
 
-    log(f"=== SoRL Ablate Sanity Check (sft_mode) ===")
+    log(f"=== SoRL Ablate Sanity Check ===")
     log(f"Args: {json.dumps(vars(args), indent=2)}")
     log(f"DDP: {ddp} | World size: {os.environ.get('WORLD_SIZE', 1)}")
 
@@ -214,7 +226,6 @@ def main():
     log(f"Train: {len(train_ds)} | Val: {len(val_ds)}")
 
     # ---- Config ----
-    # sft_mode=True: abstract logits masked from CE loss, no SoRL search
     config = SoRLConfig(
         lr=args.lr,
         weight_decay=args.weight_decay,
@@ -229,10 +240,20 @@ def main():
         save_every=args.save_every,
         eval_samples=args.eval_samples,
         output_dir=args.output_dir,
-        sft_mode=True,
-        eval_K=None,
+        sft_mode=args.sft_mode,
+        eval_K=args.eval_K,
+        # SoRL search (only used when sft_mode=False)
+        K=args.K,
+        num_rollouts=args.num_rollouts,
+        max_iterations=args.max_iterations,
+        temperature=args.temperature,
+        # Zero all aux weights — pure base_traj_loss ablation
+        alpha_info_gain=0.0,
+        alpha_abs=0.0,
+        alpha_soft_zipf=0.0,
     )
-    log(f"Config: sft_mode={config.sft_mode} (abstract logits masked from CE + eval)")
+    mode_str = "sft_mode" if config.sft_mode else f"SoRL path (K={config.K}, aux weights=0)"
+    log(f"Config: {mode_str}, eval_K={config.eval_K}")
 
     # ---- Accuracy evaluator (NL-only generation) ----
     accuracy_fn = compute_accuracy_fn_factory(
@@ -249,7 +270,7 @@ def main():
         config=config,
         ddp=ddp,
     )
-    log(f"Trainer: SoRLTrainer (sft_mode — abstract logits masked, no SoRL search)")
+    log(f"Trainer: SoRLTrainer ({mode_str})")
 
     # ---- Initial eval ----
     if is_master:

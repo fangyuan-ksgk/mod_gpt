@@ -285,6 +285,20 @@ class SoRLTrainer:
         base_traj_loss = outputs.loss
         del outputs
 
+        # Check if any aux loss weight is nonzero
+        has_aux = (cfg.alpha_info_gain != 0 or cfg.alpha_abs != 0 or cfg.alpha_soft_zipf != 0)
+
+        if not has_aux:
+            # Skip SoRL search entirely — just return base_traj_loss
+            zero = torch.tensor(0.0, device=self.device)
+            return {
+                "loss": base_traj_loss,
+                "base_traj_loss": base_traj_loss,
+                "info_gain_loss": zero,
+                "abs_loss": zero,
+                "zipf_bigram_loss": zero,
+            }
+
         # 2. SoRL search (no grad)
         with torch.no_grad():
             if cfg.ar_search:
@@ -312,7 +326,7 @@ class SoRLTrainer:
             prompt_len=expanded_prompt_len,
         )
 
-        # Combined loss (all aux weights can be set to 0 for base-only ablation)
+        # Combined loss
         loss = (
             base_traj_loss
             + cfg.alpha_info_gain * info_gain_loss
