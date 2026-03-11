@@ -97,6 +97,10 @@ class SoRLConfig:
     eval_samples: int = 50
     output_dir: str = "./ckpt/sorl_ablate"
 
+    # Ablation flags
+    sft_mode: bool = False  # If True: skip SoRL search, no block_mask, mask abstract logits from CE loss
+    eval_K: Optional[int] = 4  # K for generate(); set None for NL-only generation
+
 
 # ---------------------------------------------------------------------------
 # LR schedule
@@ -245,6 +249,35 @@ class SoRLTrainer:
         labels[attention_mask == 0] = -100
         seq_idx = torch.arange(labels.size(1), device=self.device).unsqueeze(0)
         labels[seq_idx < prompt_len.unsqueeze(1)] = -100
+
+        if cfg.sft_mode:
+            # ---- SFT-equivalent: call HF model directly (no SoRL block_mask) ----
+            # Note: bypasses DDP allreduce — acceptable for sanity check ablation.
+            hf_model = self.raw_model.model
+            outputs = hf_model(
+                input_ids=input_ids, attention_mask=attention_mask, use_cache=False,
+            )
+            logits = outputs.logits  # (B, L, V_full)
+            base_vocab = self.raw_model.vocab_sizes[0].item()
+            # Zero out abstract logits so they don't affect softmax
+            logits[:, :, base_vocab:] = -float("inf")
+            # Compute CE manually
+            shift_logits = logits[:, :-1, :].contiguous()
+            shift_labels = labels[:, 1:].contiguous()
+            loss_fct = nn.CrossEntropyLoss(ignore_index=-100)
+            base_traj_loss = loss_fct(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1))
+            del outputs, logits
+            # No SoRL search — return zeros for aux losses
+            zero = torch.tensor(0.0, device=self.device)
+            return {
+                "loss": base_traj_loss,
+                "base_traj_loss": base_traj_loss,
+                "info_gain_loss": zero,
+                "abs_loss": zero,
+                "zipf_bigram_loss": zero,
+            }
+
+        # ---- Standard SoRL path ----
         outputs = model(
             input_ids=input_ids, attention_mask=attention_mask, labels=labels,
             memory_span_abs=cfg.memory_span_abs, memory_span_traj=cfg.memory_span_traj,
@@ -279,16 +312,13 @@ class SoRLTrainer:
             prompt_len=expanded_prompt_len,
         )
 
-        # 5. Ablated: base trajectory loss alone p(s)
+        # Combined loss (all aux weights can be set to 0 for base-only ablation)
         loss = (
             base_traj_loss
-            # + cfg.alpha_info_gain * info_gain_loss
-            # + cfg.alpha_abs * abs_loss
-            # + cfg.alpha_soft_zipf * zipf_bigram_loss
+            + cfg.alpha_info_gain * info_gain_loss
+            + cfg.alpha_abs * abs_loss
+            + cfg.alpha_soft_zipf * zipf_bigram_loss
         )
-
-        # Cleanup search tensors
-        # del best_data, best_ppt, best_ppt_adv, expanded_attn_mask
 
         return {
             "loss": loss,

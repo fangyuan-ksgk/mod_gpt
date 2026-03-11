@@ -1,8 +1,12 @@
 #!/bin/bash
 # SoRL Ablate Sanity Check — should match SFT baseline performance
 #
-# Uses trainer_ablate.SoRLTrainer with all aux losses zeroed (base_traj_loss only).
-# If this doesn't match SFT, there's a bug in the trainer plumbing.
+# Uses trainer_ablate.SoRLTrainer in sft_mode:
+#   - Abstract logits masked to -inf in CE loss (no softmax dilution)
+#   - No SoRL search (skipped entirely)
+#   - NL-only greedy generation for eval (no block_mask, no abstract tokens)
+#
+# If this doesn't match SFT, there's a bug in the model wrapper plumbing.
 #
 # Usage:
 #   bash run_ablate_sanity.sh
@@ -46,8 +50,10 @@ TIMESTAMP=$(date +%Y%m%d_%H%M)
 OUTPUT_DIR="./ckpt/ablate_sanity_${TIMESTAMP}"
 
 echo "============================================================"
-echo "SoRL Ablate Sanity Check: ${MODEL_NAME}"
-echo "  base_traj_loss only (all aux losses = 0)"
+echo "SoRL Ablate Sanity Check (sft_mode): ${MODEL_NAME}"
+echo "  - Abstract logits masked from CE loss"
+echo "  - No SoRL search"
+echo "  - NL-only greedy generation for eval"
 echo "  Output: ${OUTPUT_DIR}"
 echo "============================================================"
 
