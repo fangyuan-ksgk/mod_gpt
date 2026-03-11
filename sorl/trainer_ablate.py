@@ -355,17 +355,10 @@ class SoRLTrainer:
         dataloader = self._make_dataloader(self.train_dataset, shuffle=True)
         total_steps = len(dataloader) * cfg.num_epochs // cfg.gradient_accumulation_steps
 
-        # Optimizer — separate param group for embed/lm_head (higher LR)
-        emb_params, other_params = [], []
-        for name, p in self.model.named_parameters():
-            if "embed_tokens" in name or "lm_head" in name:
-                emb_params.append(p)
-            else:
-                other_params.append(p)
-        optimizer = torch.optim.AdamW([
-            {"params": other_params, "lr": cfg.lr},
-            {"params": emb_params, "lr": cfg.lr * cfg.emb_lr_mult},
-        ], weight_decay=cfg.weight_decay)
+        # Optimizer — single learning rate for all parameters
+        optimizer = torch.optim.AdamW(
+            self.model.parameters(), lr=cfg.lr, weight_decay=cfg.weight_decay,
+        )
 
         start_epoch, start_step = 0, 0
         if resume_from and os.path.exists(resume_from):
@@ -399,10 +392,10 @@ class SoRLTrainer:
                 if effective_step < start_step * cfg.gradient_accumulation_steps:
                     continue
 
-                # LR schedule (respect emb_lr_mult for embed/lm_head group)
+                # LR schedule
                 lr = _get_lr(global_step, total_steps, cfg.warmup_steps, cfg.cooldown_frac, cfg.lr)
-                optimizer.param_groups[0]["lr"] = lr
-                optimizer.param_groups[1]["lr"] = lr * cfg.emb_lr_mult
+                for pg in optimizer.param_groups:
+                    pg["lr"] = lr
 
                 # Forward + loss
                 step_out = self._training_step(batch)
@@ -434,7 +427,7 @@ class SoRLTrainer:
                         f"info={step_out['info_gain_loss'].item():.4f} "
                         f"abs={step_out['abs_loss'].item():.4f} "
                         f"zipf={step_out['zipf_bigram_loss'].item():.4f} "
-                        f"{denoise_str}{distill_str}| {peak}"
+                        f"| lr={lr:.2e} | {peak}"
                     )
                     self.history["step"].append(global_step)
                     self.history["loss"].append(total_loss)
