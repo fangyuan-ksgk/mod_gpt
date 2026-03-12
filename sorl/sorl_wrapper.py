@@ -257,8 +257,7 @@ class SorlModelWrapper(PreTrainedModel, GenerationMixin):
                 block_mask=self._create_sorl_block_mask(generated_ids, memory_span_abs, memory_span_traj),
                 use_cache=False,
             )
-            next_token_logits = outputs.logits[:, -1, :].clone()
-            del outputs
+            next_token_logits = outputs.logits[:, -1, :]
 
             if not free_form:
                 # Periodic: force abstract token every K trajectory tokens

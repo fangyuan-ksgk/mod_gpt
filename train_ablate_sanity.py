@@ -192,10 +192,6 @@ def compute_accuracy_fn_factory(tokenizer, max_new_tokens, num_log_samples, log_
                                         "response": full_text[len(q):].strip()[:300],
                                         "gold": gold, "pred": pred, "correct": hit})
 
-            # Free GPU tensors between batches
-            del input_ids, attn_mask, generated
-            torch.cuda.empty_cache()
-
             if log_fn:
                 log_fn(f"  [K={K_value}] [{bs_end}/{n}] acc: {correct}/{total} = {correct/max(total,1)*100:.1f}%")
 
