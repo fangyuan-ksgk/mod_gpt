@@ -40,6 +40,7 @@ LOG_EVERY=10
 EVAL_EVERY=99999
 SAVE_EVERY=99999
 EVAL_SAMPLES=1000
+EVAL_BATCH_SIZE=64
 MAX_NEW_TOKENS=256
 
 TIMESTAMP=$(date +%Y%m%d_%H%M)
@@ -131,6 +132,7 @@ run_bg() {
     --eval_every $EVAL_EVERY \
     --save_every $SAVE_EVERY \
     --eval_samples $EVAL_SAMPLES \
+    --eval_batch_size $EVAL_BATCH_SIZE \
     --max_new_tokens $MAX_NEW_TOKENS \
     --output_dir $output_dir \
     "$@" &
@@ -181,6 +183,7 @@ CUDA_VISIBLE_DEVICES=2,3 torchrun \
   --eval_every $EVAL_EVERY \
   --save_every $SAVE_EVERY \
   --eval_samples $EVAL_SAMPLES \
+  --eval_batch_size $EVAL_BATCH_SIZE \
   --max_new_tokens $MAX_NEW_TOKENS \
   --output_dir $DDP_OUT &
 wait_batch
