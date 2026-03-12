@@ -249,42 +249,15 @@ class SorlModelWrapper(PreTrainedModel, GenerationMixin):
         levels_cache = infer_level(generated_ids, self.vocab_sizes)
         masks = torch.stack([self.l0_mask, self.abs_mask], dim=0).to(generated_ids.device)
 
-        def _mb():
-            return torch.cuda.memory_allocated() / 1024**2
-        def _mb_reserved():
-            return torch.cuda.memory_reserved() / 1024**2
-
-        import time as _time
-        _vram_before = _mb()
-        _t_start = _time.time()
-        print(f"[generate] start: alloc={_vram_before:.0f}MB  reserved={_mb_reserved():.0f}MB  seq_len={generated_ids.size(1)}  batch={generated_ids.size(0)}")
-
-        for step_i in range(max_new_tokens):
-            # --- VRAM profiling ---
-            _do_log = step_i < 3 or step_i % 50 == 0 or step_i == max_new_tokens - 1
-
-            if _do_log:
-                _m0 = _mb()
-
-            # Block mask
-            block_mask = self._create_sorl_block_mask(generated_ids, memory_span_abs, memory_span_traj)
-            if _do_log:
-                _m1 = _mb()
-
+        for _ in range(max_new_tokens):
             # Forward pass
             outputs = self.model.forward(
                 input_ids=generated_ids,
                 attention_mask=attention_mask,
-                block_mask=block_mask,
+                block_mask=self._create_sorl_block_mask(generated_ids, memory_span_abs, memory_span_traj),
                 use_cache=False,
             )
             next_token_logits = outputs.logits[:, -1, :]
-
-            if _do_log:
-                _m2 = _mb()
-                print(f"[generate] step={step_i} seq_len={generated_ids.size(1)}: "
-                      f"pre={_m0:.0f}MB  +block_mask={_m1-_m0:.0f}MB  +forward={_m2-_m1:.0f}MB  "
-                      f"total_alloc={_m2:.0f}MB  reserved={_mb_reserved():.0f}MB")
 
             if not free_form:
                 # Periodic: force abstract token every K trajectory tokens
@@ -319,13 +292,8 @@ class SorlModelWrapper(PreTrainedModel, GenerationMixin):
             levels_cache = torch.cat([levels_cache, next_token_level[:, None]], dim=1)
 
             # Release stale CUDA reserved blocks from variable-length forward passes
-            if step_i % 20 == 0:
-                torch.cuda.empty_cache()
+            torch.cuda.empty_cache()
 
-        _vram_after = _mb()
-        _elapsed = _time.time() - _t_start
-        print(f"[generate] done: alloc={_vram_after:.0f}MB  reserved={_mb_reserved():.0f}MB  delta={_vram_after-_vram_before:.0f}MB  "
-              f"time={_elapsed:.1f}s  tok/s={max_new_tokens/_elapsed:.1f}")
         return generated_ids
 
     @torch.no_grad()
