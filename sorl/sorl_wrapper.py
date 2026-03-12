@@ -316,6 +316,10 @@ class SorlModelWrapper(PreTrainedModel, GenerationMixin):
             attention_mask = torch.cat([attention_mask, torch.ones(generated_ids.size(0), 1, dtype=attention_mask.dtype, device=attention_mask.device)], dim=1)
             levels_cache = torch.cat([levels_cache, next_token_level[:, None]], dim=1)
 
+            # Release stale CUDA reserved blocks from variable-length forward passes
+            if step_i % 20 == 0:
+                torch.cuda.empty_cache()
+
         _vram_after = _mb()
         print(f"[generate] done: alloc={_vram_after:.0f}MB  reserved={_mb_reserved():.0f}MB  delta={_vram_after-_vram_before:.0f}MB")
         return generated_ids
