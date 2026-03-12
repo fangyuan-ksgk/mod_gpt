@@ -254,7 +254,9 @@ class SorlModelWrapper(PreTrainedModel, GenerationMixin):
         def _mb_reserved():
             return torch.cuda.memory_reserved() / 1024**2
 
+        import time as _time
         _vram_before = _mb()
+        _t_start = _time.time()
         print(f"[generate] start: alloc={_vram_before:.0f}MB  reserved={_mb_reserved():.0f}MB  seq_len={generated_ids.size(1)}  batch={generated_ids.size(0)}")
 
         for step_i in range(max_new_tokens):
@@ -321,7 +323,9 @@ class SorlModelWrapper(PreTrainedModel, GenerationMixin):
                 torch.cuda.empty_cache()
 
         _vram_after = _mb()
-        print(f"[generate] done: alloc={_vram_after:.0f}MB  reserved={_mb_reserved():.0f}MB  delta={_vram_after-_vram_before:.0f}MB")
+        _elapsed = _time.time() - _t_start
+        print(f"[generate] done: alloc={_vram_after:.0f}MB  reserved={_mb_reserved():.0f}MB  delta={_vram_after-_vram_before:.0f}MB  "
+              f"time={_elapsed:.1f}s  tok/s={max_new_tokens/_elapsed:.1f}")
         return generated_ids
 
     @torch.no_grad()
