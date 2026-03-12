@@ -6,6 +6,37 @@ import torch.nn as nn
 import torch
 from torch.nn.attention.flex_attention import create_block_mask
 
+def left_pad_and_mask(
+    sequences: List[torch.Tensor], pad_id: int = 0
+) -> Tuple[torch.Tensor, torch.Tensor]:
+    """Left-pad a list of 1-D token tensors to equal length and return (input_ids, attention_mask).
+
+    Args:
+        sequences: list of 1-D LongTensors, each of shape (seq_len_i,).
+        pad_id: token id used for padding (default 0).
+
+    Returns:
+        input_ids:      (B, max_len) left-padded token ids.
+        attention_mask:  (B, max_len) with 1 for real tokens and 0 for padding.
+    """
+    lengths = torch.tensor([s.size(0) for s in sequences])
+    max_len = lengths.max().item()
+    batch_size = len(sequences)
+    device = sequences[0].device
+    dtype = sequences[0].dtype
+
+    input_ids = torch.full((batch_size, max_len), pad_id, dtype=dtype, device=device)
+    attention_mask = torch.zeros(batch_size, max_len, dtype=torch.long, device=device)
+
+    # Vectorised fill: compute pad lengths, then scatter each sequence into the right-aligned slot
+    pad_lens = max_len - lengths  # (B,)
+    for i, (seq, pl) in enumerate(zip(sequences, pad_lens)):
+        input_ids[i, pl:] = seq
+        attention_mask[i, pl:] = 1
+
+    return input_ids, attention_mask
+
+
 SUPPORTED_MODELS = {
     "qwen2": "qwen2",
     "qwen3": "qwen3",  # Use AutoModelForCausalLM for both
