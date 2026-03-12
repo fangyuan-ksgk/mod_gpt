@@ -150,9 +150,15 @@ def compute_accuracy_fn_factory(tokenizer, max_new_tokens, num_log_samples, log_
         extract_fn = getattr(dataset, "extract_answer", None)
         correct, total, samples = 0, 0, []
 
+        _mb = lambda: torch.cuda.memory_allocated() / 1024**2
+        _mb_r = lambda: torch.cuda.memory_reserved() / 1024**2
+
         for bs_start in range(0, n, eval_batch_size):
             bs_end = min(bs_start + eval_batch_size, n)
             batch_indices = range(bs_start, bs_end)
+
+            if log_fn:
+                log_fn(f"  [eval_batch {bs_start}-{bs_end}] pre-batch alloc={_mb():.0f}MB  reserved={_mb_r():.0f}MB")
 
             prompts, prompt_lens, ref_texts = [], [], []
             for i in batch_indices:
@@ -171,6 +177,9 @@ def compute_accuracy_fn_factory(tokenizer, max_new_tokens, num_log_samples, log_
                 max_new_tokens=max_new_tokens,
                 temperature=0.0, K=K_value, free_form=False,
             )
+
+            if log_fn:
+                log_fn(f"  [eval_batch {bs_start}-{bs_end}] post-generate alloc={_mb():.0f}MB  reserved={_mb_r():.0f}MB")
 
             max_pl = input_ids.size(1)
             for j, i in enumerate(batch_indices):
