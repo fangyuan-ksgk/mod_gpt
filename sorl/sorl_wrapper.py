@@ -199,6 +199,7 @@ class SorlModelWrapper(PreTrainedModel, GenerationMixin):
         self,
         input_ids: torch.LongTensor,
         max_new_tokens: int,
+        attention_mask: Optional[torch.LongTensor] = None,
         temperature: float = 0.7,
         top_k: int = 50,
         K: Optional[int] = None,
@@ -210,6 +211,10 @@ class SorlModelWrapper(PreTrainedModel, GenerationMixin):
         
         self.model.eval()
         generated_ids = input_ids.clone()
+        if attention_mask is None:
+            attention_mask = torch.ones_like(generated_ids)
+        else:
+            attention_mask = attention_mask.clone()
         levels_cache = infer_level(generated_ids, self.vocab_sizes)
         masks = torch.stack([self.l0_mask, self.abs_mask], dim=0).to(generated_ids.device)
 
@@ -217,6 +222,7 @@ class SorlModelWrapper(PreTrainedModel, GenerationMixin):
             # Forward pass
             outputs = self.model.forward(
                 input_ids=generated_ids,
+                attention_mask=attention_mask,
                 block_mask=self._create_sorl_block_mask(generated_ids, memory_span_abs, memory_span_traj),
                 use_cache=False,
             )
@@ -251,6 +257,7 @@ class SorlModelWrapper(PreTrainedModel, GenerationMixin):
 
             # Update sequences
             generated_ids = torch.cat([generated_ids, next_token_id], dim=1)
+            attention_mask = torch.cat([attention_mask, torch.ones(generated_ids.size(0), 1, dtype=attention_mask.dtype, device=attention_mask.device)], dim=1)
             levels_cache = torch.cat([levels_cache, next_token_level[:, None]], dim=1)
         
         return generated_ids
@@ -261,6 +268,7 @@ class SorlModelWrapper(PreTrainedModel, GenerationMixin):
         input_ids: torch.LongTensor,
         n_inner_cot_tokens: int = 8,
         max_new_tokens: int = 128,
+        attention_mask: Optional[torch.LongTensor] = None,
         temperature: float = 0.0,
         top_k: int = 50,
         memory_span_abs: int = 1792,
@@ -271,6 +279,10 @@ class SorlModelWrapper(PreTrainedModel, GenerationMixin):
         """
         self.model.eval()
         generated_ids = input_ids.clone()
+        if attention_mask is None:
+            attention_mask = torch.ones_like(generated_ids)
+        else:
+            attention_mask = attention_mask.clone()
         vocab_size_0 = self.vocab_sizes[0].item()
         eos_token_id = getattr(self.model.config, "eos_token_id", None)
         if isinstance(eos_token_id, (list, tuple)):
@@ -280,7 +292,7 @@ class SorlModelWrapper(PreTrainedModel, GenerationMixin):
         for _ in range(n_inner_cot_tokens):
             block_mask = self._create_sorl_block_mask(generated_ids, memory_span_abs, memory_span_traj)
             outputs = self.model.forward(
-                input_ids=generated_ids, block_mask=block_mask, use_cache=False,
+                input_ids=generated_ids, attention_mask=attention_mask, block_mask=block_mask, use_cache=False,
             )
             logits = outputs.logits[:, -1, :]
             # Mask base vocab — only allow abstract tokens
@@ -292,12 +304,13 @@ class SorlModelWrapper(PreTrainedModel, GenerationMixin):
             else:
                 next_id = torch.argmax(logits, dim=-1, keepdim=True)
             generated_ids = torch.cat([generated_ids, next_id], dim=1)
+            attention_mask = torch.cat([attention_mask, torch.ones(generated_ids.size(0), 1, dtype=attention_mask.dtype, device=attention_mask.device)], dim=1)
 
         # Phase 2: generate NL answer tokens
         for _ in range(max_new_tokens):
             block_mask = self._create_sorl_block_mask(generated_ids, memory_span_abs, memory_span_traj)
             outputs = self.model.forward(
-                input_ids=generated_ids, block_mask=block_mask, use_cache=False,
+                input_ids=generated_ids, attention_mask=attention_mask, block_mask=block_mask, use_cache=False,
             )
             logits = outputs.logits[:, -1, :]
             # Mask abstract vocab — only allow base (NL) tokens
@@ -309,6 +322,7 @@ class SorlModelWrapper(PreTrainedModel, GenerationMixin):
             else:
                 next_id = torch.argmax(logits, dim=-1, keepdim=True)
             generated_ids = torch.cat([generated_ids, next_id], dim=1)
+            attention_mask = torch.cat([attention_mask, torch.ones(generated_ids.size(0), 1, dtype=attention_mask.dtype, device=attention_mask.device)], dim=1)
             # Stop on EOS
             if eos_token_id is not None and (next_id == eos_token_id).all():
                 break
