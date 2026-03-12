@@ -98,7 +98,6 @@ class SoRLConfig:
     output_dir: str = "./ckpt/sorl_ablate"
 
     # Ablation flags
-    sft_mode: bool = False  # If True: skip SoRL search, no block_mask, mask abstract logits from CE loss
     eval_K: Optional[int] = 4  # K for generate(); set None for NL-only generation
 
 
@@ -243,53 +242,31 @@ class SoRLTrainer:
 
         # DDP proxy
         model = _DDPForwardProxy(self.model, self.raw_model) if self.ddp else self.raw_model
+        base_vocab = int(self.raw_model.vocab_sizes[0].item())
 
-        # 1. Base trajectory loss — mask padding AND question tokens in labels
+        # 1. Labels: mask padding AND question tokens
         labels = input_ids.clone()
         labels[attention_mask == 0] = -100
         seq_idx = torch.arange(labels.size(1), device=self.device).unsqueeze(0)
         labels[seq_idx < prompt_len.unsqueeze(1)] = -100
 
-        if cfg.sft_mode:
-            # ---- SFT-equivalent: call HF model directly (no SoRL block_mask) ----
-            # Note: bypasses DDP allreduce — acceptable for sanity check ablation.
-            hf_model = self.raw_model.model
-            outputs = hf_model(
-                input_ids=input_ids, attention_mask=attention_mask, use_cache=False,
-            )
-            logits = outputs.logits  # (B, L, V_full)
-            base_vocab = self.raw_model.vocab_sizes[0].item()
-            # Zero out abstract logits so they don't affect softmax
-            logits[:, :, base_vocab:] = -float("inf")
-            # Compute CE manually
-            shift_logits = logits[:, :-1, :].contiguous()
-            shift_labels = labels[:, 1:].contiguous()
-            loss_fct = nn.CrossEntropyLoss(ignore_index=-100)
-            base_traj_loss = loss_fct(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1))
-            del outputs, logits
-            # No SoRL search — return zeros for aux losses
-            zero = torch.tensor(0.0, device=self.device)
-            return {
-                "loss": base_traj_loss,
-                "base_traj_loss": base_traj_loss,
-                "info_gain_loss": zero,
-                "abs_loss": zero,
-                "zipf_bigram_loss": zero,
-            }
-
-        # ---- Standard SoRL path ----
+        # 2. Base trajectory loss — logits sliced to base vocab (SFT-equivalent)
         outputs = model(
-            input_ids=input_ids, attention_mask=attention_mask, labels=labels,
+            input_ids=input_ids, attention_mask=attention_mask,
             memory_span_abs=cfg.memory_span_abs, memory_span_traj=cfg.memory_span_traj,
         )
-        base_traj_loss = outputs.loss
-        del outputs
+        logits = outputs.logits
+        logits[:, :, base_vocab:] = -float("inf")
+        shift_logits = logits[:, :-1, :].contiguous()
+        shift_labels = labels[:, 1:].contiguous()
+        base_traj_loss = nn.CrossEntropyLoss(ignore_index=-100)(
+            shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1)
+        )
+        del outputs, logits
 
-        # Check if any aux loss weight is nonzero
+        # 3. SoRL search + aux losses (only if any aux weight is nonzero)
         has_aux = (cfg.alpha_info_gain != 0 or cfg.alpha_abs != 0 or cfg.alpha_soft_zipf != 0)
-
         if not has_aux:
-            # Skip SoRL search entirely — just return base_traj_loss
             zero = torch.tensor(0.0, device=self.device)
             return {
                 "loss": base_traj_loss,
@@ -299,7 +276,6 @@ class SoRLTrainer:
                 "zipf_bigram_loss": zero,
             }
 
-        # 2. SoRL search (no grad)
         with torch.no_grad():
             if cfg.ar_search:
                 best_data, best_ppt, best_ppt_adv, expanded_attn_mask, expanded_prompt_len = sorl_search_ar(
@@ -319,14 +295,12 @@ class SoRLTrainer:
                     temperature=cfg.temperature,
                 )
 
-        # 3. Auxiliary losses
         info_gain_loss, abs_loss, zipf_bigram_loss = self.loss_fn(
             best_data, model, base_traj_loss.detach(),
             expanded_attn_mask, cfg.memory_span_abs, cfg.memory_span_traj,
             prompt_len=expanded_prompt_len,
         )
 
-        # Combined loss
         loss = (
             base_traj_loss
             + cfg.alpha_info_gain * info_gain_loss

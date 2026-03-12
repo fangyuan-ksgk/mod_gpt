@@ -1,6 +1,6 @@
 """
-SoRL Ablate Sanity Check — trains with trainer_ablate.SoRLTrainer in sft_mode
-(abstract logits masked from CE loss, no SoRL search). Should match SFT perf.
+SoRL Ablate Sanity Check — trains with trainer_ablate.SoRLTrainer
+(base-vocab logit slicing + CE loss). Should match SFT perf.
 
 Eval generates NL-only tokens (abstract logits masked to -inf during greedy).
 
@@ -22,7 +22,7 @@ import torch
 import torch.nn.functional as F
 from transformers import AutoTokenizer
 
-from sorl.sorl_wrapper import SorlModelWrapper
+from sorl.sorl_wrapper import SorlModelWrapper, left_pad_and_mask
 from sorl.trainer_ablate import SoRLTrainer, SoRLConfig
 from data.pt_dataset import get_dataset
 
@@ -62,17 +62,16 @@ def parse_args():
     p.add_argument("--eval_every", type=int, default=500)
     p.add_argument("--save_every", type=int, default=500)
     p.add_argument("--eval_samples", type=int, default=50)
+    p.add_argument("--eval_batch_size", type=int, default=8)
     p.add_argument("--max_new_tokens", type=int, default=256)
     p.add_argument("--num_log_samples", type=int, default=3)
     p.add_argument("--output_dir", type=str, default="./ckpt/ablate_sanity")
 
     # Ablation flags
-    p.add_argument("--sft_mode", action="store_true", default=False,
-                   help="If set: mask abstract logits from CE, skip SoRL search")
     p.add_argument("--eval_K", type=int, default=None,
                    help="K for eval generation. None=NL-only, 4=periodic abstract")
 
-    # SoRL search params (only used when sft_mode is False)
+    # SoRL search params (only used when aux weights are nonzero)
     p.add_argument("--K", type=int, default=4, help="Abstract token insertion period")
     p.add_argument("--num_rollouts", type=int, default=4)
     p.add_argument("--max_iterations", type=int, default=2)
@@ -81,104 +80,124 @@ def parse_args():
     return p.parse_args()
 
 
-# ---------------------------------------------------------------------------
-# NL-only greedy generation (masks abstract logits to -inf)
-# ---------------------------------------------------------------------------
-@torch.no_grad()
-def generate_nl_only(model, input_ids, max_new_tokens, base_vocab_size):
-    """Greedy decode using only base vocab logits (abstract logits masked)."""
-    generated = input_ids.clone()
-    eos_id = getattr(model.model.config, "eos_token_id", None)
-    if isinstance(eos_id, (list, tuple)):
-        eos_id = eos_id[0] if eos_id else None
+# ---------------------------
+# Load SoRLWrapper Checkpoint
+# ---------------------------
 
-    for _ in range(max_new_tokens):
-        outputs = model.model(input_ids=generated, use_cache=False)
-        logits = outputs.logits[:, -1, :]  # (B, V_full)
-        # Mask abstract logits
-        logits[:, base_vocab_size:] = -float("inf")
-        next_id = logits.argmax(dim=-1, keepdim=True)  # greedy
-        generated = torch.cat([generated, next_id], dim=1)
-        if eos_id is not None and (next_id == eos_id).all():
-            break
-    return generated
+def load_checkpoint(model_name, abstract_vocab_size, ckpt_dir, device):
+    """Load SorlModelWrapper + checkpoint weights (model.safetensors + abs_embeddings.pt + LoRA)."""
+    print(f"Loading base model: {model_name}")
+    wrapper = SorlModelWrapper.from_pretrained(
+        model_name,
+        abstract_vocab_size_list=[abstract_vocab_size],
+    )
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
+    base_vocab = wrapper.vocab_sizes[0].item()
+
+    # 1. Load full model weights from model.safetensors (trained base params)
+    safetensors_path = os.path.join(ckpt_dir, "model.safetensors")
+    if os.path.exists(safetensors_path):
+        print(f"Loading full model weights from: {safetensors_path}")
+        state = safetensors.torch.load_file(safetensors_path, device="cpu")
+        missing, unexpected = wrapper.load_state_dict(state, strict=False)
+        print(f"  Loaded {len(state)} tensors (missing={len(missing)}, unexpected={len(unexpected)})")
+        if missing:
+            print(f"  Missing keys (first 5): {missing[:5]}")
+    else:
+        print(f"No model.safetensors found in {ckpt_dir}")
+
+    # 2. Load abstract embedding rows from abs_embeddings.pt
+    abs_path = os.path.join(ckpt_dir, "abs_embeddings.pt")
+    if os.path.exists(abs_path):
+        print(f"Loading abstract embeddings from: {abs_path}")
+        ckpt = torch.load(abs_path, map_location="cpu")
+        hf = wrapper.model
+        embed_w = hf.model.embed_tokens.weight if hasattr(hf, "model") else hf.transformer.wte.weight
+        lm_head_w = hf.lm_head.weight
+        embed_w.data[base_vocab:] = ckpt["embed_tokens"]
+        lm_head_w.data[base_vocab:] = ckpt["lm_head"]
+        print(f"  Restored abstract rows: embed={ckpt['embed_tokens'].shape}, lm_head={ckpt['lm_head'].shape}")
+        print(f"  Step: {ckpt.get('step', '?')}, Epoch: {ckpt.get('epoch', '?')}")
+
+    # 3. Load LoRA adapter if present
+    adapter_config = os.path.join(ckpt_dir, "adapter_config.json")
+    if os.path.exists(adapter_config):
+        print(f"Loading LoRA adapter from: {ckpt_dir}")
+        from peft import PeftModel
+        wrapper.model = PeftModel.from_pretrained(wrapper.model, ckpt_dir)
+
+    wrapper = wrapper.to(device).eval()
+    return wrapper, tokenizer, base_vocab
 
 
 # ---------------------------------------------------------------------------
-# NL-only accuracy evaluator
+# NL-only accuracy evaluator (batched via wrapper.generate)
 # ---------------------------------------------------------------------------
-@torch.no_grad()
-def compute_accuracy_fn_factory(tokenizer, max_new_tokens, num_log_samples, log_fn):
-    """Returns a compute_accuracy function that uses NL-only generation."""
+def compute_accuracy_fn_factory(tokenizer, max_new_tokens, num_log_samples, log_fn, eval_batch_size=8):
+    """Returns a compute_accuracy(model, tokenizer, dataset, device, num_samples) callable."""
+    pad_id = tokenizer.pad_token_id if tokenizer.pad_token_id is not None else 0
 
-    def compute_accuracy_fn(model, tokenizer_, dataset, device, num_samples):
+    @torch.no_grad()
+    def compute_accuracy_fn(model, _tokenizer, dataset, device, num_samples):
         model.eval()
-        base_vocab_size = model.vocab_sizes[0].item()
-        extract_fn = dataset.extract_answer if hasattr(dataset, "extract_answer") else None
+        base_vocab = model.vocab_sizes[0].item()
+        extract_fn = getattr(dataset, "extract_answer", None)
         if extract_fn is None:
             return {"accuracy": 0.0, "correct": 0, "total": 0}
 
-        correct, total = 0, 0
-        samples = []
+        n = min(num_samples, len(dataset))
+        correct, total, samples = 0, 0, []
 
-        for i in range(min(num_samples, len(dataset))):
-            sample = dataset[i]
-            input_ids = sample["input_ids"].unsqueeze(0).to(device)
-            prompt_len = sample["prompt_len"]
+        for bs_start in range(0, n, eval_batch_size):
+            bs_end = min(bs_start + eval_batch_size, n)
+            batch_indices = range(bs_start, bs_end)
 
-            # NL-only greedy generation (no abstract tokens, no block_mask)
-            generated = generate_nl_only(
-                model, input_ids[:, :prompt_len], max_new_tokens, base_vocab_size,
+            # Collect prompts
+            prompts, prompt_lens, ref_texts = [], [], []
+            for i in batch_indices:
+                sample = dataset[i]
+                pl = sample["prompt_len"]
+                prompts.append(sample["input_ids"][:pl])
+                prompt_lens.append(pl)
+                ref_ids = sample["input_ids"][sample["input_ids"] < base_vocab]
+                ref_texts.append(tokenizer.decode(ref_ids, skip_special_tokens=True))
+
+            # Left-pad and generate
+            input_ids, attn_mask = left_pad_and_mask(prompts, pad_id=pad_id)
+            input_ids, attn_mask = input_ids.to(device), attn_mask.to(device)
+            generated = model.generate(
+                input_ids=input_ids,
+                attention_mask=attn_mask,
+                max_new_tokens=max_new_tokens,
+                temperature=0.0, K=None, free_form=False,
             )
 
-            full_text = tokenizer.decode(generated[0], skip_special_tokens=True)
-
-            # Reference (only base vocab tokens)
-            ref_ids = input_ids[0][input_ids[0] < base_vocab_size]
-            ref_text = tokenizer.decode(ref_ids, skip_special_tokens=True)
-
-            pred_answer = extract_fn(full_text)
-            gold_answer = extract_fn(ref_text)
-
-            if gold_answer is not None:
-                total += 1
-                is_correct = (
-                    pred_answer is not None
-                    and pred_answer.strip() == gold_answer.strip()
-                )
-                if is_correct:
-                    correct += 1
-
-                if i < num_log_samples:
-                    question_text = tokenizer.decode(
-                        input_ids[0, :prompt_len], skip_special_tokens=True
-                    )
-                    samples.append({
-                        "idx": i,
-                        "question": question_text[:200],
-                        "response": full_text[len(question_text):].strip()[:300],
-                        "gold": gold_answer,
-                        "pred": pred_answer,
-                        "correct": is_correct,
-                    })
+            # Score each sample in the batch
+            max_pl = input_ids.size(1)
+            for j, i in enumerate(batch_indices):
+                pad_len = max_pl - prompt_lens[j]
+                full_text = tokenizer.decode(generated[j, pad_len:], skip_special_tokens=True)
+                pred = extract_fn(full_text)
+                gold = extract_fn(ref_texts[j])
+                if gold is not None:
+                    total += 1
+                    hit = pred is not None and pred.strip() == gold.strip()
+                    correct += hit
+                    if i < num_log_samples:
+                        q = tokenizer.decode(prompts[j], skip_special_tokens=True)
+                        samples.append({"idx": i, "question": q[:200],
+                                        "response": full_text[len(q):].strip()[:300],
+                                        "gold": gold, "pred": pred, "correct": hit})
 
         acc = correct / max(total, 1)
-        result = {"accuracy": acc, "correct": correct, "total": total}
-
         if log_fn:
-            log_fn(f"\n{'='*60}")
-            log_fn(f"  Accuracy: {correct}/{total} = {acc*100:.1f}%")
-            log_fn(f"{'='*60}")
+            log_fn(f"\n{'='*60}\n  Accuracy: {correct}/{total} = {acc*100:.1f}%\n{'='*60}")
             for s in samples:
-                log_fn(f"\n--- Sample {s['idx']} ---")
-                log_fn(f"  Q: {s['question']}")
-                log_fn(f"  Response: {s['response']}")
-                log_fn(f"  Gold: {s['gold']} | Pred: {s['pred']} | "
-                       f"{'CORRECT' if s['correct'] else 'WRONG'}")
+                log_fn(f"\n--- Sample {s['idx']} ---\n  Q: {s['question']}\n  Response: {s['response']}"
+                       f"\n  Gold: {s['gold']} | Pred: {s['pred']} | {'CORRECT' if s['correct'] else 'WRONG'}")
             log_fn(f"{'='*60}\n")
-
         model.train()
-        return result
+        return {"accuracy": acc, "correct": correct, "total": total}
 
     return compute_accuracy_fn
 
@@ -240,9 +259,7 @@ def main():
         save_every=args.save_every,
         eval_samples=args.eval_samples,
         output_dir=args.output_dir,
-        sft_mode=args.sft_mode,
         eval_K=args.eval_K,
-        # SoRL search (only used when sft_mode=False)
         K=args.K,
         num_rollouts=args.num_rollouts,
         max_iterations=args.max_iterations,
@@ -252,12 +269,12 @@ def main():
         alpha_abs=0.0,
         alpha_soft_zipf=0.0,
     )
-    mode_str = "sft_mode" if config.sft_mode else f"SoRL path (K={config.K}, aux weights=0)"
-    log(f"Config: {mode_str}, eval_K={config.eval_K}")
+    log(f"Config: eval_K={config.eval_K}, aux weights={'nonzero' if config.alpha_info_gain or config.alpha_abs or config.alpha_soft_zipf else '0 (SFT-equivalent)'}")
 
-    # ---- Accuracy evaluator (NL-only generation) ----
+    # ---- Accuracy evaluator (batched via wrapper.generate) ----
     accuracy_fn = compute_accuracy_fn_factory(
         tokenizer, args.max_new_tokens, args.num_log_samples, log,
+        eval_batch_size=args.eval_batch_size,
     )
 
     # ---- Trainer ----
@@ -270,7 +287,7 @@ def main():
         config=config,
         ddp=ddp,
     )
-    log(f"Trainer: SoRLTrainer ({mode_str})")
+    log(f"Trainer: SoRLTrainer (eval_batch_size={args.eval_batch_size})")
 
     # ---- Initial eval ----
     if is_master:
