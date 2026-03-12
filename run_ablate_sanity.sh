@@ -27,7 +27,7 @@ export NCCL_DEBUG=WARN
 MASTER_ADDR=127.0.0.1
 BASE_PORT=29501
 
-MODEL_NAME="Qwen/Qwen3-0.6B"
+MODEL_NAME="Qwen/Qwen3-1.7B"
 DATASET="gsm8k"
 MAX_LENGTH=512
 
@@ -91,47 +91,126 @@ run_experiment() {
   echo "  -> Done: ${tag}"
 }
 
-# ============================================================================
-# Exp 1: 1 GPU, BS=8, aux=0 (baseline)
-# ============================================================================
-run_experiment 0 "1gpu_bs8_aux0"
+# ---- Parallel scheduling across 4 GPUs ----
+# EXP_IDX must be incremented in the PARENT shell (not inside backgrounded
+# subshells) so that ports and output dirs stay unique.
+GPU_SLOTS=(0 1 2 3)
+SLOT=0
+
+run_bg() {
+  # Assign next GPU slot, pre-increment EXP_IDX in parent, launch in background
+  local gpu=${GPU_SLOTS[$SLOT]}
+  EXP_IDX=$((EXP_IDX + 1))
+  local idx=$EXP_IDX
+  local port=$((BASE_PORT + idx))
+  local tag=$1; shift
+  local n_gpus=1
+  local grad_accum=$((8 / (BATCH_SIZE * n_gpus)))
+  local output_dir="./ckpt/ablate_${TIMESTAMP}/exp${idx}_${tag}"
+
+  echo ""
+  echo "============================================================"
+  echo "Exp ${idx}: ${tag}  [GPU=${gpu}]  port=${port}"
+  echo "  Output: ${output_dir}"
+  echo "============================================================"
+
+  CUDA_VISIBLE_DEVICES=$gpu torchrun \
+    --nproc_per_node=1 \
+    --master_addr=$MASTER_ADDR \
+    --master_port=$port \
+    train_ablate_sanity.py \
+    --model_name $MODEL_NAME \
+    --dataset $DATASET \
+    --max_length $MAX_LENGTH \
+    --lr $LR \
+    --warmup_steps $WARMUP_STEPS \
+    --batch_size $BATCH_SIZE \
+    --gradient_accumulation_steps $grad_accum \
+    --num_epochs $NUM_EPOCHS \
+    --log_every $LOG_EVERY \
+    --eval_every $EVAL_EVERY \
+    --save_every $SAVE_EVERY \
+    --eval_samples $EVAL_SAMPLES \
+    --max_new_tokens $MAX_NEW_TOKENS \
+    --output_dir $output_dir \
+    "$@" &
+
+  SLOT=$(( (SLOT + 1) % ${#GPU_SLOTS[@]} ))
+}
+
+wait_batch() {
+  echo "  ... waiting for current batch to finish ..."
+  wait
+  SLOT=0
+}
 
 # ============================================================================
-# Exp 2: 2 GPU, BS=8, aux=0 (DDP validation)
+# Batch 1: baseline + first 3 info sweeps
 # ============================================================================
-run_experiment 0,1 "2gpu_bs8_aux0"
+run_bg "1gpu_bs8_aux0"
+run_bg "1gpu_bs8_info1.0" --alpha_info_gain 1.0
+run_bg "1gpu_bs8_info3.0" --alpha_info_gain 3.0
+run_bg "1gpu_bs8_info5.0" --alpha_info_gain 5.0
+wait_batch
 
 # ============================================================================
-# Exp 3: 1 GPU, BS=8, info_gain sweep (1.0 -> 3.0 -> 5.0 -> 7.0 -> 9.0)
+# Batch 2: remaining info sweeps + DDP validation (uses 2 GPUs)
 # ============================================================================
-for info in 1.0 3.0 5.0 7.0 9.0; do
-  run_experiment 0 "1gpu_bs8_info${info}" \
-    --alpha_info_gain $info
-done
+run_bg "1gpu_bs8_info7.0" --alpha_info_gain 7.0
+run_bg "1gpu_bs8_info9.0" --alpha_info_gain 9.0
+# DDP validation: 2 GPUs — runs on GPUs 2,3 (next 2 slots)
+EXP_IDX=$((EXP_IDX + 1))
+DDP_IDX=$EXP_IDX
+DDP_PORT=$((BASE_PORT + DDP_IDX))
+DDP_OUT="./ckpt/ablate_${TIMESTAMP}/exp${DDP_IDX}_2gpu_bs8_aux0"
+echo "Exp ${DDP_IDX}: 2gpu_bs8_aux0  [GPU=2,3]  port=${DDP_PORT}"
+CUDA_VISIBLE_DEVICES=2,3 torchrun \
+  --nproc_per_node=2 \
+  --master_addr=$MASTER_ADDR \
+  --master_port=$DDP_PORT \
+  train_ablate_sanity.py \
+  --model_name $MODEL_NAME \
+  --dataset $DATASET \
+  --max_length $MAX_LENGTH \
+  --lr $LR \
+  --warmup_steps $WARMUP_STEPS \
+  --batch_size $BATCH_SIZE \
+  --gradient_accumulation_steps $((8 / (BATCH_SIZE * 2))) \
+  --num_epochs $NUM_EPOCHS \
+  --log_every $LOG_EVERY \
+  --eval_every $EVAL_EVERY \
+  --save_every $SAVE_EVERY \
+  --eval_samples $EVAL_SAMPLES \
+  --max_new_tokens $MAX_NEW_TOKENS \
+  --output_dir $DDP_OUT &
+wait_batch
 
 # ============================================================================
-# Exp 4: 1 GPU, BS=8, info_gain sweep + abs=0.5
+# Batch 3: info + abs sweep
 # ============================================================================
-for info in 1.0 3.0 5.0 7.0 9.0; do
-  run_experiment 0 "1gpu_bs8_info${info}_abs0.5" \
-    --alpha_info_gain $info --alpha_abs 0.5
-done
+run_bg "1gpu_bs8_info1.0_abs0.5" --alpha_info_gain 1.0 --alpha_abs 0.5
+run_bg "1gpu_bs8_info3.0_abs0.5" --alpha_info_gain 3.0 --alpha_abs 0.5
+run_bg "1gpu_bs8_info5.0_abs0.5" --alpha_info_gain 5.0 --alpha_abs 0.5
+run_bg "1gpu_bs8_info7.0_abs0.5" --alpha_info_gain 7.0 --alpha_abs 0.5
+wait_batch
 
 # ============================================================================
-# Exp 5: 1 GPU, BS=8, info=9, abs sweep (0.5 -> 1.0 -> 1.5 -> 2.0)
+# Batch 4: last info+abs + abs sweep (info=9 fixed)
 # ============================================================================
-for abs_w in 0.5 1.0 1.5 2.0; do
-  run_experiment 0 "1gpu_bs8_info9_abs${abs_w}" \
-    --alpha_info_gain 9.0 --alpha_abs $abs_w
-done
+run_bg "1gpu_bs8_info9.0_abs0.5" --alpha_info_gain 9.0 --alpha_abs 0.5
+run_bg "1gpu_bs8_info9_abs1.0"   --alpha_info_gain 9.0 --alpha_abs 1.0
+run_bg "1gpu_bs8_info9_abs1.5"   --alpha_info_gain 9.0 --alpha_abs 1.5
+run_bg "1gpu_bs8_info9_abs2.0"   --alpha_info_gain 9.0 --alpha_abs 2.0
+wait_batch
 
 # ============================================================================
-# Exp 6: 1 GPU, BS=8, info=9, abs=0.5, zipf sweep (0.5 -> 1.0 -> 1.5 -> 2.0)
+# Batch 5: zipf sweep (info=9, abs=0.5 fixed)
 # ============================================================================
-for zipf in 0.5 1.0 1.5 2.0; do
-  run_experiment 0 "1gpu_bs8_info9_abs0.5_zipf${zipf}" \
-    --alpha_info_gain 9.0 --alpha_abs 0.5 --alpha_soft_zipf $zipf
-done
+run_bg "1gpu_bs8_info9_abs0.5_zipf0.5"  --alpha_info_gain 9.0 --alpha_abs 0.5 --alpha_soft_zipf 0.5
+run_bg "1gpu_bs8_info9_abs0.5_zipf1.0"  --alpha_info_gain 9.0 --alpha_abs 0.5 --alpha_soft_zipf 1.0
+run_bg "1gpu_bs8_info9_abs0.5_zipf1.5"  --alpha_info_gain 9.0 --alpha_abs 0.5 --alpha_soft_zipf 1.5
+run_bg "1gpu_bs8_info9_abs0.5_zipf2.0"  --alpha_info_gain 9.0 --alpha_abs 0.5 --alpha_soft_zipf 2.0
+wait_batch
 
 echo ""
 echo "============================================================"
