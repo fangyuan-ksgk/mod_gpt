@@ -71,6 +71,11 @@ def parse_args():
     p.add_argument("--eval_K", type=int, default=None,
                    help="K for eval generation. None=NL-only, 4=periodic abstract")
 
+    # SoRL loss weights
+    p.add_argument("--alpha_info_gain", type=float, default=0.0, help="Info-gain loss weight")
+    p.add_argument("--alpha_abs", type=float, default=0.0, help="Abstract loss weight")
+    p.add_argument("--alpha_soft_zipf", type=float, default=0.0, help="Zipf bigram loss weight")
+
     # SoRL search params (only used when aux weights are nonzero)
     p.add_argument("--K", type=int, default=4, help="Abstract token insertion period")
     p.add_argument("--num_rollouts", type=int, default=4)
@@ -131,28 +136,24 @@ def load_checkpoint(model_name, abstract_vocab_size, ckpt_dir, device):
 
 
 # ---------------------------------------------------------------------------
-# NL-only accuracy evaluator (batched via wrapper.generate)
+# Accuracy evaluator (batched via wrapper.generate)
+# Runs both K=None (NL-only) and K=eval_K (with abstract tokens) if eval_K is set.
 # ---------------------------------------------------------------------------
-def compute_accuracy_fn_factory(tokenizer, max_new_tokens, num_log_samples, log_fn, eval_batch_size=8):
+def compute_accuracy_fn_factory(tokenizer, max_new_tokens, num_log_samples, log_fn,
+                                eval_batch_size=8, eval_K=None):
     """Returns a compute_accuracy(model, tokenizer, dataset, device, num_samples) callable."""
     pad_id = tokenizer.pad_token_id if tokenizer.pad_token_id is not None else 0
 
-    @torch.no_grad()
-    def compute_accuracy_fn(model, _tokenizer, dataset, device, num_samples):
-        model.eval()
+    def _eval_with_K(model, dataset, device, n, K_value):
+        """Run batched generation with a given K and return (correct, total, samples)."""
         base_vocab = model.vocab_sizes[0].item()
         extract_fn = getattr(dataset, "extract_answer", None)
-        if extract_fn is None:
-            return {"accuracy": 0.0, "correct": 0, "total": 0}
-
-        n = min(num_samples, len(dataset))
         correct, total, samples = 0, 0, []
 
         for bs_start in range(0, n, eval_batch_size):
             bs_end = min(bs_start + eval_batch_size, n)
             batch_indices = range(bs_start, bs_end)
 
-            # Collect prompts
             prompts, prompt_lens, ref_texts = [], [], []
             for i in batch_indices:
                 sample = dataset[i]
@@ -162,21 +163,23 @@ def compute_accuracy_fn_factory(tokenizer, max_new_tokens, num_log_samples, log_
                 ref_ids = sample["input_ids"][sample["input_ids"] < base_vocab]
                 ref_texts.append(tokenizer.decode(ref_ids, skip_special_tokens=True))
 
-            # Left-pad and generate
             input_ids, attn_mask = left_pad_and_mask(prompts, pad_id=pad_id)
             input_ids, attn_mask = input_ids.to(device), attn_mask.to(device)
             generated = model.generate(
                 input_ids=input_ids,
                 attention_mask=attn_mask,
                 max_new_tokens=max_new_tokens,
-                temperature=0.0, K=None, free_form=False,
+                temperature=0.0, K=K_value, free_form=False,
             )
 
-            # Score each sample in the batch
             max_pl = input_ids.size(1)
             for j, i in enumerate(batch_indices):
                 pad_len = max_pl - prompt_lens[j]
-                full_text = tokenizer.decode(generated[j, pad_len:], skip_special_tokens=True)
+                gen_ids = generated[j, pad_len:]
+                # For K!=None, strip abstract tokens before decoding
+                if K_value is not None:
+                    gen_ids = gen_ids[gen_ids < base_vocab]
+                full_text = tokenizer.decode(gen_ids, skip_special_tokens=True)
                 pred = extract_fn(full_text)
                 gold = extract_fn(ref_texts[j])
                 if gold is not None:
@@ -189,15 +192,43 @@ def compute_accuracy_fn_factory(tokenizer, max_new_tokens, num_log_samples, log_
                                         "response": full_text[len(q):].strip()[:300],
                                         "gold": gold, "pred": pred, "correct": hit})
 
-        acc = correct / max(total, 1)
+        return correct, total, samples
+
+    @torch.no_grad()
+    def compute_accuracy_fn(model, _tokenizer, dataset, device, num_samples):
+        model.eval()
+        extract_fn = getattr(dataset, "extract_answer", None)
+        if extract_fn is None:
+            return {"accuracy": 0.0, "correct": 0, "total": 0}
+
+        n = min(num_samples, len(dataset))
+        result = {}
+
+        # NL-only (K=None)
+        c, t, samps = _eval_with_K(model, dataset, device, n, K_value=None)
+        acc = c / max(t, 1)
+        result.update({"accuracy": acc, "correct": c, "total": t})
         if log_fn:
-            log_fn(f"\n{'='*60}\n  Accuracy: {correct}/{total} = {acc*100:.1f}%\n{'='*60}")
-            for s in samples:
+            log_fn(f"\n{'='*60}\n  [K=None] Accuracy: {c}/{t} = {acc*100:.1f}%\n{'='*60}")
+            for s in samps:
                 log_fn(f"\n--- Sample {s['idx']} ---\n  Q: {s['question']}\n  Response: {s['response']}"
                        f"\n  Gold: {s['gold']} | Pred: {s['pred']} | {'CORRECT' if s['correct'] else 'WRONG'}")
+
+        # With abstract tokens (K=eval_K)
+        if eval_K is not None:
+            c_k, t_k, samps_k = _eval_with_K(model, dataset, device, n, K_value=eval_K)
+            acc_k = c_k / max(t_k, 1)
+            result.update({"accuracy_K": acc_k, "correct_K": c_k, "total_K": t_k})
+            if log_fn:
+                log_fn(f"\n  [K={eval_K}] Accuracy: {c_k}/{t_k} = {acc_k*100:.1f}%\n{'='*60}")
+                for s in samps_k:
+                    log_fn(f"\n--- Sample {s['idx']} ---\n  Q: {s['question']}\n  Response: {s['response']}"
+                           f"\n  Gold: {s['gold']} | Pred: {s['pred']} | {'CORRECT' if s['correct'] else 'WRONG'}")
+
+        if log_fn:
             log_fn(f"{'='*60}\n")
         model.train()
-        return {"accuracy": acc, "correct": correct, "total": total}
+        return result
 
     return compute_accuracy_fn
 
@@ -264,17 +295,16 @@ def main():
         num_rollouts=args.num_rollouts,
         max_iterations=args.max_iterations,
         temperature=args.temperature,
-        # Zero all aux weights — pure base_traj_loss ablation
-        alpha_info_gain=0.0,
-        alpha_abs=0.0,
-        alpha_soft_zipf=0.0,
+        alpha_info_gain=args.alpha_info_gain,
+        alpha_abs=args.alpha_abs,
+        alpha_soft_zipf=args.alpha_soft_zipf,
     )
     log(f"Config: eval_K={config.eval_K}, aux weights={'nonzero' if config.alpha_info_gain or config.alpha_abs or config.alpha_soft_zipf else '0 (SFT-equivalent)'}")
 
     # ---- Accuracy evaluator (batched via wrapper.generate) ----
     accuracy_fn = compute_accuracy_fn_factory(
         tokenizer, args.max_new_tokens, args.num_log_samples, log,
-        eval_batch_size=args.eval_batch_size,
+        eval_batch_size=args.eval_batch_size, eval_K=args.eval_K,
     )
 
     # ---- Trainer ----
