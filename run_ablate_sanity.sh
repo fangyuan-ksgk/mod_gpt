@@ -86,55 +86,57 @@ run_bg() {
 }
 
 # ============================================================================
-# Batch 1: 18 single-GPU experiments (9 per GPU, ~13GB each → ~117GB/GPU)
+# Batch 1: 12 experiments (6 per GPU, ~20GB peak each → ~120GB/GPU)
 # ============================================================================
 echo ""
 echo "============================================================"
-echo "Batch 1: 18 experiments across 2 GPUs (${TIMESTAMP})"
-echo "  Model: ${MODEL_NAME} | ~13GB/run (train) | 120GB/GPU → 9/GPU"
+echo "Batch 1: 12 experiments across 2 GPUs (${TIMESTAMP})"
+echo "  Model: ${MODEL_NAME} | ~20GB peak/run | 120GB/GPU → 6/GPU"
 echo "============================================================"
 
-# 1. Baseline (no aux losses)
+# 1. Baseline
 run_bg "1gpu_bs8_aux0"
-
 # 2-6. Info gain sweep
 run_bg "1gpu_bs8_info1.0" --alpha_info_gain 1.0
 run_bg "1gpu_bs8_info3.0" --alpha_info_gain 3.0
 run_bg "1gpu_bs8_info5.0" --alpha_info_gain 5.0
 run_bg "1gpu_bs8_info7.0" --alpha_info_gain 7.0
 run_bg "1gpu_bs8_info9.0" --alpha_info_gain 9.0
-
-# 7-11. Info gain + abs=0.5 sweep
+# 7-12. Info gain + abs=0.5 (first 6)
 run_bg "1gpu_bs8_info1.0_abs0.5" --alpha_info_gain 1.0 --alpha_abs 0.5
 run_bg "1gpu_bs8_info3.0_abs0.5" --alpha_info_gain 3.0 --alpha_abs 0.5
 run_bg "1gpu_bs8_info5.0_abs0.5" --alpha_info_gain 5.0 --alpha_abs 0.5
 run_bg "1gpu_bs8_info7.0_abs0.5" --alpha_info_gain 7.0 --alpha_abs 0.5
 run_bg "1gpu_bs8_info9.0_abs0.5" --alpha_info_gain 9.0 --alpha_abs 0.5
+run_bg "1gpu_bs8_info9_abs0.5"   --alpha_info_gain 9.0 --alpha_abs 0.5
 
-# 12-15. Abs sweep (info=9 fixed)
-run_bg "1gpu_bs8_info9_abs0.5"  --alpha_info_gain 9.0 --alpha_abs 0.5
-run_bg "1gpu_bs8_info9_abs1.0"  --alpha_info_gain 9.0 --alpha_abs 1.0
-run_bg "1gpu_bs8_info9_abs1.5"  --alpha_info_gain 9.0 --alpha_abs 1.5
-run_bg "1gpu_bs8_info9_abs2.0"  --alpha_info_gain 9.0 --alpha_abs 2.0
-
-# 16-18. Zipf sweep (first 3)
-run_bg "1gpu_bs8_info9_abs0.5_zipf0.5" --alpha_info_gain 9.0 --alpha_abs 0.5 --alpha_soft_zipf 0.5
-run_bg "1gpu_bs8_info9_abs0.5_zipf1.0" --alpha_info_gain 9.0 --alpha_abs 0.5 --alpha_soft_zipf 1.0
-run_bg "1gpu_bs8_info9_abs0.5_zipf1.5" --alpha_info_gain 9.0 --alpha_abs 0.5 --alpha_soft_zipf 1.5
-
-echo "  18 experiments launched. Waiting..."
+echo "  12 experiments launched. Waiting..."
 wait
 
 # ============================================================================
-# Batch 2: last zipf + DDP validation
+# Batch 2: 7 experiments (4 on GPU 0, 3 on GPU 1)
 # ============================================================================
 echo ""
 echo "============================================================"
-echo "Batch 2: remaining zipf experiment + DDP validation"
+echo "Batch 2: 7 experiments (${TIMESTAMP})"
 echo "============================================================"
 
-# 19. Last zipf experiment (GPU 0)
+# 13-15. Abs sweep (info=9, remaining)
+run_bg "1gpu_bs8_info9_abs1.0"  --alpha_info_gain 9.0 --alpha_abs 1.0
+run_bg "1gpu_bs8_info9_abs1.5"  --alpha_info_gain 9.0 --alpha_abs 1.5
+run_bg "1gpu_bs8_info9_abs2.0"  --alpha_info_gain 9.0 --alpha_abs 2.0
+# 16-19. Zipf sweep
+run_bg "1gpu_bs8_info9_abs0.5_zipf0.5" --alpha_info_gain 9.0 --alpha_abs 0.5 --alpha_soft_zipf 0.5
+run_bg "1gpu_bs8_info9_abs0.5_zipf1.0" --alpha_info_gain 9.0 --alpha_abs 0.5 --alpha_soft_zipf 1.0
+run_bg "1gpu_bs8_info9_abs0.5_zipf1.5" --alpha_info_gain 9.0 --alpha_abs 0.5 --alpha_soft_zipf 1.5
 run_bg "1gpu_bs8_info9_abs0.5_zipf2.0" --alpha_info_gain 9.0 --alpha_abs 0.5 --alpha_soft_zipf 2.0
+
+echo "  7 experiments launched. Waiting..."
+wait
+
+# ============================================================================
+# Batch 3: DDP validation (uses both GPUs)
+# ============================================================================
 
 # 20. DDP validation (GPU 0,1)
 EXP_IDX=$((EXP_IDX + 1))
