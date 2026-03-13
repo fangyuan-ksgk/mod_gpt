@@ -89,7 +89,7 @@ run_bg() {
 echo ""
 echo "============================================================"
 echo "Batch 1/9: Baseline + info sweep (${TIMESTAMP})"
-echo "  Model: ${MODEL_NAME} | 4xH100 | 1 run/GPU"
+echo "  Model: ${MODEL_NAME} | 4xA100 | 1 run/GPU"
 echo "============================================================"
 
 run_bg "baseline_aux0"

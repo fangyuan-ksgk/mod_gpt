@@ -1,11 +1,10 @@
 #!/bin/bash
-# SoRL Ablation Experiments — Qwen3-0.6B on 4×A100
+# SoRL Ablation Experiments — Qwen3-0.6B on 4×H100
 #
 # Usage:
 #   bash run_ablate_qwen0.6.sh
 #
-# 48 single-GPU experiments (16 parallel, 4/GPU) + 1 DDP validation.
-# Now with dual eval: K=None (NL-only) + K=4 (with abstractions) for all aux runs.
+# 48 single-GPU experiments (1 run/GPU, 4 parallel) → 12 batches + 1 DDP validation.
 
 set -e
 
@@ -48,8 +47,7 @@ MAX_NEW_TOKENS=256
 TIMESTAMP=$(date +%Y%m%d_%H%M)
 EXP_IDX=0
 
-# ---- Parallel scheduling: 4 x A100 (80GB each, ~20GB peak/run → 4/GPU = 16 parallel) ----
-# Round-robin GPU assignment: exp1→GPU0, exp2→GPU1, ..., exp5→GPU0, ...
+# ---- Parallel scheduling: 4 x H100 — 1 run/GPU, 4 parallel per batch ----
 
 run_bg() {
   EXP_IDX=$((EXP_IDX + 1))
@@ -86,100 +84,200 @@ run_bg() {
 }
 
 # ============================================================================
-# Batch 1/3: Original experiments part 1 (16 runs, 4/GPU)
+# Batch 1/12: Baseline + info sweep (4 runs, 1/GPU)
 # ============================================================================
 echo ""
 echo "============================================================"
-echo "Batch 1/3: Original experiments part 1 (${TIMESTAMP})"
-echo "  Model: ${MODEL_NAME} | 4xA100 | 4 runs/GPU | 16 parallel"
+echo "Batch 1/12: Baseline + info sweep (${TIMESTAMP})"
+echo "  Model: ${MODEL_NAME} | 4xH100 | 1 run/GPU"
 echo "============================================================"
 
 run_bg "baseline_aux0"
 run_bg "info1.0"           --alpha_info_gain 1.0
 run_bg "info3.0"           --alpha_info_gain 3.0
 run_bg "info5.0"           --alpha_info_gain 5.0
+
+echo "  4 experiments launched. Waiting..."
+wait
+
+# ============================================================================
+# Batch 2/12: Info sweep tail (4 runs, 1/GPU)
+# ============================================================================
+echo ""
+echo "============================================================"
+echo "Batch 2/12: Info sweep tail + info+abs start (${TIMESTAMP})"
+echo "============================================================"
+
 run_bg "info7.0"           --alpha_info_gain 7.0
 run_bg "info9.0"           --alpha_info_gain 9.0
 run_bg "info1.0_abs0.5"   --alpha_info_gain 1.0 --alpha_abs 0.5
 run_bg "info3.0_abs0.5"   --alpha_info_gain 3.0 --alpha_abs 0.5
+
+echo "  4 experiments launched. Waiting..."
+wait
+
+# ============================================================================
+# Batch 3/12: Info+abs continued (4 runs, 1/GPU)
+# ============================================================================
+echo ""
+echo "============================================================"
+echo "Batch 3/12: Info+abs continued (${TIMESTAMP})"
+echo "============================================================"
+
 run_bg "info5.0_abs0.5"           --alpha_info_gain 5.0 --alpha_abs 0.5
 run_bg "info7.0_abs0.5"           --alpha_info_gain 7.0 --alpha_abs 0.5
 run_bg "info9.0_abs0.5"           --alpha_info_gain 9.0 --alpha_abs 0.5
 run_bg "info9.0_abs1.0"           --alpha_info_gain 9.0 --alpha_abs 1.0
+
+echo "  4 experiments launched. Waiting..."
+wait
+
+# ============================================================================
+# Batch 4/12: Abs sweep at info=9 + zipf start (4 runs, 1/GPU)
+# ============================================================================
+echo ""
+echo "============================================================"
+echo "Batch 4/12: Abs sweep at info=9 + zipf start (${TIMESTAMP})"
+echo "============================================================"
+
 run_bg "info9.0_abs1.5"           --alpha_info_gain 9.0 --alpha_abs 1.5
 run_bg "info9.0_abs2.0"           --alpha_info_gain 9.0 --alpha_abs 2.0
 run_bg "info9.0_abs0.5_zipf0.5"  --alpha_info_gain 9.0 --alpha_abs 0.5 --alpha_soft_zipf 0.5
 run_bg "info9.0_abs0.5_zipf1.0"  --alpha_info_gain 9.0 --alpha_abs 0.5 --alpha_soft_zipf 1.0
 
-echo "  16 experiments launched. Waiting..."
+echo "  4 experiments launched. Waiting..."
 wait
 
 # ============================================================================
-# Batch 2/3: Fine-grid + zipf tail (16 runs, 4/GPU)
+# Batch 5/12: Zipf at info=9 tail + fine-grid abs at info=1.0 (4 runs, 1/GPU)
 # ============================================================================
 echo ""
 echo "============================================================"
-echo "Batch 2/3: Zipf tail + fine-grid around winner (${TIMESTAMP})"
+echo "Batch 5/12: Zipf tail + fine-grid abs at info=1.0 (${TIMESTAMP})"
 echo "============================================================"
 
 run_bg "info9.0_abs0.5_zipf1.5"  --alpha_info_gain 9.0 --alpha_abs 0.5 --alpha_soft_zipf 1.5
 run_bg "info9.0_abs0.5_zipf2.0"  --alpha_info_gain 9.0 --alpha_abs 0.5 --alpha_soft_zipf 2.0
-# Fine-grid: abs sweep at info=1.0 (winner)
 run_bg "info1.0_abs0.1"   --alpha_info_gain 1.0 --alpha_abs 0.1
 run_bg "info1.0_abs0.3"   --alpha_info_gain 1.0 --alpha_abs 0.3
+
+echo "  4 experiments launched. Waiting..."
+wait
+
+# ============================================================================
+# Batch 6/12: Fine-grid abs + fine info (4 runs, 1/GPU)
+# ============================================================================
+echo ""
+echo "============================================================"
+echo "Batch 6/12: Fine-grid abs + fine info (${TIMESTAMP})"
+echo "============================================================"
+
 run_bg "info1.0_abs0.7"   --alpha_info_gain 1.0 --alpha_abs 0.7
 run_bg "info1.0_abs1.0"   --alpha_info_gain 1.0 --alpha_abs 1.0
-# Fine info sweep at abs=0.5
 run_bg "info0.5_abs0.5"   --alpha_info_gain 0.5 --alpha_abs 0.5
 run_bg "info1.5_abs0.5"   --alpha_info_gain 1.5 --alpha_abs 0.5
+
+echo "  4 experiments launched. Waiting..."
+wait
+
+# ============================================================================
+# Batch 7/12: Fine info + info=3.0 abs sweep (4 runs, 1/GPU)
+# ============================================================================
+echo ""
+echo "============================================================"
+echo "Batch 7/12: Fine info + info=3.0 abs sweep (${TIMESTAMP})"
+echo "============================================================"
+
 run_bg "info2.0_abs0.5"            --alpha_info_gain 2.0 --alpha_abs 0.5
 run_bg "info2.5_abs0.5"            --alpha_info_gain 2.5 --alpha_abs 0.5
 run_bg "info3.0_abs0.1"            --alpha_info_gain 3.0 --alpha_abs 0.1
 run_bg "info3.0_abs0.3"            --alpha_info_gain 3.0 --alpha_abs 0.3
+
+echo "  4 experiments launched. Waiting..."
+wait
+
+# ============================================================================
+# Batch 8/12: Info=3.0 abs tail + zipf at winner (4 runs, 1/GPU)
+# ============================================================================
+echo ""
+echo "============================================================"
+echo "Batch 8/12: Info=3.0 abs tail + zipf at winner (${TIMESTAMP})"
+echo "============================================================"
+
 run_bg "info3.0_abs0.7"            --alpha_info_gain 3.0 --alpha_abs 0.7
 run_bg "info3.0_abs1.0"            --alpha_info_gain 3.0 --alpha_abs 1.0
 run_bg "info1.0_abs0.5_zipf0.5"   --alpha_info_gain 1.0 --alpha_abs 0.5 --alpha_soft_zipf 0.5
 run_bg "info1.0_abs0.5_zipf1.0"   --alpha_info_gain 1.0 --alpha_abs 0.5 --alpha_soft_zipf 1.0
 
-echo "  16 experiments launched. Waiting..."
+echo "  4 experiments launched. Waiting..."
 wait
 
 # ============================================================================
-# Batch 3/3: Zipf at winner + K sweep + extra combos (16 runs, 4/GPU)
+# Batch 9/12: Zipf at winner + K sweep start (4 runs, 1/GPU)
 # ============================================================================
 echo ""
 echo "============================================================"
-echo "Batch 3/3: Zipf at winner + K sweep + extra combos (${TIMESTAMP})"
+echo "Batch 9/12: Zipf at winner + K sweep start (${TIMESTAMP})"
 echo "============================================================"
 
 run_bg "info1.0_abs0.5_zipf1.5"   --alpha_info_gain 1.0 --alpha_abs 0.5 --alpha_soft_zipf 1.5
 run_bg "info1.0_abs0.5_zipf2.0"   --alpha_info_gain 1.0 --alpha_abs 0.5 --alpha_soft_zipf 2.0
-# K sweep at winner: does training-time K affect abstraction quality / stuttering?
 run_bg "info1.0_abs0.5_K2"        --alpha_info_gain 1.0 --alpha_abs 0.5 --K 2
 run_bg "info1.0_abs0.5_K3"        --alpha_info_gain 1.0 --alpha_abs 0.5 --K 3
+
+echo "  4 experiments launched. Waiting..."
+wait
+
+# ============================================================================
+# Batch 10/12: K sweep continued + high-info K sweep (4 runs, 1/GPU)
+# ============================================================================
+echo ""
+echo "============================================================"
+echo "Batch 10/12: K sweep + high-info K sweep (${TIMESTAMP})"
+echo "============================================================"
+
 run_bg "info1.0_abs0.5_K6"        --alpha_info_gain 1.0 --alpha_abs 0.5 --K 6
 run_bg "info1.0_abs0.5_K8"        --alpha_info_gain 1.0 --alpha_abs 0.5 --K 8
-# K sweep at high-info (stuttering config): does K fix it?
 run_bg "info9.0_abs0.5_K2"        --alpha_info_gain 9.0 --alpha_abs 0.5 --K 2
 run_bg "info9.0_abs0.5_K8"        --alpha_info_gain 9.0 --alpha_abs 0.5 --K 8
-# Ultra-low aux: lightest possible touch
+
+echo "  4 experiments launched. Waiting..."
+wait
+
+# ============================================================================
+# Batch 11/12: Ultra-low aux + stronger zipf + cross combos (4 runs, 1/GPU)
+# ============================================================================
+echo ""
+echo "============================================================"
+echo "Batch 11/12: Ultra-low aux + stronger zipf + cross combos (${TIMESTAMP})"
+echo "============================================================"
+
 run_bg "info0.3_abs0.1"           --alpha_info_gain 0.3 --alpha_abs 0.1
 run_bg "info0.3_abs0.3"           --alpha_info_gain 0.3 --alpha_abs 0.3
-# Stronger zipf at winner
 run_bg "info1.0_abs0.5_zipf3.0"   --alpha_info_gain 1.0 --alpha_abs 0.5 --alpha_soft_zipf 3.0
-# Cross combos: fine-grid abs + zipf
 run_bg "info1.0_abs0.3_zipf0.5"   --alpha_info_gain 1.0 --alpha_abs 0.3 --alpha_soft_zipf 0.5
+
+echo "  4 experiments launched. Waiting..."
+wait
+
+# ============================================================================
+# Batch 12/12: Remaining cross combos (4 runs, 1/GPU)
+# ============================================================================
+echo ""
+echo "============================================================"
+echo "Batch 12/12: Remaining cross combos (${TIMESTAMP})"
+echo "============================================================"
+
 run_bg "info1.0_abs0.3_zipf1.0"   --alpha_info_gain 1.0 --alpha_abs 0.3 --alpha_soft_zipf 1.0
-# Zipf at second-best info
 run_bg "info3.0_abs0.5_zipf0.5"   --alpha_info_gain 3.0 --alpha_abs 0.5 --alpha_soft_zipf 0.5
 run_bg "info3.0_abs0.5_zipf1.0"   --alpha_info_gain 3.0 --alpha_abs 0.5 --alpha_soft_zipf 1.0
 run_bg "info0.5_abs0.3"           --alpha_info_gain 0.5 --alpha_abs 0.3
 
-echo "  16 experiments launched. Waiting..."
+echo "  4 experiments launched. Waiting..."
 wait
 
 # ============================================================================
-# Batch 4: DDP validation (uses all 4 GPUs)
+# Batch 13: DDP validation (uses all 4 GPUs)
 # ============================================================================
 EXP_IDX=$((EXP_IDX + 1))
 DDP_IDX=$EXP_IDX
