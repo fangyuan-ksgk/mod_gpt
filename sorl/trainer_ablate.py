@@ -303,11 +303,14 @@ class SoRLTrainer:
 
         ortho_loss = self.loss_fn.ortho_loss(best_ppt, best_ppt_adv)
 
+        ortho_loss = self.loss_fn.ortho_loss(best_ppt, best_ppt_adv)
+
         loss = (
             base_traj_loss
             + cfg.alpha_info_gain * info_gain_loss
             + cfg.alpha_abs * abs_loss
             + cfg.alpha_soft_zipf * zipf_bigram_loss
+            + cfg.alpha_ortho * ortho_loss
             + cfg.alpha_ortho * ortho_loss
         )
 
@@ -317,6 +320,7 @@ class SoRLTrainer:
             "info_gain_loss": info_gain_loss,
             "abs_loss": abs_loss,
             "zipf_bigram_loss": zipf_bigram_loss,
+            "ortho_loss": ortho_loss,
             "ortho_loss": ortho_loss,
         }
 

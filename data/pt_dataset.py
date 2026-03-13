@@ -8,6 +8,7 @@ Usage:
     result = evaluate_accuracy(model, tokenizer, train_ds, device, num_samples=50)
 """
 
+import json
 import re
 import torch
 from torch.utils.data import Dataset
@@ -582,6 +583,91 @@ class HumanEvalDataset(Dataset):
         return text.strip()
 
 
+class MBPPDataset(Dataset):
+    """MBPP (Mostly Basic Python Problems) — 974 coding tasks."""
+
+    def __init__(self, split="train", tokenizer=None, max_length=1024):
+        # MBPP has train/test/validation; use "test" for eval, "train" for training
+        hf_split = {"train": "train", "test": "test", "validation": "validation"}.get(split, split)
+        self.dataset = load_dataset("google-research-datasets/mbpp", "sanitized", split=hf_split)
+        self.tokenizer = tokenizer
+        self.max_length = max_length
+
+    def __len__(self):
+        return len(self.dataset)
+
+    def __getitem__(self, idx):
+        ex = self.dataset[idx]
+        prompt = f"# Task: {ex['prompt'].strip()}\n# Solution:\n"
+        solution = ex["code"].strip()
+        text = f"{prompt}{solution}"
+        prompt_len = len(self.tokenizer(prompt, add_special_tokens=False)["input_ids"])
+        enc = self.tokenizer(text, truncation=True, max_length=self.max_length,
+                             padding="max_length", return_tensors="pt")
+        prompt_len = min(prompt_len, self.max_length)
+        return {
+            "input_ids": enc["input_ids"].squeeze(0),
+            "attention_mask": enc["attention_mask"].squeeze(0),
+            "prompt_len": prompt_len,
+        }
+
+    @staticmethod
+    def extract_answer(text):
+        """Return generated code after the prompt."""
+        marker = "# Solution:\n"
+        idx = text.find(marker)
+        if idx != -1:
+            return text[idx + len(marker):].strip()
+        return text.strip()
+
+
+class APPSDataset(Dataset):
+    """APPS coding problems (introductory / interview / competition)."""
+
+    _DIFFICULTY_MAP = {"introductory": 0, "interview": 1, "competition": 2}
+
+    def __init__(self, split="train", tokenizer=None, max_length=1024):
+        hf_split = "test" if split == "test" else "train"
+        self.dataset = load_dataset("codeparrot/apps", split=hf_split)
+        self.tokenizer = tokenizer
+        self.max_length = max_length
+
+    def __len__(self):
+        return len(self.dataset)
+
+    def __getitem__(self, idx):
+        ex = self.dataset[idx]
+        question = ex["question"].strip()
+        # solutions is a JSON string containing a list of solution strings
+        solutions_raw = ex.get("solutions", "[]")
+        try:
+            solutions = json.loads(solutions_raw) if isinstance(solutions_raw, str) else solutions_raw
+        except (json.JSONDecodeError, TypeError):
+            solutions = []
+        solution = solutions[0].strip() if solutions else ""
+
+        prompt = f"# Problem:\n{question}\n\n# Solution:\n"
+        text = f"{prompt}{solution}" if solution else prompt
+        prompt_len = len(self.tokenizer(prompt, add_special_tokens=False)["input_ids"])
+        enc = self.tokenizer(text, truncation=True, max_length=self.max_length,
+                             padding="max_length", return_tensors="pt")
+        prompt_len = min(prompt_len, self.max_length)
+        return {
+            "input_ids": enc["input_ids"].squeeze(0),
+            "attention_mask": enc["attention_mask"].squeeze(0),
+            "prompt_len": prompt_len,
+        }
+
+    @staticmethod
+    def extract_answer(text):
+        """Return generated code after the prompt."""
+        marker = "# Solution:\n"
+        idx = text.find(marker)
+        if idx != -1:
+            return text[idx + len(marker):].strip()
+        return text.strip()
+
+
 # =====================================================================
 # Registry
 # =====================================================================
@@ -603,6 +689,8 @@ DATASET_REGISTRY = {
     "scienceqa": ScienceQADataset,
     # Code generation
     "humaneval": HumanEvalDataset,
+    "mbpp": MBPPDataset,
+    "apps": APPSDataset,
 }
 
 
