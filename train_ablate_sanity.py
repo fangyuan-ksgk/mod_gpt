@@ -20,6 +20,7 @@ import argparse
 
 import torch
 import torch.nn.functional as F
+from safetensors.torch import load_file as load_safetensors
 from transformers import AutoTokenizer
 
 from sorl.sorl_wrapper import SorlModelWrapper, left_pad_and_mask
@@ -103,7 +104,7 @@ def load_checkpoint(model_name, abstract_vocab_size, ckpt_dir, device):
     safetensors_path = os.path.join(ckpt_dir, "model.safetensors")
     if os.path.exists(safetensors_path):
         print(f"Loading full model weights from: {safetensors_path}")
-        state = safetensors.torch.load_file(safetensors_path, device="cpu")
+        state = load_safetensors(safetensors_path, device="cpu")
         missing, unexpected = wrapper.load_state_dict(state, strict=False)
         print(f"  Loaded {len(state)} tensors (missing={len(missing)}, unexpected={len(unexpected)})")
         if missing:
