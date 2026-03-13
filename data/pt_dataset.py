@@ -704,14 +704,13 @@ class MBPPDataset(Dataset):
         return text.strip()
 
 
-class APPSDataset(Dataset):
-    """APPS coding problems (introductory / interview / competition)."""
-
-    _DIFFICULTY_MAP = {"introductory": 0, "interview": 1, "competition": 2}
+class LiveCodeBenchDataset(Dataset):
+    """LiveCodeBench coding problems (LeetCode / Codeforces / AtCoder)."""
 
     def __init__(self, split="train", tokenizer=None, max_length=1024):
-        hf_split = "test" if split == "test" else "train"
-        self.dataset = load_dataset("codeparrot/apps", split=hf_split, trust_remote_code=True)
+        # bzantium/livecodebench is a parquet-compatible clone of
+        # livecodebench/code_generation_lite (works with datasets>=4.0)
+        self.dataset = load_dataset("bzantium/livecodebench", split="train")
         self.tokenizer = tokenizer
         self.max_length = max_length
 
@@ -720,17 +719,16 @@ class APPSDataset(Dataset):
 
     def __getitem__(self, idx):
         ex = self.dataset[idx]
-        question = ex["question"].strip()
-        # solutions is a JSON string containing a list of solution strings
-        solutions_raw = ex.get("solutions", "[]")
-        try:
-            solutions = json.loads(solutions_raw) if isinstance(solutions_raw, str) else solutions_raw
-        except (json.JSONDecodeError, TypeError):
-            solutions = []
-        solution = solutions[0].strip() if solutions else ""
+        question = ex.get("question_content", ex.get("question", "")).strip()
+        starter = ex.get("starter_code", "").strip()
 
-        prompt = f"# Problem:\n{question}\n\n# Solution:\n"
-        text = f"{prompt}{solution}" if solution else prompt
+        if starter:
+            prompt = f"# Problem:\n{question}\n\n{starter}\n# Solution:\n"
+        else:
+            prompt = f"# Problem:\n{question}\n\n# Solution:\n"
+
+        # Use empty solution for eval — no reference solutions in this dataset
+        text = prompt
         prompt_len = len(self.tokenizer(prompt, add_special_tokens=False)["input_ids"])
         enc = self.tokenizer(text, truncation=True, max_length=self.max_length,
                              padding="max_length", return_tensors="pt")
@@ -742,26 +740,28 @@ class APPSDataset(Dataset):
         }
 
     def get_test_cases(self, idx):
-        """Return list of {preamble, check} dicts for this problem.
+        """Return list of {preamble, check} dicts from public_test_cases.
 
-        APPS stores tests as JSON in 'input_output' with 'inputs'/'outputs' lists.
-        Preamble patches stdin before the generated code runs;
-        check captures stdout after and asserts correctness.
+        LiveCodeBench stores tests as JSON list of {input, output} dicts.
+        Uses stdin/stdout patching like competitive programming problems.
         """
         ex = self.dataset[idx]
-        io_raw = ex.get("input_output", "")
-        if not io_raw:
+        # Try public_test_cases first, fall back to other field names
+        tc_raw = ex.get("public_test_cases", ex.get("test_cases", ""))
+        if not tc_raw:
             return []
         try:
-            io_data = json.loads(io_raw) if isinstance(io_raw, str) else io_raw
+            tc_list = json.loads(tc_raw) if isinstance(tc_raw, str) else tc_raw
         except (json.JSONDecodeError, TypeError):
             return []
-        inputs = io_data.get("inputs", [])
-        outputs = io_data.get("outputs", [])
+        if not isinstance(tc_list, list):
+            return []
         tests = []
-        for inp, out in zip(inputs, outputs):
-            inp_repr = repr(inp.strip() if isinstance(inp, str) else inp)
-            out_repr = repr(out.strip() if isinstance(out, str) else out)
+        for tc in tc_list:
+            inp = tc.get("input", "")
+            out = tc.get("output", tc.get("expected_output", ""))
+            inp_repr = repr(inp.strip() if isinstance(inp, str) else str(inp))
+            out_repr = repr(out.strip() if isinstance(out, str) else str(out))
             preamble = (
                 "import sys, io as _io\n"
                 f"sys.stdin = _io.StringIO({inp_repr})\n"
@@ -809,7 +809,7 @@ DATASET_REGISTRY = {
     # Code generation
     "humaneval": HumanEvalDataset,
     "mbpp": MBPPDataset,
-    "apps": APPSDataset,
+    "livecodebench": LiveCodeBenchDataset,
 }
 
 
