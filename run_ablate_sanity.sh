@@ -135,7 +135,66 @@ echo "  7 experiments launched. Waiting..."
 wait
 
 # ============================================================================
-# Batch 3: DDP validation (uses both GPUs)
+# Batch 3: Fine-grid around winner (info=1.0, abs=0.5)
+#   - Abs sweep at info=1.0 (fill gaps: 0.1, 0.3, 0.7, 1.0)
+#   - Fine info sweep at abs=0.5 (fill gaps: 0.5, 1.5, 2.0, 2.5)
+# ============================================================================
+echo ""
+echo "============================================================"
+echo "Batch 3: Fine-grid around winner (${TIMESTAMP})"
+echo "============================================================"
+
+# info=1.0, abs sweep
+run_bg "1gpu_bs8_info1.0_abs0.1" --alpha_info_gain 1.0 --alpha_abs 0.1
+run_bg "1gpu_bs8_info1.0_abs0.3" --alpha_info_gain 1.0 --alpha_abs 0.3
+run_bg "1gpu_bs8_info1.0_abs0.7" --alpha_info_gain 1.0 --alpha_abs 0.7
+run_bg "1gpu_bs8_info1.0_abs1.0" --alpha_info_gain 1.0 --alpha_abs 1.0
+# abs=0.5, fine info sweep
+run_bg "1gpu_bs8_info0.5_abs0.5" --alpha_info_gain 0.5 --alpha_abs 0.5
+run_bg "1gpu_bs8_info1.5_abs0.5" --alpha_info_gain 1.5 --alpha_abs 0.5
+
+echo "  6 experiments launched. Waiting..."
+wait
+
+# ============================================================================
+# Batch 4: More fine info + info=3.0 abs sweep
+#   - Fine info at abs=0.5 (2.0, 2.5)
+#   - Abs sweep at info=3.0 (second-best info value)
+# ============================================================================
+echo ""
+echo "============================================================"
+echo "Batch 4: info=3.0 abs sweep + fine info (${TIMESTAMP})"
+echo "============================================================"
+
+run_bg "1gpu_bs8_info2.0_abs0.5" --alpha_info_gain 2.0 --alpha_abs 0.5
+run_bg "1gpu_bs8_info2.5_abs0.5" --alpha_info_gain 2.5 --alpha_abs 0.5
+# info=3.0, abs sweep
+run_bg "1gpu_bs8_info3.0_abs0.1" --alpha_info_gain 3.0 --alpha_abs 0.1
+run_bg "1gpu_bs8_info3.0_abs0.3" --alpha_info_gain 3.0 --alpha_abs 0.3
+run_bg "1gpu_bs8_info3.0_abs0.7" --alpha_info_gain 3.0 --alpha_abs 0.7
+run_bg "1gpu_bs8_info3.0_abs1.0" --alpha_info_gain 3.0 --alpha_abs 1.0
+
+echo "  6 experiments launched. Waiting..."
+wait
+
+# ============================================================================
+# Batch 5: Zipf at winning config (info=1.0, abs=0.5)
+# ============================================================================
+echo ""
+echo "============================================================"
+echo "Batch 5: Zipf sweep at winner config (${TIMESTAMP})"
+echo "============================================================"
+
+run_bg "1gpu_bs8_info1.0_abs0.5_zipf0.5" --alpha_info_gain 1.0 --alpha_abs 0.5 --alpha_soft_zipf 0.5
+run_bg "1gpu_bs8_info1.0_abs0.5_zipf1.0" --alpha_info_gain 1.0 --alpha_abs 0.5 --alpha_soft_zipf 1.0
+run_bg "1gpu_bs8_info1.0_abs0.5_zipf1.5" --alpha_info_gain 1.0 --alpha_abs 0.5 --alpha_soft_zipf 1.5
+run_bg "1gpu_bs8_info1.0_abs0.5_zipf2.0" --alpha_info_gain 1.0 --alpha_abs 0.5 --alpha_soft_zipf 2.0
+
+echo "  4 experiments launched. Waiting..."
+wait
+
+# ============================================================================
+# Batch 6: DDP validation (uses both GPUs)
 # ============================================================================
 
 # 20. DDP validation (GPU 0,1)
