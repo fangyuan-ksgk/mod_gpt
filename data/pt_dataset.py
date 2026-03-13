@@ -1051,8 +1051,9 @@ def evaluate_accuracy(model, tokenizer, dataset, device, num_samples=100, max_ne
     extract_fn = dataset.extract_answer
     base_vocab_size = model.vocab_sizes[0].item()
 
-    # Check if this is a code generation dataset
-    is_code_dataset = hasattr(dataset, '__class__') and dataset.__class__.__name__ == 'HumanEvalDataset'
+    # Detect code datasets that support execution-based eval
+    has_exec_tests = hasattr(dataset, 'get_test_cases')
+    is_humaneval = isinstance(dataset, HumanEvalDataset)
 
     for i in range(attempted):
         item = dataset[i]
@@ -1068,14 +1069,32 @@ def evaluate_accuracy(model, tokenizer, dataset, device, num_samples=100, max_ne
         traj_tokens = _filter_traj_tokens(generated, base_vocab_size)
         full_text = tokenizer.decode(traj_tokens[0], skip_special_tokens=True)
 
-        ref_ids = input_ids[0][input_ids[0] < base_vocab_size]
-        ref_text = tokenizer.decode(ref_ids, skip_special_tokens=True)
-
         pred_answer = extract_fn(full_text)
-        gold_answer = extract_fn(ref_text)
 
         if pred_answer is not None:
             parsed_count += 1
+
+        # Execution-based eval for code datasets
+        if has_exec_tests:
+            test_cases = dataset.get_test_cases(i)
+            if test_cases:
+                # HumanEval: generated code is the function body; prepend prompt
+                if is_humaneval:
+                    prompt_ids = input_ids[0, :prompt_len]
+                    prompt_ids = prompt_ids[prompt_ids < base_vocab_size]
+                    prompt_text = tokenizer.decode(prompt_ids, skip_special_tokens=True)
+                    exec_code = prompt_text + (pred_answer or "")
+                else:
+                    exec_code = pred_answer or ""
+                result = check_code_correctness(exec_code, test_cases, timeout=10)
+                if result["passed"]:
+                    correct += 1
+                continue
+
+        # String-matching fallback for non-code datasets
+        ref_ids = input_ids[0][input_ids[0] < base_vocab_size]
+        ref_text = tokenizer.decode(ref_ids, skip_special_tokens=True)
+        gold_answer = extract_fn(ref_text)
 
         if (
             pred_answer is not None
