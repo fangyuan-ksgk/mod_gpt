@@ -351,6 +351,7 @@ def main():
         alpha_info_gain=args.alpha_info_gain,
         alpha_abs=args.alpha_abs,
         alpha_soft_zipf=args.alpha_soft_zipf,
+        # zipf_alpha=args.zipf_alpha,
     )
     log(f"Config: eval_K={config.eval_K}, aux weights={'nonzero' if config.alpha_info_gain or config.alpha_abs or config.alpha_soft_zipf else '0 (SFT-equivalent)'}")
 
