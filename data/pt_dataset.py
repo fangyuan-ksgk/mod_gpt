@@ -711,7 +711,7 @@ class APPSDataset(Dataset):
 
     def __init__(self, split="train", tokenizer=None, max_length=1024):
         hf_split = "test" if split == "test" else "train"
-        self.dataset = load_dataset("codeparrot/apps", split=hf_split)
+        self.dataset = load_dataset("codeparrot/apps", split=hf_split, trust_remote_code=True)
         self.tokenizer = tokenizer
         self.max_length = max_length
 
