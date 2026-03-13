@@ -76,6 +76,8 @@ def parse_args():
     p.add_argument("--alpha_info_gain", type=float, default=0.0, help="Info-gain loss weight")
     p.add_argument("--alpha_abs", type=float, default=0.0, help="Abstract loss weight")
     p.add_argument("--alpha_soft_zipf", type=float, default=0.0, help="Zipf bigram loss weight")
+    p.add_argument("--alpha_ortho", type=float, default=0.0, help="Ortho loss weight")
+    p.add_argument("--zipf_alpha", type=float, default=1.0, help="Zipf alpha param for loss fn")
 
     # SoRL search params (only used when aux weights are nonzero)
     p.add_argument("--K", type=int, default=4, help="Abstract token insertion period")
@@ -351,16 +353,17 @@ def main():
         alpha_info_gain=args.alpha_info_gain,
         alpha_abs=args.alpha_abs,
         alpha_soft_zipf=args.alpha_soft_zipf,
-        # zipf_alpha=args.zipf_alpha,
+        alpha_ortho=args.alpha_ortho,
+        zipf_alpha=args.zipf_alpha,
     )
-    log(f"Config: eval_K={config.eval_K}, aux weights={'nonzero' if config.alpha_info_gain or config.alpha_abs or config.alpha_soft_zipf else '0 (SFT-equivalent)'}")
+    log(f"Config: eval_K={config.eval_K}, aux weights={'nonzero' if config.alpha_info_gain or config.alpha_abs or config.alpha_soft_zipf or config.alpha_ortho else '0 (SFT-equivalent)'}")
 
     # ---- Accuracy evaluator (batched via wrapper.generate) ----
     accuracy_fn = compute_accuracy_fn_factory(
         tokenizer, args.max_new_tokens, args.num_log_samples, log,
         eval_batch_size=args.eval_batch_size,
     )
-    has_aux = (config.alpha_info_gain != 0 or config.alpha_abs != 0 or config.alpha_soft_zipf != 0)
+    has_aux = (config.alpha_info_gain != 0 or config.alpha_abs != 0 or config.alpha_soft_zipf != 0 or config.alpha_ortho != 0)
 
     # ---- Trainer ----
     trainer = SoRLTrainer(

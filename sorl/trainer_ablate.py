@@ -68,7 +68,7 @@ class SoRLConfig:
     alpha_info_gain: float = 10.0
     alpha_abs: float = 0.1
     alpha_soft_zipf: float = 1.0
-    ortho_reg: float = 0.0
+    alpha_ortho: float = 0.0
 
     # Loss function
     decay: float = 0.8
@@ -301,11 +301,14 @@ class SoRLTrainer:
             prompt_len=expanded_prompt_len,
         )
 
+        ortho_loss = self.loss_fn.ortho_loss(best_ppt, best_ppt_adv)
+
         loss = (
             base_traj_loss
             + cfg.alpha_info_gain * info_gain_loss
             + cfg.alpha_abs * abs_loss
             + cfg.alpha_soft_zipf * zipf_bigram_loss
+            + cfg.alpha_ortho * ortho_loss
         )
 
         return {
@@ -314,6 +317,7 @@ class SoRLTrainer:
             "info_gain_loss": info_gain_loss,
             "abs_loss": abs_loss,
             "zipf_bigram_loss": zipf_bigram_loss,
+            "ortho_loss": ortho_loss,
         }
 
     # ------------------------------------------------------------------
