@@ -1036,72 +1036,98 @@ def _filter_traj_tokens(generated_ids, base_vocab_size):
 
 
 @torch.no_grad()
-def evaluate_accuracy(model, tokenizer, dataset, device, num_samples=100, max_new_tokens=256):
+def evaluate_accuracy(model, tokenizer, dataset, device, num_samples=100,
+                      max_new_tokens=256, eval_batch_size=8):
     """
-    Generate answers and compute accuracy.
-    For code datasets (humaneval), returns syntax validity rate.
-    For other datasets, uses exact string matching of extracted answers.
-    Uses SorlModelWrapper.generate (not the base HF model).
-    Filters out abstract tokens before decoding.
+    Batched generation + accuracy evaluation.
+    For code datasets: execution-based pass/fail via check_code_correctness.
+    For other datasets: exact string matching of extracted answers.
+    Uses SorlModelWrapper.generate. Filters out abstract tokens before decoding.
     """
+    from sorl.sorl_wrapper import left_pad_and_mask
+    from concurrent.futures import ThreadPoolExecutor
+
     model.eval()
-    correct = 0
-    parsed_count = 0
     attempted = min(num_samples, len(dataset))
     extract_fn = dataset.extract_answer
     base_vocab_size = model.vocab_sizes[0].item()
 
-    # Detect code datasets that support execution-based eval
     has_exec_tests = hasattr(dataset, 'get_test_cases')
     is_humaneval = isinstance(dataset, HumanEvalDataset)
 
+    # ---- Phase 1: Collect all prompts ----
+    items = []
     for i in range(attempted):
         item = dataset[i]
-        input_ids = item["input_ids"].unsqueeze(0).to(device)
-        prompt_len = item["prompt_len"]
+        items.append({
+            "idx": i,
+            "input_ids": item["input_ids"].to(device),
+            "prompt_len": item["prompt_len"],
+        })
+
+    # ---- Phase 2: Batched generation ----
+    all_pred_answers = [None] * attempted
+    all_prompt_texts = [None] * attempted
+
+    for b_start in range(0, attempted, eval_batch_size):
+        b_end = min(b_start + eval_batch_size, attempted)
+        batch_items = items[b_start:b_end]
+
+        # Left-pad prompt-only sequences for batched generation
+        prompt_seqs = [it["input_ids"][:it["prompt_len"]] for it in batch_items]
+        input_ids_padded, attn_mask = left_pad_and_mask(prompt_seqs, pad_id=tokenizer.pad_token_id or 0)
 
         generated = model.generate(
-            input_ids=input_ids[:, :prompt_len],
+            input_ids=input_ids_padded,
+            attention_mask=attn_mask,
             max_new_tokens=max_new_tokens,
             temperature=0.0,
         )
 
-        traj_tokens = _filter_traj_tokens(generated, base_vocab_size)
-        full_text = tokenizer.decode(traj_tokens[0], skip_special_tokens=True)
+        for j, it in enumerate(batch_items):
+            traj_tokens = _filter_traj_tokens(generated[j:j+1], base_vocab_size)
+            full_text = tokenizer.decode(traj_tokens[0], skip_special_tokens=True)
+            pred_answer = extract_fn(full_text)
+            all_pred_answers[b_start + j] = pred_answer
+            # Decode prompt text (needed for HumanEval)
+            prompt_ids = it["input_ids"][:it["prompt_len"]]
+            prompt_ids_filtered = prompt_ids[prompt_ids < base_vocab_size]
+            all_prompt_texts[b_start + j] = tokenizer.decode(prompt_ids_filtered, skip_special_tokens=True)
 
-        pred_answer = extract_fn(full_text)
+    # ---- Phase 3: Evaluate ----
+    correct = 0
+    parsed_count = sum(1 for p in all_pred_answers if p is not None)
 
-        if pred_answer is not None:
-            parsed_count += 1
-
-        # Execution-based eval for code datasets
-        if has_exec_tests:
+    if has_exec_tests:
+        # Parallel sandbox execution for code datasets
+        def _check_one(args):
+            i, pred, prompt_text = args
             test_cases = dataset.get_test_cases(i)
-            if test_cases:
-                # HumanEval: generated code is the function body; prepend prompt
-                if is_humaneval:
-                    prompt_ids = input_ids[0, :prompt_len]
-                    prompt_ids = prompt_ids[prompt_ids < base_vocab_size]
-                    prompt_text = tokenizer.decode(prompt_ids, skip_special_tokens=True)
-                    exec_code = prompt_text + (pred_answer or "")
-                else:
-                    exec_code = pred_answer or ""
-                result = check_code_correctness(exec_code, test_cases, timeout=10)
-                if result["passed"]:
-                    correct += 1
-                continue
+            if not test_cases:
+                return False
+            if is_humaneval:
+                exec_code = prompt_text + (pred or "")
+            else:
+                exec_code = pred or ""
+            result = check_code_correctness(exec_code, test_cases, timeout=10)
+            return result["passed"]
 
-        # String-matching fallback for non-code datasets
-        ref_ids = input_ids[0][input_ids[0] < base_vocab_size]
-        ref_text = tokenizer.decode(ref_ids, skip_special_tokens=True)
-        gold_answer = extract_fn(ref_text)
-
-        if (
-            pred_answer is not None
-            and gold_answer is not None
-            and pred_answer.strip() == gold_answer.strip()
-        ):
-            correct += 1
+        eval_args = [(items[i]["idx"], all_pred_answers[i], all_prompt_texts[i])
+                     for i in range(attempted)]
+        with ThreadPoolExecutor(max_workers=min(8, attempted)) as pool:
+            results = list(pool.map(lambda a: _check_one(a), eval_args))
+        correct = sum(results)
+    else:
+        # String-matching for non-code datasets
+        for i in range(attempted):
+            it = items[i]
+            ref_ids = it["input_ids"][it["input_ids"] < base_vocab_size]
+            ref_text = tokenizer.decode(ref_ids, skip_special_tokens=True)
+            gold_answer = extract_fn(ref_text)
+            pred = all_pred_answers[i]
+            if (pred is not None and gold_answer is not None
+                    and pred.strip() == gold_answer.strip()):
+                correct += 1
 
     strict_accuracy = correct / max(attempted, 1)
     parsed_accuracy = correct / max(parsed_count, 1)
