@@ -265,7 +265,8 @@ class SoRLTrainer:
         del outputs, logits
 
         # 3. SoRL search + aux losses (only if any aux weight is nonzero)
-        has_aux = (cfg.alpha_info_gain != 0 or cfg.alpha_abs != 0 or cfg.alpha_soft_zipf != 0)
+        has_aux = (cfg.alpha_info_gain != 0 or cfg.alpha_abs != 0
+                   or cfg.alpha_soft_zipf != 0 or cfg.alpha_ortho != 0)
         if not has_aux:
             zero = torch.tensor(0.0, device=self.device)
             return {
@@ -274,6 +275,7 @@ class SoRLTrainer:
                 "info_gain_loss": zero,
                 "abs_loss": zero,
                 "zipf_bigram_loss": zero,
+                "ortho_loss": zero,
             }
 
         with torch.no_grad():
@@ -301,16 +303,13 @@ class SoRLTrainer:
             prompt_len=expanded_prompt_len,
         )
 
-        ortho_loss = self.loss_fn.ortho_loss(best_ppt, best_ppt_adv)
-
-        ortho_loss = self.loss_fn.ortho_loss(best_ppt, best_ppt_adv)
+        ortho_loss = self.loss_fn.ortho_loss(model)
 
         loss = (
             base_traj_loss
             + cfg.alpha_info_gain * info_gain_loss
             + cfg.alpha_abs * abs_loss
             + cfg.alpha_soft_zipf * zipf_bigram_loss
-            + cfg.alpha_ortho * ortho_loss
             + cfg.alpha_ortho * ortho_loss
         )
 
@@ -320,7 +319,6 @@ class SoRLTrainer:
             "info_gain_loss": info_gain_loss,
             "abs_loss": abs_loss,
             "zipf_bigram_loss": zipf_bigram_loss,
-            "ortho_loss": ortho_loss,
             "ortho_loss": ortho_loss,
         }
 
