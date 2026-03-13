@@ -138,18 +138,25 @@ def load_checkpoint(model_name, abstract_vocab_size, ckpt_dir, device):
 
 # ---------------------------------------------------------------------------
 # Accuracy evaluator (batched via wrapper.generate)
-# Runs both K=None (NL-only) and K=eval_K (with abstract tokens) if eval_K is set.
+# Single-mode per call: eval_K=None → NL-only, eval_K=int → with abstractions.
+# Call trainer.evaluate() and trainer.evaluate(eval_K=K) separately.
 # ---------------------------------------------------------------------------
 def compute_accuracy_fn_factory(tokenizer, max_new_tokens, num_log_samples, log_fn,
-                                eval_batch_size=8, eval_K=None):
-    """Returns a compute_accuracy(model, tokenizer, dataset, device, num_samples) callable."""
+                                eval_batch_size=8):
+    """Returns a compute_accuracy(model, tokenizer, dataset, device, num_samples, eval_K=None) callable."""
     pad_id = tokenizer.pad_token_id if tokenizer.pad_token_id is not None else 0
 
     def _eval_with_K(model, dataset, device, n, K_value):
-        """Run batched generation with a given K and return (correct, total, samples)."""
+        """Run batched generation with a given K and return (correct, total, samples, mono_stats).
+
+        mono_stats is a dict of inner-monologue statistics when K_value is not None, else None.
+        """
+        from collections import Counter
         base_vocab = model.vocab_sizes[0].item()
         extract_fn = getattr(dataset, "extract_answer", None)
         correct, total, samples = 0, 0, []
+        abs_counter = Counter()  # global abstract token frequency
+        abs_counts_per_sample = []  # (n_abs, n_nl) per sample
 
         for bs_start in range(0, n, eval_batch_size):
             bs_end = min(bs_start + eval_batch_size, n)
@@ -177,9 +184,20 @@ def compute_accuracy_fn_factory(tokenizer, max_new_tokens, num_log_samples, log_
             for j, i in enumerate(batch_indices):
                 pad_len = max_pl - prompt_lens[j]
                 gen_ids = generated[j, pad_len:]
-                # For K!=None, strip abstract tokens before decoding
+                new_ids = generated[j, max_pl:]  # only newly generated tokens
+
                 if K_value is not None:
+                    # Record inner-monologue stats from newly generated tokens
+                    abs_mask = (new_ids >= base_vocab)
+                    abs_ids = new_ids[abs_mask].tolist()
+                    n_abs = len(abs_ids)
+                    n_nl = len(new_ids) - n_abs
+                    abs_counts_per_sample.append((n_abs, n_nl))
+                    for aid in abs_ids:
+                        abs_counter[aid - base_vocab] += 1
+                    # Strip abstract tokens for decoding
                     gen_ids = gen_ids[gen_ids < base_vocab]
+
                 full_text = tokenizer.decode(gen_ids, skip_special_tokens=True)
                 pred = extract_fn(full_text)
                 gold = extract_fn(ref_texts[j])
@@ -189,45 +207,76 @@ def compute_accuracy_fn_factory(tokenizer, max_new_tokens, num_log_samples, log_
                     correct += hit
                     if i < num_log_samples:
                         q = tokenizer.decode(prompts[j], skip_special_tokens=True)
-                        samples.append({"idx": i, "question": q[:200],
-                                        "response": full_text[len(q):].strip()[:300],
-                                        "gold": gold, "pred": pred, "correct": hit})
+                        sample_entry = {
+                            "idx": i, "question": q[:200],
+                            "response": full_text[len(q):].strip()[:300],
+                            "gold": gold, "pred": pred, "correct": hit,
+                        }
+                        if K_value is not None:
+                            sample_entry["inner_monologue"] = abs_ids
+                            # Build interleaved text: NL tokens with ⟨ABS_N⟩ markers
+                            parts, nl_buf = [], []
+                            for tid in new_ids.tolist():
+                                if tid < base_vocab:
+                                    nl_buf.append(tid)
+                                else:
+                                    if nl_buf:
+                                        parts.append(tokenizer.decode(nl_buf, skip_special_tokens=True))
+                                        nl_buf = []
+                                    parts.append(f"⟨ABS_{tid - base_vocab}⟩")
+                            if nl_buf:
+                                parts.append(tokenizer.decode(nl_buf, skip_special_tokens=True))
+                            sample_entry["interleaved"] = "".join(parts)[:500]
+                        samples.append(sample_entry)
 
             if log_fn and bs_end % 100 == 0:
                 log_fn(f"  [K={K_value}] [{bs_end}/{n}] acc: {correct}/{total} = {correct/max(total,1)*100:.1f}%")
 
-        return correct, total, samples
+        # Build inner-monologue statistics
+        mono_stats = None
+        if K_value is not None and abs_counts_per_sample:
+            total_abs = sum(a for a, _ in abs_counts_per_sample)
+            total_nl = sum(nl for _, nl in abs_counts_per_sample)
+            mono_stats = {
+                "effective_vocab_size": len(abs_counter),
+                "total_abstract_tokens": total_abs,
+                "total_nl_tokens": total_nl,
+                "abs_ratio": total_abs / max(total_abs + total_nl, 1),
+                "top10": abs_counter.most_common(10),
+                "freq_distribution": dict(abs_counter),
+            }
+
+        return correct, total, samples, mono_stats
 
     @torch.no_grad()
-    def compute_accuracy_fn(model, _tokenizer, dataset, device, num_samples):
+    def compute_accuracy_fn(model, _tokenizer, dataset, device, num_samples, eval_K=None):
         model.eval()
         extract_fn = getattr(dataset, "extract_answer", None)
         if extract_fn is None:
             return {"accuracy": 0.0, "correct": 0, "total": 0}
 
         n = min(num_samples, len(dataset))
-        result = {}
 
-        # NL-only (K=None)
-        c, t, samps = _eval_with_K(model, dataset, device, n, K_value=None)
+        c, t, samps, mono_stats = _eval_with_K(model, dataset, device, n, K_value=eval_K)
         acc = c / max(t, 1)
-        result.update({"accuracy": acc, "correct": c, "total": t})
+        result = {"accuracy": acc, "correct": c, "total": t, "K": eval_K}
+
         if log_fn:
-            log_fn(f"\n{'='*60}\n  [K=None] Accuracy: {c}/{t} = {acc*100:.1f}%\n{'='*60}")
+            log_fn(f"\n{'='*60}\n  [K={eval_K}] Accuracy: {c}/{t} = {acc*100:.1f}%\n{'='*60}")
             for s in samps:
                 log_fn(f"\n--- Sample {s['idx']} ---\n  Q: {s['question']}\n  Response: {s['response']}"
                        f"\n  Gold: {s['gold']} | Pred: {s['pred']} | {'CORRECT' if s['correct'] else 'WRONG'}")
+                if "interleaved" in s:
+                    log_fn(f"  Interleaved ({len(s.get('inner_monologue',[]))} abs tokens):\n    {s['interleaved']}")
 
-        # With abstract tokens (K=eval_K)
-        if eval_K is not None:
-            c_k, t_k, samps_k = _eval_with_K(model, dataset, device, n, K_value=eval_K)
-            acc_k = c_k / max(t_k, 1)
-            result.update({"accuracy_K": acc_k, "correct_K": c_k, "total_K": t_k})
+        if mono_stats is not None:
+            result["mono_stats"] = mono_stats
             if log_fn:
-                log_fn(f"\n  [K={eval_K}] Accuracy: {c_k}/{t_k} = {acc_k*100:.1f}%\n{'='*60}")
-                for s in samps_k:
-                    log_fn(f"\n--- Sample {s['idx']} ---\n  Q: {s['question']}\n  Response: {s['response']}"
-                           f"\n  Gold: {s['gold']} | Pred: {s['pred']} | {'CORRECT' if s['correct'] else 'WRONG'}")
+                log_fn(f"\n  Inner-monologue stats:"
+                       f"\n    Effective vocab: {mono_stats['effective_vocab_size']}"
+                       f"\n    Abstract tokens: {mono_stats['total_abstract_tokens']} "
+                       f"({mono_stats['abs_ratio']:.1%} of generated)"
+                       f"\n    Top 10 abs IDs: {mono_stats['top10']}")
 
         if log_fn:
             log_fn(f"{'='*60}\n")
@@ -308,8 +357,9 @@ def main():
     # ---- Accuracy evaluator (batched via wrapper.generate) ----
     accuracy_fn = compute_accuracy_fn_factory(
         tokenizer, args.max_new_tokens, args.num_log_samples, log,
-        eval_batch_size=args.eval_batch_size, eval_K=args.eval_K,
+        eval_batch_size=args.eval_batch_size,
     )
+    has_aux = (config.alpha_info_gain != 0 or config.alpha_abs != 0 or config.alpha_soft_zipf != 0)
 
     # ---- Trainer ----
     trainer = SoRLTrainer(
@@ -325,22 +375,38 @@ def main():
 
     # ---- Initial eval ----
     if is_master:
-        log("--- Initial evaluation (NL-only generation) ---")
+        log("--- Initial evaluation (K=None, NL-only) ---")
         result = trainer.evaluate()
         if result:
-            log(f"Pre-train accuracy: {result['accuracy']*100:.1f}% "
+            log(f"Pre-train accuracy [K=None]: {result['accuracy']*100:.1f}% "
                 f"({result['correct']}/{result['total']})")
+        if has_aux:
+            log(f"--- Initial evaluation (K={config.K}, with abstractions) ---")
+            result_k = trainer.evaluate(eval_K=config.K)
+            if result_k:
+                log(f"Pre-train accuracy [K={config.K}]: {result_k['accuracy']*100:.1f}% "
+                    f"({result_k['correct']}/{result_k['total']})")
 
     # ---- Train ----
     history = trainer.train()
 
     # ---- Final eval ----
     if is_master:
-        log("--- Final evaluation (NL-only generation) ---")
+        log("--- Final evaluation (K=None, NL-only) ---")
         result = trainer.evaluate()
         if result:
-            log(f"Final accuracy: {result['accuracy']*100:.1f}% "
+            log(f"Final accuracy [K=None]: {result['accuracy']*100:.1f}% "
                 f"({result['correct']}/{result['total']})")
+        if has_aux:
+            log(f"--- Final evaluation (K={config.K}, with abstractions) ---")
+            result_k = trainer.evaluate(eval_K=config.K)
+            if result_k:
+                log(f"Final accuracy [K={config.K}]: {result_k['accuracy']*100:.1f}% "
+                    f"({result_k['correct']}/{result_k['total']})")
+                if "mono_stats" in result_k:
+                    ms = result_k["mono_stats"]
+                    log(f"  Inner-monologue: effective_vocab={ms['effective_vocab_size']}, "
+                        f"abs_ratio={ms['abs_ratio']:.1%}, top10={ms['top10']}")
 
         # Save history
         hist_path = os.path.join(args.output_dir, "history.json")

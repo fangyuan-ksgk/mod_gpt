@@ -355,13 +355,13 @@ class SoRLTrainer:
     # Evaluate
     # ------------------------------------------------------------------
     @torch.no_grad()
-    def evaluate(self):
+    def evaluate(self, eval_K=None):
         if self.compute_accuracy is None or self.val_dataset is None:
             return None
         self.raw_model.eval()
         result = self.compute_accuracy(
             self.raw_model, self.tokenizer, self.val_dataset,
-            self.device, self.config.eval_samples,
+            self.device, self.config.eval_samples, eval_K=eval_K,
         )
         self.raw_model.train()
         return result
