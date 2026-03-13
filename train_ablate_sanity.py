@@ -43,7 +43,8 @@ def parse_args():
                    choices=["gsm8k", "math_qa", "arc", "hellaswag",
                             "winogrande", "boolq", "openbookqa",
                             "commonsenseqa", "mmlu",
-                            "aqua", "math", "scienceqa"])
+                            "aqua", "math", "scienceqa",
+                            "humaneval", "mbpp", "livecodebench", "codecontests"])
     p.add_argument("--max_length", type=int, default=512)
 
     # Optimizer
@@ -152,13 +153,28 @@ def compute_accuracy_fn_factory(tokenizer, max_new_tokens, num_log_samples, log_
         """Run batched generation with a given K and return (correct, total, samples, mono_stats).
 
         mono_stats is a dict of inner-monologue statistics when K_value is not None, else None.
+        For code datasets: uses execution-based correctness checking.
+        For other datasets: uses exact string matching of extracted answers.
         """
         from collections import Counter
+        from concurrent.futures import ThreadPoolExecutor
+        from data.pt_dataset import HumanEvalDataset, check_code_correctness
+
         base_vocab = model.vocab_sizes[0].item()
         extract_fn = getattr(dataset, "extract_answer", None)
+        has_exec_tests = hasattr(dataset, 'get_test_cases')
+        is_humaneval = isinstance(dataset, HumanEvalDataset)
+
         correct, total, samples = 0, 0, []
         abs_counter = Counter()  # global abstract token frequency
         abs_counts_per_sample = []  # (n_abs, n_nl) per sample
+
+        # Collect all generated texts for deferred execution-based eval
+        all_full_texts = [None] * n
+        all_prompt_texts = [None] * n
+        all_preds = [None] * n
+        all_golds = [None] * n
+        all_new_ids_list = [None] * n  # for inner-monologue stats
 
         for bs_start in range(0, n, eval_batch_size):
             bs_end = min(bs_start + eval_batch_size, n)
@@ -187,6 +203,7 @@ def compute_accuracy_fn_factory(tokenizer, max_new_tokens, num_log_samples, log_
                 pad_len = max_pl - prompt_lens[j]
                 gen_ids = generated[j, pad_len:]
                 new_ids = generated[j, max_pl:]  # only newly generated tokens
+                all_new_ids_list[i] = new_ids
 
                 if K_value is not None:
                     # Record inner-monologue stats from newly generated tokens
@@ -201,38 +218,75 @@ def compute_accuracy_fn_factory(tokenizer, max_new_tokens, num_log_samples, log_
                     gen_ids = gen_ids[gen_ids < base_vocab]
 
                 full_text = tokenizer.decode(gen_ids, skip_special_tokens=True)
-                pred = extract_fn(full_text)
-                gold = extract_fn(ref_texts[j])
+                prompt_text = tokenizer.decode(prompts[j], skip_special_tokens=True)
+                all_full_texts[i] = full_text
+                all_prompt_texts[i] = prompt_text
+                all_preds[i] = extract_fn(full_text)
+                all_golds[i] = extract_fn(ref_texts[j])
+
+            if log_fn and bs_end % 100 == 0:
+                log_fn(f"  [K={K_value}] [{bs_end}/{n}] generated...")
+
+        # ---- Evaluate: execution-based for code, string matching otherwise ----
+        is_correct_list = [False] * n
+
+        if has_exec_tests:
+            def _check_one(idx):
+                test_cases = dataset.get_test_cases(idx)
+                if not test_cases:
+                    return None
+                pred = all_preds[idx] or ""
+                if is_humaneval:
+                    exec_code = all_prompt_texts[idx] + pred
+                else:
+                    exec_code = pred
+                result = check_code_correctness(exec_code, test_cases, timeout=10)
+                return result["passed"]
+
+            with ThreadPoolExecutor(max_workers=min(8, n)) as pool:
+                results = list(pool.map(_check_one, range(n)))
+            for i, r in enumerate(results):
+                if r is not None:
+                    total += 1
+                    is_correct_list[i] = r
+                    if r:
+                        correct += 1
+        else:
+            for i in range(n):
+                gold = all_golds[i]
+                pred = all_preds[i]
                 if gold is not None:
                     total += 1
                     hit = pred is not None and pred.strip() == gold.strip()
-                    correct += hit
-                    if i < num_log_samples:
-                        q = tokenizer.decode(prompts[j], skip_special_tokens=True)
-                        sample_entry = {
-                            "idx": i, "question": q[:200],
-                            "response": full_text[len(q):].strip()[:300],
-                            "gold": gold, "pred": pred, "correct": hit,
-                        }
-                        if K_value is not None:
-                            sample_entry["inner_monologue"] = abs_ids
-                            # Build interleaved text: NL tokens with ⟨ABS_N⟩ markers
-                            parts, nl_buf = [], []
-                            for tid in new_ids.tolist():
-                                if tid < base_vocab:
-                                    nl_buf.append(tid)
-                                else:
-                                    if nl_buf:
-                                        parts.append(tokenizer.decode(nl_buf, skip_special_tokens=True))
-                                        nl_buf = []
-                                    parts.append(f"⟨ABS_{tid - base_vocab}⟩")
-                            if nl_buf:
-                                parts.append(tokenizer.decode(nl_buf, skip_special_tokens=True))
-                            sample_entry["interleaved"] = "".join(parts)[:500]
-                        samples.append(sample_entry)
+                    is_correct_list[i] = hit
+                    if hit:
+                        correct += 1
 
-            if log_fn and bs_end % 100 == 0:
-                log_fn(f"  [K={K_value}] [{bs_end}/{n}] acc: {correct}/{total} = {correct/max(total,1)*100:.1f}%")
+        # ---- Build log samples ----
+        for i in range(min(num_log_samples, n)):
+            sample_entry = {
+                "idx": i, "question": all_prompt_texts[i][:200],
+                "response": all_full_texts[i][len(all_prompt_texts[i]):].strip()[:300],
+                "gold": all_golds[i], "pred": all_preds[i], "correct": is_correct_list[i],
+            }
+            if K_value is not None and all_new_ids_list[i] is not None:
+                new_ids = all_new_ids_list[i]
+                abs_ids = new_ids[new_ids >= base_vocab].tolist()
+                sample_entry["inner_monologue"] = abs_ids
+                # Build interleaved text: NL tokens with ⟨ABS_N⟩ markers
+                parts, nl_buf = [], []
+                for tid in new_ids.tolist():
+                    if tid < base_vocab:
+                        nl_buf.append(tid)
+                    else:
+                        if nl_buf:
+                            parts.append(tokenizer.decode(nl_buf, skip_special_tokens=True))
+                            nl_buf = []
+                        parts.append(f"⟨ABS_{tid - base_vocab}⟩")
+                if nl_buf:
+                    parts.append(tokenizer.decode(nl_buf, skip_special_tokens=True))
+                sample_entry["interleaved"] = "".join(parts)[:500]
+            samples.append(sample_entry)
 
         # Build inner-monologue statistics
         mono_stats = None
