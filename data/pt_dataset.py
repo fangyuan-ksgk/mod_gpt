@@ -573,6 +573,22 @@ class HumanEvalDataset(Dataset):
             "prompt_len": prompt_len,
         }
 
+    def get_test_cases(self, idx):
+        """Return list of test strings for this problem.
+
+        HumanEval bundles all asserts into a check(candidate) function
+        plus a check(entry_point) call. We return the full test block
+        as a single test case.
+        """
+        ex = self.dataset[idx]
+        test_code = ex.get("test", "")
+        entry_point = ex.get("entry_point", "")
+        if not test_code or not entry_point:
+            return []
+        # The test field already contains the check function + call
+        # e.g. "def check(candidate):\n    assert ...\ncheck(entry_point)"
+        return [f"{test_code}\ncheck({entry_point})"]
+
     @staticmethod
     def extract_answer(text):
         """For code generation, we typically use pass@k metrics, but for consistency return the generated code."""
@@ -710,7 +726,8 @@ class LiveCodeBenchDataset(Dataset):
     def __init__(self, split="train", tokenizer=None, max_length=1024):
         # bzantium/livecodebench is a parquet-compatible clone of
         # livecodebench/code_generation_lite (works with datasets>=4.0)
-        self.dataset = load_dataset("bzantium/livecodebench", split="train")
+        # Only has a "test" split — this is an eval-only benchmark
+        self.dataset = load_dataset("bzantium/livecodebench", split="test")
         self.tokenizer = tokenizer
         self.max_length = max_length
 
@@ -787,6 +804,114 @@ class LiveCodeBenchDataset(Dataset):
         return text.strip()
 
 
+class CodeContestsDataset(Dataset):
+    """CodeContests-O competitive programming problems (train + test splits)."""
+
+    def __init__(self, split="train", tokenizer=None, max_length=1024):
+        hf_split = "test" if split == "test" else "train"
+        self.dataset = load_dataset("caijanfeng/CodeContests-O", split=hf_split)
+        self.tokenizer = tokenizer
+        self.max_length = max_length
+
+    def __len__(self):
+        return len(self.dataset)
+
+    def __getitem__(self, idx):
+        ex = self.dataset[idx]
+        description = ex.get("description", ex.get("question", "")).strip()
+        # Pick the first Python solution if available
+        solutions = ex.get("solutions", [])
+        if isinstance(solutions, str):
+            try:
+                solutions = json.loads(solutions)
+            except (json.JSONDecodeError, TypeError):
+                solutions = []
+        solution = ""
+        if isinstance(solutions, list):
+            for s in solutions:
+                # CodeContests solutions may be dicts with 'language' and 'solution'
+                if isinstance(s, dict):
+                    if s.get("language", "") in ("PYTHON3", "PYTHON", 3, 1):
+                        solution = s.get("solution", "").strip()
+                        break
+                elif isinstance(s, str):
+                    solution = s.strip()
+                    break
+
+        prompt = f"# Problem:\n{description}\n\n# Solution:\n"
+        text = f"{prompt}{solution}" if solution else prompt
+        prompt_len = len(self.tokenizer(prompt, add_special_tokens=False)["input_ids"])
+        enc = self.tokenizer(text, truncation=True, max_length=self.max_length,
+                             padding="max_length", return_tensors="pt")
+        prompt_len = min(prompt_len, self.max_length)
+        return {
+            "input_ids": enc["input_ids"].squeeze(0),
+            "attention_mask": enc["attention_mask"].squeeze(0),
+            "prompt_len": prompt_len,
+        }
+
+    def _parse_io_pairs(self, field):
+        """Parse input/output test pairs from various formats."""
+        if not field:
+            return []
+        if isinstance(field, str):
+            try:
+                field = json.loads(field)
+            except (json.JSONDecodeError, TypeError):
+                return []
+        if isinstance(field, dict):
+            inputs = field.get("input", field.get("inputs", []))
+            outputs = field.get("output", field.get("outputs", []))
+            if isinstance(inputs, list) and isinstance(outputs, list):
+                return list(zip(inputs, outputs))
+        if isinstance(field, list):
+            pairs = []
+            for item in field:
+                if isinstance(item, dict):
+                    inp = item.get("input", "")
+                    out = item.get("output", item.get("expected_output", ""))
+                    pairs.append((inp, out))
+            return pairs
+        return []
+
+    def get_test_cases(self, idx):
+        """Return list of {preamble, check} dicts for stdin/stdout testing."""
+        ex = self.dataset[idx]
+        # Try public_tests, then private_tests, then generated_tests
+        pairs = []
+        for key in ["public_tests", "private_tests", "generated_tests"]:
+            pairs = self._parse_io_pairs(ex.get(key, None))
+            if pairs:
+                break
+        tests = []
+        for inp, out in pairs:
+            inp_s = inp.strip() if isinstance(inp, str) else str(inp)
+            out_s = out.strip() if isinstance(out, str) else str(out)
+            preamble = (
+                "import sys, io as _io\n"
+                f"sys.stdin = _io.StringIO({repr(inp_s)})\n"
+                "_old_stdout = sys.stdout\n"
+                "sys.stdout = _io.StringIO()\n"
+            )
+            check = (
+                "_output = sys.stdout.getvalue()\n"
+                "sys.stdout = _old_stdout\n"
+                f"assert _output.strip() == {repr(out_s)}, "
+                f"f'Expected {repr(out_s)}, got {{_output.strip()!r}}'"
+            )
+            tests.append({"preamble": preamble, "check": check})
+        return tests
+
+    @staticmethod
+    def extract_answer(text):
+        """Return generated code after the prompt."""
+        marker = "# Solution:\n"
+        idx = text.find(marker)
+        if idx != -1:
+            return text[idx + len(marker):].strip()
+        return text.strip()
+
+
 # =====================================================================
 # Registry
 # =====================================================================
@@ -810,6 +935,7 @@ DATASET_REGISTRY = {
     "humaneval": HumanEvalDataset,
     "mbpp": MBPPDataset,
     "livecodebench": LiveCodeBenchDataset,
+    "codecontests": CodeContestsDataset,
 }
 
 
