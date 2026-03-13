@@ -804,6 +804,68 @@ class LiveCodeBenchDataset(Dataset):
         return text.strip()
 
 
+class WildIFEvalDataset(Dataset):
+    """WildIFEval — instruction-following eval from Chatbot Arena conversations.
+
+    Eval-only benchmark: measures whether models satisfy decomposed
+    constraints in real-world user instructions.
+    """
+
+    def __init__(self, split="train", tokenizer=None, max_length=1024):
+        # Only has a "test" split
+        self.dataset = load_dataset("gililior/wild-if-eval", split="test")
+        self.tokenizer = tokenizer
+        self.max_length = max_length
+
+    def __len__(self):
+        return len(self.dataset)
+
+    def __getitem__(self, idx):
+        ex = self.dataset[idx]
+        # The prompt is the user instruction
+        instruction = ex.get("prompt", ex.get("instruction", "")).strip()
+        prompt = f"### Instruction:\n{instruction}\n\n### Response:\n"
+        text = prompt  # eval-only: no reference response for training
+        prompt_len = len(self.tokenizer(prompt, add_special_tokens=False)["input_ids"])
+        enc = self.tokenizer(text, truncation=True, max_length=self.max_length,
+                             padding="max_length", return_tensors="pt")
+        prompt_len = min(prompt_len, self.max_length)
+        return {
+            "input_ids": enc["input_ids"].squeeze(0),
+            "attention_mask": enc["attention_mask"].squeeze(0),
+            "prompt_len": prompt_len,
+        }
+
+    def get_constraints(self, idx):
+        """Return list of constraint strings for this problem.
+
+        WildIFEval decomposes each instruction into verifiable constraints.
+        """
+        ex = self.dataset[idx]
+        constraints = ex.get("constraints", ex.get("decomposition", []))
+        if isinstance(constraints, str):
+            try:
+                constraints = json.loads(constraints)
+            except (json.JSONDecodeError, TypeError):
+                constraints = [constraints]
+        if not isinstance(constraints, list):
+            return []
+        return constraints
+
+    def get_test_cases(self, idx):
+        """Not applicable for IF eval — return empty (no execution-based tests)."""
+        return []
+
+    @staticmethod
+    def extract_answer(text):
+        """Return generated response after the instruction."""
+        marker = "### Response:\n"
+        idx = text.find(marker)
+        if idx != -1:
+            return text[idx + len(marker):].strip()
+        return text.strip()
+
+
 class CodeContestsDataset(Dataset):
     """CodeContests-O competitive programming problems (train + test splits)."""
 
@@ -936,6 +998,8 @@ DATASET_REGISTRY = {
     "mbpp": MBPPDataset,
     "livecodebench": LiveCodeBenchDataset,
     "codecontests": CodeContestsDataset,
+    # Instruction following
+    "wildifeval": WildIFEvalDataset,
 }
 
 
