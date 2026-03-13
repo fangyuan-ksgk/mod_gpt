@@ -9,7 +9,10 @@ Usage:
 """
 
 import json
+import os
 import re
+import subprocess
+import tempfile
 import torch
 from torch.utils.data import Dataset
 from datasets import load_dataset
@@ -583,6 +586,81 @@ class HumanEvalDataset(Dataset):
         return text.strip()
 
 
+# =====================================================================
+# Code execution sandbox
+# =====================================================================
+
+def sandbox_execute(code: str, test_code: str, timeout: int = 10) -> dict:
+    """
+    Execute generated code + test assertions in an isolated subprocess.
+
+    Returns:
+        {"passed": bool, "error": str or None, "output": str}
+    """
+    full_code = f"{code}\n\n{test_code}"
+    try:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
+            f.write(full_code)
+            tmp_path = f.name
+        result = subprocess.run(
+            ["python", tmp_path],
+            capture_output=True, text=True, timeout=timeout,
+        )
+        passed = result.returncode == 0
+        error = result.stderr.strip() if not passed else None
+        return {"passed": passed, "error": error, "output": result.stdout.strip()}
+    except subprocess.TimeoutExpired:
+        return {"passed": False, "error": "timeout", "output": ""}
+    except Exception as e:
+        return {"passed": False, "error": str(e), "output": ""}
+    finally:
+        try:
+            os.unlink(tmp_path)
+        except (OSError, UnboundLocalError):
+            pass
+
+
+def check_code_correctness(generated_code: str, test_cases: list, timeout: int = 10) -> dict:
+    """
+    Run generated code against a list of test cases.
+
+    Args:
+        generated_code: The model-generated Python code.
+        test_cases: List of test items. Each item is either:
+            - str: an assert statement appended after code (MBPP style)
+            - dict with {"preamble": str, "check": str}: preamble runs before
+              the generated code, check runs after (APPS stdin/stdout style)
+        timeout: Max seconds per execution.
+
+    Returns:
+        {"passed": bool, "num_passed": int, "num_total": int, "errors": list}
+    """
+    if not test_cases:
+        return {"passed": False, "num_passed": 0, "num_total": 0, "errors": ["no test cases"]}
+
+    num_passed = 0
+    errors = []
+    for test in test_cases:
+        if isinstance(test, dict):
+            # APPS-style: preamble (stdin patch) + code + check (stdout assert)
+            full_code = f"{test['preamble']}\n{generated_code}\n\n{test['check']}"
+            result = sandbox_execute(full_code, "", timeout=timeout)
+        else:
+            # MBPP-style: code + assert string
+            result = sandbox_execute(generated_code, test, timeout=timeout)
+        if result["passed"]:
+            num_passed += 1
+        else:
+            errors.append(result["error"])
+
+    return {
+        "passed": num_passed == len(test_cases),
+        "num_passed": num_passed,
+        "num_total": len(test_cases),
+        "errors": errors,
+    }
+
+
 class MBPPDataset(Dataset):
     """MBPP (Mostly Basic Python Problems) — 974 coding tasks."""
 
@@ -610,6 +688,11 @@ class MBPPDataset(Dataset):
             "attention_mask": enc["attention_mask"].squeeze(0),
             "prompt_len": prompt_len,
         }
+
+    def get_test_cases(self, idx):
+        """Return list of assert strings for this problem."""
+        ex = self.dataset[idx]
+        return list(ex.get("test_list", []))
 
     @staticmethod
     def extract_answer(text):
@@ -657,6 +740,42 @@ class APPSDataset(Dataset):
             "attention_mask": enc["attention_mask"].squeeze(0),
             "prompt_len": prompt_len,
         }
+
+    def get_test_cases(self, idx):
+        """Return list of {preamble, check} dicts for this problem.
+
+        APPS stores tests as JSON in 'input_output' with 'inputs'/'outputs' lists.
+        Preamble patches stdin before the generated code runs;
+        check captures stdout after and asserts correctness.
+        """
+        ex = self.dataset[idx]
+        io_raw = ex.get("input_output", "")
+        if not io_raw:
+            return []
+        try:
+            io_data = json.loads(io_raw) if isinstance(io_raw, str) else io_raw
+        except (json.JSONDecodeError, TypeError):
+            return []
+        inputs = io_data.get("inputs", [])
+        outputs = io_data.get("outputs", [])
+        tests = []
+        for inp, out in zip(inputs, outputs):
+            inp_repr = repr(inp.strip() if isinstance(inp, str) else inp)
+            out_repr = repr(out.strip() if isinstance(out, str) else out)
+            preamble = (
+                "import sys, io as _io\n"
+                f"sys.stdin = _io.StringIO({inp_repr})\n"
+                "_old_stdout = sys.stdout\n"
+                "sys.stdout = _io.StringIO()\n"
+            )
+            check = (
+                "_output = sys.stdout.getvalue()\n"
+                "sys.stdout = _old_stdout\n"
+                f"assert _output.strip() == {out_repr}, "
+                f"f'Expected {out_repr}, got {{_output.strip()!r}}'"
+            )
+            tests.append({"preamble": preamble, "check": check})
+        return tests
 
     @staticmethod
     def extract_answer(text):
