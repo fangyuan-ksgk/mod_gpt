@@ -96,6 +96,7 @@ class SoRLConfig:
     eval_every: int = 500
     save_every: int = 500
     eval_samples: int = 50
+    eval_K: Optional[int] = 4  # K for generate() during eval; set None to skip abstraction eval
     output_dir: str = "./ckpt/sorl"
 
 
@@ -287,6 +288,7 @@ class SoRLTrainer:
 
         # DDP proxy
         model = _DDPForwardProxy(self.model, self.raw_model) if self.ddp else self.raw_model
+        base_vocab = int(self.raw_model.vocab_sizes[0].item())
 
         # 1. Base trajectory loss — mask padding AND question tokens in labels
         labels = input_ids.clone()
@@ -297,8 +299,15 @@ class SoRLTrainer:
             input_ids=input_ids, attention_mask=attention_mask, labels=labels,
             memory_span_abs=cfg.memory_span_abs, memory_span_traj=cfg.memory_span_traj,
         )
-        base_traj_loss = outputs.loss
-        del outputs
+
+        logits = outputs.logits
+        logits[:, :, base_vocab:] = -float("inf")
+        shift_logits = logits[:, :-1, :].contiguous()
+        shift_labels = labels[:, 1:].contiguous()
+        base_traj_loss = nn.CrossEntropyLoss(ignore_index=-100)(
+            shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1)
+        )
+        del outputs, logits
 
         # 2. SoRL search (no grad)
         with torch.no_grad():
@@ -398,13 +407,13 @@ class SoRLTrainer:
     # Evaluate
     # ------------------------------------------------------------------
     @torch.no_grad()
-    def evaluate(self):
+    def evaluate(self, eval_K=None):
         if self.compute_accuracy is None or self.val_dataset is None:
             return None
         self.raw_model.eval()
         result = self.compute_accuracy(
             self.raw_model, self.tokenizer, self.val_dataset,
-            self.device, self.config.eval_samples,
+            self.device, self.config.eval_samples, eval_K=eval_K,
         )
         self.raw_model.train()
         return result
@@ -527,11 +536,15 @@ class SoRLTrainer:
                 if torch.cuda.is_available():
                     torch.cuda.empty_cache()
 
-                # Eval
+                # Eval — dual: NL-only (K=None) + with abstraction (K=eval_K)
                 if global_step > 0 and global_step % cfg.eval_every == 0:
-                    result = self.evaluate()
-                    if result is not None:
-                        self._log(f"--- Eval step {global_step}: {result} ---")
+                    result_nl = self.evaluate(eval_K=None)
+                    if result_nl is not None:
+                        self._log(f"--- Eval step {global_step} [NL-only]: {result_nl} ---")
+                    if cfg.eval_K is not None:
+                        result_abs = self.evaluate(eval_K=cfg.eval_K)
+                        if result_abs is not None:
+                            self._log(f"--- Eval step {global_step} [K={cfg.eval_K}]: {result_abs} ---")
 
                 # Checkpoint
                 if global_step > 0 and global_step % cfg.save_every == 0:

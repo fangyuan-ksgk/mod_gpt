@@ -1037,7 +1037,7 @@ def _filter_traj_tokens(generated_ids, base_vocab_size):
 
 @torch.no_grad()
 def evaluate_accuracy(model, tokenizer, dataset, device, num_samples=100,
-                      max_new_tokens=256, eval_batch_size=8):
+                      max_new_tokens=256, eval_batch_size=8, eval_K=None):
     """
     Batched generation + accuracy evaluation.
     For code datasets: execution-based pass/fail via check_code_correctness.
@@ -1082,6 +1082,7 @@ def evaluate_accuracy(model, tokenizer, dataset, device, num_samples=100,
             attention_mask=attn_mask,
             max_new_tokens=max_new_tokens,
             temperature=0.0,
+            K=eval_K,
         )
 
         for j, it in enumerate(batch_items):

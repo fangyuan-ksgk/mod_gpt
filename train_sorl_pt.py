@@ -217,7 +217,7 @@ def parse_args():
 @torch.no_grad()
 def evaluate_accuracy_with_logging(
     model, tokenizer, dataset, device, num_samples=50,
-    max_new_tokens=128, num_log_samples=3, log_fn=None,
+    max_new_tokens=128, num_log_samples=3, log_fn=None, eval_K=None,
 ):
     """
     Evaluate accuracy AND log sample responses with abstract token sequences.
@@ -241,7 +241,7 @@ def evaluate_accuracy_with_logging(
             input_ids=input_ids[:, :prompt_len],
             max_new_tokens=max_new_tokens,
             temperature=0.0,
-            K=4,
+            K=eval_K,
         )
 
         # Filter abstract tokens for decoding
@@ -355,7 +355,7 @@ def log_sample_generations(
             input_ids=input_ids[:, :prompt_len],
             max_new_tokens=max_new_tokens,
             temperature=0.0,
-            K=4,
+            K=4,  # sample logging always uses abstraction
         )
 
         gen_ids = generated[0]
@@ -507,13 +507,14 @@ def main():
         config = SoRLConfig(**shared_cfg)
 
     # ---- Accuracy evaluator with logging ----
-    def compute_accuracy_fn(model, tokenizer, dataset, device, num_samples):
+    def compute_accuracy_fn(model, tokenizer, dataset, device, num_samples, eval_K=None):
         return evaluate_accuracy_with_logging(
             model, tokenizer, dataset, device,
             num_samples=num_samples,
             max_new_tokens=args.max_new_tokens,
             num_log_samples=args.num_log_samples,
             log_fn=log,
+            eval_K=eval_K,
         )
 
     # ---- Trainer ----
@@ -674,23 +675,38 @@ def main():
                         log_fn=log,
                     )
 
-                # Eval (accuracy + sample responses)
+                # Eval — dual: NL-only (K=None) + with abstraction (K=eval_K)
                 if global_step > 0 and global_step % cfg.eval_every == 0:
-                    result = trainer.evaluate()
-                    if result is not None and trainer.is_master:
+                    # NL-only eval
+                    result_nl = trainer.evaluate(eval_K=None)
+                    if result_nl is not None and trainer.is_master:
                         log(
-                            f"--- Eval step {global_step}: strict_acc={result['strict_accuracy']*100:.1f}% "
-                            f"({result['correct']}/{result['attempted']}) | "
-                            f"parsed_acc={result['parsed_accuracy']*100:.1f}% "
-                            f"| parse_rate={result['parse_rate']*100:.1f}% ---"
+                            f"--- Eval step {global_step} [NL-only]: strict_acc={result_nl['strict_accuracy']*100:.1f}% "
+                            f"({result_nl['correct']}/{result_nl['attempted']}) | "
+                            f"parsed_acc={result_nl['parsed_accuracy']*100:.1f}% "
+                            f"| parse_rate={result_nl['parse_rate']*100:.1f}% ---"
                         )
                         trainer.history["eval_step"].append(global_step)
-                        trainer.history["strict_accuracy"].append(result["strict_accuracy"])
-                        trainer.history["parsed_accuracy"].append(result["parsed_accuracy"])
-                        trainer.history["parse_rate"].append(result["parse_rate"])
-                        trainer.history["eval_correct"].append(result["correct"])
-                        trainer.history["eval_attempted"].append(result["attempted"])
-                        trainer.history["eval_parsed_count"].append(result["parsed_count"])
+                        trainer.history["strict_accuracy"].append(result_nl["strict_accuracy"])
+                        trainer.history["parsed_accuracy"].append(result_nl["parsed_accuracy"])
+                        trainer.history["parse_rate"].append(result_nl["parse_rate"])
+                        trainer.history["eval_correct"].append(result_nl["correct"])
+                        trainer.history["eval_attempted"].append(result_nl["attempted"])
+                        trainer.history["eval_parsed_count"].append(result_nl["parsed_count"])
+                    # With-abstraction eval
+                    if cfg.eval_K is not None:
+                        result_abs = trainer.evaluate(eval_K=cfg.eval_K)
+                        if result_abs is not None and trainer.is_master:
+                            log(
+                                f"--- Eval step {global_step} [K={cfg.eval_K}]: strict_acc={result_abs['strict_accuracy']*100:.1f}% "
+                                f"({result_abs['correct']}/{result_abs['attempted']}) | "
+                                f"parsed_acc={result_abs['parsed_accuracy']*100:.1f}% "
+                                f"| parse_rate={result_abs['parse_rate']*100:.1f}% ---"
+                            )
+                            trainer.history.setdefault("eval_step_abs", []).append(global_step)
+                            trainer.history.setdefault("strict_accuracy_abs", []).append(result_abs["strict_accuracy"])
+                            trainer.history.setdefault("parsed_accuracy_abs", []).append(result_abs["parsed_accuracy"])
+                            trainer.history.setdefault("parse_rate_abs", []).append(result_abs["parse_rate"])
 
                 # (intermediate checkpoints disabled to save disk space)
 

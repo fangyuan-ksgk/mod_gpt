@@ -303,7 +303,7 @@ class SoRLTrainer:
             prompt_len=expanded_prompt_len,
         )
 
-        ortho_loss = self.loss_fn.ortho_loss(model)
+        ortho_loss = self.loss_fn.ortho_loss(self.raw_model) # used model here, change to 'raw_model' instead
 
         loss = (
             base_traj_loss
@@ -382,10 +382,17 @@ class SoRLTrainer:
         dataloader = self._make_dataloader(self.train_dataset, shuffle=True)
         total_steps = len(dataloader) * cfg.num_epochs // cfg.gradient_accumulation_steps
 
-        # Optimizer — single learning rate for all parameters
-        optimizer = torch.optim.AdamW(
-            self.model.parameters(), lr=cfg.lr, weight_decay=cfg.weight_decay,
-        )
+        # Optimizer — separate param group for embed/lm_head (higher LR)
+        emb_params, other_params = [], []
+        for name, p in self.model.named_parameters():
+            if "embed_tokens" in name or "lm_head" in name:
+                emb_params.append(p)
+            else:
+                other_params.append(p)
+        optimizer = torch.optim.AdamW([
+            {"params": other_params, "lr": cfg.lr},
+            {"params": emb_params, "lr": cfg.lr * cfg.emb_lr_mult},
+        ], weight_decay=cfg.weight_decay)
 
         start_epoch, start_step = 0, 0
         if resume_from and os.path.exists(resume_from):
@@ -419,10 +426,10 @@ class SoRLTrainer:
                 if effective_step < start_step * cfg.gradient_accumulation_steps:
                     continue
 
-                # LR schedule
+                # LR schedule (respect emb_lr_mult for embed/lm_head group)
                 lr = _get_lr(global_step, total_steps, cfg.warmup_steps, cfg.cooldown_frac, cfg.lr)
-                for pg in optimizer.param_groups:
-                    pg["lr"] = lr
+                optimizer.param_groups[0]["lr"] = lr
+                optimizer.param_groups[1]["lr"] = lr * cfg.emb_lr_mult
 
                 # Forward + loss
                 step_out = self._training_step(batch)
@@ -454,6 +461,7 @@ class SoRLTrainer:
                         f"info={step_out['info_gain_loss'].item():.4f} "
                         f"abs={step_out['abs_loss'].item():.4f} "
                         f"zipf={step_out['zipf_bigram_loss'].item():.4f} "
+                        f"ortho={step_out['ortho_loss'].item():.4f} "
                         f"| lr={lr:.2e} | {peak}"
                     )
                     self.history["step"].append(global_step)
@@ -462,6 +470,7 @@ class SoRLTrainer:
                     self.history["info_loss"].append(step_out["info_gain_loss"].item())
                     self.history["abs_loss"].append(step_out["abs_loss"].item())
                     self.history["zipf_loss"].append(step_out["zipf_bigram_loss"].item())
+                    self.history["ortho_loss"].append(step_out["ortho_loss"].item())
                     self.history["lr"].append(lr)
 
                 # Cleanup

@@ -87,6 +87,7 @@ class SorlModelWrapper(PreTrainedModel, GenerationMixin):
             wrapper.model.resize_token_embeddings(new_total_vocab_size)
             wrapper.model.config.vocab_size = new_total_vocab_size
             wrapper.config.vocab_size = new_total_vocab_size
+            # wrapper._init_abstract_embeddings_orthogonal()
 
         return wrapper
     
@@ -100,7 +101,37 @@ class SorlModelWrapper(PreTrainedModel, GenerationMixin):
         new_total_vocab_size = wrapper.total_vocab_size.item()
         wrapper.model.resize_token_embeddings(new_total_vocab_size)
         wrapper.config.vocab_size = new_total_vocab_size
+        wrapper._init_abstract_embeddings_orthogonal()
         return wrapper
+
+    @torch.no_grad()
+    def _init_abstract_embeddings_orthogonal(self):
+        """Reinitialize abstract embedding rows with orthogonal vectors.
+
+        After resize_token_embeddings (mean_resizing), abstract rows are
+        near-identical samples from N(mu, Sigma).  This creates a symmetry
+        trap for ortho_loss: all rows receive the same gradient direction,
+        so they never diverge.  Orthogonal init breaks this symmetry.
+        """
+        base_vocab = int(self.vocab_sizes[0].item())
+        n_abs = int(self.total_vocab_size.item()) - base_vocab  # includes placeholder
+        if n_abs <= 1:
+            return
+
+        embed_w = self.model.model.embed_tokens.weight
+        lm_head_w = self.model.lm_head.weight
+        hidden = embed_w.shape[1]
+
+        # Measure scale from existing base embeddings
+        base_norm = embed_w[:base_vocab].norm(dim=1).mean().item()
+
+        # Generate orthogonal matrix (n_abs x hidden), scale to match base norms
+        ortho = torch.empty(max(n_abs, hidden), hidden, device=embed_w.device)
+        nn.init.orthogonal_(ortho)
+        ortho = ortho[:n_abs] * base_norm
+
+        embed_w[base_vocab:] = ortho
+        lm_head_w[base_vocab:] = ortho
 
     def forward(self, input_ids, attention_mask=None, memory_span_abs=1792, memory_span_traj=1792, **kwargs):
         # Create SORL block mask for flex attention with information bottleneck
