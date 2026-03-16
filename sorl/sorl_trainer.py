@@ -304,14 +304,21 @@ class SoRLLoss(nn.Module):
         traj_logits = shift_logits.clone()
         traj_logits[..., base_vocab:] = -float("inf")
         loss_fct = nn.CrossEntropyLoss(reduction='none')
-        traj_losses = loss_fct(traj_logits.view(-1, traj_logits.size(-1)), shift_labels.view(-1))
+        # Safe labels: at non-traj positions, label may be abstract → logit is -inf → CE=+inf.
+        # Replace with 0 (valid base-vocab id) so CE is finite; mask zeros it out anyway.
+        safe_traj_labels = shift_labels.clone()
+        safe_traj_labels[~traj_mask.bool()] = 0
+        traj_losses = loss_fct(traj_logits.view(-1, traj_logits.size(-1)), safe_traj_labels.view(-1))
         traj_losses = (traj_losses.view(data.shape[0], -1) * traj_mask)
         traj_loss = traj_losses.sum() / traj_mask.sum().clamp(min=1)
 
         # --- abs loss p(a|s): mask base vocab + placeholder, softmax over abstract only ---
         abs_logits_sliced = shift_logits.clone()
         abs_logits_sliced[..., :(base_vocab + 1)] = -float("inf")  # mask base vocab + placeholder
-        abs_losses = loss_fct(abs_logits_sliced.view(-1, abs_logits_sliced.size(-1)), shift_labels.view(-1))
+        # Safe labels: at non-abs positions, label may be base-vocab → logit is -inf → CE=+inf.
+        safe_abs_labels = shift_labels.clone()
+        safe_abs_labels[~abs_mask.bool()] = base_vocab + 1  # valid abstract token id
+        abs_losses = loss_fct(abs_logits_sliced.view(-1, abs_logits_sliced.size(-1)), safe_abs_labels.view(-1))
         abs_losses = (abs_losses.view(data.shape[0], -1) * abs_mask).clamp(min=self.min_abs_ppl)
         abs_loss = abs_losses.sum() / abs_mask.sum().clamp(min=1)
         info_loss = traj_loss - base_traj_loss
@@ -455,17 +462,21 @@ class SoRLLoss_v2(SoRLLoss):
         traj_logits = shift_logits.clone()
         traj_logits[..., base_vocab:] = -float("inf")
         loss_fct = nn.CrossEntropyLoss(reduction='none')
-
-        # set abstract logit to -infty
-        traj_losses = loss_fct(traj_logits.view(-1, traj_logits.size(-1)), shift_labels.view(-1))
+        # Safe labels: at non-traj positions, label may be abstract → logit is -inf → CE=+inf.
+        # Replace with 0 (valid base-vocab id) so CE is finite; mask zeros it out anyway.
+        safe_traj_labels = shift_labels.clone()
+        safe_traj_labels[~traj_mask.bool()] = 0
+        traj_losses = loss_fct(traj_logits.view(-1, traj_logits.size(-1)), safe_traj_labels.view(-1))
         traj_losses = (traj_losses.view(data.shape[0], -1) * traj_mask)
         traj_loss = traj_losses.sum() / traj_mask.sum().clamp(min=1)
 
-        # --- abs loss p(a|s): use full logits ---
-        # set traj logit to -infty
+        # --- abs loss p(a|s): mask base vocab + placeholder, softmax over abstract only ---
         abs_logits = shift_logits.clone()
         abs_logits[..., :(base_vocab + 1)] = -float("inf")  # mask base vocab + placeholder
-        abs_losses = loss_fct(abs_logits.view(-1, abs_logits.size(-1)), shift_labels.view(-1))
+        # Safe labels: at non-abs positions, label may be base-vocab → logit is -inf → CE=+inf.
+        safe_abs_labels = shift_labels.clone()
+        safe_abs_labels[~abs_mask.bool()] = base_vocab + 1  # valid abstract token id
+        abs_losses = loss_fct(abs_logits.view(-1, abs_logits.size(-1)), safe_abs_labels.view(-1))
         abs_losses = (abs_losses.view(data.shape[0], -1) * abs_mask).clamp(min=self.min_abs_ppl)
         abs_loss = abs_losses.sum() / abs_mask.sum().clamp(min=1)
 
