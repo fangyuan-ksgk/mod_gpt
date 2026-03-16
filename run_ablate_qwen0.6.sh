@@ -1,15 +1,21 @@
 #!/bin/bash
-# SoRL Ablation Experiments v2 — Qwen3-0.6B on 4×H100
+# SoRL Ablation Experiments v3 — Qwen3-0.6B on 4×H100
 #
-# 16 single-GPU experiments (4 batches × 4 parallel) ≈ 8 hours
+# 12 single-GPU experiments (3 batches × 4 parallel) ≈ 3 hours
+#
+# Previous findings:
+#   - info=1.0, abs=0.5 is best accuracy config
+#   - v2 (no info-gain) → abstract tokens collapse (effective_vocab=7), K=4 < K=None
+#   - ortho=1.0 + emb_lr_mult=10 helps diversity
+#
+# This round: test v3 contrastive trainer (hinge loss against corrupted abstractions)
 #
 # Research questions:
-#   Q1 (2 runs): Bug-fix validation — re-run prev best configs with fixed CE logits slicing
-#   Q2 (2 runs): v2 ablation — does optimizing p(s|a) directly suffice vs info-gain?
-#   Q3 (2 runs): emb_lr_mult — does 10× embedding LR help ortho_loss converge?
-#   Q4 (8 runs): Diversity — does ortho alone suffice, or is zipf needed?
-#                 2×2 factorial (ortho × zipf) at info=1 and info=3
-#   Extended (2 runs): v2 + ortho combos
+#   Q5 (4 runs): Does v3 build dependency? (K=4 ≥ K=None?)
+#   Q6 (4 runs): Gamma & corruption settings — margin, ratio, method
+#   Q7 (4 runs): v1 vs v2 validation — head-to-head with matched configs
+#
+# All v3 runs share: --use_v3 --alpha_info_gain 1.0 --alpha_abs 0.5
 #
 # Usage:
 #   bash run_ablate_qwen0.6.sh
@@ -52,6 +58,9 @@ EVAL_SAMPLES=1000
 EVAL_BATCH_SIZE=64
 MAX_NEW_TOKENS=256
 
+# v3 shared defaults
+V3="--use_v3 --alpha_info_gain 1.0 --alpha_abs 0.5"
+
 TIMESTAMP=$(date +%Y%m%d_%H%M)
 EXP_IDX=0
 
@@ -92,84 +101,60 @@ run_bg() {
 }
 
 # ============================================================================
-# Batch 1/4: Q1 (bug-fix re-run) + Q2 (v2 ablation)
-#   Q1: re-run prev best configs (info+abs) with fixed CE logits slicing
-#   Q2: --use_v2 optimizes p(s|a) directly, no info-gain formulation
+# Batch 1/3 — Q5: v3 core — does contrastive build dependency?
+#   Sweep corruption ratio with shuffle method, gamma=0.5, alpha_contrastive=1.0
 # ============================================================================
 echo ""
 echo "============================================================"
-echo "Batch 1/4: Q1 bug-fix re-run + Q2 v2 ablation (${TIMESTAMP})"
+echo "Batch 1/3: Q5 — v3 core contrastive (${TIMESTAMP})"
 echo "  Model: ${MODEL_NAME} | 4xH100 | 1 run/GPU"
 echo "============================================================"
 
-# Q1: prev best configs (with abs>0) — compare to old runs under fixed CE
-run_bg "Q1_fix_info1_abs0.5"       --alpha_info_gain 1.0 --alpha_abs 0.5
-run_bg "Q1_fix_info3_abs0.5"       --alpha_info_gain 3.0 --alpha_abs 0.5
-# Q2: v2 trainer — p(s|a) directly (alpha_info_gain controls weight on cond_traj_loss)
-run_bg "Q2_v2_info1_abs0.5"        --use_v2 --alpha_info_gain 1.0 --alpha_abs 0.5
-run_bg "Q2_v2_info3_abs0.5"        --use_v2 --alpha_info_gain 3.0 --alpha_abs 0.5
+run_bg "v3_shuf_r0.3_g0.5"   $V3 --corrupt_method shuffle --corrupt_ratio 0.3 --gamma_contrastive 0.5
+run_bg "v3_shuf_r0.5_g0.5"   $V3 --corrupt_method shuffle --corrupt_ratio 0.5 --gamma_contrastive 0.5
+run_bg "v3_shuf_r1.0_g0.5"   $V3 --corrupt_method shuffle --corrupt_ratio 1.0 --gamma_contrastive 0.5
+run_bg "v3_noise_r0.3_g0.5"  $V3 --corrupt_method noise   --corrupt_ratio 0.3 --gamma_contrastive 0.5
 
 echo "  4 experiments launched. Waiting..."
 wait
 
 # ============================================================================
-# Batch 2/4: Q3 (emb_lr_mult) + Q4 start (diversity at info=1)
-#   Q3: same config, emb_lr_mult=1 vs 10 — does higher emb LR help ortho converge?
-#   Q4: zipf-only baseline at info=1 + ortho+zipf combo at info=1
-#   (ortho-only at info=1 = Q3 emb10x run; neither = Q1 fix_info1 run)
+# Batch 2/3 — Q6: gamma & alpha_contrastive sweep
+#   Fix shuffle, ratio=0.3, vary gamma and weight
 # ============================================================================
 echo ""
 echo "============================================================"
-echo "Batch 2/4: Q3 emb_lr_mult + Q4 diversity at info=1 (${TIMESTAMP})"
+echo "Batch 2/3: Q6 — gamma & alpha_contrastive sweep (${TIMESTAMP})"
 echo "============================================================"
 
-# Q3: emb_lr_mult effect (both have ortho=1.0)
-run_bg "Q3_ortho1.0_emb1x"         --alpha_info_gain 1.0 --alpha_abs 0.5 --alpha_ortho 1.0 --emb_lr_mult 1.0
-run_bg "Q3_ortho1.0_emb10x"        --alpha_info_gain 1.0 --alpha_abs 0.5 --alpha_ortho 1.0 --emb_lr_mult 10.0
-# Q4 at info=1: zipf-only, ortho+zipf  (ortho-only = Q3_emb10x, neither = Q1_fix_info1)
-run_bg "Q4_i1_zipf1.0"             --alpha_info_gain 1.0 --alpha_abs 0.5 --alpha_soft_zipf 1.0
-run_bg "Q4_i1_ortho1.0_zipf1.0"    --alpha_info_gain 1.0 --alpha_abs 0.5 --alpha_ortho 1.0 --alpha_soft_zipf 1.0 --emb_lr_mult 10.0
+run_bg "v3_shuf_g0.1"        $V3 --corrupt_method shuffle --corrupt_ratio 0.3 --gamma_contrastive 0.1
+run_bg "v3_shuf_g1.0"        $V3 --corrupt_method shuffle --corrupt_ratio 0.3 --gamma_contrastive 1.0
+run_bg "v3_shuf_g2.0"        $V3 --corrupt_method shuffle --corrupt_ratio 0.3 --gamma_contrastive 2.0
+run_bg "v3_acontr3.0"        $V3 --corrupt_method shuffle --corrupt_ratio 0.3 --gamma_contrastive 0.5 --alpha_contrastive 3.0
 
 echo "  4 experiments launched. Waiting..."
 wait
 
 # ============================================================================
-# Batch 3/4: Q4 continued (diversity factorial at info=3)
-#   Full 2×2: ortho-only, zipf-only, both, neither=Q1_fix_info3
+# Batch 3/3 — Q7: v1 vs v2 validation (same configs, head-to-head)
+#   v2 now has torch.no_grad() fix on base_traj_loss — compare against v1
 # ============================================================================
 echo ""
 echo "============================================================"
-echo "Batch 3/4: Q4 diversity factorial at info=3 (${TIMESTAMP})"
+echo "Batch 3/3: Q7 — v1 vs v2 validation + SFT baseline (${TIMESTAMP})"
 echo "============================================================"
 
-# Q4 at info=3: ortho-only (neither = Q1_fix_info3)
-run_bg "Q4_i3_ortho1.0"            --alpha_info_gain 3.0 --alpha_abs 0.5 --alpha_ortho 1.0 --emb_lr_mult 10.0
-run_bg "Q4_i3_zipf1.0"             --alpha_info_gain 3.0 --alpha_abs 0.5 --alpha_soft_zipf 1.0
-run_bg "Q4_i3_ortho1.0_zipf1.0"    --alpha_info_gain 3.0 --alpha_abs 0.5 --alpha_ortho 1.0 --alpha_soft_zipf 1.0 --emb_lr_mult 10.0
-# Extended: v2 + ortho (does v2 benefit from diversity regularization?)
-run_bg "v2_info1_ortho1.0_emb10x"  --use_v2 --alpha_info_gain 1.0 --alpha_abs 0.5 --alpha_ortho 1.0 --emb_lr_mult 10.0
-
-echo "  4 experiments launched. Waiting..."
-wait
-
-# ============================================================================
-# Batch 4/4: Extended combos + SFT baseline
-#   v2+ortho at info=3, v2+zipf, stronger ortho, fresh SFT reference
-# ============================================================================
-echo ""
-echo "============================================================"
-echo "Batch 4/4: Extended combos + baseline (${TIMESTAMP})"
-echo "============================================================"
-
-run_bg "v2_info3_ortho1.0_emb10x"  --use_v2 --alpha_info_gain 3.0 --alpha_abs 0.5 --alpha_ortho 1.0 --emb_lr_mult 10.0
-run_bg "v2_info1_zipf1.0"          --use_v2 --alpha_info_gain 1.0 --alpha_abs 0.5 --alpha_soft_zipf 1.0
-run_bg "ortho0.5_emb10x"           --alpha_info_gain 1.0 --alpha_abs 0.5 --alpha_ortho 0.5 --emb_lr_mult 10.0
-run_bg "baseline_sft"
+# v1 vs v2: info=1, abs=0.5 (matched config)
+run_bg "v1_info1_abs0.5"               --alpha_info_gain 1.0 --alpha_abs 0.5
+run_bg "v2_info1_abs0.5"               --use_v2 --alpha_info_gain 1.0 --alpha_abs 0.5
+# v1 vs v2: info=1, abs=0.5, ortho=1.0, emb10x (matched config + diversity)
+run_bg "v1_info1_ortho1_emb10x"        --alpha_info_gain 1.0 --alpha_abs 0.5 --alpha_ortho 1.0 --emb_lr_mult 10.0
+run_bg "v2_info1_ortho1_emb10x"        --use_v2 --alpha_info_gain 1.0 --alpha_abs 0.5 --alpha_ortho 1.0 --emb_lr_mult 10.0
 
 echo "  4 experiments launched. Waiting..."
 wait
 
 echo ""
 echo "============================================================"
-echo "All 16 experiments complete. Results in ./ckpt/ablate_${TIMESTAMP}/"
+echo "All 12 experiments complete. Results in ./ckpt/ablate_${TIMESTAMP}/"
 echo "============================================================"

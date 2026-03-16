@@ -532,24 +532,25 @@ class SoRLTrainerv2(SoRLTrainer):
         model = _DDPForwardProxy(self.model, self.raw_model) if self.ddp else self.raw_model
         base_vocab = int(self.raw_model.vocab_sizes[0].item())
 
-        # 1. Base trajectory loss (SFT-equivalent, no abstraction)
+        # 1. Base trajectory loss (SFT-equivalent, logging only — NOT in loss)
         labels = input_ids.clone()
         labels[attention_mask == 0] = -100
         seq_idx = torch.arange(labels.size(1), device=self.device).unsqueeze(0)
         labels[seq_idx < prompt_len.unsqueeze(1)] = -100
 
-        outputs = model(
-            input_ids=input_ids, attention_mask=attention_mask,
-            memory_span_abs=cfg.memory_span_abs, memory_span_traj=cfg.memory_span_traj,
-        )
-        logits = outputs.logits
-        logits[:, :, base_vocab:] = -float("inf")
-        shift_logits = logits[:, :-1, :].contiguous()
-        shift_labels = labels[:, 1:].contiguous()
-        base_traj_loss = nn.CrossEntropyLoss(ignore_index=-100)(
-            shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1)
-        )
-        del outputs, logits
+        with torch.no_grad():
+            outputs = model(
+                input_ids=input_ids, attention_mask=attention_mask,
+                memory_span_abs=cfg.memory_span_abs, memory_span_traj=cfg.memory_span_traj,
+            )
+            logits = outputs.logits
+            logits[:, :, base_vocab:] = -float("inf")
+            shift_logits = logits[:, :-1, :].contiguous()
+            shift_labels = labels[:, 1:].contiguous()
+            base_traj_loss = nn.CrossEntropyLoss(ignore_index=-100)(
+                shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1)
+            )
+            del outputs, logits
 
         # 2. SoRL search + v2 aux losses
         has_aux = (cfg.alpha_info_gain != 0 or cfg.alpha_abs != 0
