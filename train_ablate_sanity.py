@@ -431,19 +431,19 @@ def main():
     )
     log(f"Trainer: SoRLTrainer (eval_batch_size={args.eval_batch_size})")
 
-    # ---- Initial eval ----
-    if is_master:
-        log("--- Initial evaluation (K=None, NL-only) ---")
-        result = trainer.evaluate()
-        if result:
-            log(f"Pre-train accuracy [K=None]: {result['accuracy']*100:.1f}% "
-                f"({result['correct']}/{result['total']})")
-        if has_aux:
-            log(f"--- Initial evaluation (K={config.K}, with abstractions) ---")
-            result_k = trainer.evaluate(eval_K=config.K)
-            if result_k:
-                log(f"Pre-train accuracy [K={config.K}]: {result_k['accuracy']*100:.1f}% "
-                    f"({result_k['correct']}/{result_k['total']})")
+    # # ---- Initial eval ----
+    # if is_master:
+    #     log("--- Initial evaluation (K=None, NL-only) ---")
+    #     result = trainer.evaluate()
+    #     if result:
+    #         log(f"Pre-train accuracy [K=None]: {result['accuracy']*100:.1f}% "
+    #             f"({result['correct']}/{result['total']})")
+    #     if has_aux:
+    #         log(f"--- Initial evaluation (K={config.K}, with abstractions) ---")
+    #         result_k = trainer.evaluate(eval_K=config.K)
+    #         if result_k:
+    #             log(f"Pre-train accuracy [K={config.K}]: {result_k['accuracy']*100:.1f}% "
+    #                 f"({result_k['correct']}/{result_k['total']})")
 
     # ---- Train ----
     history = trainer.train()
