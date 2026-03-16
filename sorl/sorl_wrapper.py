@@ -87,7 +87,7 @@ class SorlModelWrapper(PreTrainedModel, GenerationMixin):
             wrapper.model.resize_token_embeddings(new_total_vocab_size)
             wrapper.model.config.vocab_size = new_total_vocab_size
             wrapper.config.vocab_size = new_total_vocab_size
-            # wrapper._init_abstract_embeddings_orthogonal()
+            wrapper._init_abstract_embeddings_orthogonal()
 
         return wrapper
     
