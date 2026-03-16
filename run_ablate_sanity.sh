@@ -1,10 +1,20 @@
 #!/bin/bash
-# SoRL Ablation Experiments — Qwen3-1.7B on 4×H100
+# SoRL Ablation Experiments v2 — Qwen3-1.7B on 4×H100
+#
+# 16 single-GPU experiments (4 batches × 4 parallel) ≈ 8 hours
+#
+# Previous finding: info=1.0, abs=0.5 is best accuracy config; zipf didn't diversify.
+#
+# Research questions:
+#   Q1 (2 runs): Bug-fix validation — re-run prev best configs with fixed CE logits slicing
+#   Q2 (2 runs): v2 ablation — does optimizing p(s|a) directly suffice vs info-gain?
+#   Q3 (2 runs): emb_lr_mult — does 10× embedding LR help ortho_loss converge?
+#   Q4 (8 runs): Diversity — does ortho alone suffice, or is zipf needed?
+#                 2×2 factorial (ortho × zipf) at info=1 and info=3
+#   Extended (2 runs): v2 + ortho combos
 #
 # Usage:
 #   bash run_ablate_sanity.sh
-#
-# 36 single-GPU experiments (1 run/GPU, 4 parallel) → 9 batches + 1 DDP validation.
 
 set -e
 
@@ -84,183 +94,84 @@ run_bg() {
 }
 
 # ============================================================================
-# Batch 1/9: Baseline + info sweep (4 runs, 1/GPU)
+# Batch 1/4: Q1 (bug-fix re-run) + Q2 (v2 ablation)
+#   Q1: re-run prev best configs (info+abs) with fixed CE logits slicing
+#   Q2: --use_v2 optimizes p(s|a) directly, no info-gain formulation
 # ============================================================================
 echo ""
 echo "============================================================"
-echo "Batch 1/9: Baseline + info sweep (${TIMESTAMP})"
-echo "  Model: ${MODEL_NAME} | 4xA100 | 1 run/GPU"
+echo "Batch 1/4: Q1 bug-fix re-run + Q2 v2 ablation (${TIMESTAMP})"
+echo "  Model: ${MODEL_NAME} | 4xH100 | 1 run/GPU"
 echo "============================================================"
 
-run_bg "baseline_aux0"
-run_bg "info1.0"           --alpha_info_gain 1.0
-run_bg "info3.0"           --alpha_info_gain 3.0
-run_bg "info5.0"           --alpha_info_gain 5.0
+# Q1: prev best configs (with abs>0) — compare to old runs under fixed CE
+run_bg "Q1_fix_info1_abs0.5"       --alpha_info_gain 1.0 --alpha_abs 0.5
+run_bg "Q1_fix_info3_abs0.5"       --alpha_info_gain 3.0 --alpha_abs 0.5
+# Q2: v2 trainer — p(s|a) directly (alpha_info_gain controls weight on cond_traj_loss)
+run_bg "Q2_v2_info1_abs0.5"        --use_v2 --alpha_info_gain 1.0 --alpha_abs 0.5
+run_bg "Q2_v2_info3_abs0.5"        --use_v2 --alpha_info_gain 3.0 --alpha_abs 0.5
 
 echo "  4 experiments launched. Waiting..."
 wait
 
 # ============================================================================
-# Batch 2/9: Info sweep tail + info+abs start (4 runs, 1/GPU)
+# Batch 2/4: Q3 (emb_lr_mult) + Q4 start (diversity at info=1)
+#   Q3: same config, emb_lr_mult=1 vs 10 — does higher emb LR help ortho converge?
+#   Q4: zipf-only baseline at info=1 + ortho+zipf combo at info=1
+#   (ortho-only at info=1 = Q3 emb10x run; neither = Q1 fix_info1 run)
 # ============================================================================
 echo ""
 echo "============================================================"
-echo "Batch 2/9: Info sweep tail + info+abs start (${TIMESTAMP})"
+echo "Batch 2/4: Q3 emb_lr_mult + Q4 diversity at info=1 (${TIMESTAMP})"
 echo "============================================================"
 
-run_bg "info7.0"           --alpha_info_gain 7.0
-run_bg "info9.0"           --alpha_info_gain 9.0
-run_bg "info1.0_abs0.5"   --alpha_info_gain 1.0 --alpha_abs 0.5
-run_bg "info3.0_abs0.5"   --alpha_info_gain 3.0 --alpha_abs 0.5
+# Q3: emb_lr_mult effect (both have ortho=1.0)
+run_bg "Q3_ortho1.0_emb1x"         --alpha_info_gain 1.0 --alpha_abs 0.5 --alpha_ortho 1.0 --emb_lr_mult 1.0
+run_bg "Q3_ortho1.0_emb10x"        --alpha_info_gain 1.0 --alpha_abs 0.5 --alpha_ortho 1.0 --emb_lr_mult 10.0
+# Q4 at info=1: zipf-only, ortho+zipf  (ortho-only = Q3_emb10x, neither = Q1_fix_info1)
+run_bg "Q4_i1_zipf1.0"             --alpha_info_gain 1.0 --alpha_abs 0.5 --alpha_soft_zipf 1.0
+run_bg "Q4_i1_ortho1.0_zipf1.0"    --alpha_info_gain 1.0 --alpha_abs 0.5 --alpha_ortho 1.0 --alpha_soft_zipf 1.0 --emb_lr_mult 10.0
 
 echo "  4 experiments launched. Waiting..."
 wait
 
 # ============================================================================
-# Batch 3/9: Info+abs continued (4 runs, 1/GPU)
+# Batch 3/4: Q4 continued (diversity factorial at info=3)
+#   Full 2×2: ortho-only, zipf-only, both, neither=Q1_fix_info3
 # ============================================================================
 echo ""
 echo "============================================================"
-echo "Batch 3/9: Info+abs continued (${TIMESTAMP})"
+echo "Batch 3/4: Q4 diversity factorial at info=3 (${TIMESTAMP})"
 echo "============================================================"
 
-run_bg "info5.0_abs0.5"           --alpha_info_gain 5.0 --alpha_abs 0.5
-run_bg "info7.0_abs0.5"           --alpha_info_gain 7.0 --alpha_abs 0.5
-run_bg "info9.0_abs0.5"           --alpha_info_gain 9.0 --alpha_abs 0.5
-run_bg "info9.0_abs1.0"           --alpha_info_gain 9.0 --alpha_abs 1.0
+# Q4 at info=3: ortho-only (neither = Q1_fix_info3)
+run_bg "Q4_i3_ortho1.0"            --alpha_info_gain 3.0 --alpha_abs 0.5 --alpha_ortho 1.0 --emb_lr_mult 10.0
+run_bg "Q4_i3_zipf1.0"             --alpha_info_gain 3.0 --alpha_abs 0.5 --alpha_soft_zipf 1.0
+run_bg "Q4_i3_ortho1.0_zipf1.0"    --alpha_info_gain 3.0 --alpha_abs 0.5 --alpha_ortho 1.0 --alpha_soft_zipf 1.0 --emb_lr_mult 10.0
+# Extended: v2 + ortho (does v2 benefit from diversity regularization?)
+run_bg "v2_info1_ortho1.0_emb10x"  --use_v2 --alpha_info_gain 1.0 --alpha_abs 0.5 --alpha_ortho 1.0 --emb_lr_mult 10.0
 
 echo "  4 experiments launched. Waiting..."
 wait
 
 # ============================================================================
-# Batch 4/9: Abs sweep at info=9 + zipf start (4 runs, 1/GPU)
+# Batch 4/4: Extended combos + SFT baseline
+#   v2+ortho at info=3, v2+zipf, stronger ortho, fresh SFT reference
 # ============================================================================
 echo ""
 echo "============================================================"
-echo "Batch 4/9: Abs sweep at info=9 + zipf start (${TIMESTAMP})"
+echo "Batch 4/4: Extended combos + baseline (${TIMESTAMP})"
 echo "============================================================"
 
-run_bg "info9.0_abs1.5"           --alpha_info_gain 9.0 --alpha_abs 1.5
-run_bg "info9.0_abs2.0"           --alpha_info_gain 9.0 --alpha_abs 2.0
-run_bg "info9.0_abs0.5_zipf0.5"  --alpha_info_gain 9.0 --alpha_abs 0.5 --alpha_soft_zipf 0.5
-run_bg "info9.0_abs0.5_zipf1.0"  --alpha_info_gain 9.0 --alpha_abs 0.5 --alpha_soft_zipf 1.0
+run_bg "v2_info3_ortho1.0_emb10x"  --use_v2 --alpha_info_gain 3.0 --alpha_abs 0.5 --alpha_ortho 1.0 --emb_lr_mult 10.0
+run_bg "v2_info1_zipf1.0"          --use_v2 --alpha_info_gain 1.0 --alpha_abs 0.5 --alpha_soft_zipf 1.0
+run_bg "ortho0.5_emb10x"           --alpha_info_gain 1.0 --alpha_abs 0.5 --alpha_ortho 0.5 --emb_lr_mult 10.0
+run_bg "baseline_sft"
 
 echo "  4 experiments launched. Waiting..."
 wait
 
-# ============================================================================
-# Batch 5/9: Zipf at info=9 tail + fine-grid abs at info=1.0 (4 runs, 1/GPU)
-# ============================================================================
 echo ""
 echo "============================================================"
-echo "Batch 5/9: Zipf tail + fine-grid abs at info=1.0 (${TIMESTAMP})"
-echo "============================================================"
-
-run_bg "info9.0_abs0.5_zipf1.5"  --alpha_info_gain 9.0 --alpha_abs 0.5 --alpha_soft_zipf 1.5
-run_bg "info9.0_abs0.5_zipf2.0"  --alpha_info_gain 9.0 --alpha_abs 0.5 --alpha_soft_zipf 2.0
-run_bg "info1.0_abs0.1"   --alpha_info_gain 1.0 --alpha_abs 0.1
-run_bg "info1.0_abs0.3"   --alpha_info_gain 1.0 --alpha_abs 0.3
-
-echo "  4 experiments launched. Waiting..."
-wait
-
-# ============================================================================
-# Batch 6/9: Fine-grid abs at info=1.0 + fine info at abs=0.5 (4 runs, 1/GPU)
-# ============================================================================
-echo ""
-echo "============================================================"
-echo "Batch 6/9: Fine-grid abs + fine info (${TIMESTAMP})"
-echo "============================================================"
-
-run_bg "info1.0_abs0.7"   --alpha_info_gain 1.0 --alpha_abs 0.7
-run_bg "info1.0_abs1.0"   --alpha_info_gain 1.0 --alpha_abs 1.0
-run_bg "info0.5_abs0.5"   --alpha_info_gain 0.5 --alpha_abs 0.5
-run_bg "info1.5_abs0.5"   --alpha_info_gain 1.5 --alpha_abs 0.5
-
-echo "  4 experiments launched. Waiting..."
-wait
-
-# ============================================================================
-# Batch 7/9: Fine info continued + info=3.0 abs sweep (4 runs, 1/GPU)
-# ============================================================================
-echo ""
-echo "============================================================"
-echo "Batch 7/9: Fine info + info=3.0 abs sweep (${TIMESTAMP})"
-echo "============================================================"
-
-run_bg "info2.0_abs0.5"            --alpha_info_gain 2.0 --alpha_abs 0.5
-run_bg "info2.5_abs0.5"            --alpha_info_gain 2.5 --alpha_abs 0.5
-run_bg "info3.0_abs0.1"            --alpha_info_gain 3.0 --alpha_abs 0.1
-run_bg "info3.0_abs0.3"            --alpha_info_gain 3.0 --alpha_abs 0.3
-
-echo "  4 experiments launched. Waiting..."
-wait
-
-# ============================================================================
-# Batch 8/9: Info=3.0 abs tail + zipf at winner (4 runs, 1/GPU)
-# ============================================================================
-echo ""
-echo "============================================================"
-echo "Batch 8/9: Info=3.0 abs tail + zipf at winner (${TIMESTAMP})"
-echo "============================================================"
-
-run_bg "info3.0_abs0.7"            --alpha_info_gain 3.0 --alpha_abs 0.7
-run_bg "info3.0_abs1.0"            --alpha_info_gain 3.0 --alpha_abs 1.0
-run_bg "info1.0_abs0.5_zipf0.5"   --alpha_info_gain 1.0 --alpha_abs 0.5 --alpha_soft_zipf 0.5
-run_bg "info1.0_abs0.5_zipf1.0"   --alpha_info_gain 1.0 --alpha_abs 0.5 --alpha_soft_zipf 1.0
-
-echo "  4 experiments launched. Waiting..."
-wait
-
-# ============================================================================
-# Batch 9/9: Zipf at winner + K sweep (4 runs, 1/GPU)
-# ============================================================================
-echo ""
-echo "============================================================"
-echo "Batch 9/9: Zipf at winner + K sweep (${TIMESTAMP})"
-echo "============================================================"
-
-run_bg "info1.0_abs0.5_zipf1.5"   --alpha_info_gain 1.0 --alpha_abs 0.5 --alpha_soft_zipf 1.5
-run_bg "info1.0_abs0.5_zipf2.0"   --alpha_info_gain 1.0 --alpha_abs 0.5 --alpha_soft_zipf 2.0
-run_bg "info1.0_abs0.5_K2"        --alpha_info_gain 1.0 --alpha_abs 0.5 --K 2
-run_bg "info1.0_abs0.5_K8"        --alpha_info_gain 1.0 --alpha_abs 0.5 --K 8
-
-echo "  4 experiments launched. Waiting..."
-wait
-
-# ============================================================================
-# Batch 10: DDP validation (uses all 4 GPUs)
-# ============================================================================
-EXP_IDX=$((EXP_IDX + 1))
-DDP_IDX=$EXP_IDX
-DDP_PORT=$((BASE_PORT + DDP_IDX))
-DDP_OUT="./ckpt/ablate_${TIMESTAMP}/exp${DDP_IDX}_4gpu_ddp_baseline"
-echo ""
-echo "============================================================"
-echo "Exp ${DDP_IDX}: DDP validation  [GPU=0,1,2,3]  port=${DDP_PORT}"
-echo "============================================================"
-CUDA_VISIBLE_DEVICES=0,1,2,3 torchrun \
-  --nproc_per_node=$N_GPUS \
-  --master_addr=$MASTER_ADDR \
-  --master_port=$DDP_PORT \
-  train_ablate_sanity.py \
-  --model_name $MODEL_NAME \
-  --dataset $DATASET \
-  --max_length $MAX_LENGTH \
-  --lr $LR \
-  --warmup_steps $WARMUP_STEPS \
-  --batch_size $BATCH_SIZE \
-  --gradient_accumulation_steps $((8 / (BATCH_SIZE * N_GPUS))) \
-  --num_epochs $NUM_EPOCHS \
-  --log_every $LOG_EVERY \
-  --eval_every $EVAL_EVERY \
-  --save_every $SAVE_EVERY \
-  --eval_samples $EVAL_SAMPLES \
-  --eval_batch_size $EVAL_BATCH_SIZE \
-  --max_new_tokens $MAX_NEW_TOKENS \
-  --output_dir $DDP_OUT
-
-echo ""
-echo "============================================================"
-echo "All experiments complete. Results in ./ckpt/ablate_${TIMESTAMP}/"
+echo "All 16 experiments complete. Results in ./ckpt/ablate_${TIMESTAMP}/"
 echo "============================================================"
