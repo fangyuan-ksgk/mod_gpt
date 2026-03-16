@@ -580,7 +580,6 @@ class SoRLTrainerv2(SoRLTrainer):
 
         # alpha_info_gain now weights traj_loss = p(s|a) directly
         loss = (
-            base_traj_loss
             + cfg.alpha_info_gain * traj_loss
             + cfg.alpha_abs * abs_loss
             + cfg.alpha_soft_zipf * zipf_bigram_loss

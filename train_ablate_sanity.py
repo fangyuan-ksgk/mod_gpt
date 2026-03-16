@@ -24,7 +24,7 @@ from safetensors.torch import load_file as load_safetensors
 from transformers import AutoTokenizer
 
 from sorl.sorl_wrapper import SorlModelWrapper, left_pad_and_mask
-from sorl.trainer_ablate import SoRLTrainer, SoRLConfig
+from sorl.trainer_ablate import SoRLTrainer, SoRLTrainerv2, SoRLConfig
 from data.pt_dataset import get_dataset
 
 
@@ -48,6 +48,8 @@ def parse_args():
     p.add_argument("--max_length", type=int, default=512)
 
     # Optimizer
+    p.add_argument("--emb_lr_mult", type=float, default=1.0,
+                   help="LR multiplier for embed_tokens & lm_head")
     p.add_argument("--lr", type=float, default=1e-5)
     p.add_argument("--weight_decay", type=float, default=0.01)
     p.add_argument("--warmup_steps", type=int, default=50)
@@ -72,6 +74,8 @@ def parse_args():
     # Ablation flags
     p.add_argument("--eval_K", type=int, default=None,
                    help="K for eval generation. None=NL-only, 4=periodic abstract")
+    p.add_argument("--use_v2", action="store_true",
+                   help="Use SoRLTrainerv2 (optimizes p(s|a) directly, no info-gain)")
 
     # SoRL loss weights
     p.add_argument("--alpha_info_gain", type=float, default=0.0, help="Info-gain loss weight")
@@ -387,6 +391,7 @@ def main():
     # ---- Config ----
     config = SoRLConfig(
         lr=args.lr,
+        emb_lr_mult=args.emb_lr_mult,
         weight_decay=args.weight_decay,
         warmup_steps=args.warmup_steps,
         cooldown_frac=args.cooldown_frac,
@@ -420,7 +425,8 @@ def main():
     has_aux = (config.alpha_info_gain != 0 or config.alpha_abs != 0 or config.alpha_soft_zipf != 0 or config.alpha_ortho != 0)
 
     # ---- Trainer ----
-    trainer = SoRLTrainer(
+    TrainerCls = SoRLTrainerv2 if args.use_v2 else SoRLTrainer
+    trainer = TrainerCls(
         model=model,
         tokenizer=tokenizer,
         train_dataset=train_ds,
@@ -429,7 +435,7 @@ def main():
         config=config,
         ddp=ddp,
     )
-    log(f"Trainer: SoRLTrainer (eval_batch_size={args.eval_batch_size})")
+    log(f"Trainer: {TrainerCls.__name__} (eval_batch_size={args.eval_batch_size})")
 
     # # ---- Initial eval ----
     # if is_master:
