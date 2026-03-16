@@ -124,6 +124,62 @@ def select_best_sequences(
     return best_data, best_ppt, best_ppt_advantage
 
 
+def corrupt_abstract_tokens(
+    data: torch.Tensor,
+    base_vocab: int,
+    total_vocab: int,
+    method: str = 'shuffle',
+    corrupt_ratio: float = 0.3,
+) -> torch.Tensor:
+    """
+    Create corrupted abstract token sequence ã from data.
+
+    Both methods first fully corrupt all abstract positions, then reset
+    (1 - corrupt_ratio) of them back to the original values.  This gives
+    a unified corruption-level control regardless of method.
+
+    Args:
+        data:          (B, L) token ids with interleaved abstract tokens.
+        base_vocab:    First abstract token id (tokens >= base_vocab are abstract).
+        total_vocab:   Total vocabulary size (base + abstract).
+        method:        'shuffle' — random permutation of abstract positions per sequence.
+                       'noise'  — replace abstract tokens with random abstract ids.
+        corrupt_ratio: Fraction of abstract positions that stay corrupted (0→identity, 1→full).
+
+    Returns:
+        corrupted: (B, L) with corrupted abstract tokens; trajectory tokens unchanged.
+    """
+    corrupted = data.clone()
+    abs_mask = (data >= base_vocab)  # (B, L) bool
+
+    for i in range(data.size(0)):
+        abs_pos = abs_mask[i].nonzero(as_tuple=True)[0]
+        n_abs = len(abs_pos)
+        if n_abs <= 1 and method == 'shuffle':
+            continue
+        if n_abs == 0:
+            continue
+
+        # Step 1: fully corrupt
+        if method == 'shuffle':
+            perm = torch.randperm(n_abs, device=data.device)
+            corrupted[i, abs_pos] = data[i, abs_pos[perm]]
+        elif method == 'noise':
+            corrupted[i, abs_pos] = torch.randint(
+                base_vocab, total_vocab, (n_abs,), device=data.device
+            )
+        else:
+            raise ValueError(f"Unknown corruption method: {method}")
+
+        # Step 2: reset (1 - corrupt_ratio) of positions back to original
+        n_keep = int(n_abs * (1 - corrupt_ratio))
+        if n_keep > 0:
+            keep_idx = torch.randperm(n_abs, device=data.device)[:n_keep]
+            corrupted[i, abs_pos[keep_idx]] = data[i, abs_pos[keep_idx]]
+
+    return corrupted
+
+
 def sorl_search(
     model,
     input_ids: torch.Tensor,
@@ -168,6 +224,9 @@ def sorl_search(
     )
     
     return best_data, best_ppt, best_ppt_advantage, expanded_mask, expanded_prompt_len
+
+# fn 1. corrupt abstraction sequence 
+# fn 2. compute info gain (between picked abstraction v.s. corrupted abstraction)
 
 def sorl_search_ar(
     model,

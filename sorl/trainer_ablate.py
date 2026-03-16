@@ -24,7 +24,7 @@ import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data import DataLoader, DistributedSampler
 
-from sorl.sorl_trainer import sorl_search, sorl_search_ar, SoRLLoss, SoRLLoss_v2
+from sorl.sorl_trainer import sorl_search, sorl_search_ar, SoRLLoss, SoRLLoss_v2, corrupt_abstract_tokens
 from data.pt_dataset import collate_fn as default_collate_fn
 
 
@@ -99,6 +99,12 @@ class SoRLConfig:
 
     # Ablation flags
     eval_K: Optional[int] = 4  # K for generate(); set None for NL-only generation
+
+    # Contrastive corruption (v3)
+    corrupt_method: str = 'shuffle'   # 'shuffle' or 'noise'
+    corrupt_ratio: float = 0.3        # fraction of abstract positions that stay corrupted
+    alpha_contrastive: float = 1.0    # weight for hinge contrastive loss
+    gamma_contrastive: float = 0.5    # margin for hinge: want corrupted_traj - traj > gamma
 
 
 # ---------------------------------------------------------------------------
@@ -590,6 +596,145 @@ class SoRLTrainerv2(SoRLTrainer):
             "loss": loss,
             "base_traj_loss": base_traj_loss,
             "info_gain_loss": traj_loss,  # reuse key for logging compatibility
+            "abs_loss": abs_loss,
+            "zipf_bigram_loss": zipf_bigram_loss,
+            "ortho_loss": ortho_loss,
+        }
+
+
+# ---------------------------------------------------------------------------
+# v3: Contrastive SoRL — uses SoRLLoss_v2 for p(s|a), plus hinge contrastive
+#   loss against corrupted abstractions p(s|ã).
+#
+#   Loss = α_info * traj_loss                                    [p(s|a)]
+#        + α_contrastive * max(0, γ + traj_loss - corrupted_traj) [hinge]
+#        + α_abs * abs_loss
+#        + α_zipf * zipf_loss
+#        + α_ortho * ortho_loss
+# ---------------------------------------------------------------------------
+class SoRLTrainerv3(SoRLTrainer):
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Use SoRLLoss_v2 — returns (traj_loss, abs_loss, zipf_kl) directly
+        self.loss_fn = SoRLLoss_v2(
+            abs_vocab_size=self.raw_model.vocab_sizes[-1],
+            decay=self.config.decay,
+            target_vocab_util=self.config.target_vocab_util,
+            min_abs_ppl=self.config.min_abs_ppl,
+            zipf_alpha=self.config.zipf_alpha,
+        ).to(self.device)
+
+    def _compute_corrupted_traj_loss(self, corrupted_data, model, expanded_attn_mask,
+                                     expanded_prompt_len, base_vocab):
+        """Forward corrupted_data (no grad) and compute traj_loss at trajectory positions."""
+        cfg = self.config
+        with torch.no_grad():
+            c_out = model(
+                input_ids=corrupted_data, attention_mask=expanded_attn_mask,
+                memory_span_abs=cfg.memory_span_abs, memory_span_traj=cfg.memory_span_traj,
+            )
+            c_shift_logits = c_out.logits[..., :-1, :].contiguous()
+            c_shift_labels = corrupted_data[..., 1:].contiguous()
+            c_shift_attn = expanded_attn_mask[..., 1:].contiguous()
+
+            if expanded_prompt_len is not None:
+                seq_idx = torch.arange(c_shift_attn.size(1), device=c_shift_attn.device).unsqueeze(0)
+                c_shift_attn = c_shift_attn.clone()
+                c_shift_attn[seq_idx < (expanded_prompt_len.unsqueeze(1) - 1)] = 0
+
+            levels = (corrupted_data >= base_vocab).long()[:, 1:]
+            traj_mask = (levels == 0).float() * c_shift_attn.float()
+
+            c_traj_logits = c_shift_logits.clone()
+            c_traj_logits[..., base_vocab:] = -float("inf")
+
+            safe_labels = c_shift_labels.clone()
+            safe_labels[~traj_mask.bool()] = 0
+
+            loss_fct = nn.CrossEntropyLoss(reduction='none')
+            c_losses = loss_fct(c_traj_logits.view(-1, c_traj_logits.size(-1)), safe_labels.view(-1))
+            c_losses = c_losses.view(corrupted_data.shape[0], -1) * traj_mask
+            corrupted_traj_loss = c_losses.sum() / traj_mask.sum().clamp(min=1)
+
+        return corrupted_traj_loss
+
+    def _training_step(self, batch):
+        cfg = self.config
+        input_ids = batch["input_ids"].to(self.device)
+        attention_mask = batch["attention_mask"].to(self.device)
+        prompt_len = batch["prompt_len"].to(self.device)
+
+        model = _DDPForwardProxy(self.model, self.raw_model) if self.ddp else self.raw_model
+        base_vocab = int(self.raw_model.vocab_sizes[0].item())
+        total_vocab = int(self.raw_model.vocab_sizes.sum().item())
+
+        # 1. Base trajectory loss (SFT-equivalent, for logging only)
+        labels = input_ids.clone()
+        labels[attention_mask == 0] = -100
+        seq_idx = torch.arange(labels.size(1), device=self.device).unsqueeze(0)
+        labels[seq_idx < prompt_len.unsqueeze(1)] = -100
+
+        with torch.no_grad():
+            outputs = model(
+                input_ids=input_ids, attention_mask=attention_mask,
+                memory_span_abs=cfg.memory_span_abs, memory_span_traj=cfg.memory_span_traj,
+            )
+            logits = outputs.logits
+            logits[:, :, base_vocab:] = -float("inf")
+            shift_logits = logits[:, :-1, :].contiguous()
+            shift_labels = labels[:, 1:].contiguous()
+            base_traj_loss = nn.CrossEntropyLoss(ignore_index=-100)(
+                shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1)
+            )
+            del outputs, logits
+
+        # 2. SoRL search
+        with torch.no_grad():
+            best_data, best_ppt, best_ppt_adv, expanded_attn_mask, expanded_prompt_len = sorl_search(
+                self.raw_model, input_ids, attention_mask, prompt_len, self.pad_token_id,
+                n=cfg.num_rollouts, K=cfg.K,
+                max_iterations=cfg.max_iterations,
+                memory_span_abs=cfg.memory_span_abs,
+                memory_span_traj=cfg.memory_span_traj,
+                temperature=cfg.temperature,
+            )
+
+        # 3. Corrupt abstract tokens → corrupted_traj_loss (no grad)
+        corrupted_data = corrupt_abstract_tokens(
+            best_data, base_vocab, total_vocab,
+            method=cfg.corrupt_method, corrupt_ratio=cfg.corrupt_ratio,
+        )
+        corrupted_traj_loss = self._compute_corrupted_traj_loss(
+            corrupted_data, model, expanded_attn_mask,
+            expanded_prompt_len, base_vocab,
+        )
+
+        # 4. SoRLLoss_v2: returns (traj_loss, abs_loss, zipf_kl)
+        traj_loss, abs_loss, zipf_bigram_loss = self.loss_fn(
+            best_data, model,
+            expanded_attn_mask, cfg.memory_span_abs, cfg.memory_span_traj,
+            prompt_len=expanded_prompt_len,
+        )
+
+        ortho_loss = self.loss_fn.ortho_loss(self.raw_model)
+
+        # 5. Hinge contrastive: max(0, γ + traj_loss - corrupted_traj_loss)
+        #    Active when corrupted_traj_loss - traj_loss < γ (gap too small)
+        contrastive_loss = (cfg.gamma_contrastive + traj_loss - corrupted_traj_loss).clamp(min=0)
+
+        loss = (
+            cfg.alpha_info_gain * traj_loss
+            + cfg.alpha_contrastive * contrastive_loss
+            + cfg.alpha_abs * abs_loss
+            + cfg.alpha_soft_zipf * zipf_bigram_loss
+            + cfg.alpha_ortho * ortho_loss
+        )
+
+        return {
+            "loss": loss,
+            "base_traj_loss": base_traj_loss,
+            "info_gain_loss": contrastive_loss,  # reuse key for logging compatibility
             "abs_loss": abs_loss,
             "zipf_bigram_loss": zipf_bigram_loss,
             "ortho_loss": ortho_loss,
