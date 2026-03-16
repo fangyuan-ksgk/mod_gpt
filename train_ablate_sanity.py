@@ -24,7 +24,7 @@ from safetensors.torch import load_file as load_safetensors
 from transformers import AutoTokenizer
 
 from sorl.sorl_wrapper import SorlModelWrapper, left_pad_and_mask
-from sorl.trainer_ablate import SoRLTrainer, SoRLTrainerv2, SoRLConfig
+from sorl.trainer_ablate import SoRLTrainer, SoRLTrainerv2, SoRLTrainerv3, SoRLConfig
 from data.pt_dataset import get_dataset
 
 
@@ -76,6 +76,18 @@ def parse_args():
                    help="K for eval generation. None=NL-only, 4=periodic abstract")
     p.add_argument("--use_v2", action="store_true",
                    help="Use SoRLTrainerv2 (optimizes p(s|a) directly, no info-gain)")
+    p.add_argument("--use_v3", action="store_true",
+                   help="Use SoRLTrainerv3 (contrastive: p(s|a) vs p(s|a_corrupted))")
+
+    # Contrastive (v3) params
+    p.add_argument("--corrupt_method", type=str, default="shuffle", choices=["shuffle", "noise"],
+                   help="Corruption method for contrastive loss")
+    p.add_argument("--corrupt_ratio", type=float, default=0.3,
+                   help="Fraction of abstract tokens that stay corrupted")
+    p.add_argument("--alpha_contrastive", type=float, default=1.0,
+                   help="Weight for hinge contrastive loss")
+    p.add_argument("--gamma_contrastive", type=float, default=0.5,
+                   help="Margin for hinge contrastive loss")
 
     # SoRL loss weights
     p.add_argument("--alpha_info_gain", type=float, default=0.0, help="Info-gain loss weight")
@@ -414,6 +426,10 @@ def main():
         alpha_soft_zipf=args.alpha_soft_zipf,
         alpha_ortho=args.alpha_ortho,
         zipf_alpha=args.zipf_alpha,
+        corrupt_method=args.corrupt_method,
+        corrupt_ratio=args.corrupt_ratio,
+        alpha_contrastive=args.alpha_contrastive,
+        gamma_contrastive=args.gamma_contrastive,
     )
     log(f"Config: eval_K={config.eval_K}, aux weights={'nonzero' if config.alpha_info_gain or config.alpha_abs or config.alpha_soft_zipf or config.alpha_ortho else '0 (SFT-equivalent)'}")
 
@@ -425,7 +441,12 @@ def main():
     has_aux = (config.alpha_info_gain != 0 or config.alpha_abs != 0 or config.alpha_soft_zipf != 0 or config.alpha_ortho != 0)
 
     # ---- Trainer ----
-    TrainerCls = SoRLTrainerv2 if args.use_v2 else SoRLTrainer
+    if args.use_v3:
+        TrainerCls = SoRLTrainerv3
+    elif args.use_v2:
+        TrainerCls = SoRLTrainerv2
+    else:
+        TrainerCls = SoRLTrainer
     trainer = TrainerCls(
         model=model,
         tokenizer=tokenizer,
