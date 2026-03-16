@@ -296,7 +296,7 @@ class SoRLTrainer:
         seq_idx = torch.arange(labels.size(1), device=self.device).unsqueeze(0)
         labels[seq_idx < prompt_len.unsqueeze(1)] = -100
         outputs = model(
-            input_ids=input_ids, attention_mask=attention_mask, labels=labels,
+            input_ids=input_ids, attention_mask=attention_mask,
             memory_span_abs=cfg.memory_span_abs, memory_span_traj=cfg.memory_span_traj,
         )
 

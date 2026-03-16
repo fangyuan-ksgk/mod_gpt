@@ -286,27 +286,34 @@ class SoRLLoss(nn.Module):
         outputs = model(input_ids=data, attention_mask=attention_mask, memory_span_abs=memory_span_abs, memory_span_traj=memory_span_traj)
         logits = outputs.logits
 
-        # --- cond loss --- 
+        # --- masks ---
         shift_logits = logits[..., :-1, :].contiguous()
         shift_labels = data[..., 1:].contiguous()
-        loss_fct = nn.CrossEntropyLoss(reduction='none')
-        losses = loss_fct(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1))
         shift_attention_mask = attention_mask[..., 1:].contiguous()
-        # Mask question tokens so they don't contribute to any loss term
         if prompt_len is not None:
             seq_idx = torch.arange(shift_attention_mask.size(1), device=shift_attention_mask.device).unsqueeze(0)
             shift_attention_mask = shift_attention_mask.clone()
             shift_attention_mask[seq_idx < (prompt_len.unsqueeze(1) - 1)] = 0
-        valid_positions = shift_attention_mask.view(-1) == 1
-        losses = losses * valid_positions.float()
-        ppt = losses.view(data.shape[0], -1)
 
-        # --- info gain, abs loss ---
-        levels = (data >= model.vocab_sizes[0]).long()[:, 1:]
-        traj_mask = (levels == 0).float() * shift_attention_mask.float() 
+        base_vocab = int(model.vocab_sizes[0].item())
+        levels = (data >= base_vocab).long()[:, 1:]
+        traj_mask = (levels == 0).float() * shift_attention_mask.float()
         abs_mask = (1 - traj_mask) * shift_attention_mask.float()
-        traj_loss = (ppt * traj_mask).sum() / traj_mask.sum().clamp(min=1)
-        abs_loss = (ppt * abs_mask).clamp(min=self.min_abs_ppl).sum() / abs_mask.sum().clamp(min=1)
+
+        # --- traj loss p(s|a): slice logits to base vocab (same scale as base_traj_loss) ---
+        traj_logits = shift_logits.clone()
+        traj_logits[..., base_vocab:] = -float("inf")
+        loss_fct = nn.CrossEntropyLoss(reduction='none')
+        traj_losses = loss_fct(traj_logits.view(-1, traj_logits.size(-1)), shift_labels.view(-1))
+        traj_losses = (traj_losses.view(data.shape[0], -1) * traj_mask)
+        traj_loss = traj_losses.sum() / traj_mask.sum().clamp(min=1)
+
+        # --- abs loss p(a|s): mask base vocab + placeholder, softmax over abstract only ---
+        abs_logits_sliced = shift_logits.clone()
+        abs_logits_sliced[..., :(base_vocab + 1)] = -float("inf")  # mask base vocab + placeholder
+        abs_losses = loss_fct(abs_logits_sliced.view(-1, abs_logits_sliced.size(-1)), shift_labels.view(-1))
+        abs_losses = (abs_losses.view(data.shape[0], -1) * abs_mask).clamp(min=self.min_abs_ppl)
+        abs_loss = abs_losses.sum() / abs_mask.sum().clamp(min=1)
         info_loss = traj_loss - base_traj_loss
 
         # --- bigram zipfian loss ---
@@ -421,3 +428,51 @@ class SoRLLoss(nn.Module):
         abs_losses = losses * shift_abs_mask.float()
         denoise_loss = abs_losses.sum() / shift_abs_mask.float().sum().clamp(min=1)
         return denoise_loss
+
+
+class SoRLLoss_v2(SoRLLoss): 
+
+    def forward(self, data, model, attention_mask, memory_span_abs: int, memory_span_traj: int, prompt_len=None):
+        
+        outputs = model(input_ids=data, attention_mask=attention_mask, memory_span_abs=memory_span_abs, memory_span_traj=memory_span_traj)
+        logits = outputs.logits
+
+        # --- masks ---
+        shift_logits = logits[..., :-1, :].contiguous()
+        shift_labels = data[..., 1:].contiguous()
+        shift_attention_mask = attention_mask[..., 1:].contiguous()
+        if prompt_len is not None:
+            seq_idx = torch.arange(shift_attention_mask.size(1), device=shift_attention_mask.device).unsqueeze(0)
+            shift_attention_mask = shift_attention_mask.clone()
+            shift_attention_mask[seq_idx < (prompt_len.unsqueeze(1) - 1)] = 0
+
+        base_vocab = int(model.vocab_sizes[0].item())
+        levels = (data >= base_vocab).long()[:, 1:]
+        traj_mask = (levels == 0).float() * shift_attention_mask.float()
+        abs_mask = (1 - traj_mask) * shift_attention_mask.float()
+
+        # --- traj loss p(s|a): slice logits to base vocab (same scale as base_traj_loss) ---
+        traj_logits = shift_logits.clone()
+        traj_logits[..., base_vocab:] = -float("inf")
+        loss_fct = nn.CrossEntropyLoss(reduction='none')
+
+        # set abstract logit to -infty
+        traj_losses = loss_fct(traj_logits.view(-1, traj_logits.size(-1)), shift_labels.view(-1))
+        traj_losses = (traj_losses.view(data.shape[0], -1) * traj_mask)
+        traj_loss = traj_losses.sum() / traj_mask.sum().clamp(min=1)
+
+        # --- abs loss p(a|s): use full logits ---
+        # set traj logit to -infty
+        abs_logits = shift_logits.clone()
+        abs_logits[..., :(base_vocab + 1)] = -float("inf")  # mask base vocab + placeholder
+        abs_losses = loss_fct(abs_logits.view(-1, abs_logits.size(-1)), shift_labels.view(-1))
+        abs_losses = (abs_losses.view(data.shape[0], -1) * abs_mask).clamp(min=self.min_abs_ppl)
+        abs_loss = abs_losses.sum() / abs_mask.sum().clamp(min=1)
+
+        # --- bigram zipfian loss ---
+        abs_positions = abs_mask.bool()
+        abs_logits = logits[:, :-1][abs_positions][..., model.vocab_sizes[0]:]
+        soft_zipf_kl = self.zipf_loss(abs_logits)
+
+        # --- Return: p(s | a)/p(s), p(a | s), KL(p(a_t, a_t+1), soft_zipf_prior) ---
+        return traj_loss, abs_loss, soft_zipf_kl 

@@ -24,7 +24,7 @@ import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data import DataLoader, DistributedSampler
 
-from sorl.sorl_trainer import sorl_search, sorl_search_ar, SoRLLoss
+from sorl.sorl_trainer import sorl_search, sorl_search_ar, SoRLLoss, SoRLLoss_v2
 from data.pt_dataset import collate_fn as default_collate_fn
 
 
@@ -500,3 +500,98 @@ class SoRLTrainer:
             dist.destroy_process_group()
 
         return self.history
+
+
+# use SoRLLoss_v2 (traj loss instead of info gain loss etc.)
+# Ablation: directly optimize p(s|a) instead of info-gain p(s|a)/p(s)
+class SoRLTrainerv2(SoRLTrainer):
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Replace SoRLLoss with SoRLLoss_v2
+        self.loss_fn = SoRLLoss_v2(
+            abs_vocab_size=self.raw_model.vocab_sizes[-1],
+            decay=self.config.decay,
+            target_vocab_util=self.config.target_vocab_util,
+            min_abs_ppl=self.config.min_abs_ppl,
+            zipf_alpha=self.config.zipf_alpha,
+        ).to(self.device)
+
+    def _training_step(self, batch):
+        cfg = self.config
+        input_ids = batch["input_ids"].to(self.device)
+        attention_mask = batch["attention_mask"].to(self.device)
+        prompt_len = batch["prompt_len"].to(self.device)
+
+        model = _DDPForwardProxy(self.model, self.raw_model) if self.ddp else self.raw_model
+        base_vocab = int(self.raw_model.vocab_sizes[0].item())
+
+        # 1. Base trajectory loss (SFT-equivalent, no abstraction)
+        labels = input_ids.clone()
+        labels[attention_mask == 0] = -100
+        seq_idx = torch.arange(labels.size(1), device=self.device).unsqueeze(0)
+        labels[seq_idx < prompt_len.unsqueeze(1)] = -100
+
+        outputs = model(
+            input_ids=input_ids, attention_mask=attention_mask,
+            memory_span_abs=cfg.memory_span_abs, memory_span_traj=cfg.memory_span_traj,
+        )
+        logits = outputs.logits
+        logits[:, :, base_vocab:] = -float("inf")
+        shift_logits = logits[:, :-1, :].contiguous()
+        shift_labels = labels[:, 1:].contiguous()
+        base_traj_loss = nn.CrossEntropyLoss(ignore_index=-100)(
+            shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1)
+        )
+        del outputs, logits
+
+        # 2. SoRL search + v2 aux losses
+        has_aux = (cfg.alpha_info_gain != 0 or cfg.alpha_abs != 0
+                   or cfg.alpha_soft_zipf != 0 or cfg.alpha_ortho != 0)
+        assert has_aux, "v2 only supports SoRL with auxiliary losses"
+
+        with torch.no_grad():
+            if cfg.ar_search:
+                best_data, best_ppt, best_ppt_adv, expanded_attn_mask, expanded_prompt_len = sorl_search_ar(
+                    self.raw_model, input_ids, attention_mask, prompt_len, self.pad_token_id,
+                    n=cfg.num_rollouts, K=cfg.K,
+                    memory_span_abs=cfg.memory_span_abs,
+                    memory_span_traj=cfg.memory_span_traj,
+                    temperature=cfg.temperature,
+                )
+            else:
+                best_data, best_ppt, best_ppt_adv, expanded_attn_mask, expanded_prompt_len = sorl_search(
+                    self.raw_model, input_ids, attention_mask, prompt_len, self.pad_token_id,
+                    n=cfg.num_rollouts, K=cfg.K,
+                    max_iterations=cfg.max_iterations,
+                    memory_span_abs=cfg.memory_span_abs,
+                    memory_span_traj=cfg.memory_span_traj,
+                    temperature=cfg.temperature,
+                )
+
+        # SoRLLoss_v2: returns (traj_loss, abs_loss, zipf_kl) — no base_traj_loss arg
+        traj_loss, abs_loss, zipf_bigram_loss = self.loss_fn(
+            best_data, model,
+            expanded_attn_mask, cfg.memory_span_abs, cfg.memory_span_traj,
+            prompt_len=expanded_prompt_len,
+        )
+
+        ortho_loss = self.loss_fn.ortho_loss(self.raw_model)
+
+        # alpha_info_gain now weights traj_loss = p(s|a) directly
+        loss = (
+            base_traj_loss
+            + cfg.alpha_info_gain * traj_loss
+            + cfg.alpha_abs * abs_loss
+            + cfg.alpha_soft_zipf * zipf_bigram_loss
+            + cfg.alpha_ortho * ortho_loss
+        )
+
+        return {
+            "loss": loss,
+            "base_traj_loss": base_traj_loss,
+            "info_gain_loss": traj_loss,  # reuse key for logging compatibility
+            "abs_loss": abs_loss,
+            "zipf_bigram_loss": zipf_bigram_loss,
+            "ortho_loss": ortho_loss,
+        }
