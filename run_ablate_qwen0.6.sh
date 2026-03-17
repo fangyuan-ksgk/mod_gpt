@@ -1,23 +1,44 @@
 #!/bin/bash
-# SoRL Ablation Experiments v3 — Qwen3-0.6B on 4×H100
+# SoRL Ablation Experiments — Qwen3-0.6B on 4×H100
 #
-# 12 single-GPU experiments (3 batches × 4 parallel) ≈ 3 hours
+# 20 single-GPU experiments (5 batches × 4 parallel) ≈ 5 hours
 #
-# Previous findings:
-#   - info=1.0, abs=0.5 is best accuracy config
-#   - v2 (no info-gain) → abstract tokens collapse (effective_vocab=7), K=4 < K=None
-#   - ortho=1.0 + emb_lr_mult=10 helps diversity
-#   - Orthogonal init now enabled in from_pretrained (symmetry trap fixed)
+# Prior best configs (0.6B):
+#   v3: shuffle r=1.0 γ=0.5 (full corruption works best for 0.6B)
+#   v1: info=1 abs=0.5
+#   ortho=1.0 is helpful
 #
-# Key question: can emb_lr_mult=10 alone (no ortho_loss) diversify abstract embeddings?
+# Batch 1 (≈1h) — Validate prior conclusions (3 epochs):
+#   exp1   v1 baseline        info_gain + abs              → no dependency
+#   exp2   v1 + regularizers  + zipf + ortho               → doesn't help
+#   exp3   v2 baseline        traj + abs                   → dependency not established
+#   exp4   v3 baseline        traj + abs + hinge (r=1.0)   → v3 >> v1 cond accuracy
 #
-# Research questions:
-#   Q5 (4 runs): v1 diversification factorial — emb_lr × ortho
-#   Q6 (4 runs): v3 diversification factorial — emb_lr × ortho
-#   Q7 (4 runs): v3 hyperparameter sweep with emb10x (no ortho)
+# Batch 2 (≈1h) — v2 sweep (3 epochs):
+#   exp5   v2 + ortho         does ortho help v2?
+#   exp6   v2 + zipf          does zipf help v2?
+#   exp7   v2 + zipf + ortho  full regularization for v2
+#   exp8   v2 lower traj      alpha_traj=0.5
 #
-# Shared: --alpha_info_gain 1.0 --alpha_abs 0.5
-# v3 shared: --use_v3 + above + --corrupt_method shuffle --corrupt_ratio 0.3 --gamma_contrastive 0.5
+# Batch 3 (≈1h) — v3 sweep (3 epochs):
+#   exp9   v3 r=0.3           weaker corruption (compare to r=1.0 baseline)
+#   exp10  v3 noise           noise instead of shuffle
+#   exp11  v3 γ=0.1           lower margin (easier to satisfy)
+#   exp12  v3 + ortho         does ortho help v3?
+#
+# Batch 4 (≈1.5h) — v4 inner=4, 1 epoch:
+#   exp13  v4 baseline        shuffle r=1.0 γ=0.5
+#   exp14  v4 r=0.3           weaker corruption
+#   exp15  v4 γ=0.1           lower margin
+#   exp16  v4 no hinge        alpha_contrastive=0 (pure inner-loop ablation)
+#
+# Batch 5 (≈1.5h) — v4 inner=2, 2 epochs:
+#   exp17  v4 baseline        shuffle r=1.0 γ=0.5
+#   exp18  v4 r=0.3           weaker corruption
+#   exp19  v4 γ=0.1           lower margin
+#   exp20  v4 no hinge        alpha_contrastive=0
+#
+# All use emb_lr_mult=10.
 #
 # Usage:
 #   bash run_ablate_qwen0.6.sh
@@ -56,18 +77,22 @@ NUM_EPOCHS=3
 LOG_EVERY=10
 EVAL_EVERY=99999
 SAVE_EVERY=99999
-EVAL_SAMPLES=1000
+EVAL_SAMPLES=1300
 EVAL_BATCH_SIZE=64
 MAX_NEW_TOKENS=256
 
-# shared defaults
-V1="--alpha_info_gain 1.0 --alpha_abs 0.5"
-V3="--use_v3 --alpha_info_gain 1.0 --alpha_abs 0.5 --corrupt_method shuffle --corrupt_ratio 0.3 --gamma_contrastive 0.5"
+# shared defaults — all use emb_lr_mult=10
+# NOTE: 0.6B best v3 config uses r=1.0 (full corruption), not r=0.3
+EMB="--emb_lr_mult 10.0"
+V1="--alpha_info_gain 1.0 --alpha_abs 0.5 $EMB"
+V2="--use_v2 --alpha_traj 1.0 --alpha_abs 0.5 $EMB"
+V3="--use_v3 --alpha_traj 1.0 --alpha_abs 0.5 --corrupt_method shuffle --corrupt_ratio 1.0 --gamma_contrastive 0.5 $EMB"
+V4="--use_v4 --alpha_traj 1.0 --alpha_abs 0.5 --corrupt_method shuffle --corrupt_ratio 1.0 --gamma_contrastive 0.5 $EMB"
 
 TIMESTAMP=$(date +%Y%m%d_%H%M)
 EXP_IDX=0
 
-# ---- Parallel scheduling: 4 x H100 — 1 run/GPU, 4 parallel per batch ----
+# ---- Parallel scheduling: 4 x H100 — 1 run/GPU ----
 
 run_bg() {
   EXP_IDX=$((EXP_IDX + 1))
@@ -92,7 +117,6 @@ run_bg() {
     --warmup_steps $WARMUP_STEPS \
     --batch_size $BATCH_SIZE \
     --gradient_accumulation_steps $grad_accum \
-    --num_epochs $NUM_EPOCHS \
     --log_every $LOG_EVERY \
     --eval_every $EVAL_EVERY \
     --save_every $SAVE_EVERY \
@@ -104,60 +128,87 @@ run_bg() {
 }
 
 # ============================================================================
-# Batch 1/3 — Q5: v1 diversification factorial (emb_lr × ortho)
-#   2×2: {emb_lr=1x, emb_lr=10x} × {no ortho, ortho=1.0}
-#   All use info=1.0, abs=0.5 (best v1 config). Orthogonal init is ON.
+# Batch 1/5 — Validate prior conclusions (3 epochs, 4 parallel) ≈ 1h
 # ============================================================================
 echo ""
 echo "============================================================"
-echo "Batch 1/3: Q5 — v1 emb_lr × ortho factorial (${TIMESTAMP})"
-echo "  Model: ${MODEL_NAME} | 4xH100 | 1 run/GPU"
+echo "Batch 1/5: Validate — v1/v1+reg/v2/v3 baselines (${TIMESTAMP})"
+echo "  Model: ${MODEL_NAME} | 4xH100 | 3 epochs each"
 echo "============================================================"
 
-run_bg "v1_emb1x"              $V1
-run_bg "v1_emb10x"             $V1 --emb_lr_mult 10.0
-run_bg "v1_ortho1_emb1x"      $V1 --alpha_ortho 1.0
-run_bg "v1_ortho1_emb10x"     $V1 --alpha_ortho 1.0 --emb_lr_mult 10.0
+run_bg "v1_baseline"           --num_epochs 3 $V1
+run_bg "v1_zipf_ortho"         --num_epochs 3 $V1 --alpha_soft_zipf 1.0 --alpha_ortho 1.0
+run_bg "v2_baseline"           --num_epochs 3 $V2
+run_bg "v3_baseline"           --num_epochs 3 $V3
 
 echo "  4 experiments launched. Waiting..."
 wait
 
 # ============================================================================
-# Batch 2/3 — Q6: v3 diversification factorial (emb_lr × ortho)
-#   2×2: {emb_lr=1x, emb_lr=10x} × {no ortho, ortho=1.0}
-#   All use v3 defaults (shuffle, r=0.3, γ=0.5).
+# Batch 2/5 — v2 sweep (3 epochs, 4 parallel) ≈ 1h
 # ============================================================================
 echo ""
 echo "============================================================"
-echo "Batch 2/3: Q6 — v3 emb_lr × ortho factorial (${TIMESTAMP})"
+echo "Batch 2/5: v2 sweep — regularization variants (${TIMESTAMP})"
 echo "============================================================"
 
-run_bg "v3_emb1x"              $V3
-run_bg "v3_emb10x"             $V3 --emb_lr_mult 10.0
-run_bg "v3_ortho1_emb1x"      $V3 --alpha_ortho 1.0
-run_bg "v3_ortho1_emb10x"     $V3 --alpha_ortho 1.0 --emb_lr_mult 10.0
+run_bg "v2_ortho"              --num_epochs 3 $V2 --alpha_ortho 1.0
+run_bg "v2_zipf"               --num_epochs 3 $V2 --alpha_soft_zipf 1.0
+run_bg "v2_zipf_ortho"         --num_epochs 3 $V2 --alpha_soft_zipf 1.0 --alpha_ortho 1.0
+run_bg "v2_traj0.5"            --num_epochs 3 $V2 --alpha_traj 0.5
 
 echo "  4 experiments launched. Waiting..."
 wait
 
 # ============================================================================
-# Batch 3/3 — Q7: v3 hyperparameter sweep (all with emb10x, no ortho)
-#   Test corruption/gamma variants under the "emb_lr only" regime
+# Batch 3/5 — v3 sweep (3 epochs, 4 parallel) ≈ 1h
 # ============================================================================
 echo ""
 echo "============================================================"
-echo "Batch 3/3: Q7 — v3 sweep with emb10x, no ortho (${TIMESTAMP})"
+echo "Batch 3/5: v3 sweep — corruption & margin variants (${TIMESTAMP})"
 echo "============================================================"
 
-run_bg "v3_emb10x_r0.5"       $V3 --emb_lr_mult 10.0 --corrupt_ratio 0.5
-run_bg "v3_emb10x_r1.0"       $V3 --emb_lr_mult 10.0 --corrupt_ratio 1.0
-run_bg "v3_emb10x_g1.0"       $V3 --emb_lr_mult 10.0 --gamma_contrastive 1.0
-run_bg "v3_emb10x_noise"      $V3 --emb_lr_mult 10.0 --corrupt_method noise
+run_bg "v3_r0.3"               --num_epochs 3 $V3 --corrupt_ratio 0.3
+run_bg "v3_noise"              --num_epochs 3 $V3 --corrupt_method noise
+run_bg "v3_g0.1"               --num_epochs 3 $V3 --gamma_contrastive 0.1
+run_bg "v3_ortho"              --num_epochs 3 $V3 --alpha_ortho 1.0
+
+echo "  4 experiments launched. Waiting..."
+wait
+
+# ============================================================================
+# Batch 4/5 — v4 inner=4, 1 epoch (4 parallel) ≈ 1.5h
+# ============================================================================
+echo ""
+echo "============================================================"
+echo "Batch 4/5: v4 inner=4, 1 epoch — config sweep (${TIMESTAMP})"
+echo "============================================================"
+
+run_bg "v4_i4_baseline"        --num_epochs 1 --n_inner 4 $V4
+run_bg "v4_i4_r0.3"            --num_epochs 1 --n_inner 4 $V4 --corrupt_ratio 0.3
+run_bg "v4_i4_g0.1"            --num_epochs 1 --n_inner 4 $V4 --gamma_contrastive 0.1
+run_bg "v4_i4_nohinge"         --num_epochs 1 --n_inner 4 $V4 --alpha_contrastive 0.0
+
+echo "  4 experiments launched. Waiting..."
+wait
+
+# ============================================================================
+# Batch 5/5 — v4 inner=2, 2 epochs (4 parallel) ≈ 1.5h
+# ============================================================================
+echo ""
+echo "============================================================"
+echo "Batch 5/5: v4 inner=2, 2 epochs — config sweep (${TIMESTAMP})"
+echo "============================================================"
+
+run_bg "v4_i2_baseline"        --num_epochs 2 --n_inner 2 $V4
+run_bg "v4_i2_r0.3"            --num_epochs 2 --n_inner 2 $V4 --corrupt_ratio 0.3
+run_bg "v4_i2_g0.1"            --num_epochs 2 --n_inner 2 $V4 --gamma_contrastive 0.1
+run_bg "v4_i2_nohinge"         --num_epochs 2 --n_inner 2 $V4 --alpha_contrastive 0.0
 
 echo "  4 experiments launched. Waiting..."
 wait
 
 echo ""
 echo "============================================================"
-echo "All 12 experiments complete. Results in ./ckpt/ablate_${TIMESTAMP}/"
+echo "All 20 experiments complete. Results in ./ckpt/ablate_${TIMESTAMP}/"
 echo "============================================================"
