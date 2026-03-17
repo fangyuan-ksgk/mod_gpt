@@ -7,15 +7,17 @@
 #   - info=1.0, abs=0.5 is best accuracy config
 #   - v2 (no info-gain) → abstract tokens collapse (effective_vocab=7), K=4 < K=None
 #   - ortho=1.0 + emb_lr_mult=10 helps diversity
+#   - Orthogonal init now enabled in from_pretrained (symmetry trap fixed)
 #
-# This round: test v3 contrastive trainer (hinge loss against corrupted abstractions)
+# Key question: can emb_lr_mult=10 alone (no ortho_loss) diversify abstract embeddings?
 #
 # Research questions:
-#   Q5 (4 runs): Does v3 build dependency? (K=4 ≥ K=None?)
-#   Q6 (4 runs): Gamma & corruption settings — margin, ratio, method
-#   Q7 (4 runs): v1 vs v2 validation — head-to-head with matched configs
+#   Q5 (4 runs): v1 diversification factorial — emb_lr × ortho
+#   Q6 (4 runs): v3 diversification factorial — emb_lr × ortho
+#   Q7 (4 runs): v3 hyperparameter sweep with emb10x (no ortho)
 #
-# All v3 runs share: --use_v3 --alpha_info_gain 1.0 --alpha_abs 0.5
+# Shared: --alpha_info_gain 1.0 --alpha_abs 0.5
+# v3 shared: --use_v3 + above + --corrupt_method shuffle --corrupt_ratio 0.3 --gamma_contrastive 0.5
 #
 # Usage:
 #   bash run_ablate_sanity.sh
@@ -58,8 +60,9 @@ EVAL_SAMPLES=1000
 EVAL_BATCH_SIZE=64
 MAX_NEW_TOKENS=256
 
-# v3 shared defaults
-V3="--use_v3 --alpha_info_gain 1.0 --alpha_abs 0.5"
+# shared defaults
+V1="--alpha_info_gain 1.0 --alpha_abs 0.5"
+V3="--use_v3 --alpha_info_gain 1.0 --alpha_abs 0.5 --corrupt_method shuffle --corrupt_ratio 0.3 --gamma_contrastive 0.5"
 
 TIMESTAMP=$(date +%Y%m%d_%H%M)
 EXP_IDX=0
@@ -101,55 +104,55 @@ run_bg() {
 }
 
 # ============================================================================
-# Batch 1/3 — Q5: v3 core — does contrastive build dependency?
-#   Sweep corruption ratio with shuffle method, gamma=0.5, alpha_contrastive=1.0
+# Batch 1/3 — Q5: v1 diversification factorial (emb_lr × ortho)
+#   2×2: {emb_lr=1x, emb_lr=10x} × {no ortho, ortho=1.0}
+#   All use info=1.0, abs=0.5 (best v1 config). Orthogonal init is ON.
 # ============================================================================
 echo ""
 echo "============================================================"
-echo "Batch 1/3: Q5 — v3 core contrastive (${TIMESTAMP})"
+echo "Batch 1/3: Q5 — v1 emb_lr × ortho factorial (${TIMESTAMP})"
 echo "  Model: ${MODEL_NAME} | 4xH100 | 1 run/GPU"
 echo "============================================================"
 
-run_bg "v3_shuf_r0.3_g0.5"   $V3 --corrupt_method shuffle --corrupt_ratio 0.3 --gamma_contrastive 0.5
-run_bg "v3_shuf_r0.5_g0.5"   $V3 --corrupt_method shuffle --corrupt_ratio 0.5 --gamma_contrastive 0.5
-run_bg "v3_shuf_r1.0_g0.5"   $V3 --corrupt_method shuffle --corrupt_ratio 1.0 --gamma_contrastive 0.5
-run_bg "v3_noise_r0.3_g0.5"  $V3 --corrupt_method noise   --corrupt_ratio 0.3 --gamma_contrastive 0.5
+run_bg "v1_emb1x"              $V1
+run_bg "v1_emb10x"             $V1 --emb_lr_mult 10.0
+run_bg "v1_ortho1_emb1x"      $V1 --alpha_ortho 1.0
+run_bg "v1_ortho1_emb10x"     $V1 --alpha_ortho 1.0 --emb_lr_mult 10.0
 
 echo "  4 experiments launched. Waiting..."
 wait
 
 # ============================================================================
-# Batch 2/3 — Q6: gamma & alpha_contrastive sweep
-#   Fix shuffle, ratio=0.3 (or best from batch 1), vary gamma and weight
+# Batch 2/3 — Q6: v3 diversification factorial (emb_lr × ortho)
+#   2×2: {emb_lr=1x, emb_lr=10x} × {no ortho, ortho=1.0}
+#   All use v3 defaults (shuffle, r=0.3, γ=0.5).
 # ============================================================================
 echo ""
 echo "============================================================"
-echo "Batch 2/3: Q6 — gamma & alpha_contrastive sweep (${TIMESTAMP})"
+echo "Batch 2/3: Q6 — v3 emb_lr × ortho factorial (${TIMESTAMP})"
 echo "============================================================"
 
-run_bg "v3_shuf_g0.1"        $V3 --corrupt_method shuffle --corrupt_ratio 0.3 --gamma_contrastive 0.1
-run_bg "v3_shuf_g1.0"        $V3 --corrupt_method shuffle --corrupt_ratio 0.3 --gamma_contrastive 1.0
-run_bg "v3_shuf_g2.0"        $V3 --corrupt_method shuffle --corrupt_ratio 0.3 --gamma_contrastive 2.0
-run_bg "v3_acontr3.0"        $V3 --corrupt_method shuffle --corrupt_ratio 0.3 --gamma_contrastive 0.5 --alpha_contrastive 3.0
+run_bg "v3_emb1x"              $V3
+run_bg "v3_emb10x"             $V3 --emb_lr_mult 10.0
+run_bg "v3_ortho1_emb1x"      $V3 --alpha_ortho 1.0
+run_bg "v3_ortho1_emb10x"     $V3 --alpha_ortho 1.0 --emb_lr_mult 10.0
 
 echo "  4 experiments launched. Waiting..."
 wait
 
 # ============================================================================
-# Batch 3/3 — Q7: v1 vs v2 validation (same configs, head-to-head)
-#   v2 now has torch.no_grad() fix on base_traj_loss — compare against v1
+# Batch 3/3 — Q7: v3 hyperparameter sweep (all with emb10x, no ortho)
+#   Test corruption/gamma variants under the "emb_lr only" regime
 # ============================================================================
 echo ""
 echo "============================================================"
-echo "Batch 3/3: Q7 — v1 vs v2 validation + SFT baseline (${TIMESTAMP})"
+echo "Batch 3/3: Q7 — v3 sweep with emb10x, no ortho (${TIMESTAMP})"
 echo "============================================================"
 
-# v1 vs v2: info=1, abs=0.5 (matched config)
-run_bg "v1_info1_abs0.5"               --alpha_info_gain 1.0 --alpha_abs 0.5
-run_bg "v2_info1_abs0.5"               --use_v2 --alpha_info_gain 1.0 --alpha_abs 0.5
-# v1 vs v2: info=1, abs=0.5, ortho=1.0, emb10x (matched config + diversity)
-run_bg "v1_info1_ortho1_emb10x"        --alpha_info_gain 1.0 --alpha_abs 0.5 --alpha_ortho 1.0 --emb_lr_mult 10.0
-run_bg "v2_info1_ortho1_emb10x"        --use_v2 --alpha_info_gain 1.0 --alpha_abs 0.5 --alpha_ortho 1.0 --emb_lr_mult 10.0
+run_bg "v3_emb10x_r0.5"       $V3 --emb_lr_mult 10.0 --corrupt_ratio 0.5
+run_bg "v3_emb10x_r1.0"       $V3 --emb_lr_mult 10.0 --corrupt_ratio 1.0
+run_bg "v3_emb10x_g1.0"       $V3 --emb_lr_mult 10.0 --gamma_contrastive 1.0
+run_bg "v3_emb10x_noise"      $V3 --emb_lr_mult 10.0 --corrupt_method noise
 
 echo "  4 experiments launched. Waiting..."
 wait
