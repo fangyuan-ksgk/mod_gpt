@@ -106,6 +106,9 @@ class SoRLConfig:
     alpha_contrastive: float = 1.0    # weight for hinge contrastive loss
     gamma_contrastive: float = 0.5    # margin for hinge: want corrupted_traj - traj > gamma
 
+    # Inner-loop (v4)
+    n_inner: int = 1  # inner optimization steps per searched sequence
+
 
 # ---------------------------------------------------------------------------
 # LR schedule
@@ -740,3 +743,261 @@ class SoRLTrainerv3(SoRLTrainer):
             "zipf_bigram_loss": zipf_bigram_loss,
             "ortho_loss": ortho_loss,
         }
+
+
+# ---------------------------------------------------------------------------
+# v4: Inner-loop contrastive SoRL
+#   Like v3, but runs n_inner optimization steps per searched sequence.
+#   Key innovations over v3:
+#   - Inner loop: search once, then iterate n_inner times to build dependency
+#   - Dynamic corruption: re-corrupt each inner step (prevents adaptation)
+#   - Grad through corrupted path: true hinge gradient g_a - g_ã
+#     (v3's no_grad on corrupted path causes "decrease then increase" because
+#      the computed gradient ∂traj(a)/∂θ is NOT the gradient of the hinge loss;
+#      the model takes the path of least resistance — ignoring abstractions)
+#
+#   Loss = α_info * traj_loss
+#        + α_contrastive * max(0, γ + traj_loss - corrupted_traj)
+#        + α_abs * abs_loss
+#        + α_zipf * zipf_loss
+#        + α_ortho * ortho_loss
+# ---------------------------------------------------------------------------
+class SoRLTrainerv4(SoRLTrainerv3):
+
+    def _compute_corrupted_traj_loss_with_grad(self, corrupted_data, model,
+                                                expanded_attn_mask,
+                                                expanded_prompt_len, base_vocab):
+        """Forward corrupted_data WITH grad — enables true hinge gradient g_a - g_ã."""
+        cfg = self.config
+        c_out = model(
+            input_ids=corrupted_data, attention_mask=expanded_attn_mask,
+            memory_span_abs=cfg.memory_span_abs, memory_span_traj=cfg.memory_span_traj,
+        )
+        c_shift_logits = c_out.logits[..., :-1, :].contiguous()
+        c_shift_labels = corrupted_data[..., 1:].contiguous()
+        c_shift_attn = expanded_attn_mask[..., 1:].contiguous()
+
+        if expanded_prompt_len is not None:
+            seq_idx = torch.arange(c_shift_attn.size(1), device=c_shift_attn.device).unsqueeze(0)
+            c_shift_attn = c_shift_attn.clone()
+            c_shift_attn[seq_idx < (expanded_prompt_len.unsqueeze(1) - 1)] = 0
+
+        levels = (corrupted_data >= base_vocab).long()[:, 1:]
+        traj_mask = (levels == 0).float() * c_shift_attn.float()
+
+        c_traj_logits = c_shift_logits.clone()
+        c_traj_logits[..., base_vocab:] = -float("inf")
+
+        safe_labels = c_shift_labels.clone()
+        safe_labels[~traj_mask.bool()] = 0
+
+        loss_fct = nn.CrossEntropyLoss(reduction='none')
+        c_losses = loss_fct(c_traj_logits.view(-1, c_traj_logits.size(-1)), safe_labels.view(-1))
+        c_losses = c_losses.view(corrupted_data.shape[0], -1) * traj_mask
+        corrupted_traj_loss = c_losses.sum() / traj_mask.sum().clamp(min=1)
+
+        return corrupted_traj_loss
+
+    def train(self, resume_from=None):
+        cfg = self.config
+        n_inner = cfg.n_inner
+        os.makedirs(cfg.output_dir, exist_ok=True)
+
+        dataloader = self._make_dataloader(self.train_dataset, shuffle=True)
+        # Each batch produces n_inner forward-backward passes;
+        # every gradient_accumulation_steps passes → 1 optimizer step
+        total_steps = len(dataloader) * cfg.num_epochs * n_inner // cfg.gradient_accumulation_steps
+
+        # Optimizer — separate param group for embed/lm_head (higher LR)
+        emb_params, other_params = [], []
+        for name, p in self.model.named_parameters():
+            if "embed_tokens" in name or "lm_head" in name:
+                emb_params.append(p)
+            else:
+                other_params.append(p)
+        optimizer = torch.optim.AdamW([
+            {"params": other_params, "lr": cfg.lr},
+            {"params": emb_params, "lr": cfg.lr * cfg.emb_lr_mult},
+        ], weight_decay=cfg.weight_decay)
+
+        start_epoch, start_step = 0, 0
+        if resume_from and os.path.exists(resume_from):
+            ckpt = torch.load(resume_from, map_location=self.device)
+            self.raw_model.load_state_dict(ckpt["model"])
+            optimizer.load_state_dict(ckpt["optimizer"])
+            if "loss_fn" in ckpt:
+                self.loss_fn.load_state_dict(ckpt["loss_fn"])
+            start_epoch = ckpt.get("epoch", 0)
+            start_step = ckpt.get("step", 0)
+            self._log(f"Resumed from {resume_from} (epoch={start_epoch}, step={start_step})")
+
+        self._log(f"v4 inner-loop trainer | n_inner={n_inner} | "
+                  f"Total steps: {total_steps} | Batches/epoch: {len(dataloader)} | "
+                  f"Effective batch: {cfg.batch_size * cfg.gradient_accumulation_steps * self.world_size}")
+
+        self.model.train()
+        global_step = start_step
+        accum_count = 0
+
+        if torch.cuda.is_available():
+            torch.cuda.reset_peak_memory_stats(self.device)
+
+        t_start = time.time()
+
+        for epoch in range(start_epoch, cfg.num_epochs):
+            if self.ddp and hasattr(dataloader.sampler, "set_epoch"):
+                dataloader.sampler.set_epoch(epoch)
+
+            for batch_idx, batch in enumerate(dataloader):
+                # Skip already-done batches on resume
+                effective_batch = epoch * len(dataloader) + batch_idx
+                if effective_batch < start_step * cfg.gradient_accumulation_steps // n_inner:
+                    continue
+
+                model = _DDPForwardProxy(self.model, self.raw_model) if self.ddp else self.raw_model
+                base_vocab = int(self.raw_model.vocab_sizes[0].item())
+                total_vocab = int(self.raw_model.vocab_sizes.sum().item())
+
+                input_ids = batch["input_ids"].to(self.device)
+                attention_mask = batch["attention_mask"].to(self.device)
+                prompt_len = batch["prompt_len"].to(self.device)
+
+                # ---- Base traj loss (logging only) ----
+                labels = input_ids.clone()
+                labels[attention_mask == 0] = -100
+                seq_idx = torch.arange(labels.size(1), device=self.device).unsqueeze(0)
+                labels[seq_idx < prompt_len.unsqueeze(1)] = -100
+
+                with torch.no_grad():
+                    outputs = model(
+                        input_ids=input_ids, attention_mask=attention_mask,
+                        memory_span_abs=cfg.memory_span_abs, memory_span_traj=cfg.memory_span_traj,
+                    )
+                    logits = outputs.logits
+                    logits[:, :, base_vocab:] = -float("inf")
+                    base_traj_loss = nn.CrossEntropyLoss(ignore_index=-100)(
+                        logits[:, :-1].contiguous().view(-1, logits.size(-1)),
+                        labels[:, 1:].contiguous().view(-1)
+                    )
+                    del outputs, logits
+
+                # ---- SoRL search (once per batch) ----
+                with torch.no_grad():
+                    best_data, _, _, expanded_attn_mask, expanded_prompt_len = sorl_search(
+                        self.raw_model, input_ids, attention_mask, prompt_len, self.pad_token_id,
+                        n=cfg.num_rollouts, K=cfg.K,
+                        max_iterations=cfg.max_iterations,
+                        memory_span_abs=cfg.memory_span_abs,
+                        memory_span_traj=cfg.memory_span_traj,
+                        temperature=cfg.temperature,
+                    )
+
+                # ---- Inner loop: n_inner steps on the same searched sequence ----
+                for inner_idx in range(n_inner):
+                    # LR schedule
+                    lr = _get_lr(global_step, total_steps, cfg.warmup_steps,
+                                 cfg.cooldown_frac, cfg.lr)
+                    optimizer.param_groups[0]["lr"] = lr
+                    optimizer.param_groups[1]["lr"] = lr * cfg.emb_lr_mult
+
+                    # Dynamic corruption (fresh each inner step)
+                    corrupted_data = corrupt_abstract_tokens(
+                        best_data, base_vocab, total_vocab,
+                        method=cfg.corrupt_method, corrupt_ratio=cfg.corrupt_ratio,
+                    )
+
+                    # Corrupted traj loss — WITH grad (true hinge gradient)
+                    corrupted_traj_loss = self._compute_corrupted_traj_loss_with_grad(
+                        corrupted_data, model, expanded_attn_mask,
+                        expanded_prompt_len, base_vocab,
+                    )
+
+                    # Clean forward: traj_loss, abs_loss, zipf via SoRLLoss_v2
+                    traj_loss, abs_loss, zipf_bigram_loss = self.loss_fn(
+                        best_data, model,
+                        expanded_attn_mask, cfg.memory_span_abs, cfg.memory_span_traj,
+                        prompt_len=expanded_prompt_len,
+                    )
+
+                    ortho_l = self.loss_fn.ortho_loss(self.raw_model)
+
+                    # Hinge contrastive (grad flows through BOTH traj_loss and corrupted_traj_loss)
+                    contrastive_loss = (cfg.gamma_contrastive + traj_loss - corrupted_traj_loss).clamp(min=0)
+
+                    print(f"- [Inner step {inner_idx+1}/{n_inner}] | hinge loss: {contrastive_loss.item():.4f}")
+                    
+                    loss = (
+                        cfg.alpha_info_gain * traj_loss
+                        + cfg.alpha_contrastive * contrastive_loss
+                        + cfg.alpha_abs * abs_loss
+                        + cfg.alpha_soft_zipf * zipf_bigram_loss
+                        + cfg.alpha_ortho * ortho_l
+                    )
+
+                    (loss / cfg.gradient_accumulation_steps).backward()
+
+                    accum_count += 1
+                    if accum_count % cfg.gradient_accumulation_steps == 0:
+                        if cfg.max_grad_norm > 0:
+                            torch.nn.utils.clip_grad_norm_(self.model.parameters(),
+                                                           cfg.max_grad_norm)
+                        optimizer.step()
+                        optimizer.zero_grad(set_to_none=True)
+                        global_step += 1
+
+                # ---- Logging (after inner loop, last inner step's values) ----
+                if self.is_master and (batch_idx + 1) % cfg.log_every == 0:
+                    elapsed = time.time() - t_start
+                    frac_done = max(global_step, 1) / max(total_steps, 1)
+                    epoch_frac = epoch + (batch_idx + 1) / len(dataloader)
+                    eta = elapsed / frac_done * (1 - frac_done) if frac_done > 0 else 0
+                    eta_m, eta_s = divmod(int(eta), 60)
+                    eta_h, eta_m = divmod(eta_m, 60)
+                    eta_str = f"{eta_h}h{eta_m:02d}m{eta_s:02d}s" if eta_h else f"{eta_m}m{eta_s:02d}s"
+                    peak = (f"Mem: {torch.cuda.max_memory_allocated(self.device)/1024**3:.2f}GB"
+                            if torch.cuda.is_available() else "")
+                    self._log(
+                        f"epoch {epoch_frac:.3f}/{cfg.num_epochs} | remain: {eta_str} | "
+                        f"loss={loss.item():.4f} base={base_traj_loss.item():.4f} "
+                        f"hinge={contrastive_loss.item():.4f} "
+                        f"traj={traj_loss.item():.4f} "
+                        f"abs={abs_loss.item():.4f} "
+                        f"zipf={zipf_bigram_loss.item():.4f} "
+                        f"ortho={ortho_l.item():.4f} "
+                        f"| lr={lr:.2e} | {peak}"
+                    )
+                    self.history["step"].append(global_step)
+                    self.history["loss"].append(loss.item())
+                    self.history["base_loss"].append(base_traj_loss.item())
+                    self.history["info_loss"].append(contrastive_loss.item())
+                    self.history["abs_loss"].append(abs_loss.item())
+                    self.history["zipf_loss"].append(zipf_bigram_loss.item())
+                    self.history["ortho_loss"].append(ortho_l.item())
+                    self.history["lr"].append(lr)
+
+                # Cleanup
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+
+                # Eval
+                if global_step > 0 and global_step % cfg.eval_every == 0:
+                    result = self.evaluate()
+                    if result is not None:
+                        self._log(f"--- Eval step {global_step}: {result} ---")
+
+                # Checkpoint
+                if global_step > 0 and global_step % cfg.save_every == 0:
+                    ckpt_path = os.path.join(cfg.output_dir, f"step_{global_step}.pt")
+                    self.save_checkpoint(ckpt_path, epoch, global_step, optimizer)
+
+            self._log(f"=== Epoch {epoch+1} complete ===")
+
+        # Final save
+        final_path = os.path.join(cfg.output_dir, "final.pt")
+        self.save_checkpoint(final_path, cfg.num_epochs, global_step, optimizer)
+        self._log("Training complete!")
+
+        if self.ddp:
+            dist.destroy_process_group()
+
+        return self.history
