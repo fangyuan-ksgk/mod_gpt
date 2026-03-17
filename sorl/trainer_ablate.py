@@ -624,6 +624,10 @@ class SoRLTrainerv3(SoRLTrainer):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.history = {
+            "step": [], "loss": [], "base_loss": [], "traj_loss": [],
+            "hinge_loss": [], "abs_loss": [], "zipf_loss": [], "ortho_loss": [], "lr": [],
+        }
         # Use SoRLLoss_v2 — returns (traj_loss, abs_loss, zipf_kl) directly
         self.loss_fn = SoRLLoss_v2(
             abs_vocab_size=self.raw_model.vocab_sizes[-1],
@@ -839,7 +843,8 @@ class SoRLTrainerv3(SoRLTrainer):
                     self.history["step"].append(global_step)
                     self.history["loss"].append(total_loss)
                     self.history["base_loss"].append(step_out["base_traj_loss"].item())
-                    self.history["info_loss"].append(step_out["contrastive_loss"].item())
+                    self.history["traj_loss"].append(step_out["traj_loss"].item())
+                    self.history["hinge_loss"].append(step_out["contrastive_loss"].item())
                     self.history["abs_loss"].append(step_out["abs_loss"].item())
                     self.history["zipf_loss"].append(step_out["zipf_bigram_loss"].item())
                     self.history["ortho_loss"].append(step_out["ortho_loss"].item())
@@ -1094,7 +1099,8 @@ class SoRLTrainerv4(SoRLTrainerv3):
                     self.history["step"].append(global_step)
                     self.history["loss"].append(loss.item())
                     self.history["base_loss"].append(base_traj_loss.item())
-                    self.history["info_loss"].append(contrastive_loss.item())
+                    self.history["traj_loss"].append(traj_loss.item())
+                    self.history["hinge_loss"].append(contrastive_loss.item())
                     self.history["abs_loss"].append(abs_loss.item())
                     self.history["zipf_loss"].append(zipf_bigram_loss.item())
                     self.history["ortho_loss"].append(ortho_l.item())
