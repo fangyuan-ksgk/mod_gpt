@@ -1,25 +1,20 @@
 #!/bin/bash
-# SoRL Ablation Experiments — Qwen3-1.7B on 4×H100
+# SoRL Ablation — Qwen3-1.7B — response_only_abs probe
 #
-# 24 single-GPU experiments (6 batches × 4 parallel)
+# 16 experiments (4 batches × 4 parallel)
+# Mirrors prior batches 1-4 with --response_only_abs.
 #
-# Batch 1 — Baselines (3 epochs):
-#   v1 baseline, v1+zipf+ortho, v2 baseline, v3 baseline
-#
-# Batch 2 — v2 sweep (3 epochs):
-#   v2+ortho, v2+zipf, v2+zipf+ortho, v2 traj=0.5
-#
-# Batch 3 — v3 sweep (3 epochs):
-#   v3 r=1.0, v3 noise, v3 γ=0.1, v3+ortho
-#
-# Batch 4 — v4 inner=2 (2 epochs):
-#   v4 baseline, v4 r=1.0, v4 γ=0.1, v4 no hinge
-#
-# Batch 5 — response_only_abs baselines (3 epochs):
+# Batch 1 — Baselines + resp_only (3 epochs):
 #   v1, v1+zipf+ortho, v2, v3
 #
-# Batch 6 — response_only_abs sweep (3 epochs):
-#   v2+ortho, v3+ortho, v3 r=1.0, v4 i2
+# Batch 2 — v2 sweep + resp_only (3 epochs):
+#   v2+ortho, v2+zipf, v2+zipf+ortho, v2 traj=0.5
+#
+# Batch 3 — v3 sweep + resp_only (3 epochs):
+#   v3 r=1.0, v3 noise, v3 γ=0.1, v3+ortho
+#
+# Batch 4 — v4 i2 + resp_only (2 epochs):
+#   v4 baseline, v4 r=1.0, v4 γ=0.1, v4 no hinge
 #
 # All use emb_lr_mult=10. V3/V4 default: r=0.3.
 #
@@ -110,102 +105,70 @@ run_bg() {
 }
 
 # ============================================================================
-# Batch 1 — Baselines (3 epochs, 4 parallel)
+# Batch 1 — Baselines + response_only_abs (3 epochs, 4 parallel)
 # ============================================================================
 echo ""
 echo "============================================================"
-echo "Batch 1: Baselines — v1/v1+reg/v2/v3 (${TIMESTAMP})"
+echo "Batch 1: resp_only baselines — v1/v1+reg/v2/v3 (${TIMESTAMP})"
 echo "============================================================"
 
-run_bg "v1_baseline"           --num_epochs 3 $V1
-run_bg "v1_zipf_ortho"         --num_epochs 3 $V1 --alpha_soft_zipf 1.0 --alpha_ortho 1.0
-run_bg "v2_baseline"           --num_epochs 3 $V2
-run_bg "v3_baseline"           --num_epochs 3 $V3
+run_bg "v1_ro"                 --num_epochs 3 $V1 --response_only_abs
+run_bg "v1_zipf_ortho_ro"      --num_epochs 3 $V1 --alpha_soft_zipf 1.0 --alpha_ortho 1.0 --response_only_abs
+run_bg "v2_ro"                 --num_epochs 3 $V2 --response_only_abs
+run_bg "v3_ro"                 --num_epochs 3 $V3 --response_only_abs
 
 echo "  4 experiments launched. Waiting..."
 wait
 
 # ============================================================================
-# Batch 2 — v2 sweep (3 epochs, 4 parallel)
+# Batch 2 — v2 sweep + response_only_abs (3 epochs, 4 parallel)
 # ============================================================================
 echo ""
 echo "============================================================"
-echo "Batch 2: v2 sweep — regularization variants (${TIMESTAMP})"
+echo "Batch 2: resp_only v2 sweep (${TIMESTAMP})"
 echo "============================================================"
 
-run_bg "v2_ortho"              --num_epochs 3 $V2 --alpha_ortho 1.0
-run_bg "v2_zipf"               --num_epochs 3 $V2 --alpha_soft_zipf 1.0
-run_bg "v2_zipf_ortho"         --num_epochs 3 $V2 --alpha_soft_zipf 1.0 --alpha_ortho 1.0
-run_bg "v2_traj0.5"            --num_epochs 3 $V2 --alpha_traj 0.5
+run_bg "v2_ortho_ro"           --num_epochs 3 $V2 --alpha_ortho 1.0 --response_only_abs
+run_bg "v2_zipf_ro"            --num_epochs 3 $V2 --alpha_soft_zipf 1.0 --response_only_abs
+run_bg "v2_zipf_ortho_ro"      --num_epochs 3 $V2 --alpha_soft_zipf 1.0 --alpha_ortho 1.0 --response_only_abs
+run_bg "v2_traj0.5_ro"         --num_epochs 3 $V2 --alpha_traj 0.5 --response_only_abs
 
 echo "  4 experiments launched. Waiting..."
 wait
 
 # ============================================================================
-# Batch 3 — v3 sweep (3 epochs, 4 parallel)
+# Batch 3 — v3 sweep + response_only_abs (3 epochs, 4 parallel)
 # ============================================================================
 echo ""
 echo "============================================================"
-echo "Batch 3: v3 sweep — corruption & margin variants (${TIMESTAMP})"
+echo "Batch 3: resp_only v3 sweep (${TIMESTAMP})"
 echo "============================================================"
 
-run_bg "v3_r1.0"               --num_epochs 3 $V3 --corrupt_ratio 1.0
-run_bg "v3_noise"              --num_epochs 3 $V3 --corrupt_method noise
-run_bg "v3_g0.1"               --num_epochs 3 $V3 --gamma_contrastive 0.1
-run_bg "v3_ortho"              --num_epochs 3 $V3 --alpha_ortho 1.0
+run_bg "v3_r1.0_ro"            --num_epochs 3 $V3 --corrupt_ratio 1.0 --response_only_abs
+run_bg "v3_noise_ro"           --num_epochs 3 $V3 --corrupt_method noise --response_only_abs
+run_bg "v3_g0.1_ro"            --num_epochs 3 $V3 --gamma_contrastive 0.1 --response_only_abs
+run_bg "v3_ortho_ro"           --num_epochs 3 $V3 --alpha_ortho 1.0 --response_only_abs
 
 echo "  4 experiments launched. Waiting..."
 wait
 
 # ============================================================================
-# Batch 4 — v4 inner=2 (2 epochs, 4 parallel)
+# Batch 4 — v4 i2 + response_only_abs (2 epochs, 4 parallel)
 # ============================================================================
 echo ""
 echo "============================================================"
-echo "Batch 4: v4 inner=2, 2 epochs (${TIMESTAMP})"
+echo "Batch 4: resp_only v4 i2 (${TIMESTAMP})"
 echo "============================================================"
 
-run_bg "v4_i2_baseline"        --num_epochs 2 --n_inner 2 $V4
-run_bg "v4_i2_r1.0"            --num_epochs 2 --n_inner 2 $V4 --corrupt_ratio 1.0
-run_bg "v4_i2_g0.1"            --num_epochs 2 --n_inner 2 $V4 --gamma_contrastive 0.1
-run_bg "v4_i2_nohinge"         --num_epochs 2 --n_inner 2 $V4 --alpha_contrastive 0.0
-
-echo "  4 experiments launched. Waiting..."
-wait
-
-# ============================================================================
-# Batch 5 — response_only_abs baselines (3 epochs, 4 parallel)
-# ============================================================================
-echo ""
-echo "============================================================"
-echo "Batch 5: response_only_abs — baselines (${TIMESTAMP})"
-echo "============================================================"
-
-run_bg "v1_resp_only"          --num_epochs 3 $V1 --response_only_abs
-run_bg "v1_resp_only_reg"      --num_epochs 3 $V1 --alpha_soft_zipf 1.0 --alpha_ortho 1.0 --response_only_abs
-run_bg "v2_resp_only"          --num_epochs 3 $V2 --response_only_abs
-run_bg "v3_resp_only"          --num_epochs 3 $V3 --response_only_abs
-
-echo "  4 experiments launched. Waiting..."
-wait
-
-# ============================================================================
-# Batch 6 — response_only_abs sweep (3 epochs, 4 parallel)
-# ============================================================================
-echo ""
-echo "============================================================"
-echo "Batch 6: response_only_abs — sweep (${TIMESTAMP})"
-echo "============================================================"
-
-run_bg "v2_resp_only_ortho"    --num_epochs 3 $V2 --alpha_ortho 1.0 --response_only_abs
-run_bg "v3_resp_only_ortho"    --num_epochs 3 $V3 --alpha_ortho 1.0 --response_only_abs
-run_bg "v3_resp_only_r1.0"     --num_epochs 3 $V3 --corrupt_ratio 1.0 --response_only_abs
-run_bg "v4_i2_resp_only"       --num_epochs 2 --n_inner 2 $V4 --response_only_abs
+run_bg "v4_i2_ro"              --num_epochs 2 --n_inner 2 $V4 --response_only_abs
+run_bg "v4_i2_r1.0_ro"         --num_epochs 2 --n_inner 2 $V4 --corrupt_ratio 1.0 --response_only_abs
+run_bg "v4_i2_g0.1_ro"         --num_epochs 2 --n_inner 2 $V4 --gamma_contrastive 0.1 --response_only_abs
+run_bg "v4_i2_nohinge_ro"      --num_epochs 2 --n_inner 2 $V4 --alpha_contrastive 0.0 --response_only_abs
 
 echo "  4 experiments launched. Waiting..."
 wait
 
 echo ""
 echo "============================================================"
-echo "All 24 experiments complete. Results in ./ckpt/ablate_${TIMESTAMP}/"
+echo "All 16 experiments complete. Results in ./ckpt/ablate_${TIMESTAMP}/"
 echo "============================================================"
