@@ -138,69 +138,69 @@ run_bg "v3_baseline"           --num_epochs 3 $V3
 echo "  4 experiments launched. Waiting..."
 wait
 
-# ============================================================================
-# Batch 2/5 — v2 sweep (3 epochs, 4 parallel) ≈ 1.5h
-# ============================================================================
-echo ""
-echo "============================================================"
-echo "Batch 2/5: v2 sweep — regularization variants (${TIMESTAMP})"
-echo "============================================================"
+# # ============================================================================
+# # Batch 2/5 — v2 sweep (3 epochs, 4 parallel) ≈ 1.5h
+# # ============================================================================
+# echo ""
+# echo "============================================================"
+# echo "Batch 2/5: v2 sweep — regularization variants (${TIMESTAMP})"
+# echo "============================================================"
 
-run_bg "v2_ortho"              --num_epochs 3 $V2 --alpha_ortho 1.0
-run_bg "v2_zipf"               --num_epochs 3 $V2 --alpha_soft_zipf 1.0
-run_bg "v2_zipf_ortho"         --num_epochs 3 $V2 --alpha_soft_zipf 1.0 --alpha_ortho 1.0
-run_bg "v2_traj0.5"            --num_epochs 3 $V2 --alpha_traj 0.5
+# run_bg "v2_ortho"              --num_epochs 3 $V2 --alpha_ortho 1.0
+# run_bg "v2_zipf"               --num_epochs 3 $V2 --alpha_soft_zipf 1.0
+# run_bg "v2_zipf_ortho"         --num_epochs 3 $V2 --alpha_soft_zipf 1.0 --alpha_ortho 1.0
+# run_bg "v2_traj0.5"            --num_epochs 3 $V2 --alpha_traj 0.5
 
-echo "  4 experiments launched. Waiting..."
-wait
+# echo "  4 experiments launched. Waiting..."
+# wait
 
-# ============================================================================
-# Batch 3/5 — v3 sweep (3 epochs, 4 parallel) ≈ 1.5h
-# ============================================================================
-echo ""
-echo "============================================================"
-echo "Batch 3/5: v3 sweep — corruption & margin variants (${TIMESTAMP})"
-echo "============================================================"
+# # ============================================================================
+# # Batch 3/5 — v3 sweep (3 epochs, 4 parallel) ≈ 1.5h
+# # ============================================================================
+# echo ""
+# echo "============================================================"
+# echo "Batch 3/5: v3 sweep — corruption & margin variants (${TIMESTAMP})"
+# echo "============================================================"
 
-run_bg "v3_r1.0"               --num_epochs 3 $V3 --corrupt_ratio 1.0
-run_bg "v3_noise"              --num_epochs 3 $V3 --corrupt_method noise
-run_bg "v3_g0.1"               --num_epochs 3 $V3 --gamma_contrastive 0.1
-run_bg "v3_ortho"              --num_epochs 3 $V3 --alpha_ortho 1.0
+# run_bg "v3_r1.0"               --num_epochs 3 $V3 --corrupt_ratio 1.0
+# run_bg "v3_noise"              --num_epochs 3 $V3 --corrupt_method noise
+# run_bg "v3_g0.1"               --num_epochs 3 $V3 --gamma_contrastive 0.1
+# run_bg "v3_ortho"              --num_epochs 3 $V3 --alpha_ortho 1.0
 
-echo "  4 experiments launched. Waiting..."
-wait
+# echo "  4 experiments launched. Waiting..."
+# wait
 
-# ============================================================================
-# Batch 4/5 — v4 inner=4, 1 epoch (4 parallel) ≈ 2h
-# ============================================================================
-echo ""
-echo "============================================================"
-echo "Batch 4/5: v4 inner=4, 1 epoch — config sweep (${TIMESTAMP})"
-echo "============================================================"
+# # ============================================================================
+# # Batch 4/5 — v4 inner=4, 1 epoch (4 parallel) ≈ 2h
+# # ============================================================================
+# echo ""
+# echo "============================================================"
+# echo "Batch 4/5: v4 inner=4, 1 epoch — config sweep (${TIMESTAMP})"
+# echo "============================================================"
 
-run_bg "v4_i4_baseline"        --num_epochs 1 --n_inner 4 $V4
-run_bg "v4_i4_r1.0"            --num_epochs 1 --n_inner 4 $V4 --corrupt_ratio 1.0
-run_bg "v4_i4_g0.1"            --num_epochs 1 --n_inner 4 $V4 --gamma_contrastive 0.1
-run_bg "v4_i4_nohinge"         --num_epochs 1 --n_inner 4 $V4 --alpha_contrastive 0.0
+# run_bg "v4_i4_baseline"        --num_epochs 1 --n_inner 4 $V4
+# run_bg "v4_i4_r1.0"            --num_epochs 1 --n_inner 4 $V4 --corrupt_ratio 1.0
+# run_bg "v4_i4_g0.1"            --num_epochs 1 --n_inner 4 $V4 --gamma_contrastive 0.1
+# run_bg "v4_i4_nohinge"         --num_epochs 1 --n_inner 4 $V4 --alpha_contrastive 0.0
 
-echo "  4 experiments launched. Waiting..."
-wait
+# echo "  4 experiments launched. Waiting..."
+# wait
 
-# ============================================================================
-# Batch 5/5 — v4 inner=2, 2 epochs (4 parallel) ≈ 2h
-# ============================================================================
-echo ""
-echo "============================================================"
-echo "Batch 5/5: v4 inner=2, 2 epochs — config sweep (${TIMESTAMP})"
-echo "============================================================"
+# # ============================================================================
+# # Batch 5/5 — v4 inner=2, 2 epochs (4 parallel) ≈ 2h
+# # ============================================================================
+# echo ""
+# echo "============================================================"
+# echo "Batch 5/5: v4 inner=2, 2 epochs — config sweep (${TIMESTAMP})"
+# echo "============================================================"
 
-run_bg "v4_i2_baseline"        --num_epochs 2 --n_inner 2 $V4
-run_bg "v4_i2_r1.0"            --num_epochs 2 --n_inner 2 $V4 --corrupt_ratio 1.0
-run_bg "v4_i2_g0.1"            --num_epochs 2 --n_inner 2 $V4 --gamma_contrastive 0.1
-run_bg "v4_i2_nohinge"         --num_epochs 2 --n_inner 2 $V4 --alpha_contrastive 0.0
+# run_bg "v4_i2_baseline"        --num_epochs 2 --n_inner 2 $V4
+# run_bg "v4_i2_r1.0"            --num_epochs 2 --n_inner 2 $V4 --corrupt_ratio 1.0
+# run_bg "v4_i2_g0.1"            --num_epochs 2 --n_inner 2 $V4 --gamma_contrastive 0.1
+# run_bg "v4_i2_nohinge"         --num_epochs 2 --n_inner 2 $V4 --alpha_contrastive 0.0
 
-echo "  4 experiments launched. Waiting..."
-wait
+# echo "  4 experiments launched. Waiting..."
+# wait
 
 echo ""
 echo "============================================================"
