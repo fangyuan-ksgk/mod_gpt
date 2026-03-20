@@ -41,7 +41,7 @@ export TORCH_NCCL_HEARTBEAT_TIMEOUT_SEC=3600
 # ============================================================================
 MASTER_ADDR=127.0.0.1
 BASE_PORT=29501
-N_GPUS=4
+N_GPUS=2
 
 MODEL_NAME="Qwen/Qwen3-0.6B"
 DATASET="gsm8k"
