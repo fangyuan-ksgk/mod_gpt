@@ -63,6 +63,7 @@ class SoRLConfig:
     memory_span_traj: int = 1792
     temperature: float = 1.0
     ar_search: bool = False  # Use AR generation instead of parallel recursion for abstract tokens
+    response_only_abs: bool = False  # Only insert abstract tokens in the response (not query/prompt)
 
     # Loss weights
     alpha_info_gain: float = 10.0
@@ -318,6 +319,7 @@ class SoRLTrainer:
                     memory_span_abs=cfg.memory_span_abs,
                     memory_span_traj=cfg.memory_span_traj,
                     temperature=cfg.temperature,
+                    response_only_abs=cfg.response_only_abs,
                 )
             else:
                 best_data, best_ppt, best_ppt_adv, expanded_attn_mask, expanded_prompt_len = sorl_search(
@@ -327,6 +329,7 @@ class SoRLTrainer:
                     memory_span_abs=cfg.memory_span_abs,
                     memory_span_traj=cfg.memory_span_traj,
                     temperature=cfg.temperature,
+                    response_only_abs=cfg.response_only_abs,
                 )
 
         # 3. Auxiliary losses
@@ -414,6 +417,7 @@ class SoRLTrainer:
         result = self.compute_accuracy(
             self.raw_model, self.tokenizer, self.val_dataset,
             self.device, self.config.eval_samples, eval_K=eval_K,
+            response_only_abs=self.config.response_only_abs,
         )
         self.raw_model.train()
         return result

@@ -107,6 +107,8 @@ def parse_args():
     p.add_argument("--num_rollouts", type=int, default=4)
     p.add_argument("--max_iterations", type=int, default=2)
     p.add_argument("--temperature", type=float, default=1.0)
+    p.add_argument("--response_only_abs", action="store_true",
+                   help="Only insert abstract tokens in the response (not query/prompt)")
 
     return p.parse_args()
 
@@ -171,7 +173,7 @@ def compute_accuracy_fn_factory(tokenizer, max_new_tokens, num_log_samples, log_
     """Returns a compute_accuracy(model, tokenizer, dataset, device, num_samples, eval_K=None) callable."""
     pad_id = tokenizer.pad_token_id if tokenizer.pad_token_id is not None else 0
 
-    def _eval_with_K(model, dataset, device, n, K_value):
+    def _eval_with_K(model, dataset, device, n, K_value, response_only_abs=False):
         """Run batched generation with a given K and return (correct, total, samples, mono_stats).
 
         mono_stats is a dict of inner-monologue statistics when K_value is not None, else None.
@@ -218,6 +220,7 @@ def compute_accuracy_fn_factory(tokenizer, max_new_tokens, num_log_samples, log_
                 attention_mask=attn_mask,
                 max_new_tokens=max_new_tokens,
                 temperature=0.0, K=K_value, free_form=False,
+                response_only_abs=response_only_abs,
             )
 
             max_pl = input_ids.size(1)
@@ -327,7 +330,7 @@ def compute_accuracy_fn_factory(tokenizer, max_new_tokens, num_log_samples, log_
         return correct, total, samples, mono_stats
 
     @torch.no_grad()
-    def compute_accuracy_fn(model, _tokenizer, dataset, device, num_samples, eval_K=None):
+    def compute_accuracy_fn(model, _tokenizer, dataset, device, num_samples, eval_K=None, response_only_abs=False):
         model.eval()
         extract_fn = getattr(dataset, "extract_answer", None)
         if extract_fn is None:
@@ -335,7 +338,7 @@ def compute_accuracy_fn_factory(tokenizer, max_new_tokens, num_log_samples, log_
 
         n = min(num_samples, len(dataset))
 
-        c, t, samps, mono_stats = _eval_with_K(model, dataset, device, n, K_value=eval_K)
+        c, t, samps, mono_stats = _eval_with_K(model, dataset, device, n, K_value=eval_K, response_only_abs=response_only_abs)
         acc = c / max(t, 1)
         result = {"accuracy": acc, "correct": c, "total": t, "K": eval_K}
 
@@ -439,6 +442,7 @@ def main():
         alpha_contrastive=args.alpha_contrastive,
         gamma_contrastive=args.gamma_contrastive,
         n_inner=args.n_inner,
+        response_only_abs=args.response_only_abs,
     )
     log(f"Config: eval_K={config.eval_K}, aux weights={'nonzero' if config.alpha_traj or config.alpha_info_gain or config.alpha_abs or config.alpha_soft_zipf or config.alpha_ortho else '0 (SFT-equivalent)'}")
 

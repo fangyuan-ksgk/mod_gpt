@@ -1,44 +1,22 @@
 #!/bin/bash
-# SoRL Ablation Experiments — Qwen3-0.6B on 4×H100
+# SoRL Ablation — Qwen3-0.6B — response_only_abs probe
 #
-# 20 single-GPU experiments (5 batches × 4 parallel) ≈ 5 hours
+# 16 experiments (4 batches × 4 parallel)
+# Mirrors prior batches 1-4 with --response_only_abs.
 #
-# Prior best configs (0.6B):
-#   v3: shuffle r=1.0 γ=0.5 (full corruption works best for 0.6B)
-#   v1: info=1 abs=0.5
-#   ortho=1.0 is helpful
+# Batch 1 — Baselines + resp_only (3 epochs):
+#   v1, v1+zipf+ortho, v2, v3
 #
-# Batch 1 (≈1h) — Validate prior conclusions (3 epochs):
-#   exp1   v1 baseline        info_gain + abs              → no dependency
-#   exp2   v1 + regularizers  + zipf + ortho               → doesn't help
-#   exp3   v2 baseline        traj + abs                   → dependency not established
-#   exp4   v3 baseline        traj + abs + hinge (r=1.0)   → v3 >> v1 cond accuracy
+# Batch 2 — v2 sweep + resp_only (3 epochs):
+#   v2+ortho, v2+zipf, v2+zipf+ortho, v2 traj=0.5
 #
-# Batch 2 (≈1h) — v2 sweep (3 epochs):
-#   exp5   v2 + ortho         does ortho help v2?
-#   exp6   v2 + zipf          does zipf help v2?
-#   exp7   v2 + zipf + ortho  full regularization for v2
-#   exp8   v2 lower traj      alpha_traj=0.5
+# Batch 3 — v3 sweep + resp_only (3 epochs):
+#   v3 r=0.3, v3 noise, v3 γ=0.1, v3+ortho
 #
-# Batch 3 (≈1h) — v3 sweep (3 epochs):
-#   exp9   v3 r=0.3           weaker corruption (compare to r=1.0 baseline)
-#   exp10  v3 noise           noise instead of shuffle
-#   exp11  v3 γ=0.1           lower margin (easier to satisfy)
-#   exp12  v3 + ortho         does ortho help v3?
+# Batch 4 — v4 i2 + resp_only (2 epochs):
+#   v4 baseline, v4 r=0.3, v4 γ=0.1, v4 no hinge
 #
-# Batch 4 (≈1.5h) — v4 inner=4, 1 epoch:
-#   exp13  v4 baseline        shuffle r=1.0 γ=0.5
-#   exp14  v4 r=0.3           weaker corruption
-#   exp15  v4 γ=0.1           lower margin
-#   exp16  v4 no hinge        alpha_contrastive=0 (pure inner-loop ablation)
-#
-# Batch 5 (≈1.5h) — v4 inner=2, 2 epochs:
-#   exp17  v4 baseline        shuffle r=1.0 γ=0.5
-#   exp18  v4 r=0.3           weaker corruption
-#   exp19  v4 γ=0.1           lower margin
-#   exp20  v4 no hinge        alpha_contrastive=0
-#
-# All use emb_lr_mult=10.
+# All use emb_lr_mult=10. V3/V4 default: r=1.0.
 #
 # Usage:
 #   bash run_ablate_qwen0.6.sh
@@ -128,87 +106,70 @@ run_bg() {
 }
 
 # ============================================================================
-# Batch 1/5 — Validate prior conclusions (3 epochs, 4 parallel) ≈ 1h
+# Batch 1 — Baselines + response_only_abs (3 epochs, 4 parallel)
 # ============================================================================
 echo ""
 echo "============================================================"
-echo "Batch 1/5: Validate — v1/v1+reg/v2/v3 baselines (${TIMESTAMP})"
-echo "  Model: ${MODEL_NAME} | 4xH100 | 3 epochs each"
+echo "Batch 1: resp_only baselines — v1/v1+reg/v2/v3 (${TIMESTAMP})"
 echo "============================================================"
 
-run_bg "v1_baseline"           --num_epochs 3 $V1
-run_bg "v1_zipf_ortho"         --num_epochs 3 $V1 --alpha_soft_zipf 1.0 --alpha_ortho 1.0
-run_bg "v2_baseline"           --num_epochs 3 $V2
-run_bg "v3_baseline"           --num_epochs 3 $V3
+run_bg "v1_ro"                 --num_epochs 3 $V1 --response_only_abs
+run_bg "v1_zipf_ortho_ro"      --num_epochs 3 $V1 --alpha_soft_zipf 1.0 --alpha_ortho 1.0 --response_only_abs
+run_bg "v2_ro"                 --num_epochs 3 $V2 --response_only_abs
+run_bg "v3_ro"                 --num_epochs 3 $V3 --response_only_abs
 
 echo "  4 experiments launched. Waiting..."
 wait
 
 # ============================================================================
-# Batch 2/5 — v2 sweep (3 epochs, 4 parallel) ≈ 1h
+# Batch 2 — v2 sweep + response_only_abs (3 epochs, 4 parallel)
 # ============================================================================
 echo ""
 echo "============================================================"
-echo "Batch 2/5: v2 sweep — regularization variants (${TIMESTAMP})"
+echo "Batch 2: resp_only v2 sweep (${TIMESTAMP})"
 echo "============================================================"
 
-run_bg "v2_ortho"              --num_epochs 3 $V2 --alpha_ortho 1.0
-run_bg "v2_zipf"               --num_epochs 3 $V2 --alpha_soft_zipf 1.0
-run_bg "v2_zipf_ortho"         --num_epochs 3 $V2 --alpha_soft_zipf 1.0 --alpha_ortho 1.0
-run_bg "v2_traj0.5"            --num_epochs 3 $V2 --alpha_traj 0.5
+run_bg "v2_ortho_ro"           --num_epochs 3 $V2 --alpha_ortho 1.0 --response_only_abs
+run_bg "v2_zipf_ro"            --num_epochs 3 $V2 --alpha_soft_zipf 1.0 --response_only_abs
+run_bg "v2_zipf_ortho_ro"      --num_epochs 3 $V2 --alpha_soft_zipf 1.0 --alpha_ortho 1.0 --response_only_abs
+run_bg "v2_traj0.5_ro"         --num_epochs 3 $V2 --alpha_traj 0.5 --response_only_abs
 
 echo "  4 experiments launched. Waiting..."
 wait
 
 # ============================================================================
-# Batch 3/5 — v3 sweep (3 epochs, 4 parallel) ≈ 1h
+# Batch 3 — v3 sweep + response_only_abs (3 epochs, 4 parallel)
 # ============================================================================
 echo ""
 echo "============================================================"
-echo "Batch 3/5: v3 sweep — corruption & margin variants (${TIMESTAMP})"
+echo "Batch 3: resp_only v3 sweep (${TIMESTAMP})"
 echo "============================================================"
 
-run_bg "v3_r0.3"               --num_epochs 3 $V3 --corrupt_ratio 0.3
-run_bg "v3_noise"              --num_epochs 3 $V3 --corrupt_method noise
-run_bg "v3_g0.1"               --num_epochs 3 $V3 --gamma_contrastive 0.1
-run_bg "v3_ortho"              --num_epochs 3 $V3 --alpha_ortho 1.0
+run_bg "v3_r0.3_ro"            --num_epochs 3 $V3 --corrupt_ratio 0.3 --response_only_abs
+run_bg "v3_noise_ro"           --num_epochs 3 $V3 --corrupt_method noise --response_only_abs
+run_bg "v3_g0.1_ro"            --num_epochs 3 $V3 --gamma_contrastive 0.1 --response_only_abs
+run_bg "v3_ortho_ro"           --num_epochs 3 $V3 --alpha_ortho 1.0 --response_only_abs
 
 echo "  4 experiments launched. Waiting..."
 wait
 
 # ============================================================================
-# Batch 4/5 — v4 inner=4, 1 epoch (4 parallel) ≈ 1.5h
+# Batch 4 — v4 i2 + response_only_abs (2 epochs, 4 parallel)
 # ============================================================================
 echo ""
 echo "============================================================"
-echo "Batch 4/5: v4 inner=4, 1 epoch — config sweep (${TIMESTAMP})"
+echo "Batch 4: resp_only v4 i2 (${TIMESTAMP})"
 echo "============================================================"
 
-run_bg "v4_i4_baseline"        --num_epochs 1 --n_inner 4 $V4
-run_bg "v4_i4_r0.3"            --num_epochs 1 --n_inner 4 $V4 --corrupt_ratio 0.3
-run_bg "v4_i4_g0.1"            --num_epochs 1 --n_inner 4 $V4 --gamma_contrastive 0.1
-run_bg "v4_i4_nohinge"         --num_epochs 1 --n_inner 4 $V4 --alpha_contrastive 0.0
-
-echo "  4 experiments launched. Waiting..."
-wait
-
-# ============================================================================
-# Batch 5/5 — v4 inner=2, 2 epochs (4 parallel) ≈ 1.5h
-# ============================================================================
-echo ""
-echo "============================================================"
-echo "Batch 5/5: v4 inner=2, 2 epochs — config sweep (${TIMESTAMP})"
-echo "============================================================"
-
-run_bg "v4_i2_baseline"        --num_epochs 2 --n_inner 2 $V4
-run_bg "v4_i2_r0.3"            --num_epochs 2 --n_inner 2 $V4 --corrupt_ratio 0.3
-run_bg "v4_i2_g0.1"            --num_epochs 2 --n_inner 2 $V4 --gamma_contrastive 0.1
-run_bg "v4_i2_nohinge"         --num_epochs 2 --n_inner 2 $V4 --alpha_contrastive 0.0
+run_bg "v4_i2_ro"              --num_epochs 2 --n_inner 2 $V4 --response_only_abs
+run_bg "v4_i2_r0.3_ro"         --num_epochs 2 --n_inner 2 $V4 --corrupt_ratio 0.3 --response_only_abs
+run_bg "v4_i2_g0.1_ro"         --num_epochs 2 --n_inner 2 $V4 --gamma_contrastive 0.1 --response_only_abs
+run_bg "v4_i2_nohinge_ro"      --num_epochs 2 --n_inner 2 $V4 --alpha_contrastive 0.0 --response_only_abs
 
 echo "  4 experiments launched. Waiting..."
 wait
 
 echo ""
 echo "============================================================"
-echo "All 20 experiments complete. Results in ./ckpt/ablate_${TIMESTAMP}/"
+echo "All 16 experiments complete. Results in ./ckpt/ablate_${TIMESTAMP}/"
 echo "============================================================"

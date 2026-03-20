@@ -43,6 +43,7 @@ def sorl_search_compress(
     memory_span_traj: int = 1792,
     temperature: Union[float, torch.Tensor] = 0.0,
     ar_search: bool = False,
+    response_only_abs: bool = False,
 ) -> Tuple[torch.Tensor, ...]:
     """
     SoRL search with NL token dropping.
@@ -57,7 +58,7 @@ def sorl_search_compress(
         traj_remove_1d  — (S,) bool mask of which original traj positions were dropped
     """
     # Step 1: periodic insertion
-    insert_mask = infer_insert_mask(input_ids, K, attention_mask)
+    insert_mask = infer_insert_mask(input_ids, K, attention_mask, prompt_len=prompt_len if response_only_abs else None)
     expanded_prompt_len = expand_prompt_len(prompt_len, insert_mask)
     expanded_data, expanded_mask = insert_tokens_with_padding(
         input_ids, attention_mask, insert_mask, model.vocab_sizes[0], pad_token_id,
@@ -114,9 +115,10 @@ def sorl_search_inner_cot(
     memory_span_traj: int = 1792,
     temperature: Union[float, torch.Tensor] = 0.0,
     ar_search: bool = False,
+    response_only_abs: bool = False,
 ) -> Tuple[torch.Tensor, ...]:
     # Step 1: periodic insertion
-    insert_mask = infer_insert_mask(input_ids, K, attention_mask)
+    insert_mask = infer_insert_mask(input_ids, K, attention_mask, prompt_len=prompt_len if response_only_abs else None)
     expanded_prompt_len = expand_prompt_len(prompt_len, insert_mask)
     expanded_data, expanded_mask = insert_tokens_with_padding(
         input_ids, attention_mask, insert_mask, model.vocab_sizes[0], pad_token_id,
@@ -196,6 +198,7 @@ class SoRLCompressTrainer(SoRLTrainer):
                         memory_span_traj=cfg.memory_span_traj,
                         temperature=cfg.temperature,
                         ar_search=cfg.ar_search,
+                        response_only_abs=cfg.response_only_abs,
                     )
             else:
                 best_data, best_ppt, best_ppt_adv, expanded_mask, expanded_prompt_len, traj_remove_1d = \
@@ -208,6 +211,7 @@ class SoRLCompressTrainer(SoRLTrainer):
                         memory_span_traj=cfg.memory_span_traj,
                         temperature=cfg.temperature,
                         ar_search=cfg.ar_search,
+                        response_only_abs=cfg.response_only_abs,
                     )
 
         # 2. Base trajectory loss — on the FULL original NL sequence (no abstract tokens)

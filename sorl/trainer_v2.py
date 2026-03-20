@@ -99,6 +99,7 @@ class SoRLTrainerV2(SoRLTrainer):
                     memory_span_abs=cfg.memory_span_abs,
                     memory_span_traj=cfg.memory_span_traj,
                     temperature=cfg.temperature,
+                    response_only_abs=cfg.response_only_abs,
                 )
             else:
                 best_data, best_ppt, best_ppt_adv, expanded_attn_mask, expanded_prompt_len = sorl_search(
@@ -108,6 +109,7 @@ class SoRLTrainerV2(SoRLTrainer):
                     memory_span_abs=cfg.memory_span_abs,
                     memory_span_traj=cfg.memory_span_traj,
                     temperature=cfg.temperature,
+                    response_only_abs=cfg.response_only_abs,
                 )
 
         # 3. Auxiliary losses (forward passes go through DDP via proxy)
@@ -199,6 +201,7 @@ class SoRLCompressTrainerV2(SoRLCompressTrainer):
                         memory_span_traj=cfg.memory_span_traj,
                         temperature=cfg.temperature,
                         ar_search=cfg.ar_search,
+                        response_only_abs=cfg.response_only_abs,
                     )
             else:
                 best_data, best_ppt, best_ppt_adv, expanded_mask, expanded_prompt_len, traj_remove_1d = \
@@ -211,6 +214,7 @@ class SoRLCompressTrainerV2(SoRLCompressTrainer):
                         memory_span_traj=cfg.memory_span_traj,
                         temperature=cfg.temperature,
                         ar_search=cfg.ar_search,
+                        response_only_abs=cfg.response_only_abs,
                     )
 
         # 2. Base trajectory loss — NL-only softmax

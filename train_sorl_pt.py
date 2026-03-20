@@ -151,6 +151,8 @@ def parse_args():
     p.add_argument("--memory_span_abs", type=int, default=1792)
     p.add_argument("--memory_span_traj", type=int, default=1792)
     p.add_argument("--temperature", type=float, default=1.0)
+    p.add_argument("--response_only_abs", action="store_true",
+                   help="Only insert abstract tokens in the response (not query/prompt)")
 
     # Loss weights
     p.add_argument("--alpha_info_gain", type=float, default=10.0)
@@ -218,6 +220,7 @@ def parse_args():
 def evaluate_accuracy_with_logging(
     model, tokenizer, dataset, device, num_samples=50,
     max_new_tokens=128, num_log_samples=3, log_fn=None, eval_K=None,
+    response_only_abs=False,
 ):
     """
     Evaluate accuracy AND log sample responses with abstract token sequences.
@@ -242,6 +245,7 @@ def evaluate_accuracy_with_logging(
             max_new_tokens=max_new_tokens,
             temperature=0.0,
             K=eval_K,
+            response_only_abs=response_only_abs,
         )
 
         # Filter abstract tokens for decoding
@@ -492,6 +496,7 @@ def main():
         save_every=args.save_every,
         eval_samples=args.eval_samples,
         output_dir=args.output_dir,
+        response_only_abs=args.response_only_abs,
     )
 
     if args.mode in ("compress", "inner_cot"):
@@ -507,7 +512,7 @@ def main():
         config = SoRLConfig(**shared_cfg)
 
     # ---- Accuracy evaluator with logging ----
-    def compute_accuracy_fn(model, tokenizer, dataset, device, num_samples, eval_K=None):
+    def compute_accuracy_fn(model, tokenizer, dataset, device, num_samples, eval_K=None, response_only_abs=False):
         return evaluate_accuracy_with_logging(
             model, tokenizer, dataset, device,
             num_samples=num_samples,
@@ -515,6 +520,7 @@ def main():
             num_log_samples=args.num_log_samples,
             log_fn=log,
             eval_K=eval_K,
+            response_only_abs=response_only_abs,
         )
 
     # ---- Trainer ----

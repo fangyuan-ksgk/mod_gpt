@@ -268,6 +268,7 @@ class SorlModelWrapper(PreTrainedModel, GenerationMixin):
         free_form: bool = False,
         memory_span_abs: int = 1792,
         memory_span_traj: int = 1792,
+        response_only_abs: bool = False,
     ):
         import torch.nn.functional as F
         
@@ -279,6 +280,11 @@ class SorlModelWrapper(PreTrainedModel, GenerationMixin):
             attention_mask = attention_mask.clone()
         levels_cache = infer_level(generated_ids, self.vocab_sizes)
         masks = torch.stack([self.l0_mask, self.abs_mask], dim=0).to(generated_ids.device)
+
+        # For response_only_abs: track NL tokens generated since start/last abstract.
+        # This avoids looking back into the prompt (which has no abstract tokens)
+        # and matches the training pattern: K NL tokens, then 1 ABS, repeat.
+        nl_since_abs = torch.zeros(generated_ids.size(0), dtype=torch.long, device=generated_ids.device)
 
         for _ in range(max_new_tokens):
             # Forward pass
@@ -294,6 +300,10 @@ class SorlModelWrapper(PreTrainedModel, GenerationMixin):
                 # Periodic: force abstract token every K trajectory tokens
                 if K is None:
                     next_token_level = torch.zeros(generated_ids.size(0), dtype=torch.long, device=generated_ids.device)
+                elif response_only_abs:
+                    # Count NL tokens generated since start of response (or last abstract).
+                    # Force abstract after K NL tokens, matching training pattern.
+                    next_token_level = (nl_since_abs >= K).long()
                 else:
                     next_token_level = 1 - (levels_cache[:, -K:] > 0).any(dim=-1).long()
 
@@ -316,6 +326,11 @@ class SorlModelWrapper(PreTrainedModel, GenerationMixin):
             # Infer level from sampled token for levels_cache
             if free_form:
                 next_token_level = (next_token_id.squeeze(-1) > self.vocab_sizes[0].item()).long()
+
+            # Update NL counter for response_only_abs mode
+            if response_only_abs and K is not None:
+                is_abs = (next_token_level > 0)
+                nl_since_abs = torch.where(is_abs, torch.zeros_like(nl_since_abs), nl_since_abs + 1)
 
             # Update sequences
             generated_ids = torch.cat([generated_ids, next_token_id], dim=1)
