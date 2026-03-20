@@ -71,6 +71,7 @@ class SoRLConfig:
     alpha_soft_zipf: float = 1.0
     alpha_ortho: float = 0.0
     alpha_anchor: float = 0.0
+    alpha_jacobi: float = 0.0
 
     # Loss function
     decay: float = 0.8
@@ -800,7 +801,7 @@ class SoRLTrainerv3(SoRLTrainer):
         self.history = {
             "step": [], "loss": [], "base_loss": [], "traj_loss": [],
             "hinge_loss": [], "abs_loss": [], "zipf_loss": [], "ortho_loss": [],
-            "anchor_loss": [], "lr": [],
+            "anchor_loss": [], "jacobi_loss": [], "lr": [],
         }
         # Use SoRLLoss_v2 — returns (traj_loss, abs_loss, zipf_kl) directly
         self.loss_fn = SoRLLoss_v2(
@@ -916,6 +917,34 @@ class SoRLTrainerv3(SoRLTrainer):
         #    Active when corrupted_traj_loss - traj_loss < γ (gap too small)
         contrastive_loss = (cfg.gamma_contrastive + traj_loss - corrupted_traj_loss).clamp(min=0)
 
+        # 6. Jacobi loss
+        if cfg.alpha_jacobi > 0:
+            jacobi_data = best_data.clone()
+            is_abs = (jacobi_data > base_vocab)
+            jacobi_data[is_abs] = base_vocab
+            
+            out_jacobi = model(
+                input_ids=jacobi_data, attention_mask=expanded_attn_mask,
+                memory_span_abs=cfg.memory_span_abs, memory_span_traj=cfg.memory_span_traj
+            )
+            logits_jacobi = out_jacobi.logits[..., :-1, :].contiguous()
+            
+            abs_mask_shift = is_abs[:, 1:]
+            if abs_mask_shift.any():
+                jacobi_logits = logits_jacobi.clone()
+                jacobi_logits[..., :(base_vocab + 1)] = -float("inf")
+                
+                safe_abs_targets = best_data[:, 1:].contiguous().clone()
+                safe_abs_targets[~abs_mask_shift] = base_vocab + 1
+                
+                per_tok_jacobi = F.cross_entropy(jacobi_logits.view(-1, jacobi_logits.size(-1)), safe_abs_targets.view(-1), reduction='none')
+                per_tok_jacobi = per_tok_jacobi.view(safe_abs_targets.shape) * abs_mask_shift.float()
+                j_loss = per_tok_jacobi.sum() / abs_mask_shift.float().sum().clamp(min=1)
+            else:
+                j_loss = torch.tensor(0.0, device=self.device)
+        else:
+            j_loss = torch.tensor(0.0, device=self.device)
+
         loss = (
             cfg.alpha_traj * traj_loss
             + cfg.alpha_contrastive * contrastive_loss
@@ -923,6 +952,7 @@ class SoRLTrainerv3(SoRLTrainer):
             + cfg.alpha_soft_zipf * zipf_bigram_loss
             + cfg.alpha_ortho * ortho_loss
             + cfg.alpha_anchor * a_loss
+            + cfg.alpha_jacobi * j_loss
         )
 
         return {
@@ -934,6 +964,7 @@ class SoRLTrainerv3(SoRLTrainer):
             "zipf_bigram_loss": zipf_bigram_loss,
             "ortho_loss": ortho_loss,
             "anchor_loss": a_loss,
+            "jacobi_loss": j_loss,
         }
 
     def train(self, resume_from: Optional[str] = None):
@@ -1022,6 +1053,7 @@ class SoRLTrainerv3(SoRLTrainer):
                         f"zipf={step_out['zipf_bigram_loss'].item():.4f} "
                         f"ortho={step_out['ortho_loss'].item():.4f} "
                         f"anchor={step_out['anchor_loss'].item():.4f} "
+                        f"jacobi={step_out['jacobi_loss'].item():.4f} "
                         f"| lr={lr:.2e} | {peak}"
                     )
                     self.history["step"].append(global_step)
@@ -1033,6 +1065,7 @@ class SoRLTrainerv3(SoRLTrainer):
                     self.history["zipf_loss"].append(step_out["zipf_bigram_loss"].item())
                     self.history["ortho_loss"].append(step_out["ortho_loss"].item())
                     self.history["anchor_loss"].append(step_out["anchor_loss"].item())
+                    self.history["jacobi_loss"].append(step_out["jacobi_loss"].item())
                     self.history["lr"].append(lr)
 
                 del loss, step_out
