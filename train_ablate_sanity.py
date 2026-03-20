@@ -99,6 +99,7 @@ def parse_args():
     p.add_argument("--alpha_abs", type=float, default=0.0, help="Abstract loss weight")
     p.add_argument("--alpha_soft_zipf", type=float, default=0.0, help="Zipf bigram loss weight")
     p.add_argument("--alpha_ortho", type=float, default=0.0, help="Ortho loss weight")
+    p.add_argument("--alpha_anchor", type=float, default=0.0, help="Anchor loss weight")
     p.add_argument("--zipf_alpha", type=float, default=1.0, help="Zipf alpha param for loss fn")
 
     # SoRL search params (only used when aux weights are nonzero)
@@ -431,6 +432,7 @@ def main():
         alpha_abs=args.alpha_abs,
         alpha_soft_zipf=args.alpha_soft_zipf,
         alpha_ortho=args.alpha_ortho,
+        alpha_anchor=args.alpha_anchor,
         zipf_alpha=args.zipf_alpha,
         corrupt_method=args.corrupt_method,
         corrupt_ratio=args.corrupt_ratio,

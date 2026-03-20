@@ -69,6 +69,7 @@ class SoRLConfig:
     alpha_abs: float = 0.1
     alpha_soft_zipf: float = 1.0
     alpha_ortho: float = 0.0
+    alpha_anchor: float = 0.0
 
     # Loss function
     decay: float = 0.8
@@ -747,6 +748,44 @@ class SoRLTrainerv2(SoRLTrainer):
 #        + α_zipf * zipf_loss
 #        + α_ortho * ortho_loss
 # ---------------------------------------------------------------------------
+def anchor_loss(model, data, base_vocab, K, detach_anchor=True):
+    """Anchor loss: pull each abstract token's embedding toward the mean
+    embedding of the K natural-language tokens immediately preceding it.
+
+    Fully vectorized — no Python loops or .nonzero() GPU syncs."""
+    is_abs = (data >= base_vocab)                  # (B, L)
+    abs_count = is_abs.float().sum()
+    if abs_count == 0:
+        return torch.tensor(0.0, device=data.device, requires_grad=True)
+
+    embed_layer = model.model.model.embed_tokens
+    embs = embed_layer(data)                       # (B, L, D)
+    B, L, D = embs.shape
+
+    # For every position l, indices of K preceding positions: (L, K)
+    pos = torch.arange(L, device=data.device)
+    offsets = torch.arange(1, K + 1, device=data.device)
+    prec_idx = (pos.unsqueeze(1) - offsets.unsqueeze(0)).clamp(min=0)  # (L, K)
+
+    # Gather preceding tokens & embeddings for ALL positions at once
+    prec_toks = data[:, prec_idx]                  # (B, L, K)
+    prec_embs = embs[:, prec_idx]                  # (B, L, K, D)
+
+    # NL mask: only average over natural-language preceding tokens
+    nl_mask = (prec_toks < base_vocab).float()     # (B, L, K)
+    nl_count = nl_mask.sum(dim=-1, keepdim=True).clamp(min=1)  # (B, L, 1)
+    anchor = (prec_embs * nl_mask.unsqueeze(-1)).sum(dim=2) / nl_count  # (B, L, D)
+
+    if detach_anchor:
+        anchor = anchor.detach()
+
+    # Cosine distance, masked to abstract positions only
+    cos_sim = nn.functional.cosine_similarity(embs, anchor, dim=-1)  # (B, L)
+    loss = (1.0 - cos_sim) * is_abs.float()
+
+    return loss.sum() / abs_count.clamp(min=1)
+
+
 class SoRLTrainerv3(SoRLTrainer):
     _info_log_label = "hinge"  # v3 logs contrastive hinge loss in the info slot
 
@@ -754,7 +793,8 @@ class SoRLTrainerv3(SoRLTrainer):
         super().__init__(*args, **kwargs)
         self.history = {
             "step": [], "loss": [], "base_loss": [], "traj_loss": [],
-            "hinge_loss": [], "abs_loss": [], "zipf_loss": [], "ortho_loss": [], "lr": [],
+            "hinge_loss": [], "abs_loss": [], "zipf_loss": [], "ortho_loss": [],
+            "anchor_loss": [], "lr": [],
         }
         # Use SoRLLoss_v2 — returns (traj_loss, abs_loss, zipf_kl) directly
         self.loss_fn = SoRLLoss_v2(
@@ -859,6 +899,12 @@ class SoRLTrainerv3(SoRLTrainer):
 
         ortho_loss = self.loss_fn.ortho_loss(self.raw_model)
 
+        # Anchor loss
+        if cfg.alpha_anchor > 0:
+            a_loss = anchor_loss(model, best_data, base_vocab, cfg.K)
+        else:
+            a_loss = torch.tensor(0.0, device=self.device)
+
         # 5. Hinge contrastive: max(0, γ + traj_loss - corrupted_traj_loss)
         #    Active when corrupted_traj_loss - traj_loss < γ (gap too small)
         contrastive_loss = (cfg.gamma_contrastive + traj_loss - corrupted_traj_loss).clamp(min=0)
@@ -869,6 +915,7 @@ class SoRLTrainerv3(SoRLTrainer):
             + cfg.alpha_abs * abs_loss
             + cfg.alpha_soft_zipf * zipf_bigram_loss
             + cfg.alpha_ortho * ortho_loss
+            + cfg.alpha_anchor * a_loss
         )
 
         return {
@@ -879,6 +926,7 @@ class SoRLTrainerv3(SoRLTrainer):
             "abs_loss": abs_loss,
             "zipf_bigram_loss": zipf_bigram_loss,
             "ortho_loss": ortho_loss,
+            "anchor_loss": a_loss,
         }
 
     def train(self, resume_from: Optional[str] = None):
@@ -966,6 +1014,7 @@ class SoRLTrainerv3(SoRLTrainer):
                         f"abs={step_out['abs_loss'].item():.4f} "
                         f"zipf={step_out['zipf_bigram_loss'].item():.4f} "
                         f"ortho={step_out['ortho_loss'].item():.4f} "
+                        f"anchor={step_out['anchor_loss'].item():.4f} "
                         f"| lr={lr:.2e} | {peak}"
                     )
                     self.history["step"].append(global_step)
@@ -976,6 +1025,7 @@ class SoRLTrainerv3(SoRLTrainer):
                     self.history["abs_loss"].append(step_out["abs_loss"].item())
                     self.history["zipf_loss"].append(step_out["zipf_bigram_loss"].item())
                     self.history["ortho_loss"].append(step_out["ortho_loss"].item())
+                    self.history["anchor_loss"].append(step_out["anchor_loss"].item())
                     self.history["lr"].append(lr)
 
                 del loss, step_out
