@@ -13,3 +13,4 @@ seaborn
 pandas
 typing_extensions>=4.12
 filelock>=3.13
+scikit-learn
