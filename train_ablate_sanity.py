@@ -104,7 +104,7 @@ def parse_args():
     p.add_argument("--alpha_jacobi", type=float, default=0.0, help="Jacobi loss weight")
     p.add_argument("--alpha_masked_traj", type=float, default=0.0, help="Masked-context traj loss weight (v3+)")
     p.add_argument("--mask_nl_ratio", type=float, default=0.3, help="Fraction of NL tokens masked for masked_traj")
-    p.add_argument("--mask_nl_mode", type=str, default="random", choices=["random", "fixed"],
+    p.add_argument("--mask_nl_mode", type=str, default="fixed", choices=["random", "fixed"],
                    help="NL masking mode for masked_traj")
     p.add_argument("--zipf_alpha", type=float, default=1.0, help="Zipf alpha param for loss fn")
 
@@ -128,7 +128,7 @@ def parse_args():
     p.add_argument("--warmup_alpha_hinge", type=float, default=0.0, help="Warmup hinge loss weight")
     p.add_argument("--warmup_alpha_jacobi", type=float, default=0.5, help="Warmup jacobi loss weight")
     p.add_argument("--warmup_mask_nl_ratio", type=float, default=0.3, help="Fraction of NL tokens masked")
-    p.add_argument("--warmup_mask_nl_mode", type=str, default="random", choices=["random", "fixed"],
+    p.add_argument("--warmup_mask_nl_mode", type=str, default="fixed", choices=["random", "fixed"],
                    help="NL masking mode: random tokens or fixed rare token")
     p.add_argument("--warmup_grad_accum", type=int, default=4,
                    help="Gradient accumulation steps for warmup (match SoRL effective batch)")

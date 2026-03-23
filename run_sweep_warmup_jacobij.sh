@@ -7,14 +7,14 @@
 # Questions:
 #   Q1: Does SFT warmup help SoRL? Which warmup config?
 #   Q2: Does Jacobi loss help pure SoRL?
-#   Q3: Does masked_traj_loss help pure SoRL?
+#   Q3: Does masked_traj_loss (fixed mode) help SoRL?
 #
 # Step matching:
-#   - Pure SoRL runs: 3 epochs (~2800 steps)
-#   - Warmup runs: 500 warmup steps + 2 epochs SoRL (~2370 total)
-#     This keeps total forward passes roughly comparable.
+#   - Pure SoRL runs: 3 epochs (~2800 optimizer steps)
+#   - Warmup runs: 500 warmup + 2 ep SoRL (~2370 optimizer steps)
+#     Effective batch matched at 8 (bs=2 × accum=4).
 #
-# 20 experiments in 5 batches × 4 GPUs
+# 16 experiments in 4 batches × 4 GPUs
 # ============================================================================
 
 set -e
@@ -191,9 +191,38 @@ run_bg "wu_1000_vanilla_v3" \
 echo "  4 experiments launched. Waiting..."
 wait
 
+# ============================================================================
+# Batch 4 — Masked traj loss (fixed mode, validated in notebook)
+#   m_traj only in SoRL phase, not warmup (warmup m_traj degrades accuracy)
+# ============================================================================
 echo ""
 echo "============================================================"
-echo "All 12 experiments complete. Results in ./ckpt/sweep_${TIMESTAMP}/"
+echo "Batch 4: Masked traj loss — fixed mode (${TIMESTAMP})"
+echo "============================================================"
+
+# 13. v3 + mtraj=1.0 (fixed, ratio=0.3) — pure SoRL
+run_bg "v3_mtraj1.0" \
+  --num_epochs 3 $V3_BASE --alpha_masked_traj 1.0
+
+# 14. v3 + jacobi=0.5 + mtraj=1.0 — both auxiliaries
+run_bg "v3_jacobi_mtraj" \
+  --num_epochs 3 $V3_BASE --alpha_jacobi 0.5 --alpha_masked_traj 1.0
+
+# 15. v3 + mtraj=0.5 (lighter weight)
+run_bg "v3_mtraj0.5" \
+  --num_epochs 3 $V3_BASE --alpha_masked_traj 0.5
+
+# 16. Warmup (jacobi) → v3 + mtraj (warmup primes, SoRL uses mtraj)
+run_bg "wu_jacobi_v3mtraj" \
+  --num_epochs 2 $V3_BASE --alpha_masked_traj 1.0 \
+  $WU_BASE --warmup_alpha_jacobi 0.5
+
+echo "  4 experiments launched. Waiting..."
+wait
+
+echo ""
+echo "============================================================"
+echo "All 16 experiments complete. Results in ./ckpt/sweep_${TIMESTAMP}/"
 echo "============================================================"
 echo ""
 echo "Experiment matrix:"
@@ -202,7 +231,7 @@ echo "    1  v3_baseline          — exp10 config (no jacobi, no mtraj)"
 echo "    2  v3_jacobi0.5         — + jacobi=0.5"
 echo "    3  v3_jacobi1.0         — + jacobi=1.0"
 echo "    4  v3_jacobi0.25        — + jacobi=0.25"
-echo "  Batch 2 (warmup → SoRL, no warmup mtraj):"
+echo "  Batch 2 (warmup → SoRL):"
 echo "    5  wu_jacobi_v3         — warmup(jacobi=0.5) → v3"
 echo "    6  wu_vanilla_v3        — warmup(abs+traj only) → v3"
 echo "    7  wu_jacobi1.0_v3      — warmup(jacobi=1.0) → v3"
@@ -212,5 +241,8 @@ echo "    9  wu_250_jacobi_v3     — warmup 250 steps + jacobi → v3 3ep"
 echo "    10 wu_1000_jacobi_v3    — warmup 1000 steps + jacobi → v3 1ep"
 echo "    11 wu_250_vanilla_v3    — warmup 250 steps (vanilla) → v3 3ep"
 echo "    12 wu_1000_vanilla_v3   — warmup 1000 steps (vanilla) → v3 1ep"
-echo ""
-echo "  masked_traj experiments deferred — validating in notebook first"
+echo "  Batch 4 (masked traj loss — fixed mode):"
+echo "    13 v3_mtraj1.0          — + mtraj=1.0 (fixed, ratio=0.3)"
+echo "    14 v3_jacobi_mtraj      — + jacobi=0.5 + mtraj=1.0"
+echo "    15 v3_mtraj0.5          — + mtraj=0.5 (lighter)"
+echo "    16 wu_jacobi_v3mtraj    — warmup(jacobi) → v3+mtraj"

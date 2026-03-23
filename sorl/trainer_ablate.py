@@ -116,7 +116,7 @@ class SoRLConfig:
     # Masked NL traj loss (v3+): mask NL tokens in searched sequence, force abs dependency
     alpha_masked_traj: float = 0.0    # weight for masked-context traj loss (0 = disabled)
     mask_nl_ratio: float = 0.3        # fraction of response NL tokens to mask
-    mask_nl_mode: str = "random"      # "random" = uniform random NL tokens, "fixed" = single rare token
+    mask_nl_mode: str = "fixed"       # "random" = uniform random NL tokens, "fixed" = single rare token
     mask_nl_fixed_id: int = 0         # token ID used when mask_nl_mode="fixed"
 
     # Inner-loop (v4)
@@ -1410,7 +1410,7 @@ class WarmupSFTConfig:
 
     # NL masking for masked_traj
     mask_nl_ratio: float = 0.3
-    mask_nl_mode: str = "random"  # "random" or "fixed"
+    mask_nl_mode: str = "fixed"   # "random" or "fixed"
     mask_nl_fixed_id: int = 0
 
     # Optimizer
