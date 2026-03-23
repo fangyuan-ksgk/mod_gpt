@@ -124,9 +124,9 @@ def parse_args():
     p.add_argument("--warmup_emb_lr_mult", type=float, default=10.0, help="Warmup emb LR multiplier")
     p.add_argument("--warmup_alpha_abs", type=float, default=0.5, help="Warmup abs loss weight")
     p.add_argument("--warmup_alpha_traj", type=float, default=1.0, help="Warmup traj loss weight")
-    p.add_argument("--warmup_alpha_masked_traj", type=float, default=1.0, help="Warmup masked traj loss weight")
+    p.add_argument("--warmup_alpha_masked_traj", type=float, default=0.0, help="Warmup masked traj loss weight")
     p.add_argument("--warmup_alpha_hinge", type=float, default=0.0, help="Warmup hinge loss weight")
-    p.add_argument("--warmup_alpha_jacobi", type=float, default=0.5, help="Warmup jacobi loss weight")
+    p.add_argument("--warmup_alpha_jacobi", type=float, default=0.0, help="Warmup jacobi loss weight")
     p.add_argument("--warmup_mask_nl_ratio", type=float, default=0.3, help="Fraction of NL tokens masked")
     p.add_argument("--warmup_mask_nl_mode", type=str, default="fixed", choices=["random", "fixed"],
                    help="NL masking mode: random tokens or fixed rare token")
