@@ -1100,10 +1100,8 @@ class SoRLTrainerv3(SoRLTrainer):
 #   Key innovations over v3:
 #   - Inner loop: search once, then iterate n_inner times to build dependency
 #   - Dynamic corruption: re-corrupt each inner step (prevents adaptation)
-#   - Grad through corrupted path: true hinge gradient g_a - g_ã
-#     (v3's no_grad on corrupted path causes "decrease then increase" because
-#      the computed gradient ∂traj(a)/∂θ is NOT the gradient of the hinge loss;
-#      the model takes the path of least resistance — ignoring abstractions)
+#   - Stop-grad on corrupted path (same as v3): grad through both paths
+#     was found to degrade accuracy significantly during SFT warmup experiments
 #
 #   Loss = α_info * traj_loss
 #        + α_contrastive * max(0, γ + traj_loss - corrupted_traj)
@@ -1256,8 +1254,8 @@ class SoRLTrainerv4(SoRLTrainerv3):
                         method=cfg.corrupt_method, corrupt_ratio=cfg.corrupt_ratio,
                     )
 
-                    # Corrupted traj loss — WITH grad (true hinge gradient)
-                    corrupted_traj_loss = self._compute_corrupted_traj_loss_with_grad(
+                    # Corrupted traj loss — NO grad (stop-grad on corrupted path)
+                    corrupted_traj_loss = self._compute_corrupted_traj_loss(
                         corrupted_data, model, expanded_attn_mask,
                         expanded_prompt_len, base_vocab,
                     )
@@ -1351,4 +1349,398 @@ class SoRLTrainerv4(SoRLTrainerv3):
         if self.ddp:
             dist.destroy_process_group()
 
+        return self.history
+
+
+# ---------------------------------------------------------------------------
+# Warmup SFT Trainer — clustering-based SFT before SoRL
+# ---------------------------------------------------------------------------
+@dataclass
+class WarmupSFTConfig:
+    # Clustering
+    K: int = 4
+    abs_vocab: int = 128          # total abstract vocab (including [Mask] at base_vocab)
+    n_chunks_for_clustering: int = 50000
+
+    # Loss weights
+    alpha_abs: float = 0.5        # CE on abstract positions (AR context)
+    alpha_traj: float = 1.0       # CE on response NL positions (full context)
+    alpha_masked_traj: float = 1.0  # CE on response NL positions (masked NL context)
+    alpha_hinge: float = 0.0      # hinge on top of masked_traj (optional)
+    gamma_hinge: float = 0.5
+    alpha_jacobi: float = 0.5     # CE on abstract positions (masked abstract context)
+
+    # Corruption for hinge
+    corrupt_method: str = "noise"
+    corrupt_ratio: float = 1.0
+
+    # NL masking for masked_traj
+    mask_nl_ratio: float = 0.3
+    mask_nl_mode: str = "random"  # "random" or "fixed"
+    mask_nl_fixed_id: int = 0
+
+    # Optimizer
+    lr: float = 1e-4
+    emb_lr_mult: float = 10.0
+    weight_decay: float = 0.01
+    max_grad_norm: float = 1.0
+
+    # Training
+    num_steps: int = 500
+    batch_size: int = 2
+    memory_span_abs: int = 1792
+    memory_span_traj: int = 1792
+
+    # Logging
+    log_every: int = 20
+
+
+# ---------------------------------------------------------------------------
+# Warmup SFT helpers
+# ---------------------------------------------------------------------------
+def _label_chunks(token_ids, prompt_len, embed_layer, centroids, base_vocab, K):
+    """Assign abstract token IDs to K-chunks after prompt.
+    Returns: labeled_ids (1D) with abstract tokens inserted.
+    """
+    resp = token_ids[prompt_len:]
+    resp_len = len(resp)
+    if resp_len < K:
+        # Too short — insert placeholders
+        result = list(token_ids[:prompt_len].tolist())
+        resp_list = token_ids[prompt_len:].tolist()
+        for i, t in enumerate(resp_list):
+            if i > 0 and i % K == 0:
+                result.append(base_vocab + 1)
+            result.append(t)
+        return torch.tensor(result, device=token_ids.device, dtype=token_ids.dtype)
+
+    with torch.no_grad():
+        embs = embed_layer(resp).float()
+
+    result = list(token_ids[:prompt_len].tolist())
+    for i in range(0, resp_len, K):
+        chunk_end = min(i + K, resp_len)
+        chunk_emb = embs[i:chunk_end].mean(dim=0, keepdim=True)
+        sims = F.cosine_similarity(chunk_emb, centroids, dim=-1)
+        abs_id = base_vocab + 1 + sims.argmax().item()
+        if i > 0:
+            result.append(abs_id)
+        result.extend(resp[i:chunk_end].tolist())
+
+    return torch.tensor(result, device=token_ids.device, dtype=token_ids.dtype)
+
+
+def _mask_nl_tokens(padded, is_nl_inp, ratio, mode, fixed_id, base_vocab):
+    """Replace a fraction of NL response tokens with noise. Returns masked copy."""
+    masked = padded.clone()
+    rand_sel = torch.rand_like(padded.float()) < ratio
+    to_mask = is_nl_inp & rand_sel
+    if mode == "random":
+        masked[to_mask] = torch.randint(0, base_vocab, padded.shape, device=padded.device)[to_mask]
+    else:
+        masked[to_mask] = fixed_id
+    return masked
+
+
+def _compute_nl_traj_loss(model, ids, attn, targets, nl_mask, base_vocab,
+                          mem_abs=1792, mem_traj=1792, no_grad=False):
+    """Forward pass -> CE on NL response positions. Returns scalar loss."""
+    ctx = torch.no_grad() if no_grad else torch.enable_grad()
+    with ctx:
+        out = model(input_ids=ids, attention_mask=attn,
+                    memory_span_abs=mem_abs, memory_span_traj=mem_traj)
+        logits = out.logits[..., :-1, :].contiguous()
+        logits[..., base_vocab:] = -float("inf")
+        safe_t = targets.clone()
+        safe_t[~nl_mask] = 0
+        per_tok = F.cross_entropy(logits.view(-1, logits.size(-1)),
+                                  safe_t.view(-1), reduction='none')
+        per_tok = per_tok.view(targets.shape) * nl_mask.float()
+        return per_tok.sum() / nl_mask.float().sum().clamp(min=1)
+
+
+# ---------------------------------------------------------------------------
+# WarmupSFTTrainer
+# ---------------------------------------------------------------------------
+class WarmupSFTTrainer:
+    """Clustering-based SFT warmup trainer.
+
+    Pipeline:
+      1. Extract K-chunk embeddings from training data
+      2. K-means → centroids (abstract codebook)
+      3. Initialize abstract embeddings with centroids
+      4. SFT warmup: train abs_loss + traj_loss + masked_traj_loss
+                      + optional hinge + jacobi_loss
+
+    After warmup, the model is ready for full SoRL training.
+    """
+
+    def __init__(self, model, tokenizer, train_dataset, val_dataset=None,
+                 compute_accuracy=None, collate_fn=None,
+                 config=None, device=None):
+        self.config = config or WarmupSFTConfig()
+        self.model = model
+        self.tokenizer = tokenizer
+        self.train_dataset = train_dataset
+        self.val_dataset = val_dataset
+        self.compute_accuracy = compute_accuracy
+        self.collate_fn = collate_fn or default_collate_fn
+
+        if device is not None:
+            self.device = torch.device(device)
+        elif torch.cuda.is_available():
+            self.device = torch.device("cuda")
+        else:
+            self.device = next(model.parameters()).device
+
+        self.model = self.model.to(self.device)
+        self.base_vocab = int(model.vocab_sizes[0].item())
+        self.total_vocab = int(model.vocab_sizes.sum().item())
+        self.pad_token_id = tokenizer.pad_token_id
+
+        self.centroids = None  # set by _cluster()
+        self.history = {
+            "step": [], "abs_loss": [], "traj_loss": [],
+            "masked_traj_loss": [], "hinge_loss": [],
+            "jacobi_loss": [], "loss": [],
+        }
+
+    def _log(self, msg):
+        print(msg)
+
+    # ------------------------------------------------------------------
+    # Step 1+2: Extract embeddings + K-means clustering
+    # ------------------------------------------------------------------
+    def _cluster(self):
+        from sklearn.cluster import MiniBatchKMeans
+        import numpy as np
+
+        cfg = self.config
+        K = cfg.K
+        n_clusters = cfg.abs_vocab - 1  # skip [Mask]
+        embed_layer = self.model.model.model.embed_tokens
+
+        all_chunk_embs = []
+        self.model.eval()
+        with torch.no_grad():
+            for idx in range(len(self.train_dataset)):
+                item = self.train_dataset[idx]
+                ids = item["input_ids"].to(self.device)
+                mask = item["attention_mask"].to(self.device)
+                pl = item["prompt_len"]
+
+                resp_ids = ids[pl:]
+                valid_len = mask[pl:].sum().item()
+                if valid_len < K:
+                    continue
+                resp_ids = resp_ids[:valid_len]
+                embs = embed_layer(resp_ids)
+
+                n_chunks = valid_len // K
+                if n_chunks == 0:
+                    continue
+                truncated = embs[:n_chunks * K].view(n_chunks, K, -1)
+                chunk_means = truncated.mean(dim=1)
+                all_chunk_embs.append(chunk_means.cpu().float())
+
+                if sum(e.shape[0] for e in all_chunk_embs) >= cfg.n_chunks_for_clustering:
+                    break
+
+        all_chunk_embs = torch.cat(all_chunk_embs, dim=0).numpy()
+        self._log(f"[Warmup] Collected {all_chunk_embs.shape[0]} K-chunk embeddings")
+
+        kmeans = MiniBatchKMeans(n_clusters=n_clusters, batch_size=1024, n_init=3, random_state=42)
+        kmeans.fit(all_chunk_embs)
+        self.centroids = torch.from_numpy(kmeans.cluster_centers_).float().to(self.device)
+        self._log(f"[Warmup] K-means done. {n_clusters} centroids.")
+
+        # Step 3: Initialize abstract embeddings
+        with torch.no_grad():
+            embed_w = self.model.model.model.embed_tokens.weight
+            lm_head_w = self.model.model.lm_head.weight
+            embed_w[self.base_vocab + 1: self.base_vocab + 1 + n_clusters] = self.centroids
+            lm_head_w[self.base_vocab + 1: self.base_vocab + 1 + n_clusters] = self.centroids
+        self._log(f"[Warmup] Initialized abstract embeddings [{self.base_vocab+1}:{self.base_vocab+1+n_clusters}]")
+
+    # ------------------------------------------------------------------
+    # Label a batch
+    # ------------------------------------------------------------------
+    def _label_batch(self, batch):
+        """Label a batch: insert abstract tokens via clustering, re-pad."""
+        cfg = self.config
+        input_ids = batch["input_ids"].to(self.device)
+        attn_mask = batch["attention_mask"].to(self.device)
+        prompt_lens = batch["prompt_len"].to(self.device)
+        embed_layer = self.model.model.model.embed_tokens
+
+        labeled_seqs, exp_prompt_lens = [], []
+        for b in range(input_ids.shape[0]):
+            valid_len = attn_mask[b].sum().item()
+            ids_b = input_ids[b, :valid_len]
+            pl = prompt_lens[b].item()
+            labeled_seqs.append(
+                _label_chunks(ids_b, pl, embed_layer, self.centroids,
+                              self.base_vocab, cfg.K)
+            )
+            exp_prompt_lens.append(pl)
+
+        max_len = max(s.shape[0] for s in labeled_seqs)
+        padded = torch.full((len(labeled_seqs), max_len), self.pad_token_id,
+                            device=self.device, dtype=torch.long)
+        exp_attn = torch.zeros(len(labeled_seqs), max_len,
+                               device=self.device, dtype=torch.long)
+        for b, s in enumerate(labeled_seqs):
+            padded[b, :s.shape[0]] = s
+            exp_attn[b, :s.shape[0]] = 1
+
+        return padded, exp_attn, exp_prompt_lens
+
+    # ------------------------------------------------------------------
+    # Train
+    # ------------------------------------------------------------------
+    def train(self):
+        cfg = self.config
+        base_vocab = self.base_vocab
+        total_vocab = self.total_vocab
+
+        # Clustering + init (if not already done)
+        if self.centroids is None:
+            self._cluster()
+
+        # Optimizer
+        emb_params, other_params = [], []
+        for name, p in self.model.named_parameters():
+            if "embed_tokens" in name or "lm_head" in name:
+                emb_params.append(p)
+            else:
+                other_params.append(p)
+        optimizer = torch.optim.AdamW([
+            {"params": other_params, "lr": cfg.lr},
+            {"params": emb_params, "lr": cfg.lr * cfg.emb_lr_mult},
+        ], weight_decay=cfg.weight_decay)
+
+        dl = DataLoader(self.train_dataset, batch_size=cfg.batch_size,
+                        shuffle=True, collate_fn=self.collate_fn, num_workers=0)
+        dl_iter = iter(dl)
+
+        self.model.train()
+        self.history = {k: [] for k in self.history}
+        t0 = time.time()
+
+        for step in range(1, cfg.num_steps + 1):
+            try:
+                batch = next(dl_iter)
+            except StopIteration:
+                dl_iter = iter(dl)
+                batch = next(dl_iter)
+
+            padded, exp_attn, exp_prompt_lens = self._label_batch(batch)
+
+            targets = padded[:, 1:].contiguous()
+            is_abs = (targets > base_vocab)
+
+            # Masks
+            positions = torch.arange(targets.shape[1], device=self.device).unsqueeze(0)
+            pl_tensor = torch.tensor(exp_prompt_lens, device=self.device).unsqueeze(1)
+            is_response = (positions >= (pl_tensor - 1)) & exp_attn[:, 1:].bool()
+            is_response_nl = is_response & (targets < base_vocab) & (targets != self.pad_token_id)
+            positions_inp = torch.arange(padded.shape[1], device=self.device).unsqueeze(0)
+            is_nl_inp = ((positions_inp >= pl_tensor) & exp_attn.bool()
+                         & (padded < base_vocab) & (padded != self.pad_token_id))
+
+            # --- 1. AR Forward (abs_loss + traj_loss) ---
+            if cfg.alpha_abs > 0 or cfg.alpha_traj > 0:
+                out = self.model(input_ids=padded, attention_mask=exp_attn,
+                                 memory_span_abs=cfg.memory_span_abs,
+                                 memory_span_traj=cfg.memory_span_traj)
+                logits = out.logits[..., :-1, :].contiguous()
+
+                if cfg.alpha_abs > 0 and is_abs.any():
+                    abs_logits = logits.clone()
+                    abs_logits[..., :(base_vocab + 1)] = -float("inf")
+                    safe_abs = targets.clone(); safe_abs[~is_abs] = base_vocab + 1
+                    per_tok = F.cross_entropy(abs_logits.view(-1, abs_logits.size(-1)),
+                                              safe_abs.view(-1), reduction='none')
+                    abs_loss = (per_tok.view(targets.shape) * is_abs.float()).sum() / is_abs.float().sum().clamp(min=1)
+                else:
+                    abs_loss = torch.tensor(0.0, device=self.device)
+
+                if cfg.alpha_traj > 0 and is_response_nl.any():
+                    traj_logits = logits.clone()
+                    traj_logits[..., base_vocab:] = -float("inf")
+                    safe_t = targets.clone(); safe_t[~is_response_nl] = 0
+                    per_tok = F.cross_entropy(traj_logits.view(-1, traj_logits.size(-1)),
+                                              safe_t.view(-1), reduction='none')
+                    traj_loss = (per_tok.view(targets.shape) * is_response_nl.float()).sum() / is_response_nl.float().sum().clamp(min=1)
+                else:
+                    traj_loss = torch.tensor(0.0, device=self.device)
+            else:
+                abs_loss = traj_loss = torch.tensor(0.0, device=self.device)
+
+            # --- 2. Masked-context traj loss (+ optional hinge) ---
+            need_masked = (cfg.alpha_masked_traj > 0 or cfg.alpha_hinge > 0)
+            if need_masked and is_response_nl.any():
+                padded_masked = _mask_nl_tokens(padded, is_nl_inp, cfg.mask_nl_ratio,
+                                                cfg.mask_nl_mode, cfg.mask_nl_fixed_id, base_vocab)
+                masked_traj_loss = _compute_nl_traj_loss(
+                    self.model, padded_masked, exp_attn, targets, is_response_nl, base_vocab,
+                    cfg.memory_span_abs, cfg.memory_span_traj)
+
+                if cfg.alpha_hinge > 0:
+                    padded_corr = corrupt_abstract_tokens(
+                        padded_masked, base_vocab, total_vocab,
+                        method=cfg.corrupt_method, corrupt_ratio=cfg.corrupt_ratio)
+                    corr_targets = padded_corr[:, 1:].contiguous()
+                    corr_traj_loss = _compute_nl_traj_loss(
+                        self.model, padded_corr, exp_attn, corr_targets, is_response_nl,
+                        base_vocab, cfg.memory_span_abs, cfg.memory_span_traj, no_grad=True)
+                    hinge_loss = (cfg.gamma_hinge + masked_traj_loss - corr_traj_loss).clamp(min=0)
+                else:
+                    hinge_loss = torch.tensor(0.0, device=self.device)
+            else:
+                masked_traj_loss = hinge_loss = torch.tensor(0.0, device=self.device)
+
+            # --- 3. Jacobi loss ---
+            if cfg.alpha_jacobi > 0 and is_abs.any():
+                padded_j = padded.clone(); padded_j[padded_j > base_vocab] = base_vocab
+                out_j = self.model(input_ids=padded_j, attention_mask=exp_attn,
+                                   memory_span_abs=cfg.memory_span_abs,
+                                   memory_span_traj=cfg.memory_span_traj)
+                j_logits = out_j.logits[..., :-1, :].contiguous()
+                j_logits[..., :(base_vocab + 1)] = -float("inf")
+                safe_abs = targets.clone(); safe_abs[~is_abs] = base_vocab + 1
+                per_tok = F.cross_entropy(j_logits.view(-1, j_logits.size(-1)),
+                                          safe_abs.view(-1), reduction='none')
+                jacobi_loss = (per_tok.view(targets.shape) * is_abs.float()).sum() / is_abs.float().sum().clamp(min=1)
+            else:
+                jacobi_loss = torch.tensor(0.0, device=self.device)
+
+            # --- Total ---
+            loss = (cfg.alpha_abs * abs_loss + cfg.alpha_traj * traj_loss
+                    + cfg.alpha_masked_traj * masked_traj_loss
+                    + cfg.alpha_hinge * hinge_loss
+                    + cfg.alpha_jacobi * jacobi_loss)
+
+            loss.backward()
+            if cfg.max_grad_norm > 0:
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), cfg.max_grad_norm)
+            optimizer.step()
+            optimizer.zero_grad(set_to_none=True)
+
+            if step % cfg.log_every == 0:
+                elapsed = time.time() - t0
+                self._log(
+                    f"[Warmup] step {step}/{cfg.num_steps} | loss={loss.item():.4f} "
+                    f"| abs={abs_loss.item():.4f} | traj={traj_loss.item():.4f} "
+                    f"| m_traj={masked_traj_loss.item():.4f} | hinge={hinge_loss.item():.4f} "
+                    f"| jacobi={jacobi_loss.item():.4f} | {elapsed:.1f}s")
+                for k, v in [("step", step), ("abs_loss", abs_loss.item()),
+                             ("traj_loss", traj_loss.item()),
+                             ("masked_traj_loss", masked_traj_loss.item()),
+                             ("hinge_loss", hinge_loss.item()),
+                             ("jacobi_loss", jacobi_loss.item()),
+                             ("loss", loss.item())]:
+                    self.history[k].append(v)
+
+        self._log(f"[Warmup] SFT warmup done in {time.time()-t0:.1f}s")
         return self.history

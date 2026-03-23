@@ -24,7 +24,8 @@ from safetensors.torch import load_file as load_safetensors
 from transformers import AutoTokenizer
 
 from sorl.sorl_wrapper import SorlModelWrapper, left_pad_and_mask
-from sorl.trainer_ablate import SoRLTrainer, SoRLTrainerv2, SoRLTrainerv3, SoRLTrainerv4, SoRLConfig
+from sorl.trainer_ablate import (SoRLTrainer, SoRLTrainerv2, SoRLTrainerv3, SoRLTrainerv4, SoRLConfig,
+                                WarmupSFTTrainer, WarmupSFTConfig)
 from data.pt_dataset import get_dataset
 
 
@@ -110,6 +111,22 @@ def parse_args():
     p.add_argument("--temperature", type=float, default=1.0)
     p.add_argument("--response_only_abs", action="store_true",
                    help="Only insert abstract tokens in the response (not query/prompt)")
+
+    # Warmup SFT params
+    p.add_argument("--warmup_sft", action="store_true",
+                   help="Run clustering-based SFT warmup before SoRL training")
+    p.add_argument("--warmup_sft_steps", type=int, default=500, help="Number of SFT warmup steps")
+    p.add_argument("--warmup_lr", type=float, default=1e-4, help="Warmup SFT learning rate")
+    p.add_argument("--warmup_emb_lr_mult", type=float, default=10.0, help="Warmup emb LR multiplier")
+    p.add_argument("--warmup_alpha_abs", type=float, default=0.5, help="Warmup abs loss weight")
+    p.add_argument("--warmup_alpha_traj", type=float, default=1.0, help="Warmup traj loss weight")
+    p.add_argument("--warmup_alpha_masked_traj", type=float, default=1.0, help="Warmup masked traj loss weight")
+    p.add_argument("--warmup_alpha_hinge", type=float, default=0.0, help="Warmup hinge loss weight")
+    p.add_argument("--warmup_alpha_jacobi", type=float, default=0.5, help="Warmup jacobi loss weight")
+    p.add_argument("--warmup_mask_nl_ratio", type=float, default=0.3, help="Fraction of NL tokens masked")
+    p.add_argument("--warmup_mask_nl_mode", type=str, default="random", choices=["random", "fixed"],
+                   help="NL masking mode: random tokens or fixed rare token")
+    p.add_argument("--warmup_log_every", type=int, default=20)
 
     return p.parse_args()
 
@@ -488,6 +505,44 @@ def main():
     #         if result_k:
     #             log(f"Pre-train accuracy [K={config.K}]: {result_k['accuracy']*100:.1f}% "
     #                 f"({result_k['correct']}/{result_k['total']})")
+
+    # ---- Warmup SFT (optional) ----
+    if args.warmup_sft:
+        log(f"=== Running SFT Warmup ({args.warmup_sft_steps} steps) ===")
+        warmup_cfg = WarmupSFTConfig(
+            K=args.K,
+            abs_vocab=args.abstract_vocab_size,
+            alpha_abs=args.warmup_alpha_abs,
+            alpha_traj=args.warmup_alpha_traj,
+            alpha_masked_traj=args.warmup_alpha_masked_traj,
+            alpha_hinge=args.warmup_alpha_hinge,
+            alpha_jacobi=args.warmup_alpha_jacobi,
+            mask_nl_ratio=args.warmup_mask_nl_ratio,
+            mask_nl_mode=args.warmup_mask_nl_mode,
+            lr=args.warmup_lr,
+            emb_lr_mult=args.warmup_emb_lr_mult,
+            num_steps=args.warmup_sft_steps,
+            batch_size=args.batch_size,
+            log_every=args.warmup_log_every,
+        )
+        warmup_trainer = WarmupSFTTrainer(
+            model=model,
+            tokenizer=tokenizer,
+            train_dataset=train_ds,
+            val_dataset=val_ds,
+            compute_accuracy=accuracy_fn,
+            config=warmup_cfg,
+        )
+        warmup_trainer._log = log  # use shared logger
+        warmup_history = warmup_trainer.train()
+        log(f"=== SFT Warmup complete ===")
+
+        # Save warmup history
+        import json as _json
+        warmup_hist_path = os.path.join(args.output_dir, "warmup_history.json")
+        with open(warmup_hist_path, "w") as f:
+            _json.dump(warmup_history, f, indent=2)
+        log(f"Warmup history saved to {warmup_hist_path}")
 
     # ---- Train ----
     history = trainer.train()
