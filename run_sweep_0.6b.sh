@@ -31,6 +31,9 @@ export NCCL_SOCKET_IFNAME=lo
 export NCCL_IB_DISABLE=1
 export NCCL_DEBUG=WARN
 export TORCH_NCCL_HEARTBEAT_TIMEOUT_SEC=3600
+export OPENBLAS_NUM_THREADS=4
+export MKL_NUM_THREADS=4
+export OMP_NUM_THREADS=4
 
 # ============================================================================
 # Shared configuration

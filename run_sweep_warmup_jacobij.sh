@@ -31,6 +31,9 @@ export NCCL_SOCKET_IFNAME=lo
 export NCCL_IB_DISABLE=1
 export NCCL_DEBUG=WARN
 export TORCH_NCCL_HEARTBEAT_TIMEOUT_SEC=3600
+export OPENBLAS_NUM_THREADS=4
+export MKL_NUM_THREADS=4
+export OMP_NUM_THREADS=4
 
 # ============================================================================
 # Shared configuration
@@ -103,29 +106,29 @@ run_bg() {
 #   Q2: Does jacobi loss help pure SoRL?
 #   (masked_traj experiments deferred — validating in notebook first)
 # ============================================================================
-echo ""
-echo "============================================================"
-echo "Batch 1: Pure SoRL baselines + jacobi (${TIMESTAMP})"
-echo "============================================================"
+# echo ""
+# echo "============================================================"
+# echo "Batch 1: Pure SoRL baselines + jacobi (${TIMESTAMP})"
+# echo "============================================================"
 
-# 1. Baseline: v3 noise r=0.3 γ=0.5 (no jacobi, no mtraj)
-run_bg "v3_baseline" \
-  --num_epochs 3 $V3_BASE
+# # 1. Baseline: v3 noise r=0.3 γ=0.5 (no jacobi, no mtraj)
+# run_bg "v3_baseline" \
+#   --num_epochs 3 $V3_BASE
 
-# 2. v3 + jacobi=0.5
-run_bg "v3_jacobi0.5" \
-  --num_epochs 3 $V3_BASE --alpha_jacobi 0.5
+# # 2. v3 + jacobi=0.5
+# run_bg "v3_jacobi0.5" \
+#   --num_epochs 3 $V3_BASE --alpha_jacobi 0.5
 
-# 3. v3 + jacobi=1.0 (stronger)
-run_bg "v3_jacobi1.0" \
-  --num_epochs 3 $V3_BASE --alpha_jacobi 1.0
+# # 3. v3 + jacobi=1.0 (stronger)
+# run_bg "v3_jacobi1.0" \
+#   --num_epochs 3 $V3_BASE --alpha_jacobi 1.0
 
-# 4. v3 + jacobi=0.25 (lighter)
-run_bg "v3_jacobi0.25" \
-  --num_epochs 3 $V3_BASE --alpha_jacobi 0.25
+# # 4. v3 + jacobi=0.25 (lighter)
+# run_bg "v3_jacobi0.25" \
+#   --num_epochs 3 $V3_BASE --alpha_jacobi 0.25
 
-echo "  4 experiments launched. Waiting..."
-wait
+# echo "  4 experiments launched. Waiting..."
+# wait
 
 # ============================================================================
 # Batch 2 — Q1: SFT warmup → SoRL (step-matched: 500 wu + 2 ep SoRL)
