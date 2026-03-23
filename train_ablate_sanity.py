@@ -102,6 +102,10 @@ def parse_args():
     p.add_argument("--alpha_ortho", type=float, default=0.0, help="Ortho loss weight")
     p.add_argument("--alpha_anchor", type=float, default=0.0, help="Anchor loss weight")
     p.add_argument("--alpha_jacobi", type=float, default=0.0, help="Jacobi loss weight")
+    p.add_argument("--alpha_masked_traj", type=float, default=0.0, help="Masked-context traj loss weight (v3+)")
+    p.add_argument("--mask_nl_ratio", type=float, default=0.3, help="Fraction of NL tokens masked for masked_traj")
+    p.add_argument("--mask_nl_mode", type=str, default="random", choices=["random", "fixed"],
+                   help="NL masking mode for masked_traj")
     p.add_argument("--zipf_alpha", type=float, default=1.0, help="Zipf alpha param for loss fn")
 
     # SoRL search params (only used when aux weights are nonzero)
@@ -126,6 +130,8 @@ def parse_args():
     p.add_argument("--warmup_mask_nl_ratio", type=float, default=0.3, help="Fraction of NL tokens masked")
     p.add_argument("--warmup_mask_nl_mode", type=str, default="random", choices=["random", "fixed"],
                    help="NL masking mode: random tokens or fixed rare token")
+    p.add_argument("--warmup_grad_accum", type=int, default=4,
+                   help="Gradient accumulation steps for warmup (match SoRL effective batch)")
     p.add_argument("--warmup_log_every", type=int, default=20)
 
     return p.parse_args()
@@ -460,6 +466,9 @@ def main():
         corrupt_ratio=args.corrupt_ratio,
         alpha_contrastive=args.alpha_contrastive,
         gamma_contrastive=args.gamma_contrastive,
+        alpha_masked_traj=args.alpha_masked_traj,
+        mask_nl_ratio=args.mask_nl_ratio,
+        mask_nl_mode=args.mask_nl_mode,
         n_inner=args.n_inner,
         response_only_abs=args.response_only_abs,
     )
@@ -523,6 +532,7 @@ def main():
             emb_lr_mult=args.warmup_emb_lr_mult,
             num_steps=args.warmup_sft_steps,
             batch_size=args.batch_size,
+            gradient_accumulation_steps=args.warmup_grad_accum,
             log_every=args.warmup_log_every,
         )
         warmup_trainer = WarmupSFTTrainer(

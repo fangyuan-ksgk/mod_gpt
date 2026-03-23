@@ -113,6 +113,12 @@ class SoRLConfig:
     alpha_contrastive: float = 1.0    # weight for hinge contrastive loss
     gamma_contrastive: float = 0.5    # margin for hinge: want corrupted_traj - traj > gamma
 
+    # Masked NL traj loss (v3+): mask NL tokens in searched sequence, force abs dependency
+    alpha_masked_traj: float = 0.0    # weight for masked-context traj loss (0 = disabled)
+    mask_nl_ratio: float = 0.3        # fraction of response NL tokens to mask
+    mask_nl_mode: str = "random"      # "random" = uniform random NL tokens, "fixed" = single rare token
+    mask_nl_fixed_id: int = 0         # token ID used when mask_nl_mode="fixed"
+
     # Inner-loop (v4)
     n_inner: int = 1  # inner optimization steps per searched sequence
 
@@ -801,8 +807,8 @@ class SoRLTrainerv3(SoRLTrainer):
         super().__init__(*args, **kwargs)
         self.history = {
             "step": [], "loss": [], "base_loss": [], "traj_loss": [],
-            "hinge_loss": [], "abs_loss": [], "zipf_loss": [], "ortho_loss": [],
-            "anchor_loss": [], "jacobi_loss": [], "lr": [],
+            "hinge_loss": [], "masked_traj_loss": [], "abs_loss": [], "zipf_loss": [],
+            "ortho_loss": [], "anchor_loss": [], "jacobi_loss": [], "lr": [],
         }
         # Use SoRLLoss_v2 — returns (traj_loss, abs_loss, zipf_kl) directly
         self.loss_fn = SoRLLoss_v2(
@@ -946,9 +952,34 @@ class SoRLTrainerv3(SoRLTrainer):
         else:
             j_loss = torch.tensor(0.0, device=self.device)
 
+        # 7. Masked-context traj loss: mask NL tokens in searched seq, force abs dependency
+        if cfg.alpha_masked_traj > 0:
+            targets_bd = best_data[:, 1:].contiguous()
+            # Build NL response mask on the searched (expanded) sequence
+            positions_t = torch.arange(targets_bd.shape[1], device=self.device).unsqueeze(0)
+            is_resp = (positions_t >= (expanded_prompt_len.unsqueeze(1) - 1)) & expanded_attn_mask[:, 1:].bool()
+            is_resp_nl = is_resp & (targets_bd < base_vocab) & (targets_bd != self.pad_token_id)
+            # NL mask on input positions (for masking)
+            positions_inp = torch.arange(best_data.shape[1], device=self.device).unsqueeze(0)
+            is_nl_inp = ((positions_inp >= expanded_prompt_len.unsqueeze(1))
+                         & expanded_attn_mask.bool()
+                         & (best_data < base_vocab)
+                         & (best_data != self.pad_token_id))
+            if is_resp_nl.any():
+                masked_data = _mask_nl_tokens(best_data, is_nl_inp, cfg.mask_nl_ratio,
+                                             cfg.mask_nl_mode, cfg.mask_nl_fixed_id, base_vocab)
+                m_traj_loss = _compute_nl_traj_loss(
+                    model, masked_data, expanded_attn_mask, targets_bd, is_resp_nl,
+                    base_vocab, cfg.memory_span_abs, cfg.memory_span_traj)
+            else:
+                m_traj_loss = torch.tensor(0.0, device=self.device)
+        else:
+            m_traj_loss = torch.tensor(0.0, device=self.device)
+
         loss = (
             cfg.alpha_traj * traj_loss
             + cfg.alpha_contrastive * contrastive_loss
+            + cfg.alpha_masked_traj * m_traj_loss
             + cfg.alpha_abs * abs_loss
             + cfg.alpha_soft_zipf * zipf_bigram_loss
             + cfg.alpha_ortho * ortho_loss
@@ -961,6 +992,7 @@ class SoRLTrainerv3(SoRLTrainer):
             "base_traj_loss": base_traj_loss,
             "traj_loss": traj_loss,
             "contrastive_loss": contrastive_loss,
+            "masked_traj_loss": m_traj_loss,
             "abs_loss": abs_loss,
             "zipf_bigram_loss": zipf_bigram_loss,
             "ortho_loss": ortho_loss,
@@ -1050,6 +1082,7 @@ class SoRLTrainerv3(SoRLTrainer):
                         f"loss={total_loss:.4f} base={step_out['base_traj_loss'].item():.4f} "
                         f"hinge={step_out['contrastive_loss'].item():.4f} "
                         f"traj={step_out['traj_loss'].item():.4f} "
+                        f"m_traj={step_out['masked_traj_loss'].item():.4f} "
                         f"abs={step_out['abs_loss'].item():.4f} "
                         f"zipf={step_out['zipf_bigram_loss'].item():.4f} "
                         f"ortho={step_out['ortho_loss'].item():.4f} "
@@ -1062,6 +1095,7 @@ class SoRLTrainerv3(SoRLTrainer):
                     self.history["base_loss"].append(step_out["base_traj_loss"].item())
                     self.history["traj_loss"].append(step_out["traj_loss"].item())
                     self.history["hinge_loss"].append(step_out["contrastive_loss"].item())
+                    self.history["masked_traj_loss"].append(step_out["masked_traj_loss"].item())
                     self.history["abs_loss"].append(step_out["abs_loss"].item())
                     self.history["zipf_loss"].append(step_out["zipf_bigram_loss"].item())
                     self.history["ortho_loss"].append(step_out["ortho_loss"].item())
@@ -1380,14 +1414,15 @@ class WarmupSFTConfig:
     mask_nl_fixed_id: int = 0
 
     # Optimizer
-    lr: float = 1e-4
-    emb_lr_mult: float = 10.0
+    lr: float = 1e-5
+    emb_lr_mult: float = 1.0
     weight_decay: float = 0.01
     max_grad_norm: float = 1.0
 
     # Training
     num_steps: int = 500
     batch_size: int = 2
+    gradient_accumulation_steps: int = 1
     memory_span_abs: int = 1792
     memory_span_traj: int = 1792
 
@@ -1721,11 +1756,13 @@ class WarmupSFTTrainer:
                     + cfg.alpha_hinge * hinge_loss
                     + cfg.alpha_jacobi * jacobi_loss)
 
-            loss.backward()
-            if cfg.max_grad_norm > 0:
-                torch.nn.utils.clip_grad_norm_(self.model.parameters(), cfg.max_grad_norm)
-            optimizer.step()
-            optimizer.zero_grad(set_to_none=True)
+            (loss / cfg.gradient_accumulation_steps).backward()
+
+            if step % cfg.gradient_accumulation_steps == 0:
+                if cfg.max_grad_norm > 0:
+                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), cfg.max_grad_norm)
+                optimizer.step()
+                optimizer.zero_grad(set_to_none=True)
 
             if step % cfg.log_every == 0:
                 elapsed = time.time() - t0
