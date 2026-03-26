@@ -3,9 +3,10 @@
 import torch
 torch.set_float32_matmul_precision('high')
 from src.mbe import (
-    patch_mbe
+    patch_mbe, patch_frobenius
 )
 RANK_REG_LOSS = "mbe"
+FROB_REG_LOSS = "frob"
 
 # Customized GPT model with low-rank regularization loss 
 # -------------------------------------------------------------------
@@ -174,6 +175,7 @@ class GPT(nn.Module):
                 t0 = time.perf_counter()
             
             loss_dict[f"{RANK_REG_LOSS}_{i}"] = self.reg_func(x, patch_size)
+            loss_dict[f"{FROB_REG_LOSS}_{i}"] = patch_frobenius(x, patch_size)
             
             if self.enable_timing:
                 timings[f'encoder_layer_{i}_mbe'] = (time.perf_counter() - t0) * 1000
@@ -194,6 +196,7 @@ class GPT(nn.Module):
             
             loss_dict[f"{RANK_REG_LOSS}_{self.num_encoder_layers + i}"] = self.reg_func(x, patch_size)
             
+            loss_dict[f"{FROB_REG_LOSS}_{self.num_encoder_layers + i}"] = patch_frobenius(x, patch_size)
             if self.enable_timing:
                 timings[f'decoder_layer_{i}_mbe'] = (time.perf_counter() - t0) * 1000
         

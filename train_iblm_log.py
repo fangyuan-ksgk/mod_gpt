@@ -342,11 +342,12 @@ def get_lr(step: int):
 # Projective Non-conflicting Gradient Composer #
 ################################################
 
-from src.gradtracker import GradientTracker, GradStatsRecorder, track_gradient_similarity
+from src.gradtracker import GradientTracker, GradStatsRecorder, track_gradient_similarity, track_multi_gradient_similarity, MultiGradStatsRecorder
 from src.gapt import GatedPhaseTransition, get_mbe_layer_mask
 
 grad_tracker = GradientTracker(model)
 grad_stats = GradStatsRecorder()
+multi_grad_stats = MultiGradStatsRecorder(["mbe", "frob"])
 gapt = GatedPhaseTransition(p_m = args.entropy_patience, p_a = args.mbe_patience, 
                             tau_plateau_m = args.entropy_min_delta, tau_plateau_a = args.mbe_min_delta, 
                             tau_spike = args.entropy_spike_tolerance, clamp_a = args.min_a, use_softplus = args.use_softplus_gapt)
@@ -494,6 +495,7 @@ for step in range(train_steps + 1):
             os.makedirs(f"logs/{run_id}", exist_ok=True)
             if args.log_grad_info:
                 grad_stats.save(f"logs/{run_id}/grad_stats_step{step:06d}.pkl")
+                multi_grad_stats.save(f"logs/{run_id}/multi_grad_stats_step{step:06d}.pkl")
             plot_training_losses(loss_record, save_path=f"logs/{run_id}/loss_curve.png")
             
             if args.save_checkpoint:
@@ -519,25 +521,34 @@ for step in range(train_steps + 1):
         # Idea #1. per_layer_mbe_mask used to slice mbe loss per layer
         #          we should adapt this mask across steps, too
         per_layer_mbe_mask = get_mbe_layer_mask(step, accum_step, train_accumulation_steps, model.num_encoder_layers + model.num_decoder_layers, mode=args.mbe_schedule, skip_first=args.skip_first, skip_last=args.skip_last)
-        mbe_loss_per_layer = torch.stack([loss_dict[k] for k in loss_dict.keys() if k.startswith("mbe_")])
+        mbe_loss_per_layer = torch.stack([loss_dict[k] for k in sorted(loss_dict.keys()) if k.startswith("mbe_")])
+        frob_loss_per_layer = torch.stack([loss_dict[k] for k in sorted(loss_dict.keys()) if k.startswith("frob_")])
 
         masked_mbe = mbe_loss_per_layer * per_layer_mbe_mask
+        masked_frob = frob_loss_per_layer * per_layer_mbe_mask  # same layer mask
         if args.mbe_comp_mode == "naive": 
             mbe_loss = (masked_mbe.sum() / per_layer_mbe_mask.sum())
+            frob_loss = (masked_frob.sum() / per_layer_mbe_mask.sum())
         elif args.mbe_comp_mode == "spike": # maximize diff-mbe bottleneck
             gradients = masked_mbe[1:] - masked_mbe[:-1]
             decay_idx = gradients.argmin()
-            mbe_loss = masked_mbe[decay_idx + 1]     
+            mbe_loss = masked_mbe[decay_idx + 1]
+            frob_loss = masked_frob[decay_idx + 1]  # same bottleneck layer
         else: 
             assert False, f"Unknown MBE composition mode: {args.mbe_comp_mode}"
 
         loss_dict = {
-            "entropy": loss_dict["entropy"], "mbe": mbe_loss
+            "entropy": loss_dict["entropy"], "mbe": mbe_loss, "frob": frob_loss
         }
         if args.log_grad_info: 
-            assert "mbe" in loss_dict, "MBE loss is required for gradient tracking"
+            # Track CE vs MBE (backward compat)
             stats = track_gradient_similarity(model, loss_dict["entropy"], loss_dict["mbe"])
             grad_stats.record(stats, step)
+            # Track CE vs both MBE and Frobenius
+            multi_stats = track_multi_gradient_similarity(
+                model, loss_dict["entropy"], {"mbe": loss_dict["mbe"], "frob": loss_dict["frob"]}
+            )
+            multi_grad_stats.record(multi_stats, step)
 
         if args.no_reg: 
             loss_dict = {"entropy": loss_dict["entropy"]}

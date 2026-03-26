@@ -171,6 +171,140 @@ def track_gradient_similarity(model, ce_loss, mbe_loss):
     }
 
 
+def track_multi_gradient_similarity(model, ce_loss, aux_losses):
+    """
+    Track CE gradient alignment against multiple auxiliary losses.
+    
+    Args:
+        model: The model whose parameters to track.
+        ce_loss: Cross-entropy loss tensor (with grad graph).
+        aux_losses: Dict of {name: loss_tensor}, e.g. {"mbe": mbe_loss, "frob": frob_loss}.
+    
+    Returns:
+        Dict of {aux_name: {global_cosine, per_param}} — same structure as track_gradient_similarity per aux.
+    """
+    named_params = [(n, p) for n, p in model.named_parameters() if p.requires_grad]
+    params = [p for _, p in named_params]
+    names = [n for n, _ in named_params]
+    
+    # Compute CE gradients once
+    ce_grads = torch.autograd.grad(
+        ce_loss, params, retain_graph=True, create_graph=False, allow_unused=True
+    )
+    
+    results = {}
+    for aux_name, aux_loss in aux_losses.items():
+        aux_grads = torch.autograd.grad(
+            aux_loss, params, retain_graph=True, create_graph=False, allow_unused=True
+        )
+        
+        per_param = {}
+        ce_flat_all = []
+        aux_flat_all = []
+        
+        for name, g_ce, g_aux in zip(names, ce_grads, aux_grads):
+            if g_ce is None or g_aux is None:
+                continue
+            
+            g_ce_flat = g_ce.flatten()
+            g_aux_flat = g_aux.flatten()
+            
+            norm_ce = torch.norm(g_ce_flat).item()
+            norm_aux = torch.norm(g_aux_flat).item()
+            
+            if norm_ce > 1e-8 and norm_aux > 1e-8:
+                cos = (torch.dot(g_ce_flat, g_aux_flat) / (norm_ce * norm_aux)).item()
+            else:
+                cos = 0.0
+            
+            per_param[name] = {
+                'ce_norm': norm_ce,
+                'aux_norm': norm_aux,
+                'cosine': cos,
+                'numel': g_ce.numel(),
+            }
+            
+            ce_flat_all.append(g_ce_flat)
+            aux_flat_all.append(g_aux_flat)
+        
+        if len(ce_flat_all) > 0:
+            all_ce = torch.cat(ce_flat_all)
+            all_aux = torch.cat(aux_flat_all)
+            global_cos = (torch.dot(all_ce, all_aux) / 
+                          (torch.norm(all_ce) * torch.norm(all_aux))).item()
+        else:
+            global_cos = 0.0
+        
+        results[aux_name] = {
+            'global_cosine': global_cos,
+            'per_param': per_param,
+        }
+    
+    return results
+
+
+class MultiGradStatsRecorder:
+    """Records gradient similarity stats for multiple auxiliary losses over training."""
+    
+    def __init__(self, aux_names):
+        self.aux_names = list(aux_names)
+        self.global_history = {name: [] for name in self.aux_names}
+        self.per_param_history = {name: {} for name in self.aux_names}
+    
+    def record(self, multi_stats, step):
+        """Record stats from track_multi_gradient_similarity()."""
+        for aux_name, stats in multi_stats.items():
+            if aux_name not in self.aux_names:
+                self.aux_names.append(aux_name)
+                self.global_history[aux_name] = []
+                self.per_param_history[aux_name] = {}
+            
+            self.global_history[aux_name].append({
+                'step': step,
+                'global_cosine': stats['global_cosine'],
+            })
+            
+            for pname, pstats in stats['per_param'].items():
+                if pname not in self.per_param_history[aux_name]:
+                    self.per_param_history[aux_name][pname] = []
+                self.per_param_history[aux_name][pname].append({
+                    'step': step,
+                    'cosine': pstats['cosine'],
+                    'ce_norm': pstats['ce_norm'],
+                    'aux_norm': pstats['aux_norm'],
+                })
+    
+    def global_df(self, aux_name=None):
+        """Get global cosine over training. If aux_name=None, returns all in one df."""
+        if aux_name is not None:
+            return pd.DataFrame(self.global_history[aux_name])
+        rows = []
+        for name, history in self.global_history.items():
+            for h in history:
+                rows.append({'aux_loss': name, **h})
+        return pd.DataFrame(rows)
+    
+    def save(self, path):
+        import pickle
+        with open(path, 'wb') as f:
+            pickle.dump({
+                'aux_names': self.aux_names,
+                'global': self.global_history,
+                'per_param': self.per_param_history,
+            }, f)
+        print(f"Saved multi gradient stats to {path}")
+    
+    @classmethod
+    def load(cls, path):
+        import pickle
+        with open(path, 'rb') as f:
+            data = pickle.load(f)
+        recorder = cls(data['aux_names'])
+        recorder.global_history = data['global']
+        recorder.per_param_history = data['per_param']
+        return recorder
+
+
 class GradStatsRecorder:
     """Records gradient similarity stats over training."""
     
