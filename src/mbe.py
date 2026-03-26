@@ -34,6 +34,17 @@ def patch_mbe(x, patch_size=8):
     return mbe_values.mean()
 
 
+def patch_frobenius(x, patch_size=8):
+    """Mean squared Frobenius norm of patched hidden states (normalized)."""
+    B, S, D = x.shape
+    assert S % patch_size == 0, "Sequence length must be divisible by patch size"
+    num_patches = S // patch_size
+    x_reshaped = x.reshape(B, num_patches, patch_size, D).reshape(-1, patch_size, D)
+    x_reshaped = x_reshaped.float()
+    frob_sq = x_reshaped.pow(2).sum(dim=(1, 2)) / (patch_size * D)
+    return frob_sq.mean()
+
+
 def mbe_reverse_gram(Z, epsilon=1e-5):
     """MBE via reverse Gram matrix Z^T Z (D×D instead of N×N). Memory-efficient when N >> D."""
     Z = Z.float()
