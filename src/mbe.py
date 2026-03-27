@@ -62,17 +62,23 @@ def patch_condition_number(x, patch_size=8, epsilon=1e-6):
     
     Minimizing this encourages a uniform singular value distribution,
     spreading out the spectral energy of the representation.
+    
+    Uses the small Gram matrix X·X^T (patch_size × patch_size) + eigvalsh
+    instead of full SVD on (patch_size × D), which is orders of magnitude faster.
     """
     B, S, D = x.shape
     assert S % patch_size == 0, "Sequence length must be divisible by patch size"
     num_patches = S // patch_size
     x_reshaped = x.reshape(B, num_patches, patch_size, D).reshape(-1, patch_size, D)
     x_reshaped = x_reshaped.float()
-    # SVD: singular values shape (num_patches*B, min(patch_size, D))
-    sv = torch.linalg.svdvals(x_reshaped)
-    sigma_max = sv[:, 0]
-    sigma_min = sv[:, -1]
-    cond = sigma_max / (sigma_min + epsilon)
+    # Gram matrix: (N, patch_size, patch_size) — tiny (e.g. 4×4)
+    gram = torch.bmm(x_reshaped, x_reshaped.transpose(1, 2))
+    # Eigenvalues of symmetric PSD matrix, returned in ascending order
+    eigvals = torch.linalg.eigvalsh(gram)  # (N, patch_size)
+    lambda_max = eigvals[:, -1]
+    lambda_min = eigvals[:, 0].clamp(min=epsilon)
+    # cond(X) = sigma_max / sigma_min = sqrt(lambda_max / lambda_min)
+    cond = torch.sqrt(lambda_max / lambda_min)
     return cond.mean()
 
 
