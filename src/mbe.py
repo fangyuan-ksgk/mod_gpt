@@ -57,6 +57,25 @@ def mbe_reverse_gram(Z, epsilon=1e-5):
     return mbe.clamp(min=0.0)
 
 
+def patch_condition_number(x, patch_size=8, epsilon=1e-6):
+    """Mean condition number (sigma_max / sigma_min) of patched hidden states.
+    
+    Minimizing this encourages a uniform singular value distribution,
+    spreading out the spectral energy of the representation.
+    """
+    B, S, D = x.shape
+    assert S % patch_size == 0, "Sequence length must be divisible by patch size"
+    num_patches = S // patch_size
+    x_reshaped = x.reshape(B, num_patches, patch_size, D).reshape(-1, patch_size, D)
+    x_reshaped = x_reshaped.float()
+    # SVD: singular values shape (num_patches*B, min(patch_size, D))
+    sv = torch.linalg.svdvals(x_reshaped)
+    sigma_max = sv[:, 0]
+    sigma_min = sv[:, -1]
+    cond = sigma_max / (sigma_min + epsilon)
+    return cond.mean()
+
+
 class OnlineMBE:
     """Incremental MBE via running reverse Gram matrix G = Z^T Z (D×D)."""
 
