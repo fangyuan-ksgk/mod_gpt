@@ -57,6 +57,20 @@ def mbe_reverse_gram(Z, epsilon=1e-5):
     return mbe.clamp(min=0.0)
 
 
+def patch_l2_norm(x, patch_size=8):
+    """Mean L2 norm of hidden state token vectors, averaged over patches.
+    
+    For each token vector h_i of dimension D, computes ||h_i||_2,
+    then averages across all tokens and batches.
+    """
+    B, S, D = x.shape
+    assert S % patch_size == 0, "Sequence length must be divisible by patch size"
+    x = x.float()
+    # L2 norm per token: (B, S)
+    norms = x.norm(dim=-1)
+    return norms.mean()
+
+
 def patch_condition_number(x, patch_size=8, epsilon=1e-6):
     """Mean condition number (sigma_max / sigma_min) of patched hidden states.
     

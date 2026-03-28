@@ -3,10 +3,11 @@
 import torch
 torch.set_float32_matmul_precision('high')
 from src.mbe import (
-    patch_mbe, patch_frobenius
+    patch_mbe, patch_frobenius, patch_l2_norm
 )
 RANK_REG_LOSS = "mbe"
 FROB_REG_LOSS = "frob"
+L2_REG_LOSS = "l2"
 
 # Customized GPT model with low-rank regularization loss 
 # -------------------------------------------------------------------
@@ -176,6 +177,7 @@ class GPT(nn.Module):
             
             loss_dict[f"{RANK_REG_LOSS}_{i}"] = self.reg_func(x, patch_size)
             loss_dict[f"{FROB_REG_LOSS}_{i}"] = patch_frobenius(x, patch_size)
+            loss_dict[f"{L2_REG_LOSS}_{i}"] = patch_l2_norm(x, patch_size)
             
             if self.enable_timing:
                 timings[f'encoder_layer_{i}_mbe'] = (time.perf_counter() - t0) * 1000
@@ -197,6 +199,7 @@ class GPT(nn.Module):
             loss_dict[f"{RANK_REG_LOSS}_{self.num_encoder_layers + i}"] = self.reg_func(x, patch_size)
             
             loss_dict[f"{FROB_REG_LOSS}_{self.num_encoder_layers + i}"] = patch_frobenius(x, patch_size)
+            loss_dict[f"{L2_REG_LOSS}_{self.num_encoder_layers + i}"] = patch_l2_norm(x, patch_size)
             if self.enable_timing:
                 timings[f'decoder_layer_{i}_mbe'] = (time.perf_counter() - t0) * 1000
         
@@ -336,6 +339,7 @@ class GPT_log(nn.Module):
             
             loss_dict[f"{RANK_REG_LOSS}_{i}"] = self.reg_func(x, patch_size)
             loss_dict[f"{FROB_REG_LOSS}_{i}"] = patch_frobenius(x, patch_size)
+            loss_dict[f"{L2_REG_LOSS}_{i}"] = patch_l2_norm(x, patch_size)
             
             if self.enable_timing:
                 timings[f'encoder_layer_{i}_mbe'] = (time.perf_counter() - t0) * 1000
@@ -357,6 +361,7 @@ class GPT_log(nn.Module):
             loss_dict[f"{RANK_REG_LOSS}_{self.num_encoder_layers + i}"] = self.reg_func(x, patch_size)
             
             loss_dict[f"{FROB_REG_LOSS}_{self.num_encoder_layers + i}"] = patch_frobenius(x, patch_size)
+            loss_dict[f"{L2_REG_LOSS}_{self.num_encoder_layers + i}"] = patch_l2_norm(x, patch_size)
             if self.enable_timing:
                 timings[f'decoder_layer_{i}_mbe'] = (time.perf_counter() - t0) * 1000
         
