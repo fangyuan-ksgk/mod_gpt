@@ -108,6 +108,16 @@ def parse_args():
                    help="NL masking mode for masked_traj")
     p.add_argument("--zipf_alpha", type=float, default=1.0, help="Zipf alpha param for loss fn")
 
+    # Randomization (pass comma-separated values; None = disabled)
+    p.add_argument("--random_K", type=str, default=None,
+                   help="Comma-separated K choices, e.g. '2,4,6,8'")
+    p.add_argument("--strip_suffix", type=str, default=None,
+                   help="keep_frac range as 'lo,hi', e.g. '0.1,1.0'")
+    p.add_argument("--compress_prefix", type=str, default=None,
+                   help="compress_frac range as 'lo,hi', e.g. '0.0,0.8'")
+    p.add_argument("--random_mem_span", type=str, default=None,
+                   help="memory_span_abs range as 'lo,hi', e.g. '64,1792'")
+
     # SoRL search params (only used when aux weights are nonzero)
     p.add_argument("--K", type=int, default=4, help="Abstract token insertion period")
     p.add_argument("--num_rollouts", type=int, default=4)
@@ -471,6 +481,10 @@ def main():
         mask_nl_mode=args.mask_nl_mode,
         n_inner=args.n_inner,
         response_only_abs=args.response_only_abs,
+        random_K=tuple(int(x) for x in args.random_K.split(',')) if args.random_K else None,
+        strip_suffix=tuple(float(x) for x in args.strip_suffix.split(',')) if args.strip_suffix else None,
+        compress_prefix=tuple(float(x) for x in args.compress_prefix.split(',')) if args.compress_prefix else None,
+        random_mem_span=tuple(int(x) for x in args.random_mem_span.split(',')) if args.random_mem_span else None,
     )
     log(f"Config: eval_K={config.eval_K}, aux weights={'nonzero' if config.alpha_traj or config.alpha_info_gain or config.alpha_abs or config.alpha_soft_zipf or config.alpha_ortho else '0 (SFT-equivalent)'}")
 

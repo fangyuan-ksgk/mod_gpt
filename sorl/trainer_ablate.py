@@ -122,6 +122,12 @@ class SoRLConfig:
     # Inner-loop (v4)
     n_inner: int = 1  # inner optimization steps per searched sequence
 
+    # Randomization (set to None to disable)
+    random_K: Optional[tuple] = None          # e.g. (2, 4, 6, 8) — K choices per batch
+    strip_suffix: Optional[tuple] = None      # e.g. (0.1, 1.0) — keep_frac range
+    compress_prefix: Optional[tuple] = None   # e.g. (0.0, 0.8) — compress_frac range
+    random_mem_span: Optional[tuple] = None   # e.g. (64, 1792) — memory_span_abs range
+
 
 # ---------------------------------------------------------------------------
 # LR schedule
@@ -146,6 +152,68 @@ def _gpu_mem(tag="", device=None):
         p = torch.cuda.max_memory_allocated(device) / 1024**3
         return f"[{tag}] Alloc:{a:.2f}GB Res:{r:.2f}GB Peak:{p:.2f}GB"
     return ""
+
+
+# ---------------------------------------------------------------------------
+# Randomization helpers
+# ---------------------------------------------------------------------------
+import random as _random
+
+def _sample_random_K(K_choices):
+    """Sample a random K from the given choices tuple."""
+    return _random.choice(K_choices)
+
+def _sample_random_memory_span(lo, hi):
+    """Sample a random memory_span_abs in [lo, hi]."""
+    return _random.randint(lo, hi)
+
+def _drop_abs_suffix(best_data, exp_attn, exp_pl, base_vocab, pad_token_id, keep_frac):
+    """Keep abstract tokens only in a random prefix of the response; strip abs from suffix."""
+    B, L = best_data.shape
+    new_seqs, new_pls = [], []
+    for b in range(B):
+        pl = exp_pl[b].item() if isinstance(exp_pl, torch.Tensor) else exp_pl[b]
+        valid_len = int(exp_attn[b].sum().item())
+        seq = best_data[b, :valid_len]
+        prompt = seq[:pl]
+        response = seq[pl:]
+        cutoff = max(1, int(len(response) * keep_frac))
+        prefix = response[:cutoff]
+        suffix_nl = response[cutoff:][response[cutoff:] < base_vocab]
+        new_seqs.append(torch.cat([prompt, prefix, suffix_nl]))
+        new_pls.append(pl)
+    max_len = max(s.shape[0] for s in new_seqs)
+    new_data = torch.full((B, max_len), pad_token_id, device=best_data.device, dtype=best_data.dtype)
+    new_attn = torch.zeros((B, max_len), device=best_data.device, dtype=exp_attn.dtype)
+    for b, s in enumerate(new_seqs):
+        new_data[b, :s.shape[0]] = s
+        new_attn[b, :s.shape[0]] = 1
+    new_pl = torch.tensor(new_pls, device=best_data.device)
+    return new_data, new_attn, new_pl
+
+def _drop_nl_prefix(best_data, exp_attn, exp_pl, base_vocab, pad_token_id, compress_frac):
+    """In a random prefix of the response, drop NL tokens and keep only abstract tokens."""
+    B, L = best_data.shape
+    new_seqs, new_pls = [], []
+    for b in range(B):
+        pl = exp_pl[b].item() if isinstance(exp_pl, torch.Tensor) else exp_pl[b]
+        valid_len = int(exp_attn[b].sum().item())
+        seq = best_data[b, :valid_len]
+        prompt = seq[:pl]
+        response = seq[pl:]
+        cutoff = int(len(response) * compress_frac)
+        prefix_abs = response[:cutoff][response[:cutoff] >= base_vocab]
+        suffix = response[cutoff:]
+        new_seqs.append(torch.cat([prompt, prefix_abs, suffix]))
+        new_pls.append(pl)
+    max_len = max(s.shape[0] for s in new_seqs)
+    new_data = torch.full((B, max_len), pad_token_id, device=best_data.device, dtype=best_data.dtype)
+    new_attn = torch.zeros((B, max_len), device=best_data.device, dtype=exp_attn.dtype)
+    for b, s in enumerate(new_seqs):
+        new_data[b, :s.shape[0]] = s
+        new_attn[b, :s.shape[0]] = 1
+    new_pl = torch.tensor(new_pls, device=best_data.device)
+    return new_data, new_attn, new_pl
 
 
 # ---------------------------------------------------------------------------
@@ -820,13 +888,15 @@ class SoRLTrainerv3(SoRLTrainer):
         ).to(self.device)
 
     def _compute_corrupted_traj_loss(self, corrupted_data, model, expanded_attn_mask,
-                                     expanded_prompt_len, base_vocab):
+                                     expanded_prompt_len, base_vocab,
+                                     memory_span_abs=None):
         """Forward corrupted_data (no grad) and compute traj_loss at trajectory positions."""
         cfg = self.config
+        mem_abs = memory_span_abs if memory_span_abs is not None else cfg.memory_span_abs
         with torch.no_grad():
             c_out = model(
                 input_ids=corrupted_data, attention_mask=expanded_attn_mask,
-                memory_span_abs=cfg.memory_span_abs, memory_span_traj=cfg.memory_span_traj,
+                memory_span_abs=mem_abs, memory_span_traj=cfg.memory_span_traj,
             )
             c_shift_logits = c_out.logits[..., :-1, :].contiguous()
             c_shift_labels = corrupted_data[..., 1:].contiguous()
@@ -863,6 +933,12 @@ class SoRLTrainerv3(SoRLTrainer):
         base_vocab = int(self.raw_model.vocab_sizes[0].item())
         total_vocab = int(self.raw_model.vocab_sizes.sum().item())
 
+        # ---- Randomization 1: Random K ----
+        K_this = _sample_random_K(cfg.random_K) if cfg.random_K else cfg.K
+
+        # ---- Randomization 4: Random memory_span_abs ----
+        mem_abs = _sample_random_memory_span(*cfg.random_mem_span) if cfg.random_mem_span else cfg.memory_span_abs
+
         # 1. Base trajectory loss (SFT-equivalent, for logging only)
         labels = input_ids.clone()
         labels[attention_mask == 0] = -100
@@ -883,17 +959,31 @@ class SoRLTrainerv3(SoRLTrainer):
             )
             del outputs, logits
 
-        # 2. SoRL search
+        # 2. SoRL search (uses randomized K and mem_abs)
         with torch.no_grad():
             best_data, best_ppt, best_ppt_adv, expanded_attn_mask, expanded_prompt_len = sorl_search(
                 self.raw_model, input_ids, attention_mask, prompt_len, self.pad_token_id,
-                n=cfg.num_rollouts, K=cfg.K,
+                n=cfg.num_rollouts, K=K_this,
                 max_iterations=cfg.max_iterations,
-                memory_span_abs=cfg.memory_span_abs,
+                memory_span_abs=mem_abs,
                 memory_span_traj=cfg.memory_span_traj,
                 temperature=cfg.temperature,
                 response_only_abs=cfg.response_only_abs,
             )
+
+        # ---- Randomization 2: Strip suffix abstractions ----
+        if cfg.strip_suffix:
+            frac = _random.uniform(*cfg.strip_suffix)
+            best_data, expanded_attn_mask, expanded_prompt_len = _drop_abs_suffix(
+                best_data, expanded_attn_mask, expanded_prompt_len,
+                base_vocab, self.pad_token_id, keep_frac=frac)
+
+        # ---- Randomization 3: Compress prefix chunks ----
+        if cfg.compress_prefix:
+            frac = _random.uniform(*cfg.compress_prefix)
+            best_data, expanded_attn_mask, expanded_prompt_len = _drop_nl_prefix(
+                best_data, expanded_attn_mask, expanded_prompt_len,
+                base_vocab, self.pad_token_id, compress_frac=frac)
 
         # 3. Corrupt abstract tokens → corrupted_traj_loss (no grad)
         corrupted_data = corrupt_abstract_tokens(
@@ -903,12 +993,13 @@ class SoRLTrainerv3(SoRLTrainer):
         corrupted_traj_loss = self._compute_corrupted_traj_loss(
             corrupted_data, model, expanded_attn_mask,
             expanded_prompt_len, base_vocab,
+            memory_span_abs=mem_abs,
         )
 
         # 4. SoRLLoss_v2: returns (traj_loss, abs_loss, zipf_kl)
         traj_loss, abs_loss, zipf_bigram_loss = self.loss_fn(
             best_data, model,
-            expanded_attn_mask, cfg.memory_span_abs, cfg.memory_span_traj,
+            expanded_attn_mask, mem_abs, cfg.memory_span_traj,
             prompt_len=expanded_prompt_len,
         )
 
@@ -916,7 +1007,7 @@ class SoRLTrainerv3(SoRLTrainer):
 
         # Anchor loss
         if cfg.alpha_anchor > 0:
-            a_loss = anchor_loss(model, best_data, base_vocab, cfg.K)
+            a_loss = anchor_loss(model, best_data, base_vocab, K_this)
         else:
             a_loss = torch.tensor(0.0, device=self.device)
 
@@ -932,7 +1023,7 @@ class SoRLTrainerv3(SoRLTrainer):
             
             out_jacobi = model(
                 input_ids=jacobi_data, attention_mask=expanded_attn_mask,
-                memory_span_abs=cfg.memory_span_abs, memory_span_traj=cfg.memory_span_traj
+                memory_span_abs=mem_abs, memory_span_traj=cfg.memory_span_traj
             )
             logits_jacobi = out_jacobi.logits[..., :-1, :].contiguous()
             
@@ -970,7 +1061,7 @@ class SoRLTrainerv3(SoRLTrainer):
                                              cfg.mask_nl_mode, cfg.mask_nl_fixed_id, base_vocab)
                 m_traj_loss = _compute_nl_traj_loss(
                     model, masked_data, expanded_attn_mask, targets_bd, is_resp_nl,
-                    base_vocab, cfg.memory_span_abs, cfg.memory_span_traj)
+                    base_vocab, mem_abs, cfg.memory_span_traj)
             else:
                 m_traj_loss = torch.tensor(0.0, device=self.device)
         else:
@@ -998,6 +1089,8 @@ class SoRLTrainerv3(SoRLTrainer):
             "ortho_loss": ortho_loss,
             "anchor_loss": a_loss,
             "jacobi_loss": j_loss,
+            "K_this": K_this,
+            "mem_abs": mem_abs,
         }
 
     def train(self, resume_from: Optional[str] = None):
@@ -1088,6 +1181,7 @@ class SoRLTrainerv3(SoRLTrainer):
                         f"ortho={step_out['ortho_loss'].item():.4f} "
                         f"anchor={step_out['anchor_loss'].item():.4f} "
                         f"jacobi={step_out['jacobi_loss'].item():.4f} "
+                        f"| K={step_out['K_this']} mem={step_out['mem_abs']} "
                         f"| lr={lr:.2e} | {peak}"
                     )
                     self.history["step"].append(global_step)
