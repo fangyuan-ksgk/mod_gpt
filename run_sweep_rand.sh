@@ -60,6 +60,8 @@ MAX_NEW_TOKENS=256
 V3_BASE="--use_v3 --alpha_traj 1.0 --alpha_abs 0.5 --corrupt_method shuffle --corrupt_ratio 1.0 --gamma_contrastive 0.5 --emb_lr_mult 1.0"
 
 TIMESTAMP=$(date +%Y%m%d_%H%M)
+SWEEP_DIR="./ckpt/sweep_rand_${TIMESTAMP}"
+mkdir -p "$SWEEP_DIR"
 EXP_IDX=0
 
 # ---- Helper: launch one experiment on a specific GPU ----
