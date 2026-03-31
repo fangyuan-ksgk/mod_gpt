@@ -1395,11 +1395,12 @@ class WarmupSFTConfig:
     K: int = 4
     abs_vocab: int = 128          # total abstract vocab (including [Mask] at base_vocab)
     n_chunks_for_clustering: int = 50000
+    skip_centroid_init: bool = False  # if True, skip initializing embeddings with centroids (random init)
 
     # Loss weights
     alpha_abs: float = 0.5        # CE on abstract positions (AR context)
     alpha_traj: float = 1.0       # CE on response NL positions (full context)
-    alpha_masked_traj: float = 1.0  # CE on response NL positions (masked NL context)
+    alpha_masked_traj: float = 0.0  # CE on response NL positions (masked NL context)
     alpha_hinge: float = 0.0      # hinge on top of masked_traj (optional)
     gamma_hinge: float = 0.5
     alpha_jacobi: float = 0.5     # CE on abstract positions (masked abstract context)
@@ -1590,12 +1591,15 @@ class WarmupSFTTrainer:
         self._log(f"[Warmup] K-means done. {n_clusters} centroids.")
 
         # Step 3: Initialize abstract embeddings
-        with torch.no_grad():
-            embed_w = self.model.model.model.embed_tokens.weight
-            lm_head_w = self.model.model.lm_head.weight
-            embed_w[self.base_vocab + 1: self.base_vocab + 1 + n_clusters] = self.centroids
-            lm_head_w[self.base_vocab + 1: self.base_vocab + 1 + n_clusters] = self.centroids
-        self._log(f"[Warmup] Initialized abstract embeddings [{self.base_vocab+1}:{self.base_vocab+1+n_clusters}]")
+        if not self.config.skip_centroid_init:
+            with torch.no_grad():
+                embed_w = self.model.model.model.embed_tokens.weight
+                lm_head_w = self.model.model.lm_head.weight
+                embed_w[self.base_vocab + 1: self.base_vocab + 1 + n_clusters] = self.centroids
+                lm_head_w[self.base_vocab + 1: self.base_vocab + 1 + n_clusters] = self.centroids
+            self._log(f"[Warmup] Initialized abstract embeddings [{self.base_vocab+1}:{self.base_vocab+1+n_clusters}]")
+        else:
+            self._log(f"[Warmup] Skipping centroid init (using default random embeddings)")
 
     # ------------------------------------------------------------------
     # Label a batch
