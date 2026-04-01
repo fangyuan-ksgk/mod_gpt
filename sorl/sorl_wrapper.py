@@ -481,16 +481,24 @@ class SorlModelWrapper(PreTrainedModel, GenerationMixin):
         
         probs = F.softmax(recursion_logits / temp, dim=-1)
         new_tokens = torch.multinomial(probs, num_samples=1).squeeze(-1)
-
+        
         idx[recursion_mask] = new_tokens.to(idx.dtype)
         return idx
 
-    def recursion(self, idx, attention_mask, max_iterations=5, memory_span_abs=1792, memory_span_traj=1792, attn_blocksize=1792, temperature=0.0, prompt_len=None):
-        """Perform recursion on abstract tokens with information bottleneck mask."""
+    def recursion(self, idx, attention_mask, max_iterations=5, memory_span_abs=1792, memory_span_traj=1792, attn_blocksize=1792, temperature=0.0, prompt_len=None, differentiable=False):
+        """Perform recursion on abstract tokens with information bottleneck mask.
+        If differentiable=True, uses Straight-Through Estimator (STE) on the final iteration
+        to allow gradients to flow back into the abstraction prediction logits.
+        """
         # Ensure vocab_sizes is on the same device as idx
         vocab_size_0 = self.vocab_sizes[0].to(idx.device)
+        total_vocab_size = self.total_vocab_size.item()
+        
         recursion_mask = (idx >= vocab_size_0)
         recursion_mask[:, 0] = False
+        
+        predict_mask = torch.roll(recursion_mask, -1, dims=1)
+        predict_mask[:, -1] = False
         
         # Expand temperature if needed
         if isinstance(temperature, torch.Tensor) and temperature.ndim == 1:
@@ -500,7 +508,7 @@ class SorlModelWrapper(PreTrainedModel, GenerationMixin):
 
         block_mask = self._create_sorl_block_mask(idx, memory_span_abs, memory_span_traj)
 
-        for _ in range(max_iterations): 
+        for it in range(max_iterations): 
             outputs = self.model.forward(
                 input_ids=idx, 
                 attention_mask=attention_mask,
@@ -508,7 +516,26 @@ class SorlModelWrapper(PreTrainedModel, GenerationMixin):
                 use_cache=False,
             )
             logits = outputs.logits
-            idx = self.extract_and_sample(logits, idx, recursion_mask, temp_expanded)
+            
+            if not differentiable or it < max_iterations - 1:
+                idx = self.extract_and_sample(logits, idx, recursion_mask, temp_expanded)
+            else:
+                # Last iteration with STE
+                recursion_logits = logits[predict_mask]
+                recursion_logits[:, :vocab_size_0 + 1] = float('-inf')
+                
+                if isinstance(temp_expanded, torch.Tensor):
+                    temp = temp_expanded[predict_mask].clamp(min=1e-10).unsqueeze(-1)
+                else:
+                    temp = max(float(temperature), 1e-10)
+                    
+                soft_probs = F.softmax(recursion_logits / temp, dim=-1)
+                new_tokens = torch.multinomial(soft_probs, num_samples=1).squeeze(-1)
+                         
+                one_hot = F.one_hot(new_tokens, num_classes=total_vocab_size).to(soft_probs.dtype)
+                ste_probs = one_hot + soft_probs - soft_probs.detach()
+                
+                idx[recursion_mask] = new_tokens.to(idx.dtype)
         
         # Evaluation — mask padding AND question tokens in labels
         labels = idx.clone()
@@ -517,12 +544,27 @@ class SorlModelWrapper(PreTrainedModel, GenerationMixin):
             seq_idx = torch.arange(labels.size(1), device=labels.device).unsqueeze(0)
             labels[seq_idx < prompt_len.unsqueeze(1)] = -100
 
-        outputs = self.model.forward(
-            input_ids=idx, 
-            attention_mask=attention_mask,
-            block_mask=block_mask,
-            use_cache=False,
-        )
+        block_mask = self._create_sorl_block_mask(idx, memory_span_abs, memory_span_traj)
+
+        if not differentiable:
+            outputs = self.model.forward(
+                input_ids=idx, 
+                attention_mask=attention_mask,
+                block_mask=block_mask,
+                use_cache=False,
+            )
+        else:
+            embed_weight = self.model.get_input_embeddings().weight
+            inputs_embeds = self.model.get_input_embeddings()(idx)
+            abs_embeds = ste_probs.to(embed_weight.dtype) @ embed_weight
+            inputs_embeds[recursion_mask] = abs_embeds
+            
+            outputs = self.model.forward(
+                inputs_embeds=inputs_embeds,
+                attention_mask=attention_mask,
+                block_mask=block_mask,
+                use_cache=False,
+            )
 
         shift_logits = outputs.logits[..., :-1, :].contiguous()
         shift_labels = labels[..., 1:].contiguous()
@@ -531,4 +573,4 @@ class SorlModelWrapper(PreTrainedModel, GenerationMixin):
         per_token_loss = loss_fct(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1))
         per_token_loss = per_token_loss.view(idx.shape[0], -1)  # [batch_size, seq_len-1]
                     
-        return idx, per_token_loss
+        return idx, per_token_loss, outputs.logits

@@ -214,7 +214,7 @@ def sorl_search(
     repeated_data = expanded_data.repeat_interleave(n, dim=0)
     repeated_mask = expanded_mask.repeat_interleave(n, dim=0)
     repeated_prompt_len = expanded_prompt_len.repeat_interleave(n, dim=0)
-    search_data, search_ppt = model.recursion(
+    search_data, search_ppt, _ = model.recursion(
         repeated_data,
         repeated_mask,
         max_iterations=max_iterations,

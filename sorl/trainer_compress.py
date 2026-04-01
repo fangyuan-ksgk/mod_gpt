@@ -84,7 +84,7 @@ def sorl_search_compress(
             prompt_len=repeated_prompt_len,
         )
     else:
-        search_data, search_ppt = model.recursion(
+        search_data, search_ppt, _ = model.recursion(
             repeated_data, repeated_mask,
             max_iterations=max_iterations,
             memory_span_abs=memory_span_abs,
@@ -145,7 +145,7 @@ def sorl_search_inner_cot(
             prompt_len=repeated_prompt_len,
         )
     else:
-        search_data, search_ppt = model.recursion(
+        search_data, search_ppt, _ = model.recursion(
             repeated_data, repeated_mask,
             max_iterations=max_iterations,
             memory_span_abs=memory_span_abs,
