@@ -139,32 +139,40 @@ for MODEL_NAME in "${MODELS[@]}"; do
   # 0.6B best: v3+shuffle r=1.0 (exp3: NL=49.1, K=4=46.2)
   # Progressively stack: +mtraj → +jacobi → +randK
   # ========================================================================
-  echo ""
-  echo "============================================================"
-  echo "Exp1: Q+R Compounding — ${MODEL_SHORT} (${TIMESTAMP})"
-  echo "============================================================"
+  if [[ "$MODEL_SHORT" == "1.7B" ]]; then
+    echo ""
+    echo "============================================================"
+    echo "Exp1: SKIPPED for 1.7B (already completed)"
+    echo "============================================================"
+    EXP_IDX=4  # keep numbering consistent for Exp2
+  else
+    echo ""
+    echo "============================================================"
+    echo "Exp1: Q+R Compounding — ${MODEL_SHORT} (${TIMESTAMP})"
+    echo "============================================================"
 
-  # 1. Control: per-model v3 best
-  run_bg "qr_v3base" \
-    --num_epochs 3 $V3_BASE
+    # 1. Control: per-model v3 best
+    run_bg "qr_v3base" \
+      --num_epochs 3 $V3_BASE
 
-  # 2. + masked traj loss (mtraj=1.0, fixed mask, ratio=0.3)
-  run_bg "qr_v3base_mtraj" \
-    --num_epochs 3 $V3_BASE \
-    --alpha_masked_traj 1.0
+    # 2. + masked traj loss (mtraj=1.0, fixed mask, ratio=0.3)
+    run_bg "qr_v3base_mtraj" \
+      --num_epochs 3 $V3_BASE \
+      --alpha_masked_traj 1.0
 
-  # 3. + mtraj + jacobi
-  run_bg "qr_v3base_mtraj_jacobi" \
-    --num_epochs 3 $V3_BASE \
-    --alpha_masked_traj 1.0 --alpha_jacobi 0.5
+    # 3. + mtraj + jacobi
+    run_bg "qr_v3base_mtraj_jacobi" \
+      --num_epochs 3 $V3_BASE \
+      --alpha_masked_traj 1.0 --alpha_jacobi 0.5
 
-  # 4. + mtraj + jacobi + randK (full compound)
-  run_bg "qr_v3base_mtraj_jacobi_rK" \
-    --num_epochs 3 $V3_BASE \
-    --alpha_masked_traj 1.0 --alpha_jacobi 0.5 --random_K 2,4,6,8
+    # 4. + mtraj + jacobi + randK (full compound)
+    run_bg "qr_v3base_mtraj_jacobi_rK" \
+      --num_epochs 3 $V3_BASE \
+      --alpha_masked_traj 1.0 --alpha_jacobi 0.5 --random_K 2,4,6,8
 
-  echo "  4 experiments launched. Waiting..."
-  wait
+    echo "  4 experiments launched. Waiting..."
+    wait
+  fi
 
   # ========================================================================
   # Experiment 2 — Q+R α_abs sweep (per-model v3 base + zipf + ortho)

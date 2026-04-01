@@ -24,8 +24,8 @@ from safetensors.torch import load_file as load_safetensors
 from transformers import AutoTokenizer
 
 from sorl.sorl_wrapper import SorlModelWrapper, left_pad_and_mask
-from sorl.trainer_ablate import (SoRLTrainer, SoRLTrainerv2, SoRLTrainerv3, SoRLTrainerv4, SoRLConfig,
-                                WarmupSFTTrainer, WarmupSFTConfig)
+from sorl.trainer_ablate import (SoRLTrainer, SoRLTrainerv2, SoRLTrainerv3, SoRLTrainerv4, SoRLTrainerv5,
+                                SoRLConfig, WarmupSFTTrainer, WarmupSFTConfig)
 from data.pt_dataset import get_dataset
 
 
@@ -81,6 +81,8 @@ def parse_args():
                    help="Use SoRLTrainerv3 (contrastive: p(s|a) vs p(s|a_corrupted))")
     p.add_argument("--use_v4", action="store_true",
                    help="Use SoRLTrainerv4 (inner-loop contrastive with grad through corrupted path)")
+    p.add_argument("--use_v5", action="store_true",
+                   help="Use SoRLTrainerv5 (STE single-rollout: differentiable recursion, no multi-rollout search)")
     p.add_argument("--n_inner", type=int, default=4,
                    help="Inner-loop steps per searched sequence (v4 only)")
 
@@ -496,7 +498,9 @@ def main():
     has_aux = (config.alpha_info_gain != 0 or config.alpha_abs != 0 or config.alpha_soft_zipf != 0 or config.alpha_ortho != 0)
 
     # ---- Trainer ----
-    if args.use_v4:
+    if args.use_v5:
+        TrainerCls = SoRLTrainerv5
+    elif args.use_v4:
         TrainerCls = SoRLTrainerv4
     elif args.use_v3:
         TrainerCls = SoRLTrainerv3
