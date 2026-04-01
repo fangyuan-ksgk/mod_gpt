@@ -521,7 +521,7 @@ class SorlModelWrapper(PreTrainedModel, GenerationMixin):
                 idx = self.extract_and_sample(logits, idx, recursion_mask, temp_expanded)
             else:
                 # Last iteration with STE
-                recursion_logits = logits[predict_mask]
+                recursion_logits = logits[predict_mask].clone()
                 recursion_logits[:, :vocab_size_0 + 1] = float('-inf')
                 
                 if isinstance(temp_expanded, torch.Tensor):
@@ -535,6 +535,7 @@ class SorlModelWrapper(PreTrainedModel, GenerationMixin):
                 one_hot = F.one_hot(new_tokens, num_classes=total_vocab_size).to(soft_probs.dtype)
                 ste_probs = one_hot + soft_probs - soft_probs.detach()
                 
+                idx = idx.clone()
                 idx[recursion_mask] = new_tokens.to(idx.dtype)
         
         # Evaluation — mask padding AND question tokens in labels
