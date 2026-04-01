@@ -1,7 +1,6 @@
+# Qwen3-1.7B | GSM8K | 1.3K Validation Set | emb_lr_mult=1.0
 
-  =================== Experiment with 1300 validation datapoints ========================
-
-Qwen3-1.7B | GSM8K | 1.3K validation set | emb_lr_mult=1.0
+## Section A: Question + Response Abstractions | Response abstraction is AR decoded, whilst question abstraction is Jacobi decoded. 
 
     ┌─────────┬─────────┬───────────────────────────────────────────────────┬────────┬────────┬─────────┬─────────┬─────────┬───────────┐
     │ Exp     │  Train  │ Config                                            │     NL │    K=4 │     Gap │   Vocab │   Top3% │   AbsLoss │
@@ -176,3 +175,94 @@ Qwen3-1.7B | GSM8K | 1.3K validation set | emb_lr_mult=1.0
 
   Zipf drops NL by 1-6pp and K=4 by 5-6pp. The damage correlates with abs_loss: the model never learns confident abstract token predictions under zipf
   pressure. Not tested with v3 yet. Needs pairing with higher alpha_abs to force confident predictions alongside diverse marginals.
+
+
+
+
+## Section B: Response-Only Abstractions
+
+  response_only_abs=true, emb_lr_mult=1.0, warmup_emb_lr_mult=10.0. Base: traj=1.0, abs=0.5.
+
+    ┌─────────┬─────────┬──────────────────────────────────────────────────────┬────────┬────────┬─────────┬─────────┬─────────┬───────────┐
+    │ Exp     │  Train  │ Config                                               │     NL │    K=4 │     Gap │   Vocab │   Top3% │   AbsLoss │
+    ├─────────┼─────────┼──────────────────────────────────────────────────────┼────────┼────────┼─────────┼─────────┼─────────┼───────────┤
+    │ exp1    │    v1   │ ig=1.0, abs=0.5                                      │   62.7 │   59.7 │     3.0 │      10 │   100.0 │     0.001 │
+    │ exp2    │    v1   │ ig=1.0, abs=0.5, zipf=1.0, ortho=1.0                 │   59.4 │   52.8 │     6.6 │     107 │    44.5 │     1.022 │
+    ├─────────┼─────────┼──────────────────────────────────────────────────────┼────────┼────────┼─────────┼─────────┼─────────┼───────────┤
+    │ exp3    │    v2   │ traj=1.0, abs=0.5                                    │   60.6 │   57.8 │     2.8 │      18 │    99.9 │     0.006 │
+    │ exp5    │    v2   │ traj=1.0, abs=0.5, ortho=1.0                         │   62.7 │   57.9 │     4.8 │      19 │    99.1 │     0.011 │
+    │ exp6    │    v2   │ traj=1.0, abs=0.5, zipf=1.0                          │   57.3 │   52.2 │     5.1 │     105 │    66.0 │     0.831 │
+    │ exp7    │    v2   │ traj=1.0, abs=0.5, zipf=1.0, ortho=1.0               │   54.9 │   53.6 │     1.3 │     103 │    63.8 │     1.031 │
+    │ exp8    │    v2   │ traj=0.5, abs=0.5                                    │   62.7 │   56.6 │     6.1 │       8 │   100.0 │     0.001 │
+    ├─────────┼─────────┼──────────────────────────────────────────────────────┼────────┼────────┼─────────┼─────────┼─────────┼───────────┤
+    │ exp4    │    v3   │ traj=1.0, abs=0.5, hinge=1.0, γ=0.5                  │   60.8 │   56.8 │     4.0 │      35 │    92.6 │     0.044 │
+    │ exp9    │    v3   │ traj=1.0, abs=0.5, hinge=1.0, γ=0.5, r=1.0          │   62.4 │   59.3 │     3.1 │      18 │   100.0 │     0.012 │
+    │ exp10   │    v3   │ traj=1.0, abs=0.5, hinge=1.0, γ=0.5, noise           │   62.4 │   57.7 │     4.7 │       9 │   100.0 │     0.003 │
+    │ exp11   │    v3   │ traj=1.0, abs=0.5, hinge=1.0, γ=0.1                  │   62.7 │   57.9 │     4.8 │      26 │    98.8 │     0.005 │
+    │ exp12   │    v3   │ traj=1.0, abs=0.5, hinge=1.0, γ=0.5, ortho=1.0       │   62.0 │   56.7 │     5.3 │      35 │    91.9 │     0.017 │
+    ├─────────┼─────────┼──────────────────────────────────────────────────────┼────────┼────────┼─────────┼─────────┼─────────┼───────────┤
+    │ exp13   │    v4   │ traj=1.0, abs=0.5, hinge=1.0, γ=0.5, i=2             │   62.8 │   59.2 │     3.6 │      28 │    99.9 │     0.009 │
+    │ exp14   │    v4   │ traj=1.0, abs=0.5, hinge=1.0, γ=0.5, r=1.0, i=2     │   63.2 │   58.9 │     4.3 │      12 │    99.4 │     0.002 │
+    │ exp15   │    v4   │ traj=1.0, abs=0.5, hinge=1.0, γ=0.1, i=2             │   62.7 │   59.5 │     3.2 │      12 │   100.0 │     0.001 │
+    │ exp16   │    v4   │ traj=1.0, abs=0.5, hinge=0.0, i=2                    │   61.7 │   57.1 │     4.6 │      10 │   100.0 │     0.002 │
+    └─────────┴─────────┴──────────────────────────────────────────────────────┴────────┴────────┴─────────┴─────────┴─────────┴───────────┘
+
+
+  Observation 1. Response only abtraction fails to improve "NL accuracy" above 63% on v3. "Strange benefit disappears". 
+  Observation 2. Response only abstraction eliminates the advantage of sorl v3, hinge loss (constrast between different abstraction choice) benefit disappears. 
+  Observation 3. v1 becomes the best configuration, but diversity still hurts accuracy for about 7%. Simplicity wins. 
+
+  Question 1. Does mtraj + jacobi loss combo still benefits the "response-only" SoRL? 
+  Question 2. Does the various randomization mechanism benefits "response-only" SoRL? 
+
+
+  ---
+  1. Head-to-Head: Response-Only vs Question+Response
+
+  ┌──────────────────────┬───────────┬───────────┬──────────────────┐
+  │     Config           │  A (Q+R)  │  B (RO)   │     Delta        │
+  │                      │  NL / K=4 │  NL / K=4 │  ΔNL  /  ΔK=4   │
+  ├──────────────────────┼───────────┼───────────┼──────────────────┤
+  │ v1 baseline          │ 63.0/58.0 │ 62.7/59.7 │  -0.3  /  +1.7  │
+  ├──────────────────────┼───────────┼───────────┼──────────────────┤
+  │ v2 baseline          │ 62.0/58.4 │ 60.6/57.8 │  -1.4  /  -0.6  │
+  ├──────────────────────┼───────────┼───────────┼──────────────────┤
+  │ v2 + ortho           │ 62.3/59.0 │ 62.7/57.9 │  +0.4  /  -1.1  │
+  ├──────────────────────┼───────────┼───────────┼──────────────────┤
+  │ v3 baseline          │ 62.0/58.7 │ 60.8/56.8 │  -1.2  /  -1.9  │
+  ├──────────────────────┼───────────┼───────────┼──────────────────┤
+  │ v3 + noise           │ 63.7/59.7 │ 62.4/57.7 │  -1.3  /  -2.0  │
+  ├──────────────────────┼───────────┼───────────┼──────────────────┤
+  │ v3 + r=1.0           │ 61.7/57.0 │ 62.4/59.3 │  +0.7  /  +2.3  │
+  ├──────────────────────┼───────────┼───────────┼──────────────────┤
+  │ v4, i=2              │ 61.8/57.5 │ 62.8/59.2 │  +1.0  /  +1.7  │
+  ├──────────────────────┼───────────┼───────────┼──────────────────┤
+  │ v4, i=2, g=0.1       │ 62.9/58.6 │ 62.7/59.5 │  -0.2  /  +0.9  │
+  └──────────────────────┴───────────┴───────────┴──────────────────┘
+
+  Two patterns:
+  - **RO helps when Q+R was fragile**: v1 baseline, v3 r=1.0, all v4 i=2 configs — these gain +0.9 to +2.3pp on K=4
+  - **RO hurts when Q+R was already strong**: v2 baseline, v3 baseline, v3+noise — these lose 0.6–2.0pp on K=4
+
+  Interpretation: question-side abstractions provide useful signal for v2/v3 trainers (traj loss benefits from
+  seeing abstractions in the prompt). But they also inject noise that destabilizes fragile training loops (v4 inner
+  loops, full-corruption r=1.0). Response-only is the safer default; question+response is higher-ceiling but
+  requires a stable trainer.
+
+  ---
+  2. Zipf Still Hurts
+
+  ┌──────┬─────────┬──────┬──────┬──────┬──────────┐
+  │ Exp  │ Trainer │ Zipf │ NL%  │ K=4% │ abs_loss │
+  ├──────┼─────────┼──────┼──────┼──────┼──────────┤
+  │ exp1 │ v1      │ 0.0  │ 62.7 │ 59.7 │  0.001   │
+  ├──────┼─────────┼──────┼──────┼──────┼──────────┤
+  │ exp2 │ v1      │ 1.0  │ 59.4 │ 52.8 │  1.022   │
+  ├──────┼─────────┼──────┼──────┼──────┼──────────┤
+  │ exp3 │ v2      │ 0.0  │ 60.6 │ 57.8 │  0.006   │
+  ├──────┼─────────┼──────┼──────┼──────┼──────────┤
+  │ exp6 │ v2      │ 1.0  │ 57.3 │ 52.2 │  0.831   │
+  └──────┴─────────┴──────┴──────┴──────┴──────────┘
+
+  Same story as Section A: zipf drops NL 3-5pp, K=4 5-7pp, abs_loss stays high. Response-only does not fix the
+  fundamental zipf problem of unlearnable token assignments.

@@ -60,7 +60,7 @@ EVAL_BATCH_SIZE=64
 MAX_NEW_TOKENS=256
 
 # shared defaults — all use emb_lr_mult=10
-EMB="--emb_lr_mult 10.0"
+EMB="--emb_lr_mult 1.0"
 V1="--alpha_info_gain 1.0 --alpha_abs 0.5 $EMB"
 V2="--use_v2 --alpha_traj 1.0 --alpha_abs 0.5 $EMB"
 V3="--use_v3 --alpha_traj 1.0 --alpha_abs 0.5 --corrupt_method shuffle --corrupt_ratio 0.3 --gamma_contrastive 0.5 $EMB"
