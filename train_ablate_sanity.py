@@ -533,7 +533,10 @@ def main():
     #             log(f"Pre-train accuracy [K={config.K}]: {result_k['accuracy']*100:.1f}% "
     #                 f"({result_k['correct']}/{result_k['total']})")
 
-    # ---- Warmup SFT (optional) ----
+    # ---- Warmup SFT (optional, not supported for v5) ----
+    if args.warmup_sft and args.use_v5:
+        log("WARNING: --warmup_sft ignored for v5 (STE provides dense gradients directly)")
+        args.warmup_sft = False
     if args.warmup_sft:
         log(f"=== Running SFT Warmup ({args.warmup_sft_steps} steps) ===")
         warmup_cfg = WarmupSFTConfig(
