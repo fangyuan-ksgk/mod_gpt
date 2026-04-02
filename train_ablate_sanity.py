@@ -83,6 +83,8 @@ def parse_args():
                    help="Use SoRLTrainerv4 (inner-loop contrastive with grad through corrupted path)")
     p.add_argument("--use_v5", action="store_true",
                    help="Use SoRLTrainerv5 (STE single-rollout: differentiable recursion, no multi-rollout search)")
+    p.add_argument("--no_ste", action="store_true",
+                   help="v5 only: disable STE (hard recursion ablation). Same pipeline, no gradient through abstract selection.")
     p.add_argument("--n_inner", type=int, default=4,
                    help="Inner-loop steps per searched sequence (v4 only)")
 
@@ -483,6 +485,7 @@ def main():
         mask_nl_mode=args.mask_nl_mode,
         n_inner=args.n_inner,
         response_only_abs=args.response_only_abs,
+        use_ste=not args.no_ste,
         random_K=tuple(int(x) for x in args.random_K.split(',')) if args.random_K else None,
         strip_suffix=tuple(float(x) for x in args.strip_suffix.split(',')) if args.strip_suffix else None,
         compress_prefix=tuple(float(x) for x in args.compress_prefix.split(',')) if args.compress_prefix else None,

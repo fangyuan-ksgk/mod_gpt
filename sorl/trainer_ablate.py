@@ -120,6 +120,9 @@ class SoRLConfig:
     mask_nl_mode: str = "fixed"       # "random" = uniform random NL tokens, "fixed" = single rare token
     mask_nl_fixed_id: int = 0         # token ID used when mask_nl_mode="fixed"
 
+    # STE (v5)
+    use_ste: bool = True  # True = differentiable recursion (STE), False = hard recursion (ablation)
+
     # Inner-loop (v4)
     n_inner: int = 1  # inner optimization steps per searched sequence
 
@@ -1592,7 +1595,7 @@ class SoRLTrainerv5(SoRLTrainerv3):
             self.raw_model.vocab_sizes[0], self.pad_token_id,
         )
 
-        # Single rollout with STE on last iteration
+        # Single rollout: STE (differentiable) or hard (ablation)
         idx, per_token_loss, ste_logits = self.raw_model.recursion(
             exp_data, exp_mask,
             max_iterations=cfg.max_iterations,
@@ -1600,13 +1603,24 @@ class SoRLTrainerv5(SoRLTrainerv3):
             memory_span_traj=cfg.memory_span_traj,
             temperature=cfg.temperature,
             prompt_len=expanded_prompt_len,
-            differentiable=True,
+            differentiable=cfg.use_ste,
         )
 
-        # 3. Decompose STE logits into traj_loss + abs_loss (gradients flow)
-        traj_loss, abs_loss = self._decompose_losses(
-            idx, ste_logits, exp_mask, expanded_prompt_len, base_vocab,
-        )
+        if cfg.use_ste:
+            # 3a. Decompose STE logits into traj_loss + abs_loss (gradients flow through STE)
+            traj_loss, abs_loss = self._decompose_losses(
+                idx, ste_logits, exp_mask, expanded_prompt_len, base_vocab,
+            )
+        else:
+            # 3b. No STE: forward pass on hard idx to get gradients (same as v3 post-search)
+            outputs_hard = model(
+                input_ids=idx, attention_mask=exp_mask,
+                memory_span_abs=mem_abs, memory_span_traj=cfg.memory_span_traj,
+            )
+            traj_loss, abs_loss = self._decompose_losses(
+                idx, outputs_hard.logits, exp_mask, expanded_prompt_len, base_vocab,
+            )
+            del outputs_hard
 
         # 4. Zipf bigram loss from SoRLLoss_v2
         _, _, zipf_bigram_loss = self.loss_fn(
