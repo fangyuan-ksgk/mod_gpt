@@ -76,16 +76,16 @@ echo "==============================="
 echo "  BATCH 1: Loss weight ablation"
 echo "==============================="
 
-# Exp 1a: v5 STE baseline — traj=1, abs=0.5, no contrastive
-run_exp "b1_ste_traj1_abs05" \
-    --use_v5 \
-    --alpha_traj 1.0 --alpha_abs 0.5 --alpha_contrastive 0.0
+# # Exp 1a: v5 STE baseline — traj=1, abs=0.5, no contrastive
+# run_exp "b1_ste_traj1_abs05" \
+#     --use_v5 \
+#     --alpha_traj 1.0 --alpha_abs 0.5 --alpha_contrastive 0.0
 
-# Exp 1b: v5 STE + contrastive — traj=1, abs=0.5, hinge=1, γ=0.5
-run_exp "b1_ste_traj1_abs05_hinge1" \
-    --use_v5 \
-    --alpha_traj 1.0 --alpha_abs 0.5 --alpha_contrastive 1.0 --gamma_contrastive 0.5 \
-    --corrupt_method shuffle --corrupt_ratio 0.3
+# # Exp 1b: v5 STE + contrastive — traj=1, abs=0.5, hinge=1, γ=0.5
+# run_exp "b1_ste_traj1_abs05_hinge1" \
+#     --use_v5 \
+#     --alpha_traj 1.0 --alpha_abs 0.5 --alpha_contrastive 1.0 --gamma_contrastive 0.5 \
+#     --corrupt_method shuffle --corrupt_ratio 0.3
 
 # Exp 1c: v5 STE + anchor — traj=1, abs=0.5, anchor=0.1
 run_exp "b1_ste_traj1_abs05_anchor" \
