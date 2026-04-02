@@ -58,6 +58,7 @@ run_exp() {
     echo "  Experiment: $NAME"
     echo "  Output: $OUT"
     echo "================================================================"
+    mkdir -p "$OUT"
     torchrun --nproc_per_node=4 train_ablate_sanity.py \
         $COMMON --output_dir "$OUT" "$@" 2>&1 | tee "$OUT/stdout.log"
     echo "  => Done: $NAME"
