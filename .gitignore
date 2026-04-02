@@ -10,6 +10,7 @@ results_*
 *.gif
 *.pt
 .DS_Store
+log/*
 
 # Local NCCL tuner placeholder created by repo-owned launchers on RunPod.
 dummy_tuner_config.txt

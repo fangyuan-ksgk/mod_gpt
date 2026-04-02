@@ -198,8 +198,8 @@ def extract_and_sample(logits, idx, recursion_mask, vocab_sizes, temperature):
     recursion_logits[:, :abstract_start + 1] = float('-inf')
     
     temp = torch.clamp(recursion_temp, min=1e-10).view(-1, 1) if isinstance(recursion_temp, torch.Tensor) else max(temperature, 1e-10)
-    
     probs = F.softmax(recursion_logits / temp, dim=-1)
+    
     new_tokens = torch.multinomial(probs, num_samples=1).squeeze(-1)
 
     idx[recursion_mask] = new_tokens.to(idx.dtype)
