@@ -517,26 +517,7 @@ class SorlModelWrapper(PreTrainedModel, GenerationMixin):
             )
             logits = outputs.logits
             
-            if not differentiable or it < max_iterations - 1:
-                idx = self.extract_and_sample(logits, idx, recursion_mask, temp_expanded)
-            else:
-                # Last iteration with STE
-                recursion_logits = logits[predict_mask].clone()
-                recursion_logits[:, :vocab_size_0 + 1] = float('-inf')
-                
-                if isinstance(temp_expanded, torch.Tensor):
-                    temp = temp_expanded[predict_mask].clamp(min=1e-10).unsqueeze(-1)
-                else:
-                    temp = max(float(temperature), 1e-10)
-                    
-                soft_probs = F.softmax(recursion_logits / temp, dim=-1)
-                new_tokens = torch.multinomial(soft_probs, num_samples=1).squeeze(-1)
-                         
-                one_hot = F.one_hot(new_tokens, num_classes=total_vocab_size).to(soft_probs.dtype)
-                ste_probs = one_hot + soft_probs - soft_probs.detach()
-                
-                idx = idx.clone()
-                idx[recursion_mask] = new_tokens.to(idx.dtype)
+            idx = self.extract_and_sample(logits, idx, recursion_mask, temp_expanded)
         
         # Evaluation — mask padding AND question tokens in labels
         labels = idx.clone()
@@ -546,26 +527,13 @@ class SorlModelWrapper(PreTrainedModel, GenerationMixin):
             labels[seq_idx < prompt_len.unsqueeze(1)] = -100
 
         block_mask = self._create_sorl_block_mask(idx, memory_span_abs, memory_span_traj)
-
-        if not differentiable:
-            outputs = self.model.forward(
-                input_ids=idx, 
-                attention_mask=attention_mask,
-                block_mask=block_mask,
-                use_cache=False,
-            )
-        else:
-            embed_weight = self.model.get_input_embeddings().weight
-            inputs_embeds = self.model.get_input_embeddings()(idx)
-            abs_embeds = ste_probs.to(embed_weight.dtype) @ embed_weight
-            inputs_embeds[recursion_mask] = abs_embeds
-            
-            outputs = self.model.forward(
-                inputs_embeds=inputs_embeds,
-                attention_mask=attention_mask,
-                block_mask=block_mask,
-                use_cache=False,
-            )
+        
+        outputs = self.model.forward(
+            input_ids=idx, 
+            attention_mask=attention_mask,
+            block_mask=block_mask,
+            use_cache=False,
+        )
 
         shift_logits = outputs.logits[..., :-1, :].contiguous()
         shift_labels = labels[..., 1:].contiguous()
