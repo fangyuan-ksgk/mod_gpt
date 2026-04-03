@@ -167,6 +167,7 @@ def evaluate_accuracy_sft(
 
         pred_answer = extract_fn(full_text)
         gold_answer = extract_fn(ref_text)
+        is_correct = False
 
         if gold_answer is not None:
             # Count only cases where reference has extractable answer
