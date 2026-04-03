@@ -593,7 +593,7 @@ def main():
         if result:
             log(f"Final accuracy [K=None]: {result['accuracy']*100:.1f}% "
                 f"({result['correct']}/{result['total']})")
-        if has_aux:
+        if has_aux or (config.eval_K is not None): # <- so that self-routing run doesn't get ignored
             log(f"--- Final evaluation (K={config.K}, with abstractions) ---")
             result_k = trainer.evaluate(eval_K=config.K)
             if result_k:
