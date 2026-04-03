@@ -102,7 +102,7 @@ def parse_args():
                             "commonsenseqa", "mmlu",
                             "aqua", "math", "scienceqa",
                             "mbpp", "humaneval", "livecodebench", "codecontests",
-                            "wildifeval"])
+                            "wildifeval", "xlam"])
     p.add_argument("--max_length", type=int, default=256)
 
     # Optimizer

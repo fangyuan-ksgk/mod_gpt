@@ -975,12 +975,112 @@ class CodeContestsDataset(Dataset):
 
 
 # =====================================================================
+# XLAMDataset — Salesforce/xlam-function-calling-60k
+# =====================================================================
+
+class XLAMDataset(Dataset):
+    """Salesforce/xlam-function-calling-60k — 60k function calling examples.
+
+    Format:
+        query   : str  — user request
+        tools   : str  — JSON list of tool definitions (name, description, parameters)
+        answers : str  — JSON list of function calls   (name, arguments)
+
+    Prompt  : "Available tools:\n{tools_json}\n\nUser query: {query}\n\nResponse:\n"
+    Response: compact JSON list of function calls
+    """
+
+    _MARKER = "\nResponse:\n"
+
+    def __init__(self, split="train", tokenizer=None, max_length=1024):
+        full = load_dataset("Salesforce/xlam-function-calling-60k", split="train")
+        n = len(full)
+        cutoff = int(n * 0.95)
+        self.dataset = full.select(range(cutoff) if split == "train" else range(cutoff, n))
+        self.tokenizer = tokenizer
+        self.max_length = max_length
+
+    def __len__(self):
+        return len(self.dataset)
+
+    def _build_prompt(self, ex):
+        tools_compact = json.dumps(json.loads(ex["tools"]), separators=(",", ":"))
+        return f"Available tools:\n{tools_compact}\n\nUser query: {ex['query']}{self._MARKER}"
+
+    def __getitem__(self, idx):
+        ex = self.dataset[idx]
+        prompt = self._build_prompt(ex)
+        answer = json.dumps(json.loads(ex["answers"]), separators=(",", ":"))
+        text = prompt + answer
+        prompt_len = len(self.tokenizer(prompt, add_special_tokens=False)["input_ids"])
+        enc = self.tokenizer(text, truncation=True, max_length=self.max_length,
+                             padding="max_length", return_tensors="pt")
+        return {
+            "input_ids": enc["input_ids"].squeeze(0),
+            "attention_mask": enc["attention_mask"].squeeze(0),
+            "prompt_len": min(prompt_len, self.max_length),
+        }
+
+    @staticmethod
+    def extract_answer(text):
+        """Extract and normalize the JSON function-call list from generated text.
+
+        Strategy:
+          1. Strip everything before the response marker.
+          2. Find the opening '[' of the JSON array.
+          3. Walk characters to find the matching ']' (bracket-depth tracking).
+             This tolerates any trailing text or commentary after the array.
+          4. Parse the exact slice, normalize with sort_keys so key-order
+             differences don't affect string equality.
+          Returns None if no parseable JSON array is found.
+        """
+        marker = "\nResponse:\n"
+        idx = text.find(marker)
+        snippet = text[idx + len(marker):].strip() if idx != -1 else text.strip()
+
+        start = snippet.find("[")
+        if start == -1:
+            return None
+
+        depth, end = 0, -1
+        in_str, escape = False, False
+        for i, ch in enumerate(snippet[start:], start):
+            if escape:
+                escape = False
+                continue
+            if ch == "\\" and in_str:
+                escape = True
+                continue
+            if ch == '"':
+                in_str = not in_str
+                continue
+            if in_str:
+                continue
+            if ch == "[":
+                depth += 1
+            elif ch == "]":
+                depth -= 1
+                if depth == 0:
+                    end = i + 1
+                    break
+
+        if end == -1:
+            return None
+
+        try:
+            parsed = json.loads(snippet[start:end])
+            return json.dumps(parsed, sort_keys=True, separators=(",", ":"))
+        except json.JSONDecodeError:
+            return None
+
+
+# =====================================================================
 # Registry
 # =====================================================================
 
 DATASET_REGISTRY = {
     # Answer-only benchmarks
-    "gsm8k": GSM8KDataset,
+    "gsm8k": GSM8KDataset, # verified
     "math_qa": MathQADataset,
     "arc": ARCDataset,
     "hellaswag": HellaSwagDataset,
@@ -992,7 +1092,7 @@ DATASET_REGISTRY = {
     # CoT reasoning datasets
     "aqua": AQuADataset,
     "math": MATHDataset,
-    "scienceqa": ScienceQADataset,
+    "scienceqa": ScienceQADataset, # verified
     # Code generation
     "humaneval": HumanEvalDataset,
     "mbpp": MBPPDataset,
@@ -1000,6 +1100,8 @@ DATASET_REGISTRY = {
     "codecontests": CodeContestsDataset,
     # Instruction following
     "wildifeval": WildIFEvalDataset,
+    # Function calling
+    "xlam": XLAMDataset,
 }
 
 
