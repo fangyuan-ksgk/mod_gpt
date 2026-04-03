@@ -64,7 +64,7 @@ class SoRLTrainerv6(SoRLTrainerv3):
         im = infer_insert_mask(ids, cfg.K, attn)
         ep = expand_prompt_len(pl, im)
         ed, ea = insert_tokens_with_padding(ids, attn, im, self.raw_model.vocab_sizes[0], self.pad_token_id)
-        data, _, _ = self.raw_model.recursion(
+        data, _, logits = self.raw_model.recursion(
             ed, ea, max_iterations=cfg.max_iterations,
             memory_span_abs=cfg.memory_span_abs, memory_span_traj=cfg.memory_span_traj,
             temperature=cfg.temperature, prompt_len=ep)
