@@ -182,6 +182,7 @@
 ## Section B: Response-Only Abstractions
 
   response_only_abs=true, emb_lr_mult=1.0, warmup_emb_lr_mult=10.0. Base: traj=1.0, abs=0.5.
+  | Conclusion: useless, v1 is already good enough, v2 / v3 degrades from v1 instead of improves from it
 
     ┌─────────┬─────────┬──────────────────────────────────────────────────────┬────────┬────────┬─────────┬─────────┬─────────┬───────────┐
     │ Exp     │  Train  │ Config                                               │     NL │    K=4 │     Gap │   Vocab │   Top3% │   AbsLoss │

@@ -1097,7 +1097,7 @@ DATASET_REGISTRY = {
     "humaneval": HumanEvalDataset,
     "mbpp": MBPPDataset,
     "livecodebench": LiveCodeBenchDataset,
-    "codecontests": CodeContestsDataset,
+    "codecontests": CodeContestsDataset, # data (down)loading takes an hour | training requires >400GB disk space
     # Instruction following
     "wildifeval": WildIFEvalDataset,
     # Function calling
