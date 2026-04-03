@@ -36,7 +36,8 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data import DataLoader, DistributedSampler
 from transformers import AutoTokenizer, AutoModelForCausalLM
 
-from data.pt_dataset import get_dataset, collate_fn
+from concurrent.futures import ThreadPoolExecutor
+from data.pt_dataset import get_dataset, collate_fn, check_code_correctness, HumanEvalDataset
 
 
 # ---------------------------------------------------------------------------
@@ -99,7 +100,9 @@ def parse_args():
                    choices=["gsm8k", "math_qa", "arc", "hellaswag",
                             "winogrande", "boolq", "openbookqa",
                             "commonsenseqa", "mmlu",
-                            "aqua", "math", "scienceqa"])
+                            "aqua", "math", "scienceqa",
+                            "mbpp", "humaneval", "livecodebench", "codecontests",
+                            "wildifeval"])
     p.add_argument("--max_length", type=int, default=256)
 
     # Optimizer
@@ -128,71 +131,122 @@ def parse_args():
                    help="Number of sample generations to log")
     p.add_argument("--max_new_tokens", type=int, default=128,
                    help="Max new tokens for sample generation")
+    p.add_argument("--eval_batch_size", type=int, default=16,
+                   help="Batch size for evaluation generation")
 
     return p.parse_args()
 
 
 # ---------------------------------------------------------------------------
-# Accuracy evaluation (plain HF model — no abstract tokens)
+# Accuracy evaluation (plain HF model — batched left-padded generation)
 # ---------------------------------------------------------------------------
+def _left_pad_prompts(prompts, pad_id):
+    """Left-pad a list of 1D tensors to equal length, return (input_ids, attn_mask)."""
+    max_len = max(p.size(0) for p in prompts)
+    input_ids = torch.full((len(prompts), max_len), pad_id, dtype=torch.long)
+    attn_mask = torch.zeros(len(prompts), max_len, dtype=torch.long)
+    for i, p in enumerate(prompts):
+        input_ids[i, max_len - p.size(0):] = p
+        attn_mask[i, max_len - p.size(0):] = 1
+    return input_ids, attn_mask
+
+
 @torch.no_grad()
 def evaluate_accuracy_sft(
     model, tokenizer, dataset, device, num_samples=50,
-    max_new_tokens=128, num_log_samples=3, log_fn=None,
+    max_new_tokens=128, num_log_samples=3, log_fn=None, eval_batch_size=16,
 ):
-    """Evaluate accuracy with sample response logging for plain HF model."""
+    """Batched accuracy evaluation with sample response logging for plain HF model."""
     model.eval()
     correct = 0
     total = 0
-    extract_fn = dataset.extract_answer
-    samples = []
+    extract_fn = getattr(dataset, "extract_answer", lambda _: None)
+    pad_id = tokenizer.pad_token_id
+    n = min(num_samples, len(dataset))
 
-    for i in range(min(num_samples, len(dataset))):
-        item = dataset[i]
-        input_ids = item["input_ids"].unsqueeze(0).to(device)
-        prompt_len = item["prompt_len"]
+    has_exec_tests = hasattr(dataset, "get_test_cases")
+    is_humaneval = isinstance(dataset, HumanEvalDataset)
 
-        # Generate using HF generate
+    all_full_texts = [None] * n
+    all_prompt_texts = [None] * n
+    all_preds = [None] * n
+    all_golds = [None] * n
+
+    for bs_start in range(0, n, eval_batch_size):
+        bs_end = min(bs_start + eval_batch_size, n)
+        batch_indices = range(bs_start, bs_end)
+
+        prompts, prompt_lens, ref_texts = [], [], []
+        for i in batch_indices:
+            item = dataset[i]
+            pl = item["prompt_len"]
+            prompts.append(item["input_ids"][:pl])
+            prompt_lens.append(pl)
+            ref_texts.append(tokenizer.decode(item["input_ids"], skip_special_tokens=True))
+
+        input_ids, attn_mask = _left_pad_prompts(prompts, pad_id)
+        input_ids, attn_mask = input_ids.to(device), attn_mask.to(device)
+
         generated = model.generate(
-            input_ids=input_ids[:, :prompt_len],
+            input_ids=input_ids,
+            attention_mask=attn_mask,
             max_new_tokens=max_new_tokens,
             do_sample=False,
-            pad_token_id=tokenizer.pad_token_id,
+            pad_token_id=pad_id,
         )
 
-        full_text = tokenizer.decode(generated[0], skip_special_tokens=True)
+        max_pl = input_ids.size(1)
+        for j, i in enumerate(batch_indices):
+            pad_len = max_pl - prompt_lens[j]
+            gen_ids = generated[j, pad_len:]
+            full_text = tokenizer.decode(gen_ids, skip_special_tokens=True)
+            prompt_text = tokenizer.decode(prompts[j], skip_special_tokens=True)
+            all_full_texts[i] = full_text
+            all_prompt_texts[i] = prompt_text
+            all_preds[i] = extract_fn(full_text)
+            all_golds[i] = extract_fn(ref_texts[j])
 
-        # Reference
-        ref_text = tokenizer.decode(input_ids[0], skip_special_tokens=True)
+        if log_fn and bs_end % 200 == 0:
+            log_fn(f"  eval [{bs_end}/{n}]...")
 
-        pred_answer = extract_fn(full_text)
-        gold_answer = extract_fn(ref_text)
-        is_correct = False
+    is_correct_list = [False] * n
+    if has_exec_tests:
+        def _check_one(i):
+            tests = dataset.get_test_cases(i)
+            if not tests:
+                return None
+            exec_code = (all_prompt_texts[i] + all_full_texts[i]) if is_humaneval else all_full_texts[i]
+            return check_code_correctness(exec_code, tests, timeout=10)["passed"]
 
-        if gold_answer is not None:
-            # Count only cases where reference has extractable answer
-            total += 1
-            is_correct = (
-                pred_answer is not None
-                and pred_answer.strip() == gold_answer.strip()
-            )
-            if is_correct:
-                correct += 1
+        with ThreadPoolExecutor(max_workers=min(8, n)) as pool:
+            exec_results = list(pool.map(_check_one, range(n)))
 
-        # Log sample responses
-        if i < num_log_samples:
-            question_text = tokenizer.decode(
-                input_ids[0, :prompt_len], skip_special_tokens=True
-            )
-            sample = {
-                "idx": i,
-                "question": question_text[:200],
-                "response": full_text[len(question_text):].strip()[:300],
-                "gold": gold_answer,
-                "pred": pred_answer,
-                "correct": is_correct,
-            }
-            samples.append(sample)
+        for i, r in enumerate(exec_results):
+            if r is not None:
+                total += 1
+                is_correct_list[i] = r
+                if r:
+                    correct += 1
+    else:
+        for i in range(n):
+            gold, pred = all_golds[i], all_preds[i]
+            if gold is not None:
+                total += 1
+                hit = pred is not None and pred.strip() == gold.strip()
+                is_correct_list[i] = hit
+                if hit:
+                    correct += 1
+
+    samples = []
+    for i in range(min(num_log_samples, n)):
+        samples.append({
+            "idx": i,
+            "question": all_prompt_texts[i][:200],
+            "response": all_full_texts[i][len(all_prompt_texts[i]):].strip()[:300],
+            "gold": all_golds[i],
+            "pred": all_preds[i],
+            "correct": is_correct_list[i],
+        })
 
     accuracy = correct / max(total, 1)
     model.train()
@@ -411,6 +465,7 @@ def main():
             max_new_tokens=args.max_new_tokens,
             num_log_samples=args.num_log_samples,
             log_fn=log,
+            eval_batch_size=args.eval_batch_size,
         )
 
     # ---- Training loop ----

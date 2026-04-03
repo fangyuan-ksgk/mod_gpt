@@ -26,7 +26,7 @@ MASTER_PORT=29501
 # Model
 MODEL_NAME="Qwen/Qwen2.5-0.5B"
 
-# Data | science-qa 
+# Data | science-qa | mbpp
 DATASET="gsm8k"
 MAX_LENGTH=256
 
