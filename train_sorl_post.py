@@ -26,6 +26,7 @@ from transformers import AutoTokenizer
 from sorl.sorl_wrapper import SorlModelWrapper, left_pad_and_mask
 from sorl.trainer_ablate import (SoRLTrainer, SoRLTrainerv2, SoRLTrainerv3, SoRLTrainerv4, SoRLTrainerv5,
                                 SoRLConfig, WarmupSFTTrainer, WarmupSFTConfig)
+from sorl.selfroute import SoRLTrainerv6
 from data.pt_dataset import get_dataset
 
 
@@ -83,6 +84,8 @@ def parse_args():
                    help="Use SoRLTrainerv4 (inner-loop contrastive with grad through corrupted path)")
     p.add_argument("--use_v5", action="store_true",
                    help="Use SoRLTrainerv5 (STE single-rollout: differentiable recursion, no multi-rollout search)")
+    p.add_argument("--use_v6", action="store_true",
+                   help="Use SoRLTrainerv6 (self-routing: fixed diagonal lm_head, traj_loss only)")
     p.add_argument("--no_ste", action="store_true",
                    help="v5 only: disable STE (hard recursion ablation). Same pipeline, no gradient through abstract selection.")
     p.add_argument("--n_inner", type=int, default=4,
@@ -501,7 +504,9 @@ def main():
     has_aux = (config.alpha_info_gain != 0 or config.alpha_abs != 0 or config.alpha_soft_zipf != 0 or config.alpha_ortho != 0)
 
     # ---- Trainer ----
-    if args.use_v5:
+    if args.use_v6:
+        TrainerCls = SoRLTrainerv6
+    elif args.use_v5:
         TrainerCls = SoRLTrainerv5
     elif args.use_v4:
         TrainerCls = SoRLTrainerv4
