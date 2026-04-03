@@ -46,7 +46,9 @@ for ABS_VOCAB in 64 128; do
       --eval_every ${EVAL_EVERY} \
       --eval_samples ${EVAL_SAMPLES} \
       --eval_K ${K} \
-      --log_every 20 \
+      --eval_batch_size 64 \
+      --max_new_tokens 256 \
+      --log_every 10 \
       --save_every ${EVAL_EVERY} \
       --output_dir ${OUT}
 
