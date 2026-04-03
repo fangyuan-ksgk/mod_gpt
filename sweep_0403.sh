@@ -77,7 +77,7 @@ run_bg() {
     --nproc_per_node=1 \
     --master_addr=$MASTER_ADDR \
     --master_port=$port \
-    train_ablate_sanity.py \
+    train_sorl_post.py \
     --model_name $model \
     --dataset $dataset \
     --max_length $MAX_LENGTH \
@@ -208,7 +208,41 @@ run_bg "v6_e10_sci_17" $M17 $DS_SCI $R_V6_E10
 echo "  4 experiments launched. Waiting..."
 wait
 
+# ============================================================================
+# Batch 8 — K=8 sweep: V3 (shuffle+noise) and V6 (e1/e10) on 0.6B+gsm8k
+# Baseline comparison: default K=4 from batches 4,5,6,7
+# ============================================================================
 echo ""
 echo "============================================================"
-echo "All 28 experiments complete. Results in ./ckpt/sweep_${TIMESTAMP}/"
+echo "Batch 8: K=8 sweep — V3+V6 on 0.6B gsm8k (${TIMESTAMP})"
+echo "============================================================"
+
+run_bg "v3_shuf_K8"   $M06 $DS_GSM $R_V3_R10   --K 8 --eval_K 8
+run_bg "v3_noise_K8"  $M06 $DS_GSM $R_V3_NOISE  --K 8 --eval_K 8
+run_bg "v6_e1_K8"     $M06 $DS_GSM $R_V6        --K 8 --eval_K 8
+run_bg "v6_e10_K8"    $M06 $DS_GSM $R_V6_E10    --K 8 --eval_K 8
+
+echo "  4 experiments launched. Waiting..."
+wait
+
+# ============================================================================
+# Batch 9 — max_iterations=4 sweep: V3 (shuffle+noise) and V6 (e1/e10) on 0.6B+gsm8k
+# Baseline comparison: default max_iterations=2 from batches 4,5,6,7
+# ============================================================================
+echo ""
+echo "============================================================"
+echo "Batch 9: max_iterations=4 sweep — V3+V6 on 0.6B gsm8k (${TIMESTAMP})"
+echo "============================================================"
+
+run_bg "v3_shuf_iter4"  $M06 $DS_GSM $R_V3_R10   --max_iterations 4
+run_bg "v3_noise_iter4" $M06 $DS_GSM $R_V3_NOISE  --max_iterations 4
+run_bg "v6_e1_iter4"    $M06 $DS_GSM $R_V6        --max_iterations 4
+run_bg "v6_e10_iter4"   $M06 $DS_GSM $R_V6_E10    --max_iterations 4
+
+echo "  4 experiments launched. Waiting..."
+wait
+
+echo ""
+echo "============================================================"
+echo "All 36 experiments complete. Results in ./ckpt/sweep_${TIMESTAMP}/"
 echo "============================================================"
