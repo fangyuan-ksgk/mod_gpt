@@ -24,7 +24,7 @@ MASTER_ADDR=127.0.0.1
 MASTER_PORT=29501
 
 # Model
-MODEL_NAME="Qwen/Qwen2.5-0.5B"
+MODEL_NAME="Qwen/Qwen3-0.6B"
 
 # Data | science-qa | mbpp
 DATASET="gsm8k"
@@ -41,12 +41,12 @@ NUM_EPOCHS=3
 
 # Logging / Eval / Checkpoint
 LOG_EVERY=10
-EVAL_EVERY=500
-SAVE_EVERY=500
-EVAL_SAMPLES=50
+EVAL_EVERY=99999
+SAVE_EVERY=99999
+EVAL_SAMPLES=1270
 LOG_SAMPLES_EVERY=100
 NUM_LOG_SAMPLES=3
-MAX_NEW_TOKENS=128
+MAX_NEW_TOKENS=256
 OUTPUT_DIR="./ckpt/sft_pt"
 
 # ============================================================================
