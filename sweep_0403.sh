@@ -96,85 +96,85 @@ run_bg() {
     "$@" &
 }
 
-# ============================================================================
-# Batch 1 — V1 (emb_lr=1.0) × all combos
-# ============================================================================
-echo ""
-echo "============================================================"
-echo "Batch 1: V1 e1.0 — 4 combos (${TIMESTAMP})"
-echo "============================================================"
+# # ============================================================================
+# # Batch 1 — V1 (emb_lr=1.0) × all combos
+# # ============================================================================
+# echo ""
+# echo "============================================================"
+# echo "Batch 1: V1 e1.0 — 4 combos (${TIMESTAMP})"
+# echo "============================================================"
 
-run_bg "v1_e1_gsm_06"  $M06 $DS_GSM $R_V1
-run_bg "v1_e1_gsm_17"  $M17 $DS_GSM $R_V1
-run_bg "v1_e1_sci_06"  $M06 $DS_SCI $R_V1
-run_bg "v1_e1_sci_17"  $M17 $DS_SCI $R_V1
+# run_bg "v1_e1_gsm_06"  $M06 $DS_GSM $R_V1
+# run_bg "v1_e1_gsm_17"  $M17 $DS_GSM $R_V1
+# run_bg "v1_e1_sci_06"  $M06 $DS_SCI $R_V1
+# run_bg "v1_e1_sci_17"  $M17 $DS_SCI $R_V1
 
-echo "  4 experiments launched. Waiting..."
-wait
+# echo "  4 experiments launched. Waiting..."
+# wait
 
-# ============================================================================
-# Batch 2 — V1 (emb_lr=10.0) × all combos
-# ============================================================================
-echo ""
-echo "============================================================"
-echo "Batch 2: V1 e10.0 — 4 combos (${TIMESTAMP})"
-echo "============================================================"
+# # ============================================================================
+# # Batch 2 — V1 (emb_lr=10.0) × all combos
+# # ============================================================================
+# echo ""
+# echo "============================================================"
+# echo "Batch 2: V1 e10.0 — 4 combos (${TIMESTAMP})"
+# echo "============================================================"
 
-run_bg "v1_e10_gsm_06" $M06 $DS_GSM $R_V1_E10
-run_bg "v1_e10_gsm_17" $M17 $DS_GSM $R_V1_E10
-run_bg "v1_e10_sci_06" $M06 $DS_SCI $R_V1_E10
-run_bg "v1_e10_sci_17" $M17 $DS_SCI $R_V1_E10
+# run_bg "v1_e10_gsm_06" $M06 $DS_GSM $R_V1_E10
+# run_bg "v1_e10_gsm_17" $M17 $DS_GSM $R_V1_E10
+# run_bg "v1_e10_sci_06" $M06 $DS_SCI $R_V1_E10
+# run_bg "v1_e10_sci_17" $M17 $DS_SCI $R_V1_E10
 
-echo "  4 experiments launched. Waiting..."
-wait
+# echo "  4 experiments launched. Waiting..."
+# wait
 
-# ============================================================================
-# Batch 3 — V2 (emb_lr=1.0) × all combos
-# ============================================================================
-echo ""
-echo "============================================================"
-echo "Batch 3: V2 e1.0 — 4 combos (${TIMESTAMP})"
-echo "============================================================"
+# # ============================================================================
+# # Batch 3 — V2 (emb_lr=1.0) × all combos
+# # ============================================================================
+# echo ""
+# echo "============================================================"
+# echo "Batch 3: V2 e1.0 — 4 combos (${TIMESTAMP})"
+# echo "============================================================"
 
-run_bg "v2_e1_gsm_06"  $M06 $DS_GSM $R_V2
-run_bg "v2_e1_gsm_17"  $M17 $DS_GSM $R_V2
-run_bg "v2_e1_sci_06"  $M06 $DS_SCI $R_V2
-run_bg "v2_e1_sci_17"  $M17 $DS_SCI $R_V2
+# run_bg "v2_e1_gsm_06"  $M06 $DS_GSM $R_V2
+# run_bg "v2_e1_gsm_17"  $M17 $DS_GSM $R_V2
+# run_bg "v2_e1_sci_06"  $M06 $DS_SCI $R_V2
+# run_bg "v2_e1_sci_17"  $M17 $DS_SCI $R_V2
 
-echo "  4 experiments launched. Waiting..."
-wait
+# echo "  4 experiments launched. Waiting..."
+# wait
 
-# ============================================================================
-# Batch 4 — V3 shuffle r=1.0 (emb_lr=1.0) × all combos
-# ============================================================================
-echo ""
-echo "============================================================"
-echo "Batch 4: V3 shuffle r=1.0 — 4 combos (${TIMESTAMP})"
-echo "============================================================"
+# # ============================================================================
+# # Batch 4 — V3 shuffle r=1.0 (emb_lr=1.0) × all combos
+# # ============================================================================
+# echo ""
+# echo "============================================================"
+# echo "Batch 4: V3 shuffle r=1.0 — 4 combos (${TIMESTAMP})"
+# echo "============================================================"
 
-run_bg "v3_shuf_gsm_06" $M06 $DS_GSM $R_V3_R10
-run_bg "v3_shuf_gsm_17" $M17 $DS_GSM $R_V3_R10
-run_bg "v3_shuf_sci_06" $M06 $DS_SCI $R_V3_R10
-run_bg "v3_shuf_sci_17" $M17 $DS_SCI $R_V3_R10
+# run_bg "v3_shuf_gsm_06" $M06 $DS_GSM $R_V3_R10
+# run_bg "v3_shuf_gsm_17" $M17 $DS_GSM $R_V3_R10
+# run_bg "v3_shuf_sci_06" $M06 $DS_SCI $R_V3_R10
+# run_bg "v3_shuf_sci_17" $M17 $DS_SCI $R_V3_R10
 
-echo "  4 experiments launched. Waiting..."
-wait
+# echo "  4 experiments launched. Waiting..."
+# wait
 
-# ============================================================================
-# Batch 5 — V3 noise r=1.0 (emb_lr=1.0) × all combos
-# ============================================================================
-echo ""
-echo "============================================================"
-echo "Batch 5: V3 noise r=1.0 — 4 combos (${TIMESTAMP})"
-echo "============================================================"
+# # ============================================================================
+# # Batch 5 — V3 noise r=1.0 (emb_lr=1.0) × all combos
+# # ============================================================================
+# echo ""
+# echo "============================================================"
+# echo "Batch 5: V3 noise r=1.0 — 4 combos (${TIMESTAMP})"
+# echo "============================================================"
 
-run_bg "v3_noise_gsm_06" $M06 $DS_GSM $R_V3_NOISE
-run_bg "v3_noise_gsm_17" $M17 $DS_GSM $R_V3_NOISE
-run_bg "v3_noise_sci_06" $M06 $DS_SCI $R_V3_NOISE
-run_bg "v3_noise_sci_17" $M17 $DS_SCI $R_V3_NOISE
+# run_bg "v3_noise_gsm_06" $M06 $DS_GSM $R_V3_NOISE
+# run_bg "v3_noise_gsm_17" $M17 $DS_GSM $R_V3_NOISE
+# run_bg "v3_noise_sci_06" $M06 $DS_SCI $R_V3_NOISE
+# run_bg "v3_noise_sci_17" $M17 $DS_SCI $R_V3_NOISE
 
-echo "  4 experiments launched. Waiting..."
-wait
+# echo "  4 experiments launched. Waiting..."
+# wait
 
 # ============================================================================
 # Batch 6 — V6 (emb_lr=1.0) × all combos

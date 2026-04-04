@@ -524,20 +524,6 @@ def main():
     )
     log(f"Trainer: {TrainerCls.__name__} (eval_batch_size={args.eval_batch_size})")
 
-    # # ---- Initial eval ----
-    # if is_master:
-    #     log("--- Initial evaluation (K=None, NL-only) ---")
-    #     result = trainer.evaluate()
-    #     if result:
-    #         log(f"Pre-train accuracy [K=None]: {result['accuracy']*100:.1f}% "
-    #             f"({result['correct']}/{result['total']})")
-    #     if has_aux:
-    #         log(f"--- Initial evaluation (K={config.K}, with abstractions) ---")
-    #         result_k = trainer.evaluate(eval_K=config.K)
-    #         if result_k:
-    #             log(f"Pre-train accuracy [K={config.K}]: {result_k['accuracy']*100:.1f}% "
-    #                 f"({result_k['correct']}/{result_k['total']})")
-
     # ---- Warmup SFT (optional, not supported for v5) ----
     if args.warmup_sft and args.use_v5:
         log("WARNING: --warmup_sft ignored for v5 (STE provides dense gradients directly)")
@@ -590,7 +576,7 @@ def main():
         if result:
             log(f"Final accuracy [K=None]: {result['accuracy']*100:.1f}% "
                 f"({result['correct']}/{result['total']})")
-        if has_aux or (config.eval_K is not None): # <- so that self-routing run doesn't get ignored
+        if has_aux or config.use_v6: # <- so that self-routing run also gets Acc[K] evaluation
             log(f"--- Final evaluation (K={config.K}, with abstractions) ---")
             result_k = trainer.evaluate(eval_K=config.K)
             if result_k:
