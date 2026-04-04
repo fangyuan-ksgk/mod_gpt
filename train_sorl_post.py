@@ -230,7 +230,7 @@ def compute_accuracy_fn_factory(tokenizer, max_new_tokens, num_log_samples, log_
         has_exec_tests = hasattr(dataset, 'get_test_cases')
         is_humaneval = isinstance(dataset, HumanEvalDataset)
 
-        correct, total, samples = 0, 0, []
+        correct, total, samples = 0, n, []
         abs_counter = Counter()  # global abstract token frequency
         abs_counts_per_sample = []  # (n_abs, n_nl) per sample
 
@@ -313,7 +313,6 @@ def compute_accuracy_fn_factory(tokenizer, max_new_tokens, num_log_samples, log_
                 results = list(pool.map(_check_one, range(n)))
             for i, r in enumerate(results):
                 if r is not None:
-                    total += 1
                     is_correct_list[i] = r
                     if r:
                         correct += 1
@@ -321,12 +320,10 @@ def compute_accuracy_fn_factory(tokenizer, max_new_tokens, num_log_samples, log_
             for i in range(n):
                 gold = all_golds[i]
                 pred = all_preds[i]
-                if gold is not None:
-                    total += 1
-                    hit = pred is not None and pred.strip() == gold.strip()
-                    is_correct_list[i] = hit
-                    if hit:
-                        correct += 1
+                hit = gold is not None and pred is not None and pred.strip() == gold.strip()
+                is_correct_list[i] = hit
+                if hit:
+                    correct += 1
 
         # ---- Build log samples ----
         for i in range(min(num_log_samples, n)):
