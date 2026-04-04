@@ -19,7 +19,7 @@ export NCCL_DEBUG=WARN
 # ============================================================================
 # Configuration
 # ============================================================================
-N_GPUS=4
+N_GPUS=1
 MASTER_ADDR=127.0.0.1
 MASTER_PORT=29501
 
@@ -28,7 +28,7 @@ MODEL_NAME="Qwen/Qwen3-0.6B"
 
 # Data | science-qa | mbpp
 DATASET="gsm8k"
-MAX_LENGTH=256
+MAX_LENGTH=512
 
 # Optimizer
 LR=1e-5
