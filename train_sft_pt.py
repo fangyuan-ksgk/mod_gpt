@@ -159,10 +159,10 @@ def evaluate_accuracy_sft(
     """Batched accuracy evaluation with sample response logging for plain HF model."""
     model.eval()
     correct = 0
-    total = 0
     extract_fn = getattr(dataset, "extract_answer", lambda _: None)
     pad_id = tokenizer.pad_token_id
     n = min(num_samples, len(dataset))
+    total = n
 
     has_exec_tests = hasattr(dataset, "get_test_cases")
     is_humaneval = isinstance(dataset, HumanEvalDataset)
@@ -223,19 +223,16 @@ def evaluate_accuracy_sft(
 
         for i, r in enumerate(exec_results):
             if r is not None:
-                total += 1
                 is_correct_list[i] = r
                 if r:
                     correct += 1
     else:
         for i in range(n):
             gold, pred = all_golds[i], all_preds[i]
-            if gold is not None:
-                total += 1
-                hit = pred is not None and pred.strip() == gold.strip()
-                is_correct_list[i] = hit
-                if hit:
-                    correct += 1
+            hit = gold is not None and pred is not None and pred.strip() == gold.strip()
+            is_correct_list[i] = hit
+            if hit:
+                correct += 1
 
     samples = []
     for i in range(min(num_log_samples, n)):
