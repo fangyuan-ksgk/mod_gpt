@@ -47,6 +47,7 @@ EVAL_SAMPLES=1270
 LOG_SAMPLES_EVERY=100
 NUM_LOG_SAMPLES=3
 MAX_NEW_TOKENS=256
+EVAL_BATCH_SIZE=64
 OUTPUT_DIR="./ckpt/sft_pt"
 
 # ============================================================================
@@ -72,4 +73,5 @@ torchrun \
   --log_samples_every $LOG_SAMPLES_EVERY \
   --num_log_samples $NUM_LOG_SAMPLES \
   --max_new_tokens $MAX_NEW_TOKENS \
+  --eval_batch_size $EVAL_BATCH_SIZE \
   --output_dir $OUTPUT_DIR
