@@ -89,6 +89,12 @@ class SoRLConfig:
     cooldown_frac: float = 0.4
     max_grad_norm: float = 1.0
 
+    # VQ abs-projection pre-training (run before main training loop)
+    vq_abs_pretrain_steps: int = 0        # 0 = disabled; e.g. 2000 to enable
+    vq_abs_pretrain_lr: float = 1e-3      # Adam LR for the VQ codebook
+    vq_abs_pretrain_layer: int = -1       # which transformer layer's hidden states to use (-1 = last)
+    vq_abs_pretrain_batch_size: int = 256 # mini-batch size for VQ training steps
+
     # Training
     batch_size: int = 2
     gradient_accumulation_steps: int = 1
@@ -470,6 +476,139 @@ class SoRLTrainer:
         )
         self.raw_model.train()
         return result
+
+    # ------------------------------------------------------------------
+    # VQ abs-projection pre-training
+    # ------------------------------------------------------------------
+    def _pretrain_abs_projection_vq(self):
+        from sorl.tokenassort import VQCodebook
+
+        cfg = self.config
+        abs_vocab_size = int(self.raw_model.vocab_sizes[-1].item()) - 1  # exclude placeholder
+        hidden_size    = self.raw_model.model.config.hidden_size
+        base_vocab     = int(self.raw_model.vocab_sizes[0].item())
+
+        self._log(
+            f"[vq_pretrain] Starting: abs_vocab={abs_vocab_size}, "
+            f"hidden={hidden_size}, steps={cfg.vq_abs_pretrain_steps}, "
+            f"layer={cfg.vq_abs_pretrain_layer}"
+        )
+
+        # -- 1. Collect hidden states from frozen backbone --
+        collect_loader = self._make_dataloader(self.train_dataset, shuffle=True)
+        n_collect = max(1, abs_vocab_size // (cfg.batch_size * 32) + 1)
+
+        self.raw_model.eval()
+        all_h = []
+        with torch.no_grad():
+            for i, batch in enumerate(collect_loader):
+                if i >= n_collect:
+                    break
+                input_ids      = batch["input_ids"].to(self.device)
+                attention_mask = batch["attention_mask"].to(self.device)
+                inner_out = self.raw_model.model.model(
+                    input_ids=input_ids,
+                    attention_mask=attention_mask,
+                    output_hidden_states=True,
+                    use_cache=False,
+                )
+                hidden = inner_out.hidden_states[cfg.vq_abs_pretrain_layer]  # (B, T, D)
+                mask   = attention_mask.bool()
+                all_h.append(hidden[mask].cpu().float())
+                del inner_out, hidden
+                torch.cuda.empty_cache()
+        self.raw_model.train()
+
+        data   = torch.cat(all_h, dim=0)   # (N, D)
+        n_data = data.shape[0]
+        self._log(f"[vq_pretrain] Collected {n_data:,} hidden vectors.")
+
+        # -- 2. Train VQCodebook --
+        vq = VQCodebook(V=abs_vocab_size, D=hidden_size).to(self.device)
+        perm = torch.randperm(n_data)[:abs_vocab_size]
+        vq.codebook.weight.data = data[perm].to(self.device).clone()
+
+        vq_opt   = torch.optim.Adam(vq.parameters(), lr=cfg.vq_abs_pretrain_lr)
+        log_freq = max(1, cfg.vq_abs_pretrain_steps // 10)
+
+        vq.train()
+        for step in range(cfg.vq_abs_pretrain_steps):
+            idx = torch.randperm(n_data, device=self.device)[:cfg.vq_abs_pretrain_batch_size]
+            h   = data[idx].to(self.device)
+            _, _, loss = vq(h)
+            vq_opt.zero_grad()
+            loss.backward()
+            vq_opt.step()
+
+            if self.is_master and (step + 1) % log_freq == 0:
+                with torch.no_grad():
+                    util = vq.vocab_utilization(data.to(self.device))
+                self._log(
+                    f"[vq_pretrain] step {step+1}/{cfg.vq_abs_pretrain_steps} "
+                    f"| loss={loss.item():.4f} | vocab_util={util:.2f}"
+                )
+
+        with torch.no_grad():
+            final_util = vq.vocab_utilization(data.to(self.device))
+        self._log(f"[vq_pretrain] Training complete | final vocab_util={final_util:.3f} "
+                  f"({int(final_util * abs_vocab_size)}/{abs_vocab_size} codes used)")
+
+        # -- 3. Copy centroids → abstract embed_tokens rows only --
+        # lm_head is left unchanged (diagonal for v6, random-init for others).
+        # The VQ motivation is for the projection (lm_head/routing), but the
+        # embed_tokens warm-start keeps abstract embeddings in-distribution.
+        embed_w   = self.raw_model.model.model.embed_tokens.weight
+        base_norm = embed_w[:base_vocab].norm(dim=1).mean().item()
+        with torch.no_grad():
+            centroids = vq.codebook.weight.data.to(embed_w.device)  # (V, D)
+            centroids = F.normalize(centroids, dim=-1) * base_norm
+            embed_w[base_vocab + 1 : base_vocab + 1 + abs_vocab_size] = centroids
+
+        if self.ddp:
+            dist.broadcast(embed_w.data, src=0)
+
+        self._log(
+            f"[vq_pretrain] Copied VQ centroids → embed_tokens "
+            f"rows [{base_vocab+1}:{base_vocab+1+abs_vocab_size}]. lm_head unchanged."
+        )
+        del vq, vq_opt, data, all_h
+        torch.cuda.empty_cache()
+
+    # ------------------------------------------------------------------
+    # Embedding warm-up: freeze / unfreeze helpers
+    # ------------------------------------------------------------------
+    def _freeze_non_abstract(self):
+        base_vocab = int(self.raw_model.vocab_sizes[0].item())
+        self._saved_requires_grad = {}
+        self._warmup_hooks = []
+
+        for name, p in self.model.named_parameters():
+            self._saved_requires_grad[name] = p.requires_grad
+            if "embed_tokens" in name or "lm_head" in name:
+                p.requires_grad = True
+                def _zero_nl(grad, bv=base_vocab):
+                    grad[:bv] = 0
+                    return grad
+                handle = p.register_hook(_zero_nl)
+                self._warmup_hooks.append(handle)
+            else:
+                p.requires_grad = False
+
+        n_abs = sum(self.raw_model.vocab_sizes[1:]).item()
+        d = self.raw_model.model.config.hidden_size
+        self._log(f"[emb_warmup] Froze all except abstract emb/proj rows. "
+                  f"Trainable: {n_abs} × {d} × 2 = {2*n_abs*d/1e6:.2f}M")
+
+    def _unfreeze_all(self):
+        for h in self._warmup_hooks:
+            h.remove()
+        del self._warmup_hooks
+        for name, p in self.model.named_parameters():
+            if name in self._saved_requires_grad:
+                p.requires_grad = self._saved_requires_grad[name]
+        n_train = sum(p.numel() for p in self.model.parameters() if p.requires_grad)
+        self._log(f"[emb_warmup] Restored param state. Trainable: {n_train/1e6:.2f}M")
+        del self._saved_requires_grad
 
     # ------------------------------------------------------------------
     # Main training loop
@@ -1131,8 +1270,16 @@ class SoRLTrainerv3(SoRLTrainer):
                   f"Total steps: {total_steps} | Steps/epoch: {len(dataloader)} | "
                   f"Effective batch: {cfg.batch_size * cfg.gradient_accumulation_steps * self.world_size}")
 
+        # VQ abs-projection pre-training phase (before main loop)
+        if cfg.vq_abs_pretrain_steps > 0:
+            self._pretrain_abs_projection_vq()
+
         self.model.train()
         global_step = start_step
+
+        # Embedding warm-up: freeze non-abstract params for phase 1
+        if cfg.emb_warmup_steps > 0 and global_step < cfg.emb_warmup_steps:
+            self._freeze_non_abstract()
 
         if torch.cuda.is_available():
             torch.cuda.reset_peak_memory_stats(self.device)

@@ -35,8 +35,7 @@ class GSM8KDataset(Dataset):
 
     def __getitem__(self, idx):
         ex = self.dataset[idx]
-        prompt = f"Question: {ex['question']}\nAnswer:"
-        text = f"{prompt} {ex['answer']}"
+        prompt, text = self.parse_sample(ex)
         prompt_len = len(self.tokenizer(prompt, add_special_tokens=False)["input_ids"])
         enc = self.tokenizer(text, truncation=True, max_length=self.max_length,
                              padding="max_length", return_tensors="pt")
@@ -46,6 +45,13 @@ class GSM8KDataset(Dataset):
             "attention_mask": enc["attention_mask"].squeeze(0),
             "prompt_len": prompt_len,
         }
+
+    @staticmethod
+    def parse_sample(ex):
+        """Return (prompt, full_text)."""
+        prompt = f"Question: {ex['question']}\nAnswer:"
+        text = f"{prompt} {ex['answer']}"
+        return prompt, text
 
     @staticmethod
     def extract_answer(text):
@@ -501,6 +507,20 @@ class ScienceQADataset(Dataset):
 
     def __getitem__(self, idx):
         ex = self.dataset[idx]
+        prompt, text = self.parse_sample(ex)
+        prompt_len = len(self.tokenizer(prompt, add_special_tokens=False)["input_ids"])
+        enc = self.tokenizer(text, truncation=True, max_length=self.max_length,
+                             padding="max_length", return_tensors="pt")
+        prompt_len = min(prompt_len, self.max_length)
+        return {
+            "input_ids": enc["input_ids"].squeeze(0),
+            "attention_mask": enc["attention_mask"].squeeze(0),
+            "prompt_len": prompt_len,
+        }
+
+    @staticmethod
+    def parse_sample(ex):
+        """Return (prompt, full_text)."""
         choices = ex["choices"]
         answer_idx = ex["answer"]
         answer_letter = chr(ord("A") + answer_idx)
@@ -516,15 +536,7 @@ class ScienceQADataset(Dataset):
 
         prompt = f"Question: {ex['question']}\n{choices_str}\nAnswer:"
         text = f"{prompt} {reasoning}\n#### {answer_letter}"
-        prompt_len = len(self.tokenizer(prompt, add_special_tokens=False)["input_ids"])
-        enc = self.tokenizer(text, truncation=True, max_length=self.max_length,
-                             padding="max_length", return_tensors="pt")
-        prompt_len = min(prompt_len, self.max_length)
-        return {
-            "input_ids": enc["input_ids"].squeeze(0),
-            "attention_mask": enc["attention_mask"].squeeze(0),
-            "prompt_len": prompt_len,
-        }
+        return prompt, text
 
     @staticmethod
     def extract_answer(text):
@@ -692,9 +704,7 @@ class MBPPDataset(Dataset):
 
     def __getitem__(self, idx):
         ex = self.dataset[idx]
-        prompt = f"# Task: {ex['prompt'].strip()}\n# Solution:\n"
-        solution = ex["code"].strip()
-        text = f"{prompt}{solution}"
+        prompt, text = self.parse_sample(ex)
         prompt_len = len(self.tokenizer(prompt, add_special_tokens=False)["input_ids"])
         enc = self.tokenizer(text, truncation=True, max_length=self.max_length,
                              padding="max_length", return_tensors="pt")
@@ -704,6 +714,14 @@ class MBPPDataset(Dataset):
             "attention_mask": enc["attention_mask"].squeeze(0),
             "prompt_len": prompt_len,
         }
+
+    @staticmethod
+    def parse_sample(ex):
+        """Return (prompt, full_text)."""
+        prompt = f"# Task: {ex['prompt'].strip()}\n# Solution:\n"
+        solution = ex["code"].strip()
+        text = f"{prompt}{solution}"
+        return prompt, text
 
     def get_test_cases(self, idx):
         """Return list of assert strings for this problem."""

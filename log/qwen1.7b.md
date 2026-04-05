@@ -58,6 +58,12 @@
     │ exp20   │    v4   │ traj=1.0, abs=0.5, hinge=0.0, γ=0.5, i=2          │   61.3 │   58.7 │     2.6 │      19 │    99.9 │     0.000 │
     └─────────┴─────────┴───────────────────────────────────────────────────┴────────┴────────┴─────────┴─────────┴─────────┴───────────┘
 
+  Analysis: 
+  1. Acc[None] has no reason to beat SFT baseline, therefore the biggest gap 1% (62.7 -> 63.7) is the noise level. Any delta within that, is negligable. 
+  2. v1 & v2 are the same, no difference in Acc[K]
+  3. v2 & v3 are the same, adding hinge loss do NOT benefit Acc[K], nor does it degrades Acc[K]
+  4. adding zipf regularization significantly degrades accuracy, delta >6%, significant
+
 
 
   Ablation Analysis: ablate_20260318_0329 (20 experiments, Qwen3-1.7B, GSM8K, emb_lr_mult=1.0)
@@ -209,61 +215,16 @@
     └─────────┴─────────┴──────────────────────────────────────────────────────┴────────┴────────┴─────────┴─────────┴─────────┴───────────┘
 
 
-  Observation 1. Response only abtraction fails to improve "NL accuracy" above 63% on v3. "Strange benefit disappears". 
-  Observation 2. Response only abstraction eliminates the advantage of sorl v3, hinge loss (constrast between different abstraction choice) benefit disappears. 
-  Observation 3. v1 becomes the best configuration, but diversity still hurts accuracy for about 7%. Simplicity wins. 
+  Analysis: 
+  1. Again no reason for Acc[None] improvement, so variation here is 1%, just to be safe. v1 is noticably better than v2 (2% delta) when abstraction is 
+     added to response part only. 
+  2. hinge loss design in v3, as well as the inner loops in v4, does not noticably benefits. 
+  3. zipf loss degrades Acc[K], delta >5%, significant
 
-  Question 1. Does mtraj + jacobi loss combo still benefits the "response-only" SoRL? 
-  Question 2. Does the various randomization mechanism benefits "response-only" SoRL? 
+  Combining this table, above table, as well as tables in qwen0.6B, we can conclude that v3, v4, even v2 design does not have significant difference 
+  from each other. Whilst v2 has a slight advantage over v1 for qwen0.6B, this advantage disappears in Qwen1.7B. 
+
+  So in conclusion, all these training tricks are not that different, but a uniform behavior, is that they all lead to vocabulary collapsed, unless we 
+  are ready to pay accuracy tax for more than 5%. 
 
 
-  ---
-  1. Head-to-Head: Response-Only vs Question+Response
-
-  ┌──────────────────────┬───────────┬───────────┬──────────────────┐
-  │     Config           │  A (Q+R)  │  B (RO)   │     Delta        │
-  │                      │  NL / K=4 │  NL / K=4 │  ΔNL  /  ΔK=4   │
-  ├──────────────────────┼───────────┼───────────┼──────────────────┤
-  │ v1 baseline          │ 63.0/58.0 │ 62.7/59.7 │  -0.3  /  +1.7  │
-  ├──────────────────────┼───────────┼───────────┼──────────────────┤
-  │ v2 baseline          │ 62.0/58.4 │ 60.6/57.8 │  -1.4  /  -0.6  │
-  ├──────────────────────┼───────────┼───────────┼──────────────────┤
-  │ v2 + ortho           │ 62.3/59.0 │ 62.7/57.9 │  +0.4  /  -1.1  │
-  ├──────────────────────┼───────────┼───────────┼──────────────────┤
-  │ v3 baseline          │ 62.0/58.7 │ 60.8/56.8 │  -1.2  /  -1.9  │
-  ├──────────────────────┼───────────┼───────────┼──────────────────┤
-  │ v3 + noise           │ 63.7/59.7 │ 62.4/57.7 │  -1.3  /  -2.0  │
-  ├──────────────────────┼───────────┼───────────┼──────────────────┤
-  │ v3 + r=1.0           │ 61.7/57.0 │ 62.4/59.3 │  +0.7  /  +2.3  │
-  ├──────────────────────┼───────────┼───────────┼──────────────────┤
-  │ v4, i=2              │ 61.8/57.5 │ 62.8/59.2 │  +1.0  /  +1.7  │
-  ├──────────────────────┼───────────┼───────────┼──────────────────┤
-  │ v4, i=2, g=0.1       │ 62.9/58.6 │ 62.7/59.5 │  -0.2  /  +0.9  │
-  └──────────────────────┴───────────┴───────────┴──────────────────┘
-
-  Two patterns:
-  - **RO helps when Q+R was fragile**: v1 baseline, v3 r=1.0, all v4 i=2 configs — these gain +0.9 to +2.3pp on K=4
-  - **RO hurts when Q+R was already strong**: v2 baseline, v3 baseline, v3+noise — these lose 0.6–2.0pp on K=4
-
-  Interpretation: question-side abstractions provide useful signal for v2/v3 trainers (traj loss benefits from
-  seeing abstractions in the prompt). But they also inject noise that destabilizes fragile training loops (v4 inner
-  loops, full-corruption r=1.0). Response-only is the safer default; question+response is higher-ceiling but
-  requires a stable trainer.
-
-  ---
-  2. Zipf Still Hurts
-
-  ┌──────┬─────────┬──────┬──────┬──────┬──────────┐
-  │ Exp  │ Trainer │ Zipf │ NL%  │ K=4% │ abs_loss │
-  ├──────┼─────────┼──────┼──────┼──────┼──────────┤
-  │ exp1 │ v1      │ 0.0  │ 62.7 │ 59.7 │  0.001   │
-  ├──────┼─────────┼──────┼──────┼──────┼──────────┤
-  │ exp2 │ v1      │ 1.0  │ 59.4 │ 52.8 │  1.022   │
-  ├──────┼─────────┼──────┼──────┼──────┼──────────┤
-  │ exp3 │ v2      │ 0.0  │ 60.6 │ 57.8 │  0.006   │
-  ├──────┼─────────┼──────┼──────┼──────┼──────────┤
-  │ exp6 │ v2      │ 1.0  │ 57.3 │ 52.2 │  0.831   │
-  └──────┴─────────┴──────┴──────┴──────┴──────────┘
-
-  Same story as Section A: zipf drops NL 3-5pp, K=4 5-7pp, abs_loss stays high. Response-only does not fix the
-  fundamental zipf problem of unlearnable token assignments.

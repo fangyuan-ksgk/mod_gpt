@@ -27,38 +27,70 @@ class ChunkEncoder(nn.Module):
 
 
 class VQModule(nn.Module):
-    """Codebook of size C_SIZE in D_bot space. STE + commitment loss."""
-    def __init__(self, C_SIZE, D_bot, beta=DEFAULT_BETA, gamma=0.0):
+    """
+    Codebook in D_bot space with EMA update + dead-code reinitialization.
+
+    Standard trick (VQ-VAE-2 / VQGAN / Jukebox) to prevent codebook collapse:
+    - Codebook entries updated via EMA toward their assigned encoder outputs.
+    - Only commitment loss (encoder → codebook) flows back to the encoder.
+    - Entries whose EMA usage < dead_threshold are reinitialized from batch.
+    """
+    def __init__(self, C_SIZE, D_bot, beta=DEFAULT_BETA, decay=0.99, dead_threshold=0.01):
         super().__init__()
+        self.C_SIZE         = C_SIZE
+        self.beta           = beta
+        self.decay          = decay
+        self.dead_threshold = dead_threshold
+
         self.codebook = nn.Embedding(C_SIZE, D_bot)
-        self.beta  = beta
-        self.gamma = gamma  # encoder spread regularization weight
+        self.register_buffer('cluster_size', torch.zeros(C_SIZE))
+        self.register_buffer('cluster_sum',  torch.zeros(C_SIZE, D_bot))
 
     def forward(self, z):
+        # z: (B, D_bot)
         z_sq  = (z ** 2).sum(-1, keepdim=True)
         e_sq  = (self.codebook.weight ** 2).sum(-1)
-        dots  = z @ self.codebook.weight.T
-        dists = z_sq + e_sq - 2 * dots
+        dists = z_sq + e_sq - 2 * (z @ self.codebook.weight.T)
 
-        ids = dists.argmin(-1)
-        e_k = self.codebook(ids)
+        ids = dists.argmin(-1)          # (B,)
+        e_k = self.codebook(ids)        # (B, D_bot)
 
-        commit_loss = F.mse_loss(e_k.detach(), z) * self.beta + \
-                      F.mse_loss(e_k, z.detach())
+        # Commitment loss: pull encoder toward (stop-grad) codebook entry.
+        # No codebook gradient here — codebook updated via EMA below.
+        commit_loss = F.mse_loss(e_k.detach(), z) * self.beta
 
-        # Spread regularization: maximize batch variance of encoder output z
-        # Prevents encoder collapse where all inputs map to the same point.
-        spread_loss = (-self.gamma * z.var(dim=0).mean()) if (self.gamma > 0.0 and z.shape[0] > 1) else z.new_tensor(0.0)
+        if self.training:
+            with torch.no_grad():
+                z_sg    = z.detach()
+                one_hot = F.one_hot(ids, self.C_SIZE).float()  # (B, C)
+                counts  = one_hot.sum(0)                        # (C,)
+                sums    = one_hot.T @ z_sg                      # (C, D_bot)
+
+                self.cluster_size.mul_(self.decay).add_(counts * (1 - self.decay))
+                self.cluster_sum.mul_(self.decay).add_(sums   * (1 - self.decay))
+
+                # Laplace-smoothed codebook update
+                n        = self.cluster_size.sum()
+                smoothed = (self.cluster_size + 1e-5) / (n + self.C_SIZE * 1e-5) * n
+                self.codebook.weight.data.copy_(self.cluster_sum / smoothed.unsqueeze(1))
+
+                # Dead-code reinit: replace unused entries with random batch encodings
+                dead   = self.cluster_size < self.dead_threshold
+                n_dead = int(dead.sum().item())
+                if n_dead > 0:
+                    src = torch.randint(0, z_sg.shape[0], (n_dead,), device=z_sg.device)
+                    self.codebook.weight.data[dead] = z_sg[src]
+                    self.cluster_size[dead]         = self.dead_threshold
+                    self.cluster_sum[dead]          = z_sg[src] * self.dead_threshold
 
         z_st = z + (e_k - z).detach()  # straight-through estimator
-        return ids, z_st, commit_loss + spread_loss
+        return ids, z_st, commit_loss
 
     @torch.no_grad()
     def assign(self, z):
-        z_sq  = (z ** 2).sum(-1, keepdim=True)
-        e_sq  = (self.codebook.weight ** 2).sum(-1)
-        dots  = z @ self.codebook.weight.T
-        return (z_sq + e_sq - 2 * dots).argmin(-1)
+        z_sq = (z ** 2).sum(-1, keepdim=True)
+        e_sq = (self.codebook.weight ** 2).sum(-1)
+        return (z_sq + e_sq - 2 * (z @ self.codebook.weight.T)).argmin(-1)
 
 
 class ChunkDecoder(nn.Module):
@@ -80,10 +112,10 @@ class TokenAssortedVQVAE(nn.Module):
     Inference (encode):   maps (B, L, D) chunks -> discrete code ids (B,)
     """
     def __init__(self, D, L=DEFAULT_L, D_bot=DEFAULT_D_BOT,
-                 C_SIZE=DEFAULT_C_SIZE, beta=DEFAULT_BETA, gamma=0.0):
+                 C_SIZE=DEFAULT_C_SIZE, beta=DEFAULT_BETA, decay=0.99, dead_threshold=0.01):
         super().__init__()
         self.encoder = ChunkEncoder(D, L, D_bot)
-        self.vq      = VQModule(C_SIZE, D_bot, beta, gamma=gamma)
+        self.vq      = VQModule(C_SIZE, D_bot, beta, decay=decay, dead_threshold=dead_threshold)
         self.decoder = ChunkDecoder(D, L, D_bot)
 
     def forward(self, x):

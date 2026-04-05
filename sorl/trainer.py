@@ -312,27 +312,23 @@ class SoRLTrainer:
             final_util = vq.vocab_utilization(data.to(self.device))
         self._log(f"[vq_pretrain] Training complete | final vocab_util={final_util:.3f} ({int(final_util * abs_vocab_size)}/{abs_vocab_size} codes used)")
 
-        # -- 3. Copy centroids → abstract embedding rows --
+        # -- 3. Copy centroids → abstract embed_tokens rows only --
+        # lm_head is left unchanged (diagonal for v6, random-init for others).
         embed_w   = self.raw_model.model.model.embed_tokens.weight
-        lm_head_w = self.raw_model.model.lm_head.weight
-
-        # Rescale to match base-embedding norm
         base_norm = embed_w[:base_vocab].norm(dim=1).mean().item()
         with torch.no_grad():
             centroids = vq.codebook.weight.data.to(embed_w.device)  # (V, D)
             centroids = F.normalize(centroids, dim=-1) * base_norm
             # abstract rows: base_vocab+1 .. base_vocab+abs_vocab_size (base_vocab is placeholder)
-            embed_w[base_vocab + 1 : base_vocab + 1 + abs_vocab_size]   = centroids
-            lm_head_w[base_vocab + 1 : base_vocab + 1 + abs_vocab_size] = centroids
+            embed_w[base_vocab + 1 : base_vocab + 1 + abs_vocab_size] = centroids
 
         # In DDP: broadcast updated weights from rank 0
         if self.ddp:
-            dist.broadcast(embed_w.data,   src=0)
-            dist.broadcast(lm_head_w.data, src=0)
+            dist.broadcast(embed_w.data, src=0)
 
         self._log(
-            f"[vq_pretrain] Copied VQ centroids → embed_tokens & lm_head "
-            f"rows [{base_vocab+1}:{base_vocab+1+abs_vocab_size}]."
+            f"[vq_pretrain] Copied VQ centroids → embed_tokens "
+            f"rows [{base_vocab+1}:{base_vocab+1+abs_vocab_size}]. lm_head unchanged."
         )
         del vq, vq_opt, data, all_h
         torch.cuda.empty_cache()

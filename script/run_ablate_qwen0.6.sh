@@ -110,6 +110,16 @@ run_bg() {
     "$@" &
 }
 
+# =============================
+# Base configs WITHOUT emb_lr baked in (used in Batches 7-9)
+R_V1="--alpha_info_gain 1.0 --alpha_abs 0.5"
+R_V2="--use_v2 --alpha_traj 1.0 --alpha_abs 0.5"
+R_V3_R03="--use_v3 --alpha_traj 1.0 --alpha_abs 0.5 --corrupt_method shuffle --corrupt_ratio 0.3 --gamma_contrastive 0.5"
+R_V3_R05="--use_v3 --alpha_traj 1.0 --alpha_abs 0.5 --corrupt_method shuffle --corrupt_ratio 0.5 --gamma_contrastive 0.5"
+R_V3_R10="--use_v3 --alpha_traj 1.0 --alpha_abs 0.5 --corrupt_method shuffle --corrupt_ratio 1.0 --gamma_contrastive 0.5"
+R_V3_NOISE="--use_v3 --alpha_traj 1.0 --alpha_abs 0.5 --corrupt_method noise --corrupt_ratio 0.3 --gamma_contrastive 0.5"
+
+
 # ============================================================================
 # Batch 5 — response_only_abs baselines (3 epochs, 4 parallel)
 # ============================================================================
@@ -142,7 +152,55 @@ run_bg "v4_i2_resp_only"       --num_epochs 2 --n_inner 2 $V4 --response_only_ab
 echo "  4 experiments launched. Waiting..."
 wait
 
+# ============================================================================
+# Batch 7 — emb_lr=1.0: v1, v2, v3 r=0.3, v3 r=0.5  (4 parallel)
+# ============================================================================
 echo ""
 echo "============================================================"
-echo "All 24 experiments complete. Results in ./ckpt/ablate_${TIMESTAMP}/"
+echo "Batch 7: emb_lr=1.0 — v1/v2/v3_r0.3/v3_r0.5 (${TIMESTAMP})"
+echo "============================================================"
+
+run_bg "v1_e1"       --num_epochs 3 $R_V1      --emb_lr_mult 1.0
+run_bg "v2_e1"       --num_epochs 3 $R_V2      --emb_lr_mult 1.0
+run_bg "v3_r03_e1"   --num_epochs 3 $R_V3_R03  --emb_lr_mult 1.0
+run_bg "v3_r05_e1"   --num_epochs 3 $R_V3_R05  --emb_lr_mult 1.0
+
+echo "  4 experiments launched. Waiting..."
+wait
+
+# ============================================================================
+# Batch 8 — emb_lr=1.0: v3 r=1.0, v3 noise  |  emb_lr=10.0: v1, v2  (4 parallel)
+# ============================================================================
+echo ""
+echo "============================================================"
+echo "Batch 8: emb_lr=1.0 v3_r1.0/noise + emb_lr=10.0 v1/v2 (${TIMESTAMP})"
+echo "============================================================"
+
+run_bg "v3_r10_e1"    --num_epochs 3 $R_V3_R10    --emb_lr_mult 1.0
+run_bg "v3_noise_e1"  --num_epochs 3 $R_V3_NOISE  --emb_lr_mult 1.0
+run_bg "v1_e10"       --num_epochs 3 $R_V1        --emb_lr_mult 10.0
+run_bg "v2_e10"       --num_epochs 3 $R_V2        --emb_lr_mult 10.0
+
+echo "  4 experiments launched. Waiting..."
+wait
+
+# ============================================================================
+# Batch 9 — emb_lr=10.0: v3 r=0.3, r=0.5, r=1.0, noise  (4 parallel)
+# ============================================================================
+echo ""
+echo "============================================================"
+echo "Batch 9: emb_lr=10.0 — v3 sweep (${TIMESTAMP})"
+echo "============================================================"
+
+run_bg "v3_r03_e10"   --num_epochs 3 $R_V3_R03   --emb_lr_mult 10.0
+run_bg "v3_r05_e10"   --num_epochs 3 $R_V3_R05   --emb_lr_mult 10.0
+run_bg "v3_r10_e10"   --num_epochs 3 $R_V3_R10   --emb_lr_mult 10.0
+run_bg "v3_noise_e10" --num_epochs 3 $R_V3_NOISE --emb_lr_mult 10.0
+
+echo "  4 experiments launched. Waiting..."
+wait
+
+echo ""
+echo "============================================================"
+echo "All 36 experiments complete. Results in ./ckpt/ablate_${TIMESTAMP}/"
 echo "============================================================"
