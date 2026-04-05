@@ -26,7 +26,12 @@ MASTER_PORT=29501
 # Model
 MODEL_NAME="Qwen/Qwen3-0.6B"
 
-# Data | science-qa | mbpp
+# Data
+# - scienceqa (max len 512 & new token 256) 
+# - gsm8k (max len 512 & new token 256) 
+# - xlam (max len 1024 & new token 256)
+# - codecontest (max len & new token)
+
 DATASET="gsm8k"
 MAX_LENGTH=512
 

@@ -153,5 +153,18 @@ wait
 
 echo ""
 echo "============================================================"
+echo "Batch 13: V6 K=8 abs=32 — 4 combos (${TIMESTAMP})"
+echo "============================================================"
+
+run_bg "v6_K8_abs64_gsm_06"  $M06 $DS_GSM --use_v6 --abstract_vocab_size 64 --K 8 --eval_K 8
+run_bg "v6_K8_abs64_gsm_17"  $M17 $DS_GSM --use_v6 --abstract_vocab_size 64 --K 8 --eval_K 8
+run_bg "v6_K8_abs64_sci_06"  $M06 $DS_SCI --use_v6 --abstract_vocab_size 64 --K 8 --eval_K 8
+run_bg "v6_K8_abs64_sci_17"  $M17 $DS_SCI --use_v6 --abstract_vocab_size 64 --K 8 --eval_K 8
+
+echo "  4 experiments launched. Waiting..."
+wait
+
+echo ""
+echo "============================================================"
 echo "All 28 experiments complete. Results in ./ckpt/sweep_${TIMESTAMP}/"
 echo "============================================================"
