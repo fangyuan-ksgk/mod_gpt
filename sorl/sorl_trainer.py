@@ -329,7 +329,10 @@ class VariableZipfian2gramLoss(nn.Module):
 def ortho_loss(model, base_vocab):
     """Squared off-diagonal cosine similarity between abstract embedding rows.
     Penalizes collapsed embeddings by pushing abstract tokens apart."""
-    abs_embed = model.model.model.embed_tokens.weight[base_vocab + 1:]
+    m = model.model.model 
+    if hasattr(m, "model"): 
+        m = m.model
+    abs_embed = m.embed_tokens.weight[base_vocab + 1:]
     abs_norm = F.normalize(abs_embed, dim=1)
     gram = abs_norm @ abs_norm.T
     n = gram.size(0)
