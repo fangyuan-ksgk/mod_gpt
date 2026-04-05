@@ -553,23 +553,22 @@ class SoRLTrainer:
         self._log(f"[vq_pretrain] Training complete | final vocab_util={final_util:.3f} "
                   f"({int(final_util * abs_vocab_size)}/{abs_vocab_size} codes used)")
 
-        # -- 3. Copy centroids → abstract embed_tokens rows only --
-        # lm_head is left unchanged (diagonal for v6, random-init for others).
-        # The VQ motivation is for the projection (lm_head/routing), but the
-        # embed_tokens warm-start keeps abstract embeddings in-distribution.
-        embed_w   = self.raw_model.model.model.embed_tokens.weight
-        base_norm = embed_w[:base_vocab].norm(dim=1).mean().item()
+        # -- 3. Copy centroids → abstract lm_head rows --
+        # lm_head[k] · h = base_norm * ||h|| * cos(θ_{k,h}), so argmax = nearest centroid.
+        # embed_tokens is left at its default initialisation.
+        lm_head_w = self.raw_model.model.lm_head.weight
+        base_norm = lm_head_w[:base_vocab].norm(dim=1).mean().item()
         with torch.no_grad():
-            centroids = vq.codebook.weight.data.to(embed_w.device)  # (V, D)
+            centroids = vq.codebook.weight.data.to(lm_head_w.device)  # (V, D)
             centroids = F.normalize(centroids, dim=-1) * base_norm
-            embed_w[base_vocab + 1 : base_vocab + 1 + abs_vocab_size] = centroids
+            lm_head_w[base_vocab + 1 : base_vocab + 1 + abs_vocab_size] = centroids
 
         if self.ddp:
-            dist.broadcast(embed_w.data, src=0)
+            dist.broadcast(lm_head_w.data, src=0)
 
         self._log(
-            f"[vq_pretrain] Copied VQ centroids → embed_tokens "
-            f"rows [{base_vocab+1}:{base_vocab+1+abs_vocab_size}]. lm_head unchanged."
+            f"[vq_pretrain] Copied VQ centroids → lm_head "
+            f"rows [{base_vocab+1}:{base_vocab+1+abs_vocab_size}]. embed_tokens unchanged."
         )
         del vq, vq_opt, data, all_h
         torch.cuda.empty_cache()
