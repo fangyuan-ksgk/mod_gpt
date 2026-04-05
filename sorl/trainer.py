@@ -20,6 +20,7 @@ from typing import Optional, Callable, Dict, Any
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data import DataLoader, DistributedSampler
@@ -85,6 +86,12 @@ class SoRLConfig:
     warmup_steps: int = 50
     cooldown_frac: float = 0.4
     max_grad_norm: float = 1.0
+
+    # VQ abs-projection pre-training (run before main training loop)
+    vq_abs_pretrain_steps: int = 0        # 0 = disabled; e.g. 2000 to enable
+    vq_abs_pretrain_lr: float = 1e-3      # Adam LR for the VQ codebook
+    vq_abs_pretrain_layer: int = -1       # which transformer layer's hidden states to use (-1 = last)
+    vq_abs_pretrain_batch_size: int = 256 # mini-batch size for VQ training steps
 
     # Training
     batch_size: int = 2
@@ -211,6 +218,119 @@ class SoRLTrainer:
             "info_loss": [], "abs_loss": [], "zipf_loss": [], "denoise_loss": [], "ortho_loss": [],
             "lr": [], "emb_lr": [],
         }
+
+    # ------------------------------------------------------------------
+    # VQ abs-projection pre-training
+    # ------------------------------------------------------------------
+    def _pretrain_abs_projection_vq(self):
+        """
+        Pre-train abstract embedding rows using a VQ codebook fitted on
+        frozen LLM hidden states drawn from the training dataset.
+
+        Pipeline:
+          1. Collect hidden states (layer vq_abs_pretrain_layer) from frozen model.
+          2. K-means init + commitment-loss VQ training (VQCodebook).
+          3. Copy learned centroids → abstract rows of embed_tokens & lm_head,
+             rescaled to match the base-embedding norm.
+
+        Controlled by config.vq_abs_pretrain_steps > 0.
+        In DDP mode the trained codebook is broadcast from rank 0 to all ranks.
+        """
+        from sorl.tokenassort import VQCodebook
+
+        cfg = self.config
+        abs_vocab_size = int(self.raw_model.vocab_sizes[-1].item()) - 1  # exclude placeholder
+        hidden_size    = self.raw_model.model.config.hidden_size
+        base_vocab     = int(self.raw_model.vocab_sizes[0].item())
+
+        self._log(
+            f"[vq_pretrain] Starting: abs_vocab={abs_vocab_size}, "
+            f"hidden={hidden_size}, steps={cfg.vq_abs_pretrain_steps}, "
+            f"layer={cfg.vq_abs_pretrain_layer}"
+        )
+
+        # -- 1. Collect hidden states from frozen backbone --
+        collect_loader = self._make_dataloader(self.train_dataset, shuffle=True)
+        # Collect enough batches so we have >> abs_vocab_size vectors for K-means init
+        n_collect = max(1, abs_vocab_size // (cfg.batch_size * 32) + 1)
+
+        self.raw_model.eval()
+        all_h = []
+        with torch.no_grad():
+            for i, batch in enumerate(collect_loader):
+                if i >= n_collect:
+                    break
+                input_ids      = batch["input_ids"].to(self.device)
+                attention_mask = batch["attention_mask"].to(self.device)
+                # Call the inner HF base model directly (bypass SoRL block mask)
+                inner_out = self.raw_model.model.model(
+                    input_ids=input_ids,
+                    attention_mask=attention_mask,
+                    output_hidden_states=True,
+                    use_cache=False,
+                )
+                hidden = inner_out.hidden_states[cfg.vq_abs_pretrain_layer]  # (B, T, D)
+                mask   = attention_mask.bool()
+                all_h.append(hidden[mask].cpu().float())
+                del inner_out, hidden
+                torch.cuda.empty_cache()
+        self.raw_model.train()
+
+        data   = torch.cat(all_h, dim=0)   # (N, D)
+        n_data = data.shape[0]
+        self._log(f"[vq_pretrain] Collected {n_data:,} hidden vectors.")
+
+        # -- 2. Train VQCodebook --
+        vq = VQCodebook(V=abs_vocab_size, D=hidden_size).to(self.device)
+
+        # K-means init: seed centroids with random data points
+        perm = torch.randperm(n_data)[:abs_vocab_size]
+        vq.codebook.weight.data = data[perm].to(self.device).clone()
+
+        vq_opt   = torch.optim.Adam(vq.parameters(), lr=cfg.vq_abs_pretrain_lr)
+        log_freq = max(1, cfg.vq_abs_pretrain_steps // 10)
+
+        vq.train()
+        for step in range(cfg.vq_abs_pretrain_steps):
+            idx = torch.randperm(n_data, device=self.device)[:cfg.vq_abs_pretrain_batch_size]
+            h   = data[idx].to(self.device)
+            _, _, loss = vq(h)
+            vq_opt.zero_grad()
+            loss.backward()
+            vq_opt.step()
+
+            if self.is_master and (step + 1) % log_freq == 0:
+                with torch.no_grad():
+                    util = vq.vocab_utilization(data.to(self.device))
+                self._log(
+                    f"[vq_pretrain] step {step+1}/{cfg.vq_abs_pretrain_steps} "
+                    f"| loss={loss.item():.4f} | vocab_util={util:.2f}"
+                )
+
+        # -- 3. Copy centroids → abstract embedding rows --
+        embed_w   = self.raw_model.model.model.embed_tokens.weight
+        lm_head_w = self.raw_model.model.lm_head.weight
+
+        # Rescale to match base-embedding norm
+        base_norm = embed_w[:base_vocab].norm(dim=1).mean().item()
+        with torch.no_grad():
+            centroids = vq.codebook.weight.data.to(embed_w.device)  # (V, D)
+            centroids = F.normalize(centroids, dim=-1) * base_norm
+            # abstract rows: base_vocab+1 .. base_vocab+abs_vocab_size (base_vocab is placeholder)
+            embed_w[base_vocab + 1 : base_vocab + 1 + abs_vocab_size]   = centroids
+            lm_head_w[base_vocab + 1 : base_vocab + 1 + abs_vocab_size] = centroids
+
+        # In DDP: broadcast updated weights from rank 0
+        if self.ddp:
+            dist.broadcast(embed_w.data,   src=0)
+            dist.broadcast(lm_head_w.data, src=0)
+
+        self._log(
+            f"[vq_pretrain] Copied VQ centroids → embed_tokens & lm_head "
+            f"rows [{base_vocab+1}:{base_vocab+1+abs_vocab_size}]."
+        )
+        del vq, vq_opt, data, all_h
+        torch.cuda.empty_cache()
 
     # ------------------------------------------------------------------
     # Embedding warm-up: freeze / unfreeze helpers
@@ -457,6 +577,10 @@ class SoRLTrainer:
 
         self._log(f"Total steps: {total_steps} | Steps/epoch: {len(dataloader)} | "
                    f"Effective batch: {cfg.batch_size * cfg.gradient_accumulation_steps * self.world_size}")
+
+        # VQ abs-projection pre-training phase (before main loop)
+        if cfg.vq_abs_pretrain_steps > 0:
+            self._pretrain_abs_projection_vq()
 
         self.model.train()
         global_step = start_step
