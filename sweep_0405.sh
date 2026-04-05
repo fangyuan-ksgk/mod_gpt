@@ -111,8 +111,8 @@ echo "============================================================"
 
 run_bg "v6_vq_K16_abs64_gsm_06" $M06 $DS_GSM --use_v6 --abstract_vocab_size 64 --K 16 --eval_K 16 $VQ2K
 run_bg "v6_vq_K16_abs64_gsm_17" $M17 $DS_GSM --use_v6 --abstract_vocab_size 64 --K 16 --eval_K 16 $VQ2K
-run_bg "v6_vq_K16_abs64_sim_06" $M06 $DS_SIM --use_v6 --abstract_vocab_size 64 --K 16 --eval_K 16 $VQ2K
-run_bg "v6_vq_K16_abs64_sim_17" $M17 $DS_SIM --use_v6 --abstract_vocab_size 64 --K 16 --eval_K 16 $VQ2K
+run_bg "v6_vq_K16_abs64_sim_06" $M06 $DS_SCI --use_v6 --abstract_vocab_size 64 --K 16 --eval_K 16 $VQ2K
+run_bg "v6_vq_K16_abs64_sim_17" $M17 $DS_SCI --use_v6 --abstract_vocab_size 64 --K 16 --eval_K 16 $VQ2K
 
 echo "  4 experiments launched. Waiting..."
 wait
@@ -127,8 +127,8 @@ echo "============================================================"
 
 run_bg "v6_vq_K16_abs32_gsm_06" $M06 $DS_GSM --use_v6 --abstract_vocab_size 32 --K 16 --eval_K 16 $VQ2K
 run_bg "v6_vq_K16_abs32_gsm_17" $M17 $DS_GSM --use_v6 --abstract_vocab_size 32 --K 16 --eval_K 16 $VQ2K
-run_bg "v6_vq_K16_abs32_sim_06" $M06 $DS_SIM --use_v6 --abstract_vocab_size 32 --K 16 --eval_K 16 $VQ2K
-run_bg "v6_vq_K16_abs32_sim_17" $M17 $DS_SIM --use_v6 --abstract_vocab_size 32 --K 16 --eval_K 16 $VQ2K
+run_bg "v6_vq_K16_abs32_sim_06" $M06 $DS_SCI --use_v6 --abstract_vocab_size 32 --K 16 --eval_K 16 $VQ2K
+run_bg "v6_vq_K16_abs32_sim_17" $M17 $DS_SCI --use_v6 --abstract_vocab_size 32 --K 16 --eval_K 16 $VQ2K
 
 echo "  4 experiments launched. Waiting..."
 wait
