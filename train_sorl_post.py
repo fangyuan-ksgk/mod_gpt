@@ -73,6 +73,15 @@ def parse_args():
     p.add_argument("--num_log_samples", type=int, default=3)
     p.add_argument("--output_dir", type=str, default="./ckpt/ablate_sanity")
 
+    # LoRA
+    p.add_argument("--use_lora", action="store_true",
+                   help="Enable LoRA fine-tuning (backbone only; embed_tokens+lm_head remain full-rank)")
+    p.add_argument("--lora_rank", type=int, default=16, help="LoRA rank r")
+    p.add_argument("--lora_alpha", type=int, default=32, help="LoRA scaling alpha")
+    p.add_argument("--lora_dropout", type=float, default=0.05, help="LoRA dropout")
+    p.add_argument("--lora_target_modules", type=str, default="q_proj,k_proj,v_proj,o_proj",
+                   help="Comma-separated LoRA target modules")
+
     # Ablation flags
     p.add_argument("--eval_K", type=int, default=None,
                    help="K for eval generation. None=NL-only, 4=periodic abstract")
@@ -453,9 +462,33 @@ def main():
         abstract_vocab_size_list=[args.abstract_vocab_size],
     )
     tokenizer = AutoTokenizer.from_pretrained(args.model_name)
-    log(f"Full fine-tuning: {sum(p.numel() for p in model.parameters())/1e6:.1f}M params")
+    log(f"Total params: {sum(p.numel() for p in model.parameters())/1e6:.1f}M")
     log(f"Vocab: base={model.vocab_sizes[0].item()} + abstract={args.abstract_vocab_size} "
         f"= {model.total_vocab_size.item()}")
+
+    # ---- Apply LoRA (optional) ----
+    if args.use_lora:
+        from peft import get_peft_model, LoraConfig
+        lora_cfg = LoraConfig(
+            r=args.lora_rank,
+            lora_alpha=args.lora_alpha,
+            target_modules=args.lora_target_modules.split(','),
+            lora_dropout=args.lora_dropout,
+            bias="none",
+            task_type="CAUSAL_LM",
+        )
+        model.model = get_peft_model(model.model, lora_cfg)
+        # PEFT freezes all base params; re-enable embed_tokens + lm_head for abstract row training
+        for name, param in model.model.named_parameters():
+            if 'embed_tokens' in name or 'lm_head' in name:
+                param.requires_grad_(True)
+        trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
+        total     = sum(p.numel() for p in model.parameters())
+        log(f"LoRA: rank={args.lora_rank} alpha={args.lora_alpha} "
+            f"targets={args.lora_target_modules} | "
+            f"Trainable: {trainable/1e6:.1f}M / {total/1e6:.1f}M ({100*trainable/total:.1f}%)")
+    else:
+        log(f"Full fine-tuning: {sum(p.numel() for p in model.parameters() if p.requires_grad)/1e6:.1f}M trainable")
 
     # ---- Datasets ----
     log(f"Loading dataset: {args.dataset} (max_length={args.max_length})")
