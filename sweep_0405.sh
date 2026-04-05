@@ -100,34 +100,35 @@ run_bg() {
 VQ2K="--vq_abs_pretrain_steps 2000"
 
 # ============================================================================
-# Batch 1 — VQ-init vs baseline V6: K=8 abs=64, GSM8K, both model sizes
-# Hypothesis: VQ-pretrained centroids (mNN≈0.82) → faster convergence + better gap
+# Batch 1 — VQ-init V6: K=16 abs=64, GSM8K, both model sizes
+# Hypothesis: VQ-pretrained centroids → faster convergence + better gap
+# Baseline (diagonal, no VQ) results already available from prior sweep.
 # ============================================================================
 echo ""
 echo "============================================================"
-echo "Batch 1: VQ-init V6 K=8 abs=64 GSM8K (${TIMESTAMP})"
+echo "Batch 1: VQ-init V6 K=16 abs=64 GSM8K (${TIMESTAMP})"
 echo "============================================================"
 
-run_bg "v6_vq_K8_abs64_gsm_06" $M06 $DS_GSM --use_v6 --abstract_vocab_size 64 --K 8 --eval_K 8 $VQ2K
-run_bg "v6_vq_K8_abs64_gsm_17" $M17 $DS_GSM --use_v6 --abstract_vocab_size 64 --K 8 --eval_K 8 $VQ2K
-run_bg "v6_K8_abs64_gsm_06"    $M06 $DS_GSM --use_v6 --abstract_vocab_size 64 --K 8 --eval_K 8
-run_bg "v6_K8_abs64_gsm_17"    $M17 $DS_GSM --use_v6 --abstract_vocab_size 64 --K 8 --eval_K 8
+run_bg "v6_vq_K16_abs64_gsm_06" $M06 $DS_GSM --use_v6 --abstract_vocab_size 64 --K 16 --eval_K 16 $VQ2K
+run_bg "v6_vq_K16_abs64_gsm_17" $M17 $DS_GSM --use_v6 --abstract_vocab_size 64 --K 16 --eval_K 16 $VQ2K
+run_bg "v6_vq_K16_abs64_sim_06" $M06 $DS_SIM --use_v6 --abstract_vocab_size 64 --K 16 --eval_K 16 $VQ2K
+run_bg "v6_vq_K16_abs64_sim_17" $M17 $DS_SIM --use_v6 --abstract_vocab_size 64 --K 16 --eval_K 16 $VQ2K
 
 echo "  4 experiments launched. Waiting..."
 wait
 
 # ============================================================================
-# Batch 2 — VQ-init vs baseline V6: K=8 abs=32, GSM8K, both model sizes
+# Batch 2 — VQ-init V6: K=16 abs=32, GSM8K, both model sizes
 # ============================================================================
 echo ""
 echo "============================================================"
-echo "Batch 2: VQ-init V6 K=8 abs=32 GSM8K (${TIMESTAMP})"
+echo "Batch 2: VQ-init V6 K=16 abs=32 GSM8K (${TIMESTAMP})"
 echo "============================================================"
 
-run_bg "v6_vq_K8_abs32_gsm_06" $M06 $DS_GSM --use_v6 --abstract_vocab_size 32 --K 8 --eval_K 8 $VQ2K
-run_bg "v6_vq_K8_abs32_gsm_17" $M17 $DS_GSM --use_v6 --abstract_vocab_size 32 --K 8 --eval_K 8 $VQ2K
-run_bg "v6_K8_abs32_gsm_06"    $M06 $DS_GSM --use_v6 --abstract_vocab_size 32 --K 8 --eval_K 8
-run_bg "v6_K8_abs32_gsm_17"    $M17 $DS_GSM --use_v6 --abstract_vocab_size 32 --K 8 --eval_K 8
+run_bg "v6_vq_K16_abs32_gsm_06" $M06 $DS_GSM --use_v6 --abstract_vocab_size 32 --K 16 --eval_K 16 $VQ2K
+run_bg "v6_vq_K16_abs32_gsm_17" $M17 $DS_GSM --use_v6 --abstract_vocab_size 32 --K 16 --eval_K 16 $VQ2K
+run_bg "v6_vq_K16_abs32_sim_06" $M06 $DS_SIM --use_v6 --abstract_vocab_size 32 --K 16 --eval_K 16 $VQ2K
+run_bg "v6_vq_K16_abs32_sim_17" $M17 $DS_SIM --use_v6 --abstract_vocab_size 32 --K 16 --eval_K 16 $VQ2K
 
 echo "  4 experiments launched. Waiting..."
 wait
