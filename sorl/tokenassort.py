@@ -28,10 +28,11 @@ class ChunkEncoder(nn.Module):
 
 class VQModule(nn.Module):
     """Codebook of size C_SIZE in D_bot space. STE + commitment loss."""
-    def __init__(self, C_SIZE, D_bot, beta=DEFAULT_BETA):
+    def __init__(self, C_SIZE, D_bot, beta=DEFAULT_BETA, gamma=0.0):
         super().__init__()
         self.codebook = nn.Embedding(C_SIZE, D_bot)
-        self.beta = beta
+        self.beta  = beta
+        self.gamma = gamma  # encoder spread regularization weight
 
     def forward(self, z):
         z_sq  = (z ** 2).sum(-1, keepdim=True)
@@ -42,11 +43,15 @@ class VQModule(nn.Module):
         ids = dists.argmin(-1)
         e_k = self.codebook(ids)
 
-        loss = F.mse_loss(e_k.detach(), z) * self.beta + \
-               F.mse_loss(e_k, z.detach())
+        commit_loss = F.mse_loss(e_k.detach(), z) * self.beta + \
+                      F.mse_loss(e_k, z.detach())
+
+        # Spread regularization: maximize batch variance of encoder output z
+        # Prevents encoder collapse where all inputs map to the same point.
+        spread_loss = (-self.gamma * z.var(dim=0).mean()) if (self.gamma > 0.0 and z.shape[0] > 1) else z.new_tensor(0.0)
 
         z_st = z + (e_k - z).detach()  # straight-through estimator
-        return ids, z_st, loss
+        return ids, z_st, commit_loss + spread_loss
 
     @torch.no_grad()
     def assign(self, z):
@@ -75,10 +80,10 @@ class TokenAssortedVQVAE(nn.Module):
     Inference (encode):   maps (B, L, D) chunks -> discrete code ids (B,)
     """
     def __init__(self, D, L=DEFAULT_L, D_bot=DEFAULT_D_BOT,
-                 C_SIZE=DEFAULT_C_SIZE, beta=DEFAULT_BETA):
+                 C_SIZE=DEFAULT_C_SIZE, beta=DEFAULT_BETA, gamma=0.0):
         super().__init__()
         self.encoder = ChunkEncoder(D, L, D_bot)
-        self.vq      = VQModule(C_SIZE, D_bot, beta)
+        self.vq      = VQModule(C_SIZE, D_bot, beta, gamma=gamma)
         self.decoder = ChunkDecoder(D, L, D_bot)
 
     def forward(self, x):

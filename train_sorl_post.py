@@ -133,6 +133,20 @@ def parse_args():
     p.add_argument("--response_only_abs", action="store_true",
                    help="Only insert abstract tokens in the response (not query/prompt)")
 
+    # VQ abs-projection pre-training (run before main training loop)
+    p.add_argument("--vq_abs_pretrain_steps", type=int, default=0,
+                   help="VQ pretrain steps; 0=disabled")
+    p.add_argument("--vq_abs_pretrain_lr", type=float, default=1e-3,
+                   help="Adam LR for VQ codebook")
+    p.add_argument("--vq_abs_pretrain_layer", type=int, default=-1,
+                   help="Transformer layer whose hidden states drive VQ training (-1=last)")
+    p.add_argument("--vq_abs_pretrain_batch_size", type=int, default=256,
+                   help="Mini-batch size for VQ training steps")
+
+    # Embedding warm-up (freeze non-abstract params for first N steps)
+    p.add_argument("--emb_warmup_steps", type=int, default=0,
+                   help="Phase-1 steps: train only abstract emb/lm_head rows, freeze everything else")
+
     # Warmup SFT params
     p.add_argument("--warmup_sft", action="store_true",
                    help="Run clustering-based SFT warmup before SoRL training")
@@ -490,6 +504,11 @@ def main():
         strip_suffix=tuple(float(x) for x in args.strip_suffix.split(',')) if args.strip_suffix else None,
         compress_prefix=tuple(float(x) for x in args.compress_prefix.split(',')) if args.compress_prefix else None,
         random_mem_span=tuple(int(x) for x in args.random_mem_span.split(',')) if args.random_mem_span else None,
+        vq_abs_pretrain_steps=args.vq_abs_pretrain_steps,
+        vq_abs_pretrain_lr=args.vq_abs_pretrain_lr,
+        vq_abs_pretrain_layer=args.vq_abs_pretrain_layer,
+        vq_abs_pretrain_batch_size=args.vq_abs_pretrain_batch_size,
+        emb_warmup_steps=args.emb_warmup_steps,
     )
     log(f"Config: eval_K={config.eval_K}, aux weights={'nonzero' if config.alpha_traj or config.alpha_info_gain or config.alpha_abs or config.alpha_soft_zipf or config.alpha_ortho else '0 (SFT-equivalent)'}")
 
