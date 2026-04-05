@@ -128,14 +128,118 @@ class TokenAssortedVQVAE(nn.Module):
 
     @torch.no_grad()
     def encode(self, x):
-        """Labeler inference: (B, L, D) -> discrete code ids (B,)"""
-        return self.vq.assign(self.encoder(x))
+        """x: (B, L, D) -> ids (B,)"""
+        x = x.to(self.encoder.proj.weight.device)
+        z = self.encoder(x)
+        return self.vq.assign(z)
 
     @torch.no_grad()
-    def vocab_utilization(self, x_all):
-        """Fraction of codebook entries used across all chunks in x_all."""
-        ids = self.encode(x_all)
-        return ids.unique().numel() / self.vq.codebook.num_embeddings
+    def vocab_utilization(self, x):
+        """Returns the fraction of the codebook used by batch x."""
+        ids = self.encode(x)
+        unique_ids = torch.unique(ids)
+        return len(unique_ids) / self.vq.C_SIZE
+
+
+# -------------------------------------------------------------------
+# Mixed Sequence Data Prep (PyTorch Dataset & Collate)
+# -------------------------------------------------------------------
+
+import torch
+from torch.utils.data import Dataset
+from torch.nn.utils.rnn import pad_sequence
+
+class MixedSequenceDataset(Dataset):
+    """
+    On-the-fly generation of mixed sequences using the frozen VQ-VAE.
+    Produces input_ids, attention_mask, labels (for standard causal LM training).
+    Expects dataset items to be parsed via `parse_sample` (which returns prompt, full_text).
+    """
+    def __init__(self, dataset, tokenizer, emb_table, vqvae, latent_offset, abs_begin_id, abs_end_id, L=16):
+        self.dataset = dataset
+        self.tokenizer = tokenizer
+        self.emb_table = emb_table
+        self.vqvae = vqvae
+        self.latent_offset = latent_offset
+        self.abs_begin_id = abs_begin_id
+        self.abs_end_id = abs_end_id
+        self.L = L
+
+    def __len__(self):
+        return len(self.dataset)
+
+    def __getitem__(self, idx):
+        ex = self.dataset.dataset[idx]
+        
+        # Get standardized prompt and full text from the specific dataset class
+        prompt, full_text = self.dataset.parse_sample(ex)
+        
+        # Determine prompt_len (used for loss masking)
+        q_ids = self.tokenizer(prompt, add_special_tokens=False)["input_ids"]
+        prompt_len = len(q_ids)
+
+        # Tokenize full text to get raw token IDs
+        full_ids = self.tokenizer(full_text, add_special_tokens=False)["input_ids"]
+        
+        # Identify the "reasoning" part (everything after prompt)
+        cot_ids = full_ids[prompt_len:]
+        
+        # Extract chunks (n_chunks, L, D_MODEL)
+        n_chunks = len(cot_ids) // self.L
+        if n_chunks == 0:
+            cot_chunks = torch.zeros(0, self.L, self.emb_table.shape[1], device=self.emb_table.device)
+        else:
+            ids_trunc = torch.tensor(cot_ids[:n_chunks * self.L]).reshape(n_chunks, self.L)
+            cot_chunks = self.emb_table[ids_trunc]
+            
+        # Determine how many chunks to replace stochastically
+        m = sample_replacement_length(len(cot_ids), L=self.L)
+        n_replace = m // self.L
+        
+        # Build mixed sequence
+        mixed = list(q_ids)
+        if n_replace > 0 and n_chunks > 0:
+            if self.abs_begin_id is not None:
+                mixed.append(self.abs_begin_id)
+                
+            with torch.no_grad():
+                # ensure cot_chunks is on the right device for the vqvae model
+                lat_ids = self.vqvae.encode(cot_chunks)
+                
+            for k in range(min(n_replace, n_chunks)):
+                mixed.append(int(lat_ids[k].item()) + self.latent_offset)
+                
+            if self.abs_end_id is not None:
+                mixed.append(self.abs_end_id)
+                
+        # Append the rest of the uncompressed text
+        mixed += cot_ids[m:]
+
+        return {
+            "input_ids": torch.tensor(mixed, dtype=torch.long),
+            "prompt_len": prompt_len
+        }
+
+def mixed_sequence_collate_fn(batch, pad_token_id):
+    """Pads sequences and builds standard causal LM labels (-100 for prompt & padding)."""
+    input_ids = [item["input_ids"] for item in batch]
+    prompt_lens = [item["prompt_len"] for item in batch]
+
+    padded_input_ids = pad_sequence(input_ids, batch_first=True, padding_value=pad_token_id)
+    attention_mask = (padded_input_ids != pad_token_id).long()
+
+    labels = padded_input_ids.clone()
+    labels[labels == pad_token_id] = -100
+    
+    # Mask out the prompt so loss is only computed on CoT + Answer
+    for i, p_len in enumerate(prompt_lens):
+        labels[i, :p_len] = -100
+
+    return {
+        "input_ids": padded_input_ids,
+        "attention_mask": attention_mask,
+        "labels": labels
+    }
 
 
 # ---------------------------------------------------------------------------

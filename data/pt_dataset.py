@@ -75,8 +75,7 @@ class MathQADataset(Dataset):
 
     def __getitem__(self, idx):
         ex = self.dataset[idx]
-        prompt = f"Problem: {ex['Problem']}\nAnswer:"
-        text = f"{prompt} {ex['correct']}"
+        prompt, text = self.parse_sample(ex)
         prompt_len = len(self.tokenizer(prompt, add_special_tokens=False)["input_ids"])
         enc = self.tokenizer(text, truncation=True, max_length=self.max_length,
                              padding="max_length", return_tensors="pt")
@@ -86,6 +85,13 @@ class MathQADataset(Dataset):
             "attention_mask": enc["attention_mask"].squeeze(0),
             "prompt_len": prompt_len,
         }
+
+    @staticmethod
+    def parse_sample(ex):
+        """Return (prompt, full_text)."""
+        prompt = f"Problem: {ex['Problem']}\nAnswer:"
+        text = f"{prompt} {ex['correct']}"
+        return prompt, text
 
     @staticmethod
     def extract_answer(text):
@@ -122,15 +128,7 @@ class ARCDataset(Dataset):
 
     def __getitem__(self, idx):
         ex = self.dataset[idx]
-        choices_str = self._format_choices(ex["choices"])
-        answer_key = self._normalize_key(ex["answerKey"])
-        # Find answer text
-        labels = [self._NUM_TO_LETTER.get(l, l) for l in ex["choices"]["label"]]
-        answer_idx = labels.index(answer_key) if answer_key in labels else 0
-        answer_text = ex["choices"]["text"][answer_idx]
-
-        prompt = f"Question: {ex['question']}\n{choices_str}\nAnswer:"
-        text = f"{prompt} {answer_key}) {answer_text}\n#### {answer_key}"
+        prompt, text = self.parse_sample(ex)
         prompt_len = len(self.tokenizer(prompt, add_special_tokens=False)["input_ids"])
         enc = self.tokenizer(text, truncation=True, max_length=self.max_length,
                              padding="max_length", return_tensors="pt")
@@ -140,6 +138,19 @@ class ARCDataset(Dataset):
             "attention_mask": enc["attention_mask"].squeeze(0),
             "prompt_len": prompt_len,
         }
+
+    def parse_sample(self, ex):
+        """Return (prompt, full_text)."""
+        choices_str = self._format_choices(ex["choices"])
+        answer_key = self._normalize_key(ex["answerKey"])
+        # Find answer text
+        labels = [self._NUM_TO_LETTER.get(l, l) for l in ex["choices"]["label"]]
+        answer_idx = labels.index(answer_key) if answer_key in labels else 0
+        answer_text = ex["choices"]["text"][answer_idx]
+
+        prompt = f"Question: {ex['question']}\n{choices_str}\nAnswer:"
+        text = f"{prompt} {answer_key}) {answer_text}\n#### {answer_key}"
+        return prompt, text
 
     @staticmethod
     def extract_answer(text):
@@ -167,13 +178,7 @@ class HellaSwagDataset(Dataset):
 
     def __getitem__(self, idx):
         ex = self.dataset[idx]
-        endings = ex["endings"]
-        label = int(ex["label"])
-        choices_str = "\n".join(f"{i}) {e}" for i, e in enumerate(endings))
-        answer_text = endings[label]
-
-        prompt = f"Context: {ex['ctx']}\n{choices_str}\nAnswer:"
-        text = f"{prompt} {label}) {answer_text}\n#### {label}"
+        prompt, text = self.parse_sample(ex)
         prompt_len = len(self.tokenizer(prompt, add_special_tokens=False)["input_ids"])
         enc = self.tokenizer(text, truncation=True, max_length=self.max_length,
                              padding="max_length", return_tensors="pt")
@@ -183,6 +188,18 @@ class HellaSwagDataset(Dataset):
             "attention_mask": enc["attention_mask"].squeeze(0),
             "prompt_len": prompt_len,
         }
+
+    @staticmethod
+    def parse_sample(ex):
+        """Return (prompt, full_text)."""
+        endings = ex["endings"]
+        label = int(ex["label"])
+        choices_str = "\n".join(f"{i}) {e}" for i, e in enumerate(endings))
+        answer_text = endings[label]
+
+        prompt = f"Context: {ex['ctx']}\n{choices_str}\nAnswer:"
+        text = f"{prompt} {label}) {answer_text}\n#### {label}"
+        return prompt, text
 
     @staticmethod
     def extract_answer(text):
@@ -206,9 +223,7 @@ class WinoGrandeDataset(Dataset):
 
     def __getitem__(self, idx):
         ex = self.dataset[idx]
-        prompt = (f"Sentence: {ex['sentence']}\n"
-                  f"1) {ex['option1']}\n2) {ex['option2']}\nAnswer:")
-        text = f"{prompt} {ex['answer']}\n#### {ex['answer']}"
+        prompt, text = self.parse_sample(ex)
         prompt_len = len(self.tokenizer(prompt, add_special_tokens=False)["input_ids"])
         enc = self.tokenizer(text, truncation=True, max_length=self.max_length,
                              padding="max_length", return_tensors="pt")
@@ -218,6 +233,14 @@ class WinoGrandeDataset(Dataset):
             "attention_mask": enc["attention_mask"].squeeze(0),
             "prompt_len": prompt_len,
         }
+
+    @staticmethod
+    def parse_sample(ex):
+        """Return (prompt, full_text)."""
+        prompt = (f"Sentence: {ex['sentence']}\n"
+                  f"1) {ex['option1']}\n2) {ex['option2']}\nAnswer:")
+        text = f"{prompt} {ex['answer']}\n#### {ex['answer']}"
+        return prompt, text
 
     @staticmethod
     def extract_answer(text):
@@ -242,9 +265,7 @@ class BoolQDataset(Dataset):
 
     def __getitem__(self, idx):
         ex = self.dataset[idx]
-        answer = "yes" if ex["answer"] else "no"
-        prompt = f"Passage: {ex['passage']}\nQuestion: {ex['question']}\nAnswer:"
-        text = f"{prompt} {answer}\n#### {answer}"
+        prompt, text = self.parse_sample(ex)
         prompt_len = len(self.tokenizer(prompt, add_special_tokens=False)["input_ids"])
         enc = self.tokenizer(text, truncation=True, max_length=self.max_length,
                              padding="max_length", return_tensors="pt")
@@ -254,6 +275,14 @@ class BoolQDataset(Dataset):
             "attention_mask": enc["attention_mask"].squeeze(0),
             "prompt_len": prompt_len,
         }
+
+    @staticmethod
+    def parse_sample(ex):
+        """Return (prompt, full_text)."""
+        answer = "yes" if ex["answer"] else "no"
+        prompt = f"Passage: {ex['passage']}\nQuestion: {ex['question']}\nAnswer:"
+        text = f"{prompt} {answer}\n#### {answer}"
+        return prompt, text
 
     @staticmethod
     def extract_answer(text):
@@ -277,6 +306,20 @@ class OpenBookQADataset(Dataset):
 
     def __getitem__(self, idx):
         ex = self.dataset[idx]
+        prompt, text = self.parse_sample(ex)
+        prompt_len = len(self.tokenizer(prompt, add_special_tokens=False)["input_ids"])
+        enc = self.tokenizer(text, truncation=True, max_length=self.max_length,
+                             padding="max_length", return_tensors="pt")
+        prompt_len = min(prompt_len, self.max_length)
+        return {
+            "input_ids": enc["input_ids"].squeeze(0),
+            "attention_mask": enc["attention_mask"].squeeze(0),
+            "prompt_len": prompt_len,
+        }
+
+    @staticmethod
+    def parse_sample(ex):
+        """Return (prompt, full_text)."""
         choices = ex["choices"]
         answer_key = ex["answerKey"].upper()
         choices_str = "\n".join(
@@ -288,15 +331,7 @@ class OpenBookQADataset(Dataset):
 
         prompt = f"Question: {ex['question_stem']}\n{choices_str}\nAnswer:"
         text = f"{prompt} {answer_key}) {answer_text}\n#### {answer_key}"
-        prompt_len = len(self.tokenizer(prompt, add_special_tokens=False)["input_ids"])
-        enc = self.tokenizer(text, truncation=True, max_length=self.max_length,
-                             padding="max_length", return_tensors="pt")
-        prompt_len = min(prompt_len, self.max_length)
-        return {
-            "input_ids": enc["input_ids"].squeeze(0),
-            "attention_mask": enc["attention_mask"].squeeze(0),
-            "prompt_len": prompt_len,
-        }
+        return prompt, text
 
     @staticmethod
     def extract_answer(text):
@@ -321,6 +356,20 @@ class CommonsenseQADataset(Dataset):
 
     def __getitem__(self, idx):
         ex = self.dataset[idx]
+        prompt, text = self.parse_sample(ex)
+        prompt_len = len(self.tokenizer(prompt, add_special_tokens=False)["input_ids"])
+        enc = self.tokenizer(text, truncation=True, max_length=self.max_length,
+                             padding="max_length", return_tensors="pt")
+        prompt_len = min(prompt_len, self.max_length)
+        return {
+            "input_ids": enc["input_ids"].squeeze(0),
+            "attention_mask": enc["attention_mask"].squeeze(0),
+            "prompt_len": prompt_len,
+        }
+
+    @staticmethod
+    def parse_sample(ex):
+        """Return (prompt, full_text)."""
         choices = ex["choices"]
         answer_key = ex["answerKey"].upper()
         choices_str = "\n".join(
@@ -332,15 +381,7 @@ class CommonsenseQADataset(Dataset):
 
         prompt = f"Question: {ex['question']}\n{choices_str}\nAnswer:"
         text = f"{prompt} {answer_key}) {answer_text}\n#### {answer_key}"
-        prompt_len = len(self.tokenizer(prompt, add_special_tokens=False)["input_ids"])
-        enc = self.tokenizer(text, truncation=True, max_length=self.max_length,
-                             padding="max_length", return_tensors="pt")
-        prompt_len = min(prompt_len, self.max_length)
-        return {
-            "input_ids": enc["input_ids"].squeeze(0),
-            "attention_mask": enc["attention_mask"].squeeze(0),
-            "prompt_len": prompt_len,
-        }
+        return prompt, text
 
     @staticmethod
     def extract_answer(text):
@@ -368,16 +409,7 @@ class MMLUDataset(Dataset):
 
     def __getitem__(self, idx):
         ex = self.dataset[idx]
-        choices = ex["choices"]
-        answer_idx = ex["answer"]
-        answer_letter = self._IDX_TO_LETTER[answer_idx]
-        choices_str = "\n".join(
-            f"{self._IDX_TO_LETTER[i]}) {c}" for i, c in enumerate(choices)
-        )
-        answer_text = choices[answer_idx]
-
-        prompt = f"Question: {ex['question']}\n{choices_str}\nAnswer:"
-        text = f"{prompt} {answer_letter}) {answer_text}\n#### {answer_letter}"
+        prompt, text = self.parse_sample(ex)
         prompt_len = len(self.tokenizer(prompt, add_special_tokens=False)["input_ids"])
         enc = self.tokenizer(text, truncation=True, max_length=self.max_length,
                              padding="max_length", return_tensors="pt")
@@ -387,6 +419,21 @@ class MMLUDataset(Dataset):
             "attention_mask": enc["attention_mask"].squeeze(0),
             "prompt_len": prompt_len,
         }
+
+    @classmethod
+    def parse_sample(cls, ex):
+        """Return (prompt, full_text)."""
+        choices = ex["choices"]
+        answer_idx = ex["answer"]
+        answer_letter = cls._IDX_TO_LETTER[answer_idx]
+        choices_str = "\n".join(
+            f"{cls._IDX_TO_LETTER[i]}) {c}" for i, c in enumerate(choices)
+        )
+        answer_text = choices[answer_idx]
+
+        prompt = f"Question: {ex['question']}\n{choices_str}\nAnswer:"
+        text = f"{prompt} {answer_letter}) {answer_text}\n#### {answer_letter}"
+        return prompt, text
 
     @staticmethod
     def extract_answer(text):
@@ -410,9 +457,7 @@ class AQuADataset(Dataset):
 
     def __getitem__(self, idx):
         ex = self.dataset[idx]
-        options_str = " ".join(ex["options"])
-        prompt = f"Question: {ex['question']}\n{options_str}\nAnswer:"
-        text = f"{prompt} {ex['rationale']}\n#### {ex['correct']}"
+        prompt, text = self.parse_sample(ex)
         prompt_len = len(self.tokenizer(prompt, add_special_tokens=False)["input_ids"])
         enc = self.tokenizer(text, truncation=True, max_length=self.max_length,
                              padding="max_length", return_tensors="pt")
@@ -422,6 +467,14 @@ class AQuADataset(Dataset):
             "attention_mask": enc["attention_mask"].squeeze(0),
             "prompt_len": prompt_len,
         }
+
+    @staticmethod
+    def parse_sample(ex):
+        """Return (prompt, full_text)."""
+        options_str = " ".join(ex["options"])
+        prompt = f"Question: {ex['question']}\n{options_str}\nAnswer:"
+        text = f"{prompt} {ex['rationale']}\n#### {ex['correct']}"
+        return prompt, text
 
     @staticmethod
     def extract_answer(text):
@@ -473,9 +526,7 @@ class MATHDataset(Dataset):
 
     def __getitem__(self, idx):
         ex = self.dataset[idx]
-        boxed = self._extract_boxed(ex["solution"]) or ""
-        prompt = f"Problem: {ex['problem']}\nSolution:"
-        text = f"{prompt} {ex['solution']}\n#### {boxed}"
+        prompt, text = self.parse_sample(ex)
         prompt_len = len(self.tokenizer(prompt, add_special_tokens=False)["input_ids"])
         enc = self.tokenizer(text, truncation=True, max_length=self.max_length,
                              padding="max_length", return_tensors="pt")
@@ -485,6 +536,14 @@ class MATHDataset(Dataset):
             "attention_mask": enc["attention_mask"].squeeze(0),
             "prompt_len": prompt_len,
         }
+
+    @classmethod
+    def parse_sample(cls, ex):
+        """Return (prompt, full_text)."""
+        boxed = cls._extract_boxed(ex["solution"]) or ""
+        prompt = f"Problem: {ex['problem']}\nSolution:"
+        text = f"{prompt} {ex['solution']}\n#### {boxed}"
+        return prompt, text
 
     @staticmethod
     def extract_answer(text):
@@ -562,7 +621,20 @@ class HumanEvalDataset(Dataset):
 
     def __getitem__(self, idx):
         ex = self.dataset[idx]
-        # Format: function signature + docstring + solution
+        prompt, text = self.parse_sample(ex)
+        prompt_len = len(self.tokenizer(prompt, add_special_tokens=False)["input_ids"])
+        enc = self.tokenizer(text, truncation=True, max_length=self.max_length,
+                             padding="max_length", return_tensors="pt")
+        prompt_len = min(prompt_len, self.max_length)
+        return {
+            "input_ids": enc["input_ids"].squeeze(0),
+            "attention_mask": enc["attention_mask"].squeeze(0),
+            "prompt_len": prompt_len,
+        }
+
+    @staticmethod
+    def parse_sample(ex):
+        """Return (prompt, full_text)."""
         prompt = ex["prompt"].strip()  # Function signature + docstring
         solution = ex["canonical_solution"].strip()  # Reference implementation
         
@@ -575,15 +647,7 @@ class HumanEvalDataset(Dataset):
                 prompt = f"def {func_name}:\n    {prompt}"
         
         text = f"{prompt}\n{solution}"
-        prompt_len = len(self.tokenizer(prompt, add_special_tokens=False)["input_ids"])
-        enc = self.tokenizer(text, truncation=True, max_length=self.max_length,
-                             padding="max_length", return_tensors="pt")
-        prompt_len = min(prompt_len, self.max_length)
-        return {
-            "input_ids": enc["input_ids"].squeeze(0),
-            "attention_mask": enc["attention_mask"].squeeze(0),
-            "prompt_len": prompt_len,
-        }
+        return prompt, text
 
     def get_test_cases(self, idx):
         """Return list of test strings for this problem.
@@ -754,16 +818,7 @@ class LiveCodeBenchDataset(Dataset):
 
     def __getitem__(self, idx):
         ex = self.dataset[idx]
-        question = ex.get("question_content", ex.get("question", "")).strip()
-        starter = ex.get("starter_code", "").strip()
-
-        if starter:
-            prompt = f"# Problem:\n{question}\n\n{starter}\n# Solution:\n"
-        else:
-            prompt = f"# Problem:\n{question}\n\n# Solution:\n"
-
-        # Use empty solution for eval — no reference solutions in this dataset
-        text = prompt
+        prompt, text = self.parse_sample(ex)
         prompt_len = len(self.tokenizer(prompt, add_special_tokens=False)["input_ids"])
         enc = self.tokenizer(text, truncation=True, max_length=self.max_length,
                              padding="max_length", return_tensors="pt")
@@ -773,6 +828,20 @@ class LiveCodeBenchDataset(Dataset):
             "attention_mask": enc["attention_mask"].squeeze(0),
             "prompt_len": prompt_len,
         }
+
+    @staticmethod
+    def parse_sample(ex):
+        """Return (prompt, full_text). Eval-only, so full_text == prompt."""
+        question = ex.get("question_content", ex.get("question", "")).strip()
+        starter = ex.get("starter_code", "").strip()
+
+        if starter:
+            prompt = f"# Problem:\n{question}\n\n{starter}\n# Solution:\n"
+        else:
+            prompt = f"# Problem:\n{question}\n\n# Solution:\n"
+
+        # Use empty solution for eval — no reference solutions in this dataset
+        return prompt, prompt
 
     def get_test_cases(self, idx):
         """Return list of {preamble, check} dicts from public_test_cases.
@@ -840,10 +909,7 @@ class WildIFEvalDataset(Dataset):
 
     def __getitem__(self, idx):
         ex = self.dataset[idx]
-        # The prompt is the user instruction
-        instruction = ex.get("prompt", ex.get("instruction", "")).strip()
-        prompt = f"### Instruction:\n{instruction}\n\n### Response:\n"
-        text = prompt  # eval-only: no reference response for training
+        prompt, text = self.parse_sample(ex)
         prompt_len = len(self.tokenizer(prompt, add_special_tokens=False)["input_ids"])
         enc = self.tokenizer(text, truncation=True, max_length=self.max_length,
                              padding="max_length", return_tensors="pt")
@@ -853,6 +919,13 @@ class WildIFEvalDataset(Dataset):
             "attention_mask": enc["attention_mask"].squeeze(0),
             "prompt_len": prompt_len,
         }
+
+    @staticmethod
+    def parse_sample(ex):
+        """Return (prompt, full_text). Eval-only, so full_text == prompt."""
+        instruction = ex.get("prompt", ex.get("instruction", "")).strip()
+        prompt = f"### Instruction:\n{instruction}\n\n### Response:\n"
+        return prompt, prompt
 
     def get_constraints(self, idx):
         """Return list of constraint strings for this problem.

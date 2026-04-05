@@ -533,7 +533,7 @@ class SoRLTrainer:
 
         vq.train()
         for step in range(cfg.vq_abs_pretrain_steps):
-            idx = torch.randperm(n_data, device=self.device)[:cfg.vq_abs_pretrain_batch_size]
+            idx = torch.randperm(n_data)[:cfg.vq_abs_pretrain_batch_size]
             h   = data[idx].to(self.device)
             _, _, loss = vq(h)
             vq_opt.zero_grad()
