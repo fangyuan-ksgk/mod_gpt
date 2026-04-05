@@ -307,6 +307,11 @@ class SoRLTrainer:
                     f"| loss={loss.item():.4f} | vocab_util={util:.2f}"
                 )
 
+        # Final vocab utilization log
+        with torch.no_grad():
+            final_util = vq.vocab_utilization(data.to(self.device))
+        self._log(f"[vq_pretrain] Training complete | final vocab_util={final_util:.3f} ({int(final_util * abs_vocab_size)}/{abs_vocab_size} codes used)")
+
         # -- 3. Copy centroids → abstract embedding rows --
         embed_w   = self.raw_model.model.model.embed_tokens.weight
         lm_head_w = self.raw_model.model.lm_head.weight
