@@ -2,7 +2,7 @@
 set -e
 
 # --- nvidia pod specifics ------
-DUMMY_CONFIG_PATH="/workspace/mod_gpt/dummy_tuner_config.txt"
+DUMMY_CONFIG_PATH="./dummy_tuner_config.txt"
 rm -f "$DUMMY_CONFIG_PATH"
 touch "$DUMMY_CONFIG_PATH"
 
@@ -21,7 +21,7 @@ MASTER_ADDR=127.0.0.1
 BASE_PORT=29501
 N_GPUS=4
 
-MODEL_NAME="Qwen/Qwen3-0.6B"
+MODEL_NAME="Qwen/Qwen3-4B"
 DATASET="gsm8k"
 MAX_LENGTH=512
 
@@ -37,26 +37,27 @@ EVAL_SAMPLES=1300
 EVAL_BATCH_SIZE=64
 MAX_NEW_TOKENS=256
 
-# dataset: (gsm8k, scienceqa)
-# model: (qwne0.6B, qwen1.7B)
-# sorl config: v1, v2, v3 (shuffle & noise), v6
+# dataset: (gsm8k, scienceqa, math, arc)
+# model: (Qwen3-4B, Qwen3-8B, Qwen3-14B)
+# sorl config: v1, v6
 
 R_V1="--alpha_info_gain 1.0 --alpha_abs 0.5"
 R_V1_E10="--alpha_info_gain 1.0 --alpha_abs 0.5 --emb_lr_mult 10.0"
-R_V2="--use_v2 --alpha_traj 1.0 --alpha_abs 0.5"
-R_V3_R10="--use_v3 --alpha_traj 1.0 --alpha_abs 0.5 --corrupt_method shuffle --corrupt_ratio 1.0 --gamma_contrastive 0.5"
-R_V3_NOISE="--use_v3 --alpha_traj 1.0 --alpha_abs 0.5 --corrupt_method noise --corrupt_ratio 1.0 --gamma_contrastive 0.5"
-R_V6="--use_v6"
-R_V6_E10="--use_v6 --emb_lr_mult 10.0"
+R_V6="--use_v6 --abstract_vocab_size 32 --K 16 --eval_K 16"
+R_V6_E10="--use_v6 --abstract_vocab_size 32 --K 16 --eval_K 16 --emb_lr_mult 10.0"
 
 TIMESTAMP=$(date +%Y%m%d_%H%M)
 EXP_IDX=0
 
 # Model + dataset shorthands
-M06="Qwen/Qwen3-0.6B"
-M17="Qwen/Qwen3-1.7B"
+M4="Qwen/Qwen3-4B"
+M8="Qwen/Qwen3-8B"
+M14="Qwen/Qwen3-14B"
+
 DS_GSM="gsm8k"
 DS_SCI="scienceqa"
+DS_MATH="math"
+DS_ARC="arc"
 
 # ---- Parallel scheduling: 4 x H100 — 1 run/GPU ----
 # Usage: run_bg <tag> <model> <dataset> [sorl flags...]
@@ -93,45 +94,140 @@ run_bg() {
     --eval_batch_size $EVAL_BATCH_SIZE \
     --max_new_tokens $MAX_NEW_TOKENS \
     --output_dir $output_dir \
+    --use_lora \
+    --lora_rank 16 \
+    --lora_alpha 32 \
     "$@" &
 }
 
-# VQ pretrain config shorthands (2000 steps, defaults match SoRLConfig)
-VQ2K="--vq_abs_pretrain_steps 2000"
+
+# Run lora enabled ablation on Qwen3-4B, Qwen3-8B, Qwen3-14B
+# on gsm8k & scienceQA & math & arc
+# v1 (for Acc[NL]), try emb_lr_mult 1 & 10.0
+# v6 (K=16, abs_vocab=32), try emb_lr_mult 1 & 10.0
+
 
 # ============================================================================
-# Batch 1 — VQ-init V6: K=16 abs=64, GSM8K, both model sizes
-# Hypothesis: VQ-pretrained centroids → faster convergence + better gap
-# Baseline (diagonal, no VQ) results already available from prior sweep.
-# ============================================================================
-echo ""
-echo "============================================================"
-echo "Batch 1: VQ-init V6 K=16 abs=64 GSM8K (${TIMESTAMP})"
-echo "============================================================"
-
-run_bg "v6_vq_K16_abs64_gsm_06" $M06 $DS_GSM --use_v6 --abstract_vocab_size 64 --K 16 --eval_K 16 $VQ2K
-run_bg "v6_vq_K16_abs64_gsm_17" $M17 $DS_GSM --use_v6 --abstract_vocab_size 64 --K 16 --eval_K 16 $VQ2K
-run_bg "v6_vq_K16_abs64_sim_06" $M06 $DS_SCI --use_v6 --abstract_vocab_size 64 --K 16 --eval_K 16 $VQ2K
-run_bg "v6_vq_K16_abs64_sim_17" $M17 $DS_SCI --use_v6 --abstract_vocab_size 64 --K 16 --eval_K 16 $VQ2K
-
-echo "  4 experiments launched. Waiting..."
-wait
-
-# ============================================================================
-# Batch 2 — VQ-init V6: K=16 abs=32, GSM8K, both model sizes
+# Batch 1: V1 (emb=1 vs emb=10) on Qwen3-4B
 # ============================================================================
 echo ""
 echo "============================================================"
-echo "Batch 2: VQ-init V6 K=16 abs=32 GSM8K (${TIMESTAMP})"
+echo "Batch 1: V1 (emb=1 vs emb=10) on Qwen3-4B (${TIMESTAMP})"
 echo "============================================================"
 
-run_bg "v6_vq_K16_abs32_gsm_06" $M06 $DS_GSM --use_v6 --abstract_vocab_size 32 --K 16 --eval_K 16 $VQ2K
-run_bg "v6_vq_K16_abs32_gsm_17" $M17 $DS_GSM --use_v6 --abstract_vocab_size 32 --K 16 --eval_K 16 $VQ2K
-run_bg "v6_vq_K16_abs32_sim_06" $M06 $DS_SCI --use_v6 --abstract_vocab_size 32 --K 16 --eval_K 16 $VQ2K
-run_bg "v6_vq_K16_abs32_sim_17" $M17 $DS_SCI --use_v6 --abstract_vocab_size 32 --K 16 --eval_K 16 $VQ2K
+run_bg "v1_gsm_4B"      $M4  $DS_GSM  $R_V1
+run_bg "v1_e10_gsm_4B"  $M4  $DS_GSM  $R_V1_E10
+run_bg "v1_sci_4B"      $M4  $DS_SCI  $R_V1
+run_bg "v1_e10_sci_4B"  $M4  $DS_SCI  $R_V1_E10
 
-echo "  4 experiments launched. Waiting..."
 wait
+run_bg "v1_math_4B"     $M4  $DS_MATH $R_V1
+run_bg "v1_e10_math_4B" $M4  $DS_MATH $R_V1_E10
+run_bg "v1_arc_4B"      $M4  $DS_ARC  $R_V1
+run_bg "v1_e10_arc_4B"  $M4  $DS_ARC  $R_V1_E10
+wait
+
+# ============================================================================
+# Batch 2: V6 (emb=1 vs emb=10) on Qwen3-4B
+# ============================================================================
+echo ""
+echo "============================================================"
+echo "Batch 2: V6 (emb=1 vs emb=10) on Qwen3-4B (${TIMESTAMP})"
+echo "============================================================"
+
+run_bg "v6_gsm_4B"      $M4  $DS_GSM  $R_V6
+run_bg "v6_e10_gsm_4B"  $M4  $DS_GSM  $R_V6_E10
+run_bg "v6_sci_4B"      $M4  $DS_SCI  $R_V6
+run_bg "v6_e10_sci_4B"  $M4  $DS_SCI  $R_V6_E10
+
+wait
+run_bg "v6_math_4B"     $M4  $DS_MATH $R_V6
+run_bg "v6_e10_math_4B" $M4  $DS_MATH $R_V6_E10
+run_bg "v6_arc_4B"      $M4  $DS_ARC  $R_V6
+run_bg "v6_e10_arc_4B"  $M4  $DS_ARC  $R_V6_E10
+wait
+
+# ============================================================================
+# Batch 3: V1 (emb=1 vs emb=10) on Qwen3-8B
+# ============================================================================
+echo ""
+echo "============================================================"
+echo "Batch 3: V1 (emb=1 vs emb=10) on Qwen3-8B (${TIMESTAMP})"
+echo "============================================================"
+
+run_bg "v1_gsm_8B"      $M8  $DS_GSM  $R_V1
+run_bg "v1_e10_gsm_8B"  $M8  $DS_GSM  $R_V1_E10
+run_bg "v1_sci_8B"      $M8  $DS_SCI  $R_V1
+run_bg "v1_e10_sci_8B"  $M8  $DS_SCI  $R_V1_E10
+
+wait
+run_bg "v1_math_8B"     $M8  $DS_MATH $R_V1
+run_bg "v1_e10_math_8B" $M8  $DS_MATH $R_V1_E10
+run_bg "v1_arc_8B"      $M8  $DS_ARC  $R_V1
+run_bg "v1_e10_arc_8B"  $M8  $DS_ARC  $R_V1_E10
+wait
+
+# ============================================================================
+# Batch 4: V6 (emb=1 vs emb=10) on Qwen3-8B
+# ============================================================================
+echo ""
+echo "============================================================"
+echo "Batch 4: V6 (emb=1 vs emb=10) on Qwen3-8B (${TIMESTAMP})"
+echo "============================================================"
+
+run_bg "v6_gsm_8B"      $M8  $DS_GSM  $R_V6
+run_bg "v6_e10_gsm_8B"  $M8  $DS_GSM  $R_V6_E10
+run_bg "v6_sci_8B"      $M8  $DS_SCI  $R_V6
+run_bg "v6_e10_sci_8B"  $M8  $DS_SCI  $R_V6_E10
+
+wait
+run_bg "v6_math_8B"     $M8  $DS_MATH $R_V6
+run_bg "v6_e10_math_8B" $M8  $DS_MATH $R_V6_E10
+run_bg "v6_arc_8B"      $M8  $DS_ARC  $R_V6
+run_bg "v6_e10_arc_8B"  $M8  $DS_ARC  $R_V6_E10
+wait
+
+# ============================================================================
+# Batch 5: V1 (emb=1 vs emb=10) on Qwen3-14B
+# ============================================================================
+echo ""
+echo "============================================================"
+echo "Batch 5: V1 (emb=1 vs emb=10) on Qwen3-14B (${TIMESTAMP})"
+echo "============================================================"
+
+run_bg "v1_gsm_14B"      $M14 $DS_GSM  $R_V1
+run_bg "v1_e10_gsm_14B"  $M14 $DS_GSM  $R_V1_E10
+run_bg "v1_sci_14B"      $M14 $DS_SCI  $R_V1
+run_bg "v1_e10_sci_14B"  $M14 $DS_SCI  $R_V1_E10
+
+wait
+run_bg "v1_math_14B"     $M14 $DS_MATH $R_V1
+run_bg "v1_e10_math_14B" $M14 $DS_MATH $R_V1_E10
+run_bg "v1_arc_14B"      $M14 $DS_ARC  $R_V1
+run_bg "v1_e10_arc_14B"  $M14 $DS_ARC  $R_V1_E10
+wait
+
+# ============================================================================
+# Batch 6: V6 (emb=1 vs emb=10) on Qwen3-14B
+# ============================================================================
+echo ""
+echo "============================================================"
+echo "Batch 6: V6 (emb=1 vs emb=10) on Qwen3-14B (${TIMESTAMP})"
+echo "============================================================"
+
+run_bg "v6_gsm_14B"      $M14 $DS_GSM  $R_V6
+run_bg "v6_e10_gsm_14B"  $M14 $DS_GSM  $R_V6_E10
+run_bg "v6_sci_14B"      $M14 $DS_SCI  $R_V6
+run_bg "v6_e10_sci_14B"  $M14 $DS_SCI  $R_V6_E10
+
+wait
+run_bg "v6_math_14B"     $M14 $DS_MATH $R_V6
+run_bg "v6_e10_math_14B" $M14 $DS_MATH $R_V6_E10
+run_bg "v6_arc_14B"      $M14 $DS_ARC  $R_V6
+run_bg "v6_e10_arc_14B"  $M14 $DS_ARC  $R_V6_E10
+wait
+
+
 
 echo ""
 echo "============================================================"
