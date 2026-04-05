@@ -142,6 +142,8 @@ def parse_args():
                    help="Transformer layer whose hidden states drive VQ training (-1=last)")
     p.add_argument("--vq_abs_pretrain_batch_size", type=int, default=256,
                    help="Mini-batch size for VQ training steps")
+    p.add_argument("--vq_abs_pretrain_target_vectors", type=int, default=20000,
+                   help="Number of hidden vectors to collect for VQ fitting")
 
     # Embedding warm-up (freeze non-abstract params for first N steps)
     p.add_argument("--emb_warmup_steps", type=int, default=0,
@@ -508,6 +510,7 @@ def main():
         vq_abs_pretrain_lr=args.vq_abs_pretrain_lr,
         vq_abs_pretrain_layer=args.vq_abs_pretrain_layer,
         vq_abs_pretrain_batch_size=args.vq_abs_pretrain_batch_size,
+        vq_abs_pretrain_target_vectors=args.vq_abs_pretrain_target_vectors,
         emb_warmup_steps=args.emb_warmup_steps,
     )
     log(f"Config: eval_K={config.eval_K}, aux weights={'nonzero' if config.alpha_traj or config.alpha_info_gain or config.alpha_abs or config.alpha_soft_zipf or config.alpha_ortho else '0 (SFT-equivalent)'}")

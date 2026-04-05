@@ -90,10 +90,11 @@ class SoRLConfig:
     max_grad_norm: float = 1.0
 
     # VQ abs-projection pre-training (run before main training loop)
-    vq_abs_pretrain_steps: int = 0        # 0 = disabled; e.g. 2000 to enable
-    vq_abs_pretrain_lr: float = 1e-3      # Adam LR for the VQ codebook
-    vq_abs_pretrain_layer: int = -1       # which transformer layer's hidden states to use (-1 = last)
-    vq_abs_pretrain_batch_size: int = 256 # mini-batch size for VQ training steps
+    vq_abs_pretrain_steps: int = 0              # 0 = disabled; e.g. 2000 to enable
+    vq_abs_pretrain_lr: float = 1e-3            # Adam LR for the VQ codebook
+    vq_abs_pretrain_layer: int = -1             # which transformer layer's hidden states to use (-1 = last)
+    vq_abs_pretrain_batch_size: int = 256       # mini-batch size for VQ training steps
+    vq_abs_pretrain_target_vectors: int = 20000 # how many hidden vectors to collect for VQ fitting
 
     # Training
     batch_size: int = 2
@@ -496,13 +497,12 @@ class SoRLTrainer:
 
         # -- 1. Collect hidden states from frozen backbone --
         collect_loader = self._make_dataloader(self.train_dataset, shuffle=True)
-        n_collect = max(1, abs_vocab_size // (cfg.batch_size * 32) + 1)
 
         self.raw_model.eval()
         all_h = []
         with torch.no_grad():
             for i, batch in enumerate(collect_loader):
-                if i >= n_collect:
+                if sum(h.shape[0] for h in all_h) >= cfg.vq_abs_pretrain_target_vectors:
                     break
                 input_ids      = batch["input_ids"].to(self.device)
                 attention_mask = batch["attention_mask"].to(self.device)
