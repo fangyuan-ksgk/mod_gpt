@@ -4,9 +4,12 @@ Goal: show that SoRL externalizes arithmetic reasoning mechanisms (carry, borrow
 as explicit abstraction tokens — observable and intervenable without activation-level tooling.
 
 References:
-- Quirke et al., "Understanding Addition and Subtraction in Transformers" (2024)
-- SoRL paper: `docs/SoRL_alignment_weak_supervision.pdf`
-- Experiment plan: `docs/interpretability_study.md`
+- Quirke et al., ["Understanding Addition and Subtraction in Transformers"](https://arxiv.org/abs/2402.02619) (2024)
+  - Code: [quanta_maths](https://github.com/PhilipQuirke/quanta_maths) | [quanta_mech_interp](https://github.com/PhilipQuirke/quanta_mech_interp)
+  - Models: [PhilipQuirke/VerifiedArithmetic](https://huggingface.co/PhilipQuirke) (49 models on HF)
+  - Local PDF: [`docs/understanding_addition_subtraction_transformers.pdf`](../docs/understanding_addition_subtraction_transformers.pdf)
+- Yu & Abdullah, ["Intention-Level Alignment with Weak Supervision"](../docs/SoRL_alignment_weak_supervision.pdf) (SoRL paper)
+- [Interpretability study plan](../docs/interpretability_study.md)
 
 HuggingFace:
 - Models: [thoughtworks/arithmetic-sorl](https://huggingface.co/thoughtworks/arithmetic-sorl)
