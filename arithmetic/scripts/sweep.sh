@@ -34,7 +34,7 @@ run() {
         --abs_vocab ${ABS} --K 4 --trainer v6 \
         --n_layer 3 --n_head 4 --n_embd 512 \
         --batch_size 64 --num_epochs ${EPOCHS} --dataset_size ${DATASET_SIZE} \
-        --lr 8e-5 --output_dir "${DIR}" --device cuda \
+        --lr 8e-5 --output_dir "${DIR}" --device cuda --push_to_hub \
         > "${DIR}.log" 2>&1
     echo "[GPU ${GPU}] done ${TAG}"
 }

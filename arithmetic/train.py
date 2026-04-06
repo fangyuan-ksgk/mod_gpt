@@ -155,6 +155,7 @@ def main():
     # System
     p.add_argument("--output_dir", type=str, default="ckpt/arithmetic")
     p.add_argument("--device", type=str, default="cuda")
+    p.add_argument("--push_to_hub", action="store_true", help="upload to amirali1985/arithmetic-sorl")
     args = p.parse_args()
 
     # Enforce: baseline means abs_vocab=0
@@ -223,6 +224,15 @@ def main():
         json.dump(vars(args), f, indent=2)
 
     trainer.train()
+
+    # Upload to HF Hub
+    if args.push_to_hub:
+        from arithmetic.hub import save_model
+        tag = f"{args.ops}_{args.mode}"
+        if args.abs_vocab > 0:
+            tag += f"_abs{args.abs_vocab}"
+        metrics = {"history": trainer.history}
+        save_model(model, vars(args), metrics, subfolder=tag)
 
 
 if __name__ == "__main__":
