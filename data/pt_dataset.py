@@ -977,7 +977,11 @@ class DeepMindCodeContestsDataset(Dataset):
                 return 3 in sols.get("language", [])
             self.dataset = raw.filter(_has_py3, num_proc=4)
         else:
-            self.dataset = raw
+            # test=165, valid=117 — combine both for a larger eval pool (~282)
+            from datasets import concatenate_datasets
+            valid_ds = load_dataset("deepmind/code_contests", split="valid")
+            test_ds  = load_dataset("deepmind/code_contests", split="test")
+            self.dataset = concatenate_datasets([valid_ds, test_ds])
         self.tokenizer = tokenizer
         self.max_length = max_length
 
