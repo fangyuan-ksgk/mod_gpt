@@ -20,8 +20,8 @@ import tempfile
 from pathlib import Path
 from huggingface_hub import HfApi, hf_hub_download, snapshot_download
 
-MODEL_REPO = "amirali1985/arithmetic-sorl"
-DATASET_REPO = "amirali1985/arithmetic-sorl-data"
+MODEL_REPO = "thoughtworks/arithmetic-sorl"
+DATASET_REPO = "thoughtworks/arithmetic-sorl-data"
 
 
 # ── Model save/load ────────────────────────────────────────────────

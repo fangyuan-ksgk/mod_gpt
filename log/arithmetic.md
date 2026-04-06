@@ -8,6 +8,10 @@ References:
 - SoRL paper: `docs/SoRL_alignment_weak_supervision.pdf`
 - Experiment plan: `docs/interpretability_study.md`
 
+HuggingFace:
+- Models: [thoughtworks/arithmetic-sorl](https://huggingface.co/thoughtworks/arithmetic-sorl)
+- Datasets: [thoughtworks/arithmetic-sorl-data](https://huggingface.co/datasets/thoughtworks/arithmetic-sorl-data)
+
 ---
 
 ## Setup
