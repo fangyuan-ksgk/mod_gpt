@@ -300,10 +300,36 @@ Estimated wall time: ~10-12 hours with parallelism.
 
 ### Phase 4: Interpretability (after training)
 
-- Correlate abstraction tokens with sub-task labels (SA, SC, US, etc.)
-- Paired interventions: token swap vs activation patching
-- SAE on hidden states (baseline) vs direct token analysis (SoRL)
-- Auto-interpretability on top-k abstraction token usages
+Full plan in [`docs/interpretability_study.md`](../docs/interpretability_study.md).
+
+**Token-level interventions** ([`arithmetic/interp_utils/interventions.py`](../arithmetic/interp_utils/interventions.py)):
+
+Every activation-level intervention from Quirke has a token-level SoRL analog:
+
+```
+  ┌─────────────────────────────┬──────────────────────────────────────────────────┐
+  │ Quirke (activation-level)   │ SoRL (token-level)                               │
+  ├─────────────────────────────┼──────────────────────────────────────────────────┤
+  │ Mean ablation of a node     │ token_knockout: replace abs token with placeholder│
+  │ Activation patching (pairs) │ token_swap: swap abs tokens between paired Qs     │
+  │ Zero ablation               │ token_replace: set to fixed value                 │
+  │ Random perturbation         │ token_shuffle: permute abs tokens in sequence      │
+  │ Per-digit node knockout     │ knockout_at_digit: mask abs tokens before digit N  │
+  │ Paired causal intervention  │ swap_at_digit: swap abs tokens near digit N        │
+  └─────────────────────────────┴──────────────────────────────────────────────────┘
+```
+
+Key advantage: Quirke needs TransformerLens hooks + cached activations + paired forward
+passes to patch a single node. SoRL needs one line: `tokens[abs_pos] = new_value`.
+
+Analysis pipeline:
+1. Token-subtask correlation: P(token | SA), P(token | SC), etc.
+2. PCA of hidden states at abs positions (compare to Quirke's 3-cluster finding)
+3. Token knockout per digit → accuracy drop by complexity (quanta maps)
+4. Token swap between paired questions → causal verification
+5. SAE on baseline → feature-token mapping via Hungarian matching
+6. Polysemanticity check: do tokens map 1-to-1 or many-to-many?
+7. Auto-interpretability: LLM describes each token's role across examples
 
 ---
 
