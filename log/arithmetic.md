@@ -8,7 +8,7 @@ References:
   - Code: [quanta_maths](https://github.com/PhilipQuirke/quanta_maths) | [quanta_mech_interp](https://github.com/PhilipQuirke/quanta_mech_interp)
   - Models: [PhilipQuirke/VerifiedArithmetic](https://huggingface.co/PhilipQuirke) (49 models on HF)
   - Local PDF: [`docs/understanding_addition_subtraction_transformers.pdf`](../docs/understanding_addition_subtraction_transformers.pdf)
-- Yu & Abdullah, ["Intention-Level Alignment with Weak Supervision"](../docs/SoRL_alignment_weak_supervision.pdf) (SoRL paper)
+- Yu, Su & Abdullah, ["Intention-Level Alignment with Weak Supervision"](../docs/SoRL_alignment_weak_supervision.pdf) (SoRL paper)
 - [Interpretability study plan](../docs/interpretability_study.md)
 
 HuggingFace:
