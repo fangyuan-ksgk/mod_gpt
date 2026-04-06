@@ -1,18 +1,16 @@
 #!/bin/bash
 # ──────────────────────────────────────────────────────────────
-# Full ablation sweep: 36 runs across 3 GPUs
-#
-# Priority order (fastest/most important first):
-#   Wave 1: Baselines at 500K (2 runs, ~30 min)
-#   Wave 2: Vocab sweep at 500K (16 runs, ~4-6h)
-#   Wave 3: Data efficiency baselines (8 runs, ~1h)
-#   Wave 4: Data efficiency SoRL (8 runs, ~3h)
-#   Wave 5: Extra vocab points if time remains
-#
-# 3 GPUs, sequential per GPU, parallel across GPUs
+# Full ablation sweep with wandb logging
+# ~58 runs across 3 GPUs in 6 waves
 # ──────────────────────────────────────────────────────────────
 set -euo pipefail
 cd "$(dirname "$0")/../.."
+
+# Set WANDB_API_KEY in environment before running this script
+if [ -z "${WANDB_API_KEY:-}" ]; then
+    echo "ERROR: WANDB_API_KEY not set. Export it before running."
+    exit 1
+fi
 
 TIMESTAMP=$(date +%Y%m%d_%H%M)
 BASE_DIR="ckpt/sweep_${TIMESTAMP}"
@@ -22,23 +20,9 @@ mkdir -p "${BASE_DIR}"
 
 echo "═══════════════════════════════════════════════════════════"
 echo "  Arithmetic Ablation Sweep — ${TIMESTAMP}"
-echo "  3L/4H/512d | ${EPOCHS} epochs | 3 GPUs"
+echo "  3L/4H/512d | ${EPOCHS} epochs | 3 GPUs | wandb: sorl-arithmetic"
 echo "  Output: ${BASE_DIR}/"
 echo "═══════════════════════════════════════════════════════════"
-
-# Save sweep metadata
-cat > "${BASE_DIR}/sweep_config.json" << CFGEOF
-{
-  "timestamp": "${TIMESTAMP}",
-  "epochs": ${EPOCHS},
-  "architecture": "3L/4H/512d",
-  "ablations": {
-    "baseline_vs_sorl": ["add_baseline_500K", "add_sub_baseline_500K", "add_sorl16_500K", "add_sub_sorl16_500K"],
-    "vocab_sweep": [1, 2, 4, 5, 8, 10, 16, 20, 24],
-    "data_efficiency": ["10K", "50K", "100K", "250K", "500K"]
-  }
-}
-CFGEOF
 
 run() {
     local GPU=$1 OPS=$2 MODE=$3 ABS=$4 SIZE=$5
@@ -56,165 +40,74 @@ run() {
         --push_to_hub \
         > "${DIR}.log" 2>&1
     local STATUS=$?
-    if [ $STATUS -eq 0 ]; then
-        echo "[GPU ${GPU}] $(date +%H:%M:%S) DONE  ${TAG}"
-    else
-        echo "[GPU ${GPU}] $(date +%H:%M:%S) FAIL  ${TAG} (exit ${STATUS})"
-    fi
+    [ $STATUS -eq 0 ] && echo "[GPU ${GPU}] $(date +%H:%M:%S) DONE  ${TAG}" || echo "[GPU ${GPU}] $(date +%H:%M:%S) FAIL  ${TAG} (exit ${STATUS})"
 }
 
 # ══════════════════════════════════════════════════════════════
-# WAVE 1: Baselines at 500K (fast, establish reference)
+# WAVE 1: Baselines at 500K
 # ══════════════════════════════════════════════════════════════
 echo ""
-echo "── Wave 1: Baselines (500K) ──────────────────────────────"
+echo "── Wave 1: Baselines + vocab=1 ──────────────────────────"
 run 0 add     baseline 0 500000 &
 run 1 add_sub baseline 0 500000 &
-# GPU 2 starts vocab sweep early
 run 2 add     sorl     1 500000 &
 wait
-echo "── Wave 1 complete ───────────────────────────────────────"
 
 # ══════════════════════════════════════════════════════════════
 # WAVE 2: Vocab sweep at 500K (main results)
 # ══════════════════════════════════════════════════════════════
 echo ""
 echo "── Wave 2: Vocab sweep (500K) ────────────────────────────"
-
-# GPU 0: add vocab sweep
 (
-    run 0 add sorl  2 500000
-    run 0 add sorl  4 500000
-    run 0 add sorl  5 500000
-    run 0 add sorl  8 500000
-    run 0 add sorl 10 500000
-    run 0 add sorl 16 500000
-    run 0 add sorl 20 500000
-    run 0 add sorl 24 500000
+    for V in 2 3 4 5 6 7 8 10 12 14 15 16 20 24; do
+        run 0 add sorl $V 500000
+    done
 ) &
-PID0=$!
 
-# GPU 1: add_sub vocab sweep
 (
-    run 1 add_sub sorl  1 500000
-    run 1 add_sub sorl  2 500000
-    run 1 add_sub sorl  4 500000
-    run 1 add_sub sorl  5 500000
-    run 1 add_sub sorl  8 500000
-    run 1 add_sub sorl 10 500000
-    run 1 add_sub sorl 16 500000
-    run 1 add_sub sorl 20 500000
+    for V in 1 2 3 4 5 6 7 8 9 10 12 14 15 16 20 24; do
+        run 1 add_sub sorl $V 500000
+    done
 ) &
-PID1=$!
 
-# GPU 2: add_sub vocab 24 + start data efficiency baselines
 (
-    run 2 add_sub sorl 24 500000
-    # Start data efficiency while others still running
-    run 2 add     baseline 0 10000
-    run 2 add     baseline 0 50000
-    run 2 add     baseline 0 100000
-    run 2 add     baseline 0 250000
+    # add vocab 9 + data efficiency baselines (fast)
+    run 2 add sorl 9 500000
+    for S in 10000 25000 50000 75000 100000 250000; do
+        run 2 add baseline 0 $S
+    done
 ) &
-PID2=$!
 
-wait $PID0 $PID1 $PID2
-echo "── Wave 2 complete ───────────────────────────────────────"
+wait
 
 # ══════════════════════════════════════════════════════════════
-# WAVE 3: Data efficiency (remaining baselines + SoRL)
+# WAVE 3: Data efficiency
 # ══════════════════════════════════════════════════════════════
 echo ""
 echo "── Wave 3: Data efficiency ───────────────────────────────"
-
 (
-    run 0 add_sub baseline 0 10000
-    run 0 add_sub baseline 0 50000
-    run 0 add_sub baseline 0 100000
-    run 0 add_sub baseline 0 250000
+    for S in 10000 25000 50000 75000 100000 250000; do
+        run 0 add_sub baseline 0 $S
+    done
 ) &
 
 (
-    run 1 add sorl 16 10000
-    run 1 add sorl 16 50000
-    run 1 add sorl 16 100000
-    run 1 add sorl 16 250000
+    for S in 10000 25000 50000 75000 100000 250000; do
+        run 1 add sorl 16 $S
+    done
 ) &
 
 (
-    run 2 add_sub sorl 16 10000
-    run 2 add_sub sorl 16 50000
-    run 2 add_sub sorl 16 100000
-    run 2 add_sub sorl 16 250000
+    for S in 10000 25000 50000 75000 100000 250000; do
+        run 2 add_sub sorl 16 $S
+    done
 ) &
 
 wait
-echo "── Wave 3 complete ───────────────────────────────────────"
 
-# ══════════════════════════════════════════════════════════════
-# WAVE 4: Extra vocab points (if time remains)
-# ══════════════════════════════════════════════════════════════
-echo ""
-echo "── Wave 4: Extra vocab points ────────────────────────────"
-
-(
-    run 0 add     sorl  3 500000
-    run 0 add     sorl  6 500000
-    run 0 add     sorl 12 500000
-) &
-
-(
-    run 1 add_sub sorl  3 500000
-    run 1 add_sub sorl  6 500000
-    run 1 add_sub sorl 12 500000
-) &
-
-(
-    run 2 add     sorl  7 500000
-    run 2 add_sub sorl  7 500000
-) &
-
-wait
-echo "── Wave 4 complete ───────────────────────────────────────"
-
-# ══════════════════════════════════════════════════════════════
-# Summary
-# ══════════════════════════════════════════════════════════════
 echo ""
 echo "═══════════════════════════════════════════════════════════"
 echo "  Sweep complete! $(date)"
-echo "  Results: ${BASE_DIR}/"
+echo "  ~58 runs in ${BASE_DIR}/"
+echo "  wandb: https://wandb.ai/nlp_and_interpretability/sorl-arithmetic"
 echo "═══════════════════════════════════════════════════════════"
-
-# Generate summary table
-python3 << 'PYEOF'
-import json, glob, os
-
-base = os.environ.get("BASE_DIR", "SWEEP_DIR")
-dirs = sorted(glob.glob(f"${BASE_DIR}/*/"))
-
-rows = []
-for d in dirs:
-    cfg_path = os.path.join(d, "config.json")
-    if not os.path.exists(cfg_path):
-        continue
-    cfg = json.load(open(cfg_path))
-    # Look for accuracy in trainer history
-    hist_files = glob.glob(os.path.join(d, "*.json"))
-    best_acc = 0
-    for hf in hist_files:
-        try:
-            h = json.load(open(hf))
-            if isinstance(h, dict) and "step" in h:
-                # trainer history format
-                pass
-        except:
-            pass
-    name = os.path.basename(d.rstrip("/"))
-    rows.append((name, cfg.get("ops","?"), cfg.get("mode","?"), cfg.get("abs_vocab",0), cfg.get("dataset_size",0)))
-
-print()
-print(f"Completed {len(rows)} runs:")
-for name, ops, mode, vocab, size in rows:
-    print(f"  {name}")
-PYEOF
