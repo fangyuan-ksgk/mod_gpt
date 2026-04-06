@@ -106,7 +106,13 @@ class ARCDataset(Dataset):
     _NUM_TO_LETTER = {"1": "A", "2": "B", "3": "C", "4": "D", "5": "E"}
 
     def __init__(self, split="train", tokenizer=None, max_length=256):
-        self.dataset = load_dataset("ai2_arc", "ARC-Challenge", split=split)
+        if split == "train":
+            from datasets import concatenate_datasets
+            train = load_dataset("ai2_arc", "ARC-Challenge", split="train")
+            val   = load_dataset("ai2_arc", "ARC-Challenge", split="validation")
+            self.dataset = concatenate_datasets([train, val])
+        else:
+            self.dataset = load_dataset("ai2_arc", "ARC-Challenge", split=split)
         self.tokenizer = tokenizer
         self.max_length = max_length
 
@@ -1086,9 +1092,15 @@ class XLAMDataset(Dataset):
 
     def __init__(self, split="train", tokenizer=None, max_length=1024):
         full = load_dataset("Salesforce/xlam-function-calling-60k", split="train")
-        n = len(full)
-        cutoff = int(n * 0.95)
-        self.dataset = full.select(range(cutoff) if split == "train" else range(cutoff, n))
+        # Downsample: 8000 for train, 1500 for test
+        train_size = 8000
+        test_size = 1500
+        
+        if split == "train":
+            self.dataset = full.select(range(train_size))
+        else:
+            self.dataset = full.select(range(train_size, train_size + test_size))
+            
         self.tokenizer = tokenizer
         self.max_length = max_length
 
