@@ -208,19 +208,83 @@ SoRL core (Fangyuan's code, unchanged):
 
 ## Experiment Plan
 
-### Phase 1: Baselines (no SoRL)
+Three ablation dimensions, all evaluated on random + stratified + handcrafted eval sets.
+All models: tiny Qwen3 (3L/4H/512d, ~168M params), trained from scratch.
 
-Train tiny Qwen3 (3L/4H/512d) on {add, add_sub}.
-Metric: full-sequence accuracy + per-subtask + per-complexity accuracy.
-Goal: reproduce Quirke's >99% accuracy, establish baseline for each S0-S6 / M0-M6 level.
+### Ablation 1: Baseline vs SoRL
 
-### Phase 2: SoRL vocab size sweep
+Does SoRL maintain arithmetic accuracy? Does it hurt or help on hard cases (S4-S6)?
 
-Sweep: {add, add_sub} x abs_vocab {4, 8, 16, 32, 64} x trainer {v6}
-Metric: same as Phase 1 + vocab utilization, abs token distribution
-Question: does SoRL maintain accuracy? Which vocab sizes lead to interpretable tokens?
+```
+  ┌──────────┬────────────┬─────────────────────────────────────────────────┐
+  │ Task     │ Mode       │ Config                                          │
+  ├──────────┼────────────┼─────────────────────────────────────────────────┤
+  │ add      │ baseline   │ no abstraction tokens                           │
+  │ add      │ SoRL v6    │ abs_vocab=16, K=4                               │
+  │ add_sub  │ baseline   │ no abstraction tokens                           │
+  │ add_sub  │ SoRL v6    │ abs_vocab=16, K=4                               │
+  └──────────┴────────────┴─────────────────────────────────────────────────┘
+```
 
-### Phase 3: Interpretability
+Eval: accuracy on random (256), stratified (S0-S6, M0-M6), handcrafted (Quirke).
+Report per-complexity and per-subtask (SA, SC, SS, UC, US / MD, MB, ME, UB, UD).
+
+### Ablation 2: Data efficiency
+
+How much training data does each mode need to reach target accuracy?
+Train baseline and SoRL v6 (abs_vocab=16) with varying dataset sizes.
+
+```
+  ┌──────────┬────────────┬─────────────────────────────────────────────────┐
+  │ Task     │ Mode       │ Dataset sizes                                   │
+  ├──────────┼────────────┼─────────────────────────────────────────────────┤
+  │ add      │ baseline   │ 10K, 50K, 100K, 250K, 500K                     │
+  │ add      │ SoRL v6    │ 10K, 50K, 100K, 250K, 500K                     │
+  │ add_sub  │ baseline   │ 10K, 50K, 100K, 250K, 500K                     │
+  │ add_sub  │ SoRL v6    │ 10K, 50K, 100K, 250K, 500K                     │
+  └──────────┴────────────┴─────────────────────────────────────────────────┘
+```
+
+Question: does SoRL reach high accuracy with less data? Especially on S4-S6 (rare cases)?
+
+### Ablation 3: SoRL vocab size
+
+How does abstract vocabulary size affect accuracy and token interpretability?
+
+```
+  ┌──────────┬────────────┬─────────────────────────────────────────────────┐
+  │ Task     │ abs_vocab  │ Notes                                           │
+  ├──────────┼────────────┼─────────────────────────────────────────────────┤
+  │ add      │ 4          │ fewer tokens than sub-tasks (5 add labels)      │
+  │ add      │ 8          │                                                 │
+  │ add      │ 16         │ default                                         │
+  │ add      │ 32         │                                                 │
+  │ add      │ 64         │ overcomplete                                    │
+  │ add_sub  │ 4          │ fewer tokens than sub-tasks (10 total labels)   │
+  │ add_sub  │ 8          │                                                 │
+  │ add_sub  │ 16         │ default                                         │
+  │ add_sub  │ 32         │                                                 │
+  │ add_sub  │ 64         │ overcomplete                                    │
+  └──────────┴────────────┴─────────────────────────────────────────────────┘
+```
+
+Track: accuracy, vocab utilization, top-3 concentration, abs_loss, token-subtask correlation.
+Question: does vocab=5 (matching addition sub-tasks) give 1-to-1 token-mechanism mapping?
+
+### Total runs
+
+```
+  Ablation 1:  4 runs   (2 tasks x 2 modes)
+  Ablation 2: 20 runs   (2 tasks x 2 modes x 5 sizes)
+  Ablation 3: 10 runs   (2 tasks x 5 vocab sizes)
+  ─────────────────────
+  Total:      34 runs
+```
+
+3 GPUs, ~25 min per baseline run, SoRL ~2-4x slower.
+Estimated wall time: ~8-10 hours with parallelism.
+
+### Phase 4: Interpretability (after training)
 
 - Correlate abstraction tokens with sub-task labels (SA, SC, US, etc.)
 - Paired interventions: token swap vs activation patching
