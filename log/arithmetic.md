@@ -19,7 +19,7 @@ HuggingFace:
 ### Model: Tiny Qwen3 (from scratch, random init)
 
 We use `Qwen3ForCausalLM` with a custom small config so that `SorlModelWrapper` and all
-existing trainers (v1–v6) work with zero adaptation. No pretrained weights — trained from
+existing trainers (v1-v6) work with zero adaptation. No pretrained weights — trained from
 scratch on arithmetic only.
 
 ```python
@@ -35,7 +35,7 @@ Qwen3Config(
 ```
 
 Params: ~168M (mostly embedding table; active params ~3M for 3 layers).
-Qwen3 tokenizer maps each digit/operator to exactly 1 token → uniform sequence length.
+Qwen3 tokenizer maps each digit/operator to exactly 1 token -> uniform sequence length.
 
 ### SoRL: Trainer v6 (self-routing)
 
@@ -49,48 +49,141 @@ making them directly interpretable.
 
 For baseline (no SoRL): standard SFT on the same Qwen3 model, loss on answer tokens only.
 
-### Data: 6-digit addition + subtraction (online generation)
+---
 
-Format: `XXXXXX+YYYYYY=ZZZZZZZ` or `XXXXXX-YYYYYY=ZZZZZZZ` (21 tokens, answer = 7 tokens).
-Tokenized uniformly: prompt_len=14, answer_len=7.
+## Data: 6-digit arithmetic
 
-Data enrichment (matching Quirke): 60% of batches have 40% of digit positions forced to
-sum-to-9 (increases carry cascade frequency).
+### Sequence format
 
-Subtraction: x >= y guaranteed. Answer zero-padded to 7 digits.
+```
+  Position:   0  1  2  3  4  5  6  7  8  9  10 11 12 13 14 15 16 17 18 19 20
+  Addition:   D5 D4 D3 D2 D1 D0  +  D'5D'4D'3D'2D'1D'0  =  A6 A5 A4 A3 A2 A1 A0
+  Subtraction:D5 D4 D3 D2 D1 D0  -  D'5D'4D'3D'2D'1D'0  =  A6 A5 A4 A3 A2 A1 A0
 
-### Sub-tasks tracked
+  prompt_len = 14 (everything up to and including '=')
+  answer_len = 7  (n_digits + 1 for overflow/sign)
+  total      = 21 tokens
 
-Addition:
-- BA  — Base Add (no carry in/out)
-- MC1 — Make Carry (digit_sum >= 10)
-- MS9 — Make Sum 9 (digit_sum == 9, propagates carry)
-- UC1 — Use Carry (carry_in=1, digit_sum != 9)
-- US9 — Use Sum 9 (carry_in=1, digit_sum == 9 — cascade, hardest)
+  Token IDs: 0-9 = digits, 10 = '+', 11 = '=', 12 = '-'
+  Qwen3 IDs: 15-24 = digits, 10 = '+', 28 = '=', 12 = '-'
+```
 
-Subtraction:
-- BS  — Base Sub (no borrow)
-- MB1 — Make Borrow (x_i < y_i)
-- MD9 — Make Diff 9 (x_i == y_i, propagates borrow)
-- UB1 — Use Borrow (borrow_in=1, x_i != y_i)
-- UD9 — Use Diff 9 (borrow_in=1, x_i == y_i — cascade)
+### Per-digit sub-task labels (Quirke et al.)
 
-### Code structure
+Each answer digit is labeled by the arithmetic operation it requires.
+These are the building blocks of the carry/borrow circuits.
+
+**Addition** — the model must learn to cascade carries left-to-right:
+
+```
+  SA — Base Add        Dn + D'n, no carry involved        (simplest)
+  SC — Make Carry      Dn + D'n >= 10, generates carry
+  SS — Sum is 9        Dn + D'n == 9, carry uncertain     (propagator)
+  UC — Use Carry       carry arrives, Dn + D'n != 9       (consumes carry)
+  US — Use Sum-9       carry arrives, Dn + D'n == 9       (cascade, hardest)
+```
+
+**Subtraction** (x >= y) — mirrors addition with borrows:
+
+```
+  MD — Base Diff       Dn > D'n, no borrow                (simplest)
+  MB — Make Borrow     Dn < D'n, generates borrow
+  ME — Equal digits    Dn == D'n, borrow uncertain         (propagator)
+  UB — Use Borrow      borrow arrives, Dn != D'n           (consumes borrow)
+  UD — Use Equal       borrow arrives, Dn == D'n           (cascade, hardest)
+```
+
+### Complexity classification (Quirke Table 8)
+
+The complexity of a problem = the length of the longest carry/borrow cascade.
+A cascade happens when a carry/borrow propagates through consecutive "uncertain"
+positions (SS or ME digits).
+
+**Example: 555555 + 444448 = 1000003**
+
+```
+  Position (LSB first):  D0   D1   D2   D3   D4   D5
+  Digits:                5+8  5+4  5+4  5+4  5+4  5+4
+  Digit sum:              13    9    9    9    9    9
+  ST (tri-state):          1    U    U    U    U    U
+  Cascade:              [SC]  [US   US   US   US   US]  <- depth 6 = S6
+```
+
+The carry from D0 (5+8=13) cascades through D1-D5 (all sum to 9).
+Each "U" position is uncertain until the carry arrives. This is the hardest case.
+
+**Addition complexity S0-S6 (6-digit):**
+
+```
+  S0: no carries at all                 555555+111111=0666666      ~10%
+  S1: carries, no cascade               111111+000009=0111120      ~50%
+  S2: cascade of 2                      111111+000089=0111200      ~26%
+  S3: cascade of 3                      111111+000889=0112000      ~9%
+  S4: cascade of 4                      111111+008889=0120000      ~3%
+  S5: cascade of 5                      111111+088889=0200000      ~1%
+  S6: cascade of 6                      111111+888889=1000000      <0.5%
+```
+
+**Subtraction complexity M0-M6:** same structure with borrow cascades.
+
+### Data enrichment (Quirke)
+
+Without enrichment, S5/S6 cases are extremely rare (~1% and <0.5%).
+Following Quirke: **60% of batches** have **40% of digit positions** forced to sum-to-9.
+This increases cascade frequency so the model sees enough hard cases to learn.
+
+### Dataset structure on HuggingFace
+
+```
+  thoughtworks/arithmetic-sorl-data/
+  ├── add_6digit/
+  │   ├── train.parquet          500K examples
+  │   ├── val.parquet            10K examples
+  │   ├── eval_stratified.parquet  50 per complexity level (S0-S6) + 200 random
+  │   └── config.json
+  └── add_sub_6digit/
+      ├── train.parquet          500K examples (50/50 add/sub)
+      ├── val.parquet            10K examples
+      ├── eval_stratified.parquet  50 per level (S0-S6, M0-M6) + 200 random each
+      └── config.json
+```
+
+Each row has columns: `tokens, labels, op, complexity, cascade_depth, x_digits, y_digits, z_digits`
+
+The `eval_stratified` split has an additional `eval_category` column (e.g., `add_S0`, `sub_M3`).
+
+**Complexity distribution (add_6digit train, 500K):**
+
+```
+  S0:  50,860  (10.2%)
+  S1: 247,567  (49.5%)
+  S2: 130,699  (26.1%)
+  S3:  46,995   (9.4%)
+  S4:  16,540   (3.3%)
+  S5:   5,611   (1.1%)
+  S6:   1,728   (0.3%)
+```
+
+---
+
+## Code structure
 
 ```
 arithmetic/
 ├── datasets/
-│   └── addition.py          # data gen, sub-task labels, eval sets
+│   └── addition.py          # data gen, Quirke labels, complexity, eval sets
 ├── interp_utils/
 │   └── sae_trainer.py       # SAE via EleutherAI sparsify (SparseCoder)
+├── hub.py                   # HuggingFace save/load utilities
 ├── train.py                 # unified training: Qwen3 + SorlModelWrapper + v6
 └── scripts/
-    └── sweep.sh             # sweep over tasks × vocab sizes across 3 GPUs
+    └── sweep.sh             # sweep over tasks x vocab sizes across 3 GPUs
 ```
 
 Key files:
 - **[`arithmetic/train.py`](../arithmetic/train.py)** — entry point, model factory, dataset adapter, accuracy callback
-- **[`arithmetic/datasets/addition.py`](../arithmetic/datasets/addition.py)** — data generation with sub-task labels
+- **[`arithmetic/datasets/addition.py`](../arithmetic/datasets/addition.py)** — data generation with Quirke sub-task labels + complexity
+- **[`arithmetic/hub.py`](../arithmetic/hub.py)** — save/load models and datasets to HuggingFace
 
 SoRL core (Fangyuan's code, unchanged):
 - [`sorl/sorl_wrapper.py`](../sorl/sorl_wrapper.py) — SorlModelWrapper (extends HF model with abstract vocab)
@@ -101,7 +194,6 @@ SoRL core (Fangyuan's code, unchanged):
 ### Compute
 
 3x NVIDIA RTX PRO 6000 Blackwell (96GB each).
-With bf16 + compile + batch=512: ~14 it/s baseline, 20K steps ~25 min.
 
 ---
 
@@ -109,19 +201,19 @@ With bf16 + compile + batch=512: ~14 it/s baseline, 20K steps ~25 min.
 
 ### Phase 1: Baselines (no SoRL)
 
-Sweep: {add, add_sub} × {2L, 3L, 4L} × {3H/510d, 4H/512d}
-Metric: full-sequence accuracy + per-subtask accuracy (BA, MC1, MS9, UC1, US9, BS, MB1, MD9, UB1, UD9)
-Goal: reproduce Quirke's >99% accuracy, establish baseline for each sub-task.
+Train tiny Qwen3 (3L/4H/512d) on {add, add_sub}.
+Metric: full-sequence accuracy + per-subtask + per-complexity accuracy.
+Goal: reproduce Quirke's >99% accuracy, establish baseline for each S0-S6 / M0-M6 level.
 
 ### Phase 2: SoRL vocab size sweep
 
-Sweep: {add, add_sub} × abs_vocab {4, 8, 16, 32, 64} × trainer {v6}
+Sweep: {add, add_sub} x abs_vocab {4, 8, 16, 32, 64} x trainer {v6}
 Metric: same as Phase 1 + vocab utilization, abs token distribution
 Question: does SoRL maintain accuracy? Which vocab sizes lead to interpretable tokens?
 
 ### Phase 3: Interpretability
 
-- Correlate abstraction tokens with sub-task labels (BA, MC1, US9, etc.)
+- Correlate abstraction tokens with sub-task labels (SA, SC, US, etc.)
 - Paired interventions: token swap vs activation patching
 - SAE on hidden states (baseline) vs direct token analysis (SoRL)
 - Auto-interpretability on top-k abstraction token usages

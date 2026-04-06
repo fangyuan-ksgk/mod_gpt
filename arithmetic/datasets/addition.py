@@ -1,53 +1,133 @@
 """
-6-digit addition & subtraction dataset with per-digit sub-task labels.
+6-digit addition & subtraction dataset with per-digit sub-task labels
+and Quirke-style complexity classification.
+
 References:
-  - Nanda et al., "Progress measures for grokking" (ICLR 2024) — addition
-  - Quirke et al., "Understanding Addition and Subtraction in Transformers" (2024) — add+sub
+  - Quirke et al., "Understanding Addition and Subtraction in Transformers" (2024)
+  - Quirke & Barez, "Understanding Addition in Transformers" (ICLR 2024)
 
-Addition sub-tasks:
-  BA  — Base Add: x_i + y_i, no carry in/out
-  MC1 — Make Carry 1: x_i + y_i >= 10
-  MS9 — Make Sum 9: x_i + y_i == 9 (propagates carry)
-  UC1 — Use Carry 1: carry_in=1, digit_sum != 9
-  US9 — Use Sum 9: carry_in=1, digit_sum == 9 (cascade)
+Per-digit sub-task labels (what each answer digit requires):
 
-Subtraction sub-tasks (x >= y guaranteed):
-  BS  — Base Sub: x_i - y_i >= 0, no borrow
-  MB1 — Make Borrow: x_i - y_i < 0 (needs to borrow)
-  MD9 — Make Diff 9: x_i - y_i == 0 (propagates borrow, analogous to MS9)
-  UB1 — Use Borrow: borrow_in=1, x_i - y_i != 0
-  UD9 — Use Diff 9: borrow_in=1, x_i - y_i == 0 (cascade borrow)
+  Addition:
+    SA  — Base Add: (Dn + D'n) mod 10
+    SC  — Make Carry: Dn + D'n >= 10 (ST=1)
+    SS  — Sum is 9: Dn + D'n == 9, carry uncertain (ST=U)
+    UC  — Use Carry: carry cascades into this position, ST != U
+    US  — Use Sum-9: carry cascades through this position, ST=U
+
+  Subtraction (x >= y):
+    MD  — Base Diff: (Dn - D'n) mod 10
+    MB  — Make Borrow: Dn < D'n (MB=1)
+    ME  — Diff is 0: Dn == D'n, borrow uncertain (MB=U)
+    UB  — Use Borrow: borrow cascades in, MB != U
+    UD  — Use Diff-0: borrow cascades through, MB=U
+
+Complexity (Quirke Table 8):
+  Addition S0-S6:  S_k = maximum carry cascade length is k
+    S0: no carries (SA only)              ~5%
+    S1: isolated carries, no cascade      ~21%
+    S2: cascade of 2                      ~34%
+    ...
+    S6: cascade of 6 (6-digit maximum)    <0.01%
+
+  Subtraction M0-M6: same but for borrow cascades
 
 Format (n_digits=6):
-  Addition:    XXXXXX+YYYYYY=ZZZZZZZ   (21 tokens, answer has n_digits+1)
-  Subtraction: XXXXXX-YYYYYY=ZZZZZZZ   (21 tokens, answer has n_digits+1, leading 0)
-
-Tokens: 0-9 = digits, 10 = '+', 11 = '=', 12 = '-'
+  XXXXXX+YYYYYY=ZZZZZZZ  or  XXXXXX-YYYYYY=ZZZZZZZ  (21 tokens)
+  Tokens: 0-9 = digits, 10 = '+', 11 = '=', 12 = '-'
 """
 import torch
 import random
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import List, Tuple, Optional
 
 PLUS_INDEX = 10
 EQUALS_INDEX = 11
 MINUS_INDEX = 12
-NUM_TOKENS = 13  # 0-9 + plus + equals + minus
+NUM_TOKENS = 13
 
 
 @dataclass
 class ArithmeticExample:
     tokens: List[int]
-    x_digits: List[int]       # MSB first
-    y_digits: List[int]       # MSB first
-    z_digits: List[int]       # MSB first (n_digits+1)
-    labels: List[str]         # per answer digit
-    op: str                   # "add" or "sub"
+    x_digits: List[int]        # MSB first
+    y_digits: List[int]        # MSB first
+    z_digits: List[int]        # MSB first (n_digits+1)
+    labels: List[str]          # per answer digit sub-task
+    op: str                    # "add" or "sub"
+    complexity: str = ""       # Quirke: "S0"-"S6" (add) or "M0"-"M6" (sub)
+    cascade_depth: int = 0     # max carry/borrow cascade length
 
 
-# ── Addition ────────────────────────────────────────────────────────
+# ── Quirke's ST/MB tri-state classification ────────────────────────
 
-def classify_addition(x_digits: List[int], y_digits: List[int], n_digits: int) -> Tuple[List[int], List[str]]:
+def _compute_ST(x_digits: List[int], y_digits: List[int], n_digits: int) -> List:
+    """
+    Compute per-digit ST (TriCase) values for addition. LSB first.
+    ST_n = 1 if sum >= 10, 0 if sum <= 8, 'U' if sum == 9.
+    ST_0 is never U (lowest digit has no incoming carry).
+    """
+    x_rev = list(reversed(x_digits))
+    y_rev = list(reversed(y_digits))
+    st = []
+    for i in range(n_digits):
+        s = x_rev[i] + y_rev[i]
+        if s >= 10:
+            st.append(1)
+        elif s <= 8 or i == 0:
+            st.append(0)
+        else:  # s == 9 and i > 0
+            st.append('U')
+    return st
+
+
+def _compute_MB(x_digits: List[int], y_digits: List[int], n_digits: int) -> List:
+    """
+    Compute per-digit MB (TriCase) values for subtraction. LSB first.
+    MB_n = 1 if x < y (borrow), 0 if x > y, 'U' if x == y.
+    MB_0 is never U.
+    """
+    x_rev = list(reversed(x_digits))
+    y_rev = list(reversed(y_digits))
+    mb = []
+    for i in range(n_digits):
+        if x_rev[i] < y_rev[i]:
+            mb.append(1)
+        elif x_rev[i] > y_rev[i] or i == 0:
+            mb.append(0)
+        else:  # equal and i > 0
+            mb.append('U')
+    return mb
+
+
+def _cascade_depth(tricase: List) -> int:
+    """
+    Compute maximum cascade depth from a ST/MB tri-state list (LSB first).
+    A cascade is a run of consecutive 'U' values terminated by a 1.
+    Depth = length of longest such chain (including the triggering 1).
+    """
+    max_depth = 0
+    i = 0
+    while i < len(tricase):
+        if tricase[i] == 1:
+            # Count how many consecutive U's precede this 1
+            chain = 1
+            j = i + 1
+            while j < len(tricase) and tricase[j] == 'U':
+                chain += 1
+                j += 1
+            max_depth = max(max_depth, chain)
+            i = j
+        else:
+            i += 1
+    return max_depth
+
+
+# ── Classification ─────────────────────────────────────────────────
+
+def classify_addition(x_digits: List[int], y_digits: List[int],
+                      n_digits: int) -> Tuple[List[int], List[str], str, int]:
+    """Returns (z_digits, labels, complexity, cascade_depth)."""
     x_rev = list(reversed(x_digits))
     y_rev = list(reversed(y_digits))
     z_rev, labels_rev = [], []
@@ -58,32 +138,35 @@ def classify_addition(x_digits: List[int], y_digits: List[int], n_digits: int) -
         total = digit_sum + carry
 
         if carry == 0:
-            if digit_sum < 10 and digit_sum != 9:
-                label = "BA"
-            elif digit_sum == 9:
-                label = "MS9"
+            if digit_sum >= 10:
+                label = "SC"
+            elif digit_sum == 9 and i > 0:
+                label = "SS"
             else:
-                label = "MC1"
+                label = "SA"
         else:
             if digit_sum == 9:
-                label = "US9"
+                label = "US"
             else:
-                label = "UC1"
+                label = "UC"
 
         z_rev.append(total % 10)
         carry = 1 if total >= 10 else 0
         labels_rev.append(label)
 
     z_rev.append(carry)
-    labels_rev.append("BA" if carry == 0 else "UC1")
+    labels_rev.append("SA" if carry == 0 else "UC")
 
-    return list(reversed(z_rev)), list(reversed(labels_rev))
+    st = _compute_ST(x_digits, y_digits, n_digits)
+    depth = _cascade_depth(st)
+    complexity = f"S{depth}"
+
+    return list(reversed(z_rev)), list(reversed(labels_rev)), complexity, depth
 
 
-# ── Subtraction ─────────────────────────────────────────────────────
-
-def classify_subtraction(x_digits: List[int], y_digits: List[int], n_digits: int) -> Tuple[List[int], List[str]]:
-    """x >= y guaranteed. Result has n_digits+1 digits (leading 0)."""
+def classify_subtraction(x_digits: List[int], y_digits: List[int],
+                         n_digits: int) -> Tuple[List[int], List[str], str, int]:
+    """x >= y guaranteed. Returns (z_digits, labels, complexity, cascade_depth)."""
     x_rev = list(reversed(x_digits))
     y_rev = list(reversed(y_digits))
     z_rev, labels_rev = [], []
@@ -93,18 +176,17 @@ def classify_subtraction(x_digits: List[int], y_digits: List[int], n_digits: int
         diff = x_rev[i] - y_rev[i] - borrow
 
         if borrow == 0:
-            if diff > 0:
-                label = "BS"
-            elif diff == 0:
-                label = "MD9"
-            else:  # diff < 0
-                label = "MB1"
-        else:  # borrow == 1
-            raw_diff = x_rev[i] - y_rev[i]
-            if raw_diff == 0:
-                label = "UD9"
+            if x_rev[i] < y_rev[i]:
+                label = "MB"
+            elif x_rev[i] == y_rev[i] and i > 0:
+                label = "ME"
             else:
-                label = "UB1"
+                label = "MD"
+        else:
+            if x_rev[i] == y_rev[i]:
+                label = "UD"
+            else:
+                label = "UB"
 
         if diff < 0:
             diff += 10
@@ -115,31 +197,42 @@ def classify_subtraction(x_digits: List[int], y_digits: List[int], n_digits: int
         z_rev.append(diff)
         labels_rev.append(label)
 
-    # Overflow digit (always 0 for subtraction since x >= y)
     z_rev.append(0)
-    labels_rev.append("BS")
+    labels_rev.append("MD")
 
-    return list(reversed(z_rev)), list(reversed(labels_rev))
+    mb = _compute_MB(x_digits, y_digits, n_digits)
+    depth = _cascade_depth(mb)
+    complexity = f"M{depth}"
+
+    return list(reversed(z_rev)), list(reversed(labels_rev)), complexity, depth
 
 
 # ── Example construction ────────────────────────────────────────────
 
-def make_add_example(x_digits: List[int], y_digits: List[int], n_digits: int) -> ArithmeticExample:
-    z_digits, labels = classify_addition(x_digits, y_digits, n_digits)
+def make_add_example(x_digits: List[int], y_digits: List[int],
+                     n_digits: int) -> ArithmeticExample:
+    z_digits, labels, complexity, depth = classify_addition(x_digits, y_digits, n_digits)
     tokens = x_digits + [PLUS_INDEX] + y_digits + [EQUALS_INDEX] + z_digits
     return ArithmeticExample(tokens=tokens, x_digits=x_digits, y_digits=y_digits,
-                             z_digits=z_digits, labels=labels, op="add")
+                             z_digits=z_digits, labels=labels, op="add",
+                             complexity=complexity, cascade_depth=depth)
 
 
-def make_sub_example(x_digits: List[int], y_digits: List[int], n_digits: int) -> ArithmeticExample:
-    """x >= y guaranteed by caller."""
-    z_digits, labels = classify_subtraction(x_digits, y_digits, n_digits)
+def make_sub_example(x_digits: List[int], y_digits: List[int],
+                     n_digits: int) -> ArithmeticExample:
+    z_digits, labels, complexity, depth = classify_subtraction(x_digits, y_digits, n_digits)
     tokens = x_digits + [MINUS_INDEX] + y_digits + [EQUALS_INDEX] + z_digits
     return ArithmeticExample(tokens=tokens, x_digits=x_digits, y_digits=y_digits,
-                             z_digits=z_digits, labels=labels, op="sub")
+                             z_digits=z_digits, labels=labels, op="sub",
+                             complexity=complexity, cascade_depth=depth)
 
 
-def random_add_example(n_digits: int, use_sum9_aug: bool = False, aug_prob: float = 0.2) -> ArithmeticExample:
+def random_add_example(n_digits: int, use_sum9_aug: bool = False,
+                       aug_prob: float = 0.4) -> ArithmeticExample:
+    """
+    Generate random addition example.
+    Data enrichment (Quirke): aug_prob fraction of digit pairs forced to sum-to-9.
+    """
     x_digits = [random.randint(0, 9) for _ in range(n_digits)]
     y_digits = [random.randint(0, 9) for _ in range(n_digits)]
     if use_sum9_aug:
@@ -166,15 +259,10 @@ def generate_batch(batch_size: int, n_digits: int = 6,
                    ops: str = "add", use_sum9_aug: bool = True,
                    device: str = "cuda"):
     """
-    Generate a batch of random arithmetic examples.
-    Args:
-        ops: "add" for addition only, "add_sub" for mixed addition+subtraction
-    Returns:
-        tokens: (batch_size, 3*n_digits+3) int tensor
-        labels: list of list of str
-        answer_mask: (batch_size, 3*n_digits+3) bool tensor
+    Online batch generation.
+    Enrichment: 60% of batches have sum9 augmentation (Quirke).
     """
-    do_aug = use_sum9_aug and (random.random() < 0.2)
+    do_aug = use_sum9_aug and (random.random() < 0.6)
     examples = []
 
     for _ in range(batch_size):
@@ -199,122 +287,52 @@ def generate_batch(batch_size: int, n_digits: int = 6,
     return tokens, all_labels, answer_mask
 
 
-# ── Structured evaluation sets ──────────────────────────────────────
+# ── Sub-task and complexity label sets ──────────────────────────────
 
-ALL_ADD_LABELS = ["BA", "MC1", "MS9", "UC1", "US9"]
-ALL_SUB_LABELS = ["BS", "MB1", "MD9", "UB1", "UD9"]
-ALL_LABELS = ALL_ADD_LABELS + ALL_SUB_LABELS
+ADD_LABELS = ["SA", "SC", "SS", "UC", "US"]
+SUB_LABELS = ["MD", "MB", "ME", "UB", "UD"]
+ALL_LABELS = ADD_LABELS + SUB_LABELS
 
 
-def make_eval_set(n_digits: int = 6, ops: str = "add", device: str = "cuda"):
+# ── Structured evaluation sets (Quirke style) ──────────────────────
+
+def make_eval_set(n_digits: int = 6, ops: str = "add"):
     """
-    Create structured evaluation problems grouped by difficulty.
+    Create evaluation sets stratified by Quirke complexity.
+    Returns dict of category_name -> list[ArithmeticExample].
     """
     categories = {}
+    N = 50  # examples per category
 
-    # ── Addition eval sets ──────────────────────────────────────
-    # BA only: all digit sums < 9
-    ba_only = []
-    for _ in range(20):
-        x = [random.randint(0, 4) for _ in range(n_digits)]
-        y = [min(8 - x[i], random.randint(0, 4)) for i in range(n_digits)]
-        ba_only.append(make_add_example(x, y, n_digits))
-    categories["add_ba_only"] = ba_only
+    # ── Addition by complexity S0-S6 ────────────────────────────
+    for target_s in range(n_digits + 1):
+        examples = []
+        attempts = 0
+        while len(examples) < N and attempts < N * 200:
+            ex = random_add_example(n_digits, use_sum9_aug=(target_s > 1))
+            if ex.cascade_depth == target_s:
+                examples.append(ex)
+            attempts += 1
+        if examples:
+            categories[f"add_S{target_s}"] = examples
 
-    # MC1 + UC1: carries but no 9-sums
-    mc1_uc1 = []
-    for _ in range(20):
-        x = [random.randint(0, 9) for _ in range(n_digits)]
-        y = [random.randint(0, 9) for _ in range(n_digits)]
-        for i in range(n_digits):
-            if x[i] + y[i] == 9:
-                y[i] = (y[i] + 1) % 10
-        has_carry = any(x[i] + y[i] >= 10 for i in range(n_digits))
-        if not has_carry:
-            idx = random.randint(0, n_digits - 1)
-            x[idx] = random.randint(5, 9)
-            y[idx] = random.randint(10 - x[idx], 9)
-            if x[idx] + y[idx] == 9:
-                y[idx] = min(y[idx] + 1, 9)
-        mc1_uc1.append(make_add_example(x, y, n_digits))
-    categories["add_mc1_uc1"] = mc1_uc1
+    # Random addition (uniform)
+    categories["add_random"] = [random_add_example(n_digits) for _ in range(200)]
 
-    # Simple US9
-    simple_us9 = []
-    for _ in range(20):
-        x = [random.randint(0, 4) for _ in range(n_digits)]
-        y = [min(8 - x[i], random.randint(0, 4)) for i in range(n_digits)]
-        pos = random.randint(1, n_digits - 1)
-        ci = n_digits - pos
-        x[ci] = random.randint(5, 9)
-        y[ci] = random.randint(10 - x[ci], 9)
-        if x[ci] + y[ci] == 9:
-            y[ci] = min(y[ci] + 1, 9)
-        si = n_digits - pos - 1
-        if 0 <= si < n_digits:
-            y[si] = 9 - x[si]
-        simple_us9.append(make_add_example(x, y, n_digits))
-    categories["add_simple_us9"] = simple_us9
-
-    # Cascade US9
-    cascade_us9 = []
-    for cascade_len in [2, 3, 4]:
-        for _ in range(8):
-            x = [random.randint(0, 4) for _ in range(n_digits)]
-            y = [min(8 - x[i], random.randint(0, 4)) for i in range(n_digits)]
-            start = random.randint(0, max(0, n_digits - cascade_len - 1))
-            ci = start + cascade_len
-            if ci < n_digits:
-                x[ci] = random.randint(5, 9)
-                y[ci] = random.randint(10 - x[ci], 9)
-                if x[ci] + y[ci] == 9:
-                    y[ci] = min(y[ci] + 1, 9)
-            for k in range(cascade_len):
-                idx = start + cascade_len - 1 - k
-                if 0 <= idx < n_digits:
-                    y[idx] = 9 - x[idx]
-            cascade_us9.append(make_add_example(x, y, n_digits))
-    categories["add_cascade_us9"] = cascade_us9
-
-    # Random addition
-    categories["add_random"] = [random_add_example(n_digits) for _ in range(64)]
-
-    # ── Subtraction eval sets (only if ops includes sub) ────────
+    # ── Subtraction by complexity M0-M6 ─────────────────────────
     if ops == "add_sub":
-        # BS only: no borrows (x_i >= y_i for all i)
-        bs_only = []
-        for _ in range(20):
-            x = [random.randint(5, 9) for _ in range(n_digits)]
-            y = [random.randint(0, x[i]) for i in range(n_digits)]
-            # Avoid x_i == y_i (MD9)
-            for i in range(n_digits):
-                if x[i] == y[i] and x[i] < 9:
-                    x[i] += 1
-            bs_only.append(make_sub_example(x, y, n_digits))
-        categories["sub_bs_only"] = bs_only
+        for target_m in range(n_digits + 1):
+            examples = []
+            attempts = 0
+            while len(examples) < N and attempts < N * 200:
+                ex = random_sub_example(n_digits)
+                if ex.cascade_depth == target_m:
+                    examples.append(ex)
+                attempts += 1
+            if examples:
+                categories[f"sub_M{target_m}"] = examples
 
-        # MB1 + UB1: borrows but no diff-0 propagation
-        mb1_ub1 = []
-        for _ in range(20):
-            while True:
-                x = [random.randint(0, 9) for _ in range(n_digits)]
-                y = [random.randint(0, 9) for _ in range(n_digits)]
-                # Ensure x >= y
-                x_val = int("".join(str(d) for d in x))
-                y_val = int("".join(str(d) for d in y))
-                if x_val < y_val:
-                    x, y = y, x
-                # Ensure no x_i == y_i (avoids MD9/UD9)
-                ok = all(x[i] != y[i] for i in range(n_digits))
-                # Ensure at least one borrow
-                has_borrow = any(x[i] < y[i] for i in range(n_digits))
-                if ok and has_borrow:
-                    break
-            mb1_ub1.append(make_sub_example(x, y, n_digits))
-        categories["sub_mb1_ub1"] = mb1_ub1
-
-        # Random subtraction
-        categories["sub_random"] = [random_sub_example(n_digits) for _ in range(64)]
+        categories["sub_random"] = [random_sub_example(n_digits) for _ in range(200)]
 
     return categories
 
@@ -322,11 +340,10 @@ def make_eval_set(n_digits: int = 6, ops: str = "add", device: str = "cuda"):
 def eval_accuracy(model_wrapper, n_digits: int = 6, ops: str = "add",
                   device: str = "cuda"):
     """
-    Evaluate accuracy on structured eval sets.
-    model_wrapper must have .get_logits(tokens) method.
-    Returns dict of category -> {full_acc, per_subtask_acc, n_examples}.
+    Evaluate accuracy on Quirke-stratified eval sets.
+    model_wrapper must have .get_logits(tokens).
     """
-    categories = make_eval_set(n_digits, ops, device)
+    categories = make_eval_set(n_digits, ops)
     results = {}
     ans_len = n_digits + 1
     ans_start = 2 * n_digits + 2
