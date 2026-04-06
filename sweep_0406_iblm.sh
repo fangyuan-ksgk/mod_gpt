@@ -54,11 +54,9 @@ DS_MMLU="mmlu"
 DS_CSQA="commonsenseqa"
 DS_CODE="deepmind_code_contests"
 
-# Regularization variants (4 variants, fits exactly 4 GPUs per dataset block)
+# Regularization variants: SFT (mbe_val tracked) vs MBE-regularized
 R_NONE="--reg_type none"
 R_MBE="--reg_type mbe   --reg_weight $REG_WEIGHT"
-R_FROB="--reg_type frobenius --reg_weight $REG_WEIGHT"
-R_COND="--reg_type condnum  --reg_weight $REG_WEIGHT"
 
 eval_samples_for_dataset() {
   local dataset=$1
@@ -117,8 +115,8 @@ run_bg() {
     "$@" &
 }
 
-# Per model: 7 datasets × 4 reg variants = 28 runs
-# Batched by dataset: all 4 variants of one dataset = exactly 4 jobs (1 per GPU)
+# Per model: 7 datasets × 2 variants = 14 runs
+# Packed 2 datasets per wait-block → 4 jobs/block, all 4 GPUs used
 
 # ============================================================================
 # Batch 1: IBLM on Qwen3-1.7B
@@ -130,38 +128,21 @@ echo "============================================================"
 
 run_bg "none_gsm_1.7B"  $M16 $DS_GSM  $R_NONE
 run_bg "mbe_gsm_1.7B"   $M16 $DS_GSM  $R_MBE
-run_bg "frob_gsm_1.7B"  $M16 $DS_GSM  $R_FROB
-run_bg "cond_gsm_1.7B"  $M16 $DS_GSM  $R_COND
-wait
 run_bg "none_sci_1.7B"  $M16 $DS_SCI  $R_NONE
 run_bg "mbe_sci_1.7B"   $M16 $DS_SCI  $R_MBE
-run_bg "frob_sci_1.7B"  $M16 $DS_SCI  $R_FROB
-run_bg "cond_sci_1.7B"  $M16 $DS_SCI  $R_COND
 wait
 run_bg "none_math_1.7B" $M16 $DS_MATH $R_NONE
 run_bg "mbe_math_1.7B"  $M16 $DS_MATH $R_MBE
-run_bg "frob_math_1.7B" $M16 $DS_MATH $R_FROB
-run_bg "cond_math_1.7B" $M16 $DS_MATH $R_COND
-wait
 run_bg "none_arc_1.7B"  $M16 $DS_ARC  $R_NONE
 run_bg "mbe_arc_1.7B"   $M16 $DS_ARC  $R_MBE
-run_bg "frob_arc_1.7B"  $M16 $DS_ARC  $R_FROB
-run_bg "cond_arc_1.7B"  $M16 $DS_ARC  $R_COND
 wait
 run_bg "none_mmlu_1.7B" $M16 $DS_MMLU $R_NONE
 run_bg "mbe_mmlu_1.7B"  $M16 $DS_MMLU $R_MBE
-run_bg "frob_mmlu_1.7B" $M16 $DS_MMLU $R_FROB
-run_bg "cond_mmlu_1.7B" $M16 $DS_MMLU $R_COND
-wait
 run_bg "none_csqa_1.7B" $M16 $DS_CSQA $R_NONE
 run_bg "mbe_csqa_1.7B"  $M16 $DS_CSQA $R_MBE
-run_bg "frob_csqa_1.7B" $M16 $DS_CSQA $R_FROB
-run_bg "cond_csqa_1.7B" $M16 $DS_CSQA $R_COND
 wait
 run_bg "none_code_1.7B" $M16 $DS_CODE $R_NONE
 run_bg "mbe_code_1.7B"  $M16 $DS_CODE $R_MBE
-run_bg "frob_code_1.7B" $M16 $DS_CODE $R_FROB
-run_bg "cond_code_1.7B" $M16 $DS_CODE $R_COND
 wait
 
 # ============================================================================
@@ -174,38 +155,21 @@ echo "============================================================"
 
 run_bg "none_gsm_L1"  $ML1 $DS_GSM  $R_NONE
 run_bg "mbe_gsm_L1"   $ML1 $DS_GSM  $R_MBE
-run_bg "frob_gsm_L1"  $ML1 $DS_GSM  $R_FROB
-run_bg "cond_gsm_L1"  $ML1 $DS_GSM  $R_COND
-wait
 run_bg "none_sci_L1"  $ML1 $DS_SCI  $R_NONE
 run_bg "mbe_sci_L1"   $ML1 $DS_SCI  $R_MBE
-run_bg "frob_sci_L1"  $ML1 $DS_SCI  $R_FROB
-run_bg "cond_sci_L1"  $ML1 $DS_SCI  $R_COND
 wait
 run_bg "none_math_L1" $ML1 $DS_MATH $R_NONE
 run_bg "mbe_math_L1"  $ML1 $DS_MATH $R_MBE
-run_bg "frob_math_L1" $ML1 $DS_MATH $R_FROB
-run_bg "cond_math_L1" $ML1 $DS_MATH $R_COND
-wait
 run_bg "none_arc_L1"  $ML1 $DS_ARC  $R_NONE
 run_bg "mbe_arc_L1"   $ML1 $DS_ARC  $R_MBE
-run_bg "frob_arc_L1"  $ML1 $DS_ARC  $R_FROB
-run_bg "cond_arc_L1"  $ML1 $DS_ARC  $R_COND
 wait
 run_bg "none_mmlu_L1" $ML1 $DS_MMLU $R_NONE
 run_bg "mbe_mmlu_L1"  $ML1 $DS_MMLU $R_MBE
-run_bg "frob_mmlu_L1" $ML1 $DS_MMLU $R_FROB
-run_bg "cond_mmlu_L1" $ML1 $DS_MMLU $R_COND
-wait
 run_bg "none_csqa_L1" $ML1 $DS_CSQA $R_NONE
 run_bg "mbe_csqa_L1"  $ML1 $DS_CSQA $R_MBE
-run_bg "frob_csqa_L1" $ML1 $DS_CSQA $R_FROB
-run_bg "cond_csqa_L1" $ML1 $DS_CSQA $R_COND
 wait
 run_bg "none_code_L1" $ML1 $DS_CODE $R_NONE
 run_bg "mbe_code_L1"  $ML1 $DS_CODE $R_MBE
-run_bg "frob_code_L1" $ML1 $DS_CODE $R_FROB
-run_bg "cond_code_L1" $ML1 $DS_CODE $R_COND
 wait
 
 echo ""
