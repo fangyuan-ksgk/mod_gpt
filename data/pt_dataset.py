@@ -557,7 +557,8 @@ class ScienceQADataset(Dataset):
     """ScienceQA with lecture + solution reasoning traces."""
 
     def __init__(self, split="train", tokenizer=None, max_length=512):
-        self.dataset = load_dataset("derek-thomas/ScienceQA", split=split)
+        ds = load_dataset("derek-thomas/ScienceQA", split=split)
+        self.dataset = ds.filter(lambda x: x["image"] is None)
         self.tokenizer = tokenizer
         self.max_length = max_length
 
