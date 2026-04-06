@@ -67,6 +67,7 @@ Training script: `train_ablate_sanity.py` with trainers from `sorl/trainer_ablat
 - **v2 (SoRLTrainerv2):** traj loss p(s|a) + abs loss. Directly optimizes conditional.
 - **v3 (SoRLTrainerv3):** v2 + hinge contrastive loss (clean vs corrupted abstractions).
 - **v4 (SoRLTrainerv4):** v3 + inner loop (n_inner steps per searched sequence).
+- **v6 (SoRLTrainerv6):** "Self-routing SoRL" in `sorl/selfroute.py`. Inherits v3. Fixes lm_head for abstract tokens to diagonal matrix + freezes with grad hook. Loss = traj_loss only (no info_gain, no abs, no zipf). Simplest and cleanest trainer.
 
 ### Key Findings (as of ablate_20260318_0329, Qwen3-1.7B, emb_lr_mult=1.0)
 
@@ -133,10 +134,60 @@ Training script: `train_ablate_sanity.py` with trainers from `sorl/trainer_ablat
 
 ---
 
+## Arithmetic Interpretability Study (as of 2026-04-06)
+
+### Goal
+Show that SoRL externalizes arithmetic reasoning mechanisms (carry, borrow circuits) as explicit abstraction tokens — making them directly observable without activation-level tooling. Reference: Quirke et al. "Understanding Addition and Subtraction in Transformers" (2024).
+
+### Architecture Decision (in progress)
+Planning to use **tiny Qwen3 from-scratch** (custom config: 3L/4H/512d, ~168M params) instead of GAT. This allows clean import of all SoRL trainers (v1-v6) via `SorlModelWrapper` with zero adaptation. Verified that `Qwen3ForCausalLM(Qwen3Config(...))` works for custom tiny configs.
+
+### Arithmetic Sub-tasks Tracked
+- **Addition:** BA (base add), MC1 (make carry), MS9 (make sum-9), UC1 (use carry), US9 (use sum-9 / cascade)
+- **Subtraction:** BS (base sub), MB1 (make borrow), MD9 (make diff-9), UB1 (use borrow), UD9 (cascade borrow)
+
+### Code Structure
+```
+arithmetic/
+├── datasets/
+│   ├── addition.py          # add + sub dataset, sub-task labels, eval sets
+│   └── multiplication.py    # from original gat_arithmatic.ipynb
+├── reference/
+│   └── addition_6digit.py   # paper reproduction (GAT-based, may switch to Qwen3)
+├── interp_utils/
+│   └── sae_trainer.py       # SAE wrapper using EleutherAI sparsify (eai-sparsify)
+├── scripts/
+│   ├── sweep_baseline.sh    # 24 baseline configs across 3 GPUs
+│   ├── sweep_vocab.sh       # SoRL vocab size sweep (12 configs)
+│   └── run_all.sh           # full pipeline
+├── model.py                 # ArithmeticModel wrapper (GAT-based, may switch to Qwen3)
+├── train.py                 # unified training: baseline + SoRL, bf16+compile
+├── trainer.py               # BaselineTrainer / SoRLTrainer for multiplication
+└── multiply.py              # original multiplication experiment
+```
+
+### Documents
+- `docs/SoRL_alignment_weak_supervision.pdf` — SoRL paper
+- `docs/understanding_addition_subtraction_transformers.pdf` — Quirke et al. 2024
+- `docs/interpretability_study.md` — experiment plan
+
+### Compute
+- 3× NVIDIA RTX PRO 6000 Blackwell (96GB each)
+- With bf16+compile+batch=512: ~14 it/s on baseline, 20K steps in ~25 min
+- Sweep runs 6 concurrent experiments (2 per GPU)
+
+### Key Design Decisions
+- **No TransformerLens** — use raw PyTorch hooks for interpretability
+- **SAE via EleutherAI sparsify** (eai-sparsify), not sae-lens — use SparseCoder directly
+- **Online data generation** (no fixed dataset) matching Quirke's approach
+- **BOS_TOKEN_ID note:** GAT uses BOS=50256 for doc boundaries. Our arithmetic sequences don't need BOS (single-sequence, no packing). Harmless for baseline; needs attention for SoRL if using GAT path.
+
+---
+
 ## Codebase Reference
 
 - **Training script:** `train_ablate_sanity.py` — main entry point, has `load_checkpoint()`, arg parsing, accuracy eval
-- **Trainers:** `sorl/trainer_ablate.py` — SoRLTrainer (v1), SoRLTrainerv2, SoRLTrainerv3, SoRLTrainerv4
+- **Trainers:** `sorl/trainer_ablate.py` — SoRLTrainer (v1), SoRLTrainerv2, SoRLTrainerv3, SoRLTrainerv4; `sorl/selfroute.py` — SoRLTrainerv6 (self-routing)
 - **Core functions:** `sorl/sorl_trainer.py` — `sorl_search()`, `sorl_search_ar()`, `corrupt_abstract_tokens()`, `SoRLLoss`, `SoRLLoss_v2`
 - **Model wrapper:** `sorl/sorl_wrapper.py` — `SorlModelWrapper` (extends HF model with abstract vocab)
 - **Dataset:** `data/pt_dataset.py` — `get_dataset()`, `evaluate_accuracy()`, `collate_fn()`
