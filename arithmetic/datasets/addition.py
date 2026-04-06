@@ -1,18 +1,28 @@
 """
-6-digit addition dataset with per-digit sub-task labels.
-Faithfully mirrors the Integer Addition paper (Nanda et al., ICLR 2024).
+6-digit addition & subtraction dataset with per-digit sub-task labels.
+References:
+  - Nanda et al., "Progress measures for grokking" (ICLR 2024) — addition
+  - Quirke et al., "Understanding Addition and Subtraction in Transformers" (2024) — add+sub
 
-Sub-tasks per answer digit:
-  BA  — Base Add: x_i + y_i (no carry in, no carry out)
-  MC1 — Make Carry 1: x_i + y_i >= 10 (generates carry)
-  MS9 �� Make Sum 9: x_i + y_i == 9 (propagates carry if one arrives)
-  UC1 — Use Carry 1: carry_in=1 and x_i + y_i != 9
-  US9 — Use Sum 9: carry_in=1 and x_i + y_i == 9 (hardest — cascade)
+Addition sub-tasks:
+  BA  — Base Add: x_i + y_i, no carry in/out
+  MC1 — Make Carry 1: x_i + y_i >= 10
+  MS9 — Make Sum 9: x_i + y_i == 9 (propagates carry)
+  UC1 — Use Carry 1: carry_in=1, digit_sum != 9
+  US9 — Use Sum 9: carry_in=1, digit_sum == 9 (cascade)
+
+Subtraction sub-tasks (x >= y guaranteed):
+  BS  — Base Sub: x_i - y_i >= 0, no borrow
+  MB1 — Make Borrow: x_i - y_i < 0 (needs to borrow)
+  MD9 — Make Diff 9: x_i - y_i == 0 (propagates borrow, analogous to MS9)
+  UB1 — Use Borrow: borrow_in=1, x_i - y_i != 0
+  UD9 — Use Diff 9: borrow_in=1, x_i - y_i == 0 (cascade borrow)
 
 Format (n_digits=6):
-  XXXXXX+YYYYYY=ZZZZZZZ   (21 tokens, answer has n_digits+1 for overflow)
+  Addition:    XXXXXX+YYYYYY=ZZZZZZZ   (21 tokens, answer has n_digits+1)
+  Subtraction: XXXXXX-YYYYYY=ZZZZZZZ   (21 tokens, answer has n_digits+1, leading 0)
 
-Tokens: 0-9 = digits, 10 = '+', 11 = '='
+Tokens: 0-9 = digits, 10 = '+', 11 = '=', 12 = '-'
 """
 import torch
 import random
@@ -21,156 +31,204 @@ from typing import List, Tuple, Optional
 
 PLUS_INDEX = 10
 EQUALS_INDEX = 11
-NUM_TOKENS = 12
+MINUS_INDEX = 12
+NUM_TOKENS = 13  # 0-9 + plus + equals + minus
 
 
 @dataclass
-class AdditionExample:
-    tokens: List[int]          # full sequence: X + Y = Z
-    x_digits: List[int]        # MSB first
-    y_digits: List[int]        # MSB first
-    z_digits: List[int]        # MSB first (n_digits+1)
-    labels: List[str]          # per answer digit: "BA", "MC1", "MS9", "UC1", "US9"
+class ArithmeticExample:
+    tokens: List[int]
+    x_digits: List[int]       # MSB first
+    y_digits: List[int]       # MSB first
+    z_digits: List[int]       # MSB first (n_digits+1)
+    labels: List[str]         # per answer digit
+    op: str                   # "add" or "sub"
 
 
-def classify_digits(x_digits: List[int], y_digits: List[int], n_digits: int) -> Tuple[List[int], List[str]]:
-    """
-    Compute answer digits and classify each into a sub-task.
-    x_digits, y_digits: MSB-first, length n_digits.
-    Returns z_digits (MSB-first, length n_digits+1) and labels (length n_digits+1).
-    """
-    # Work LSB-first for carry propagation
+# ── Addition ────────────────────────────────────────────────────────
+
+def classify_addition(x_digits: List[int], y_digits: List[int], n_digits: int) -> Tuple[List[int], List[str]]:
     x_rev = list(reversed(x_digits))
     y_rev = list(reversed(y_digits))
-
-    z_rev = []
-    labels_rev = []
+    z_rev, labels_rev = [], []
     carry = 0
 
     for i in range(n_digits):
         digit_sum = x_rev[i] + y_rev[i]
         total = digit_sum + carry
 
-        # Classify this digit position
         if carry == 0:
             if digit_sum < 10 and digit_sum != 9:
                 label = "BA"
             elif digit_sum == 9:
                 label = "MS9"
-            else:  # digit_sum >= 10
+            else:
                 label = "MC1"
-        else:  # carry == 1
+        else:
             if digit_sum == 9:
                 label = "US9"
             else:
                 label = "UC1"
 
-        z_digit = total % 10
+        z_rev.append(total % 10)
         carry = 1 if total >= 10 else 0
-
-        z_rev.append(z_digit)
         labels_rev.append(label)
 
-    # Overflow digit
     z_rev.append(carry)
     labels_rev.append("BA" if carry == 0 else "UC1")
 
-    z_digits = list(reversed(z_rev))
-    labels = list(reversed(labels_rev))
-    return z_digits, labels
+    return list(reversed(z_rev)), list(reversed(labels_rev))
 
 
-def make_example(x_digits: List[int], y_digits: List[int], n_digits: int) -> AdditionExample:
-    z_digits, labels = classify_digits(x_digits, y_digits, n_digits)
+# ── Subtraction ─────────────────────────────────────────────────────
 
+def classify_subtraction(x_digits: List[int], y_digits: List[int], n_digits: int) -> Tuple[List[int], List[str]]:
+    """x >= y guaranteed. Result has n_digits+1 digits (leading 0)."""
+    x_rev = list(reversed(x_digits))
+    y_rev = list(reversed(y_digits))
+    z_rev, labels_rev = [], []
+    borrow = 0
+
+    for i in range(n_digits):
+        diff = x_rev[i] - y_rev[i] - borrow
+
+        if borrow == 0:
+            if diff > 0:
+                label = "BS"
+            elif diff == 0:
+                label = "MD9"
+            else:  # diff < 0
+                label = "MB1"
+        else:  # borrow == 1
+            raw_diff = x_rev[i] - y_rev[i]
+            if raw_diff == 0:
+                label = "UD9"
+            else:
+                label = "UB1"
+
+        if diff < 0:
+            diff += 10
+            borrow = 1
+        else:
+            borrow = 0
+
+        z_rev.append(diff)
+        labels_rev.append(label)
+
+    # Overflow digit (always 0 for subtraction since x >= y)
+    z_rev.append(0)
+    labels_rev.append("BS")
+
+    return list(reversed(z_rev)), list(reversed(labels_rev))
+
+
+# ── Example construction ────────────────────────────────────────────
+
+def make_add_example(x_digits: List[int], y_digits: List[int], n_digits: int) -> ArithmeticExample:
+    z_digits, labels = classify_addition(x_digits, y_digits, n_digits)
     tokens = x_digits + [PLUS_INDEX] + y_digits + [EQUALS_INDEX] + z_digits
-    return AdditionExample(
-        tokens=tokens,
-        x_digits=x_digits,
-        y_digits=y_digits,
-        z_digits=z_digits,
-        labels=labels,
-    )
+    return ArithmeticExample(tokens=tokens, x_digits=x_digits, y_digits=y_digits,
+                             z_digits=z_digits, labels=labels, op="add")
 
 
-def random_example(n_digits: int, use_sum9_aug: bool = False, aug_prob: float = 0.2) -> AdditionExample:
-    """
-    Generate a random addition example.
-    use_sum9_aug: if True, force ~aug_prob of digit positions to sum to 9
-    (increases US9 frequency from ~6% to ~8%, matching the paper).
-    """
+def make_sub_example(x_digits: List[int], y_digits: List[int], n_digits: int) -> ArithmeticExample:
+    """x >= y guaranteed by caller."""
+    z_digits, labels = classify_subtraction(x_digits, y_digits, n_digits)
+    tokens = x_digits + [MINUS_INDEX] + y_digits + [EQUALS_INDEX] + z_digits
+    return ArithmeticExample(tokens=tokens, x_digits=x_digits, y_digits=y_digits,
+                             z_digits=z_digits, labels=labels, op="sub")
+
+
+def random_add_example(n_digits: int, use_sum9_aug: bool = False, aug_prob: float = 0.2) -> ArithmeticExample:
     x_digits = [random.randint(0, 9) for _ in range(n_digits)]
     y_digits = [random.randint(0, 9) for _ in range(n_digits)]
-
     if use_sum9_aug:
         for i in range(n_digits):
             if random.random() < aug_prob:
                 y_digits[i] = 9 - x_digits[i]
+    return make_add_example(x_digits, y_digits, n_digits)
 
-    return make_example(x_digits, y_digits, n_digits)
 
+def random_sub_example(n_digits: int) -> ArithmeticExample:
+    """Generate x - y where x >= y."""
+    while True:
+        x_digits = [random.randint(0, 9) for _ in range(n_digits)]
+        y_digits = [random.randint(0, 9) for _ in range(n_digits)]
+        x_val = int("".join(str(d) for d in x_digits))
+        y_val = int("".join(str(d) for d in y_digits))
+        if x_val >= y_val:
+            return make_sub_example(x_digits, y_digits, n_digits)
+
+
+# ── Batch generation ────────────────────────────────────────────────
 
 def generate_batch(batch_size: int, n_digits: int = 6,
-                   use_sum9_aug: bool = True, device: str = "cuda"):
+                   ops: str = "add", use_sum9_aug: bool = True,
+                   device: str = "cuda"):
     """
-    Generate a batch of random addition examples (online, like the paper).
+    Generate a batch of random arithmetic examples.
+    Args:
+        ops: "add" for addition only, "add_sub" for mixed addition+subtraction
     Returns:
         tokens: (batch_size, 3*n_digits+3) int tensor
-        labels: list of list of str, per answer digit
-        answer_mask: (batch_size, 3*n_digits+3) bool tensor — True at answer positions
+        labels: list of list of str
+        answer_mask: (batch_size, 3*n_digits+3) bool tensor
     """
-    # Paper: 20% of batches use sum9 augmentation, 20% of positions
     do_aug = use_sum9_aug and (random.random() < 0.2)
+    examples = []
 
-    examples = [random_example(n_digits, use_sum9_aug=do_aug) for _ in range(batch_size)]
+    for _ in range(batch_size):
+        if ops == "add":
+            examples.append(random_add_example(n_digits, use_sum9_aug=do_aug))
+        elif ops == "add_sub":
+            if random.random() < 0.5:
+                examples.append(random_add_example(n_digits, use_sum9_aug=do_aug))
+            else:
+                examples.append(random_sub_example(n_digits))
+        else:
+            raise ValueError(f"Unknown ops: {ops}")
 
     tokens = torch.tensor([e.tokens for e in examples], dtype=torch.long, device=device)
     all_labels = [e.labels for e in examples]
 
-    # Answer positions: after '=' sign
     seq_len = 3 * n_digits + 3
-    ans_start = 2 * n_digits + 2  # position of first answer digit
+    ans_start = 2 * n_digits + 2
     answer_mask = torch.zeros(batch_size, seq_len, dtype=torch.bool, device=device)
     answer_mask[:, ans_start:] = True
 
     return tokens, all_labels, answer_mask
 
 
-# ── Structured evaluation sets (matching the paper) ──────────────────
+# ── Structured evaluation sets ──────────────────────────────────────
 
-def _digits(num: int, n: int) -> List[int]:
-    """Convert number to MSB-first digit list of length n."""
-    return [int(d) for d in str(num).zfill(n)]
+ALL_ADD_LABELS = ["BA", "MC1", "MS9", "UC1", "US9"]
+ALL_SUB_LABELS = ["BS", "MB1", "MD9", "UB1", "UD9"]
+ALL_LABELS = ALL_ADD_LABELS + ALL_SUB_LABELS
 
 
-def make_eval_set(n_digits: int = 6, device: str = "cuda"):
+def make_eval_set(n_digits: int = 6, ops: str = "add", device: str = "cuda"):
     """
-    Create structured evaluation problems grouped by sub-task difficulty.
-    Returns dict of category -> list of AdditionExample.
+    Create structured evaluation problems grouped by difficulty.
     """
-    categories = {
-        "ba_only": [],      # no carries at all
-        "mc1_uc1": [],      # carries but no sum-9 propagation
-        "simple_us9": [],   # single US9
-        "cascade_us9": [],  # cascading US9 (2-4 levels)
-        "random": [],       # 64 random
-    }
+    categories = {}
 
+    # ── Addition eval sets ──────────────────────────────────────
     # BA only: all digit sums < 9
+    ba_only = []
     for _ in range(20):
         x = [random.randint(0, 4) for _ in range(n_digits)]
         y = [min(8 - x[i], random.randint(0, 4)) for i in range(n_digits)]
-        categories["ba_only"].append(make_example(x, y, n_digits))
+        ba_only.append(make_add_example(x, y, n_digits))
+    categories["add_ba_only"] = ba_only
 
     # MC1 + UC1: carries but no 9-sums
+    mc1_uc1 = []
     for _ in range(20):
         x = [random.randint(0, 9) for _ in range(n_digits)]
         y = [random.randint(0, 9) for _ in range(n_digits)]
-        # Ensure no digit sums to exactly 9
         for i in range(n_digits):
             if x[i] + y[i] == 9:
                 y[i] = (y[i] + 1) % 10
-        # Ensure at least one carry
         has_carry = any(x[i] + y[i] >= 10 for i in range(n_digits))
         if not has_carry:
             idx = random.randint(0, n_digits - 1)
@@ -178,92 +236,120 @@ def make_eval_set(n_digits: int = 6, device: str = "cuda"):
             y[idx] = random.randint(10 - x[idx], 9)
             if x[idx] + y[idx] == 9:
                 y[idx] = min(y[idx] + 1, 9)
-        categories["mc1_uc1"].append(make_example(x, y, n_digits))
+        mc1_uc1.append(make_add_example(x, y, n_digits))
+    categories["add_mc1_uc1"] = mc1_uc1
 
-    # Simple US9: exactly one position sums to 9, with carry into it
+    # Simple US9
+    simple_us9 = []
     for _ in range(20):
         x = [random.randint(0, 4) for _ in range(n_digits)]
         y = [min(8 - x[i], random.randint(0, 4)) for i in range(n_digits)]
-        # Pick a position (not the last) to make carry, and the next to make sum-9
-        pos = random.randint(1, n_digits - 1)  # LSB index
-        # Make carry at pos-1 (LSB-indexed): ensure digits at n_digits-pos sum >= 10
-        ci = n_digits - pos  # MSB index of the carry-maker
+        pos = random.randint(1, n_digits - 1)
+        ci = n_digits - pos
         x[ci] = random.randint(5, 9)
         y[ci] = random.randint(10 - x[ci], 9)
         if x[ci] + y[ci] == 9:
             y[ci] = min(y[ci] + 1, 9)
-        # Make sum-9 at pos (LSB-indexed): digits at n_digits-pos-1
         si = n_digits - pos - 1
         if 0 <= si < n_digits:
             y[si] = 9 - x[si]
-        categories["simple_us9"].append(make_example(x, y, n_digits))
+        simple_us9.append(make_add_example(x, y, n_digits))
+    categories["add_simple_us9"] = simple_us9
 
-    # Cascade US9: multiple consecutive 9-sums with carry
+    # Cascade US9
+    cascade_us9 = []
     for cascade_len in [2, 3, 4]:
         for _ in range(8):
             x = [random.randint(0, 4) for _ in range(n_digits)]
             y = [min(8 - x[i], random.randint(0, 4)) for i in range(n_digits)]
-            # Create cascade starting from a random position
-            start = random.randint(0, n_digits - cascade_len - 1)
-            # Trigger carry at start (MSB indexed)
-            trigger = n_digits - 1 - start  # convert to LSB index... actually let's work MSB
-            # Make carry at position start+cascade_len (MSB)
+            start = random.randint(0, max(0, n_digits - cascade_len - 1))
             ci = start + cascade_len
             if ci < n_digits:
                 x[ci] = random.randint(5, 9)
                 y[ci] = random.randint(10 - x[ci], 9)
                 if x[ci] + y[ci] == 9:
                     y[ci] = min(y[ci] + 1, 9)
-            # Make sum-9 cascade at positions start+1 ... start+cascade_len-1 (MSB)
             for k in range(cascade_len):
                 idx = start + cascade_len - 1 - k
                 if 0 <= idx < n_digits:
                     y[idx] = 9 - x[idx]
-            categories["cascade_us9"].append(make_example(x, y, n_digits))
+            cascade_us9.append(make_add_example(x, y, n_digits))
+    categories["add_cascade_us9"] = cascade_us9
 
-    # Random
-    for _ in range(64):
-        categories["random"].append(random_example(n_digits))
+    # Random addition
+    categories["add_random"] = [random_add_example(n_digits) for _ in range(64)]
+
+    # ── Subtraction eval sets (only if ops includes sub) ────────
+    if ops == "add_sub":
+        # BS only: no borrows (x_i >= y_i for all i)
+        bs_only = []
+        for _ in range(20):
+            x = [random.randint(5, 9) for _ in range(n_digits)]
+            y = [random.randint(0, x[i]) for i in range(n_digits)]
+            # Avoid x_i == y_i (MD9)
+            for i in range(n_digits):
+                if x[i] == y[i] and x[i] < 9:
+                    x[i] += 1
+            bs_only.append(make_sub_example(x, y, n_digits))
+        categories["sub_bs_only"] = bs_only
+
+        # MB1 + UB1: borrows but no diff-0 propagation
+        mb1_ub1 = []
+        for _ in range(20):
+            while True:
+                x = [random.randint(0, 9) for _ in range(n_digits)]
+                y = [random.randint(0, 9) for _ in range(n_digits)]
+                # Ensure x >= y
+                x_val = int("".join(str(d) for d in x))
+                y_val = int("".join(str(d) for d in y))
+                if x_val < y_val:
+                    x, y = y, x
+                # Ensure no x_i == y_i (avoids MD9/UD9)
+                ok = all(x[i] != y[i] for i in range(n_digits))
+                # Ensure at least one borrow
+                has_borrow = any(x[i] < y[i] for i in range(n_digits))
+                if ok and has_borrow:
+                    break
+            mb1_ub1.append(make_sub_example(x, y, n_digits))
+        categories["sub_mb1_ub1"] = mb1_ub1
+
+        # Random subtraction
+        categories["sub_random"] = [random_sub_example(n_digits) for _ in range(64)]
 
     return categories
 
 
-def eval_accuracy(model, n_digits: int = 6, device: str = "cuda", batch_size: int = 32):
+def eval_accuracy(model_wrapper, n_digits: int = 6, ops: str = "add",
+                  device: str = "cuda"):
     """
-    Evaluate model accuracy on structured eval sets.
-    Returns dict of category -> (full_accuracy, per_digit_accuracy, per_subtask_accuracy).
+    Evaluate accuracy on structured eval sets.
+    model_wrapper must have .get_logits(tokens) method.
+    Returns dict of category -> {full_acc, per_subtask_acc, n_examples}.
     """
-    categories = make_eval_set(n_digits, device)
+    categories = make_eval_set(n_digits, ops, device)
     results = {}
     ans_len = n_digits + 1
-    seq_len = 3 * n_digits + 3
     ans_start = 2 * n_digits + 2
 
     for cat_name, examples in categories.items():
         if not examples:
             continue
 
-        tokens = torch.tensor([e.tokens for e in examples], dtype=torch.long, device=device)
+        tokens = torch.tensor(
+            [e.tokens for e in examples], dtype=torch.long, device=device
+        )
         all_labels = [e.labels for e in examples]
 
-        # Get model predictions
         with torch.no_grad():
-            logits = model.get_logits(tokens)  # (B, seq_len, vocab)
-            # Predict answer digits: argmax at positions ans_start-1 ... seq_len-2
+            logits = model_wrapper.get_logits(tokens)
             pred_logits = logits[:, ans_start - 1:-1, :NUM_TOKENS]
-            preds = pred_logits.argmax(dim=-1)  # (B, ans_len)
+            preds = pred_logits.argmax(dim=-1)
 
-        targets = tokens[:, ans_start:]  # (B, ans_len)
-        correct_digits = (preds == targets)  # (B, ans_len)
-
-        # Full sequence accuracy
+        targets = tokens[:, ans_start:]
+        correct_digits = (preds == targets)
         full_acc = correct_digits.all(dim=1).float().mean().item()
 
-        # Per-digit accuracy
-        per_digit_acc = correct_digits.float().mean(dim=0).tolist()
-
-        # Per sub-task accuracy
-        subtask_correct = {t: [] for t in ["BA", "MC1", "MS9", "UC1", "US9"]}
+        subtask_correct = {t: [] for t in ALL_LABELS}
         for b in range(len(examples)):
             for d in range(ans_len):
                 label = all_labels[b][d]
@@ -276,7 +362,6 @@ def eval_accuracy(model, n_digits: int = 6, device: str = "cuda", batch_size: in
 
         results[cat_name] = {
             "full_acc": full_acc,
-            "per_digit_acc": per_digit_acc,
             "per_subtask_acc": per_subtask_acc,
             "n_examples": len(examples),
         }
