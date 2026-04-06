@@ -60,3 +60,35 @@ torchrun \
   --vqvae_lr 1e-5 \
   --vqvae_batch_size 32 \
   --vqvae_save_ckpt $VQVAE_CKPT
+
+# ============================================================================
+# Pause Token — GSM8K + Qwen3-1.7B + LoRA
+# ============================================================================
+OUTPUT_DIR="./ckpt/ablation_${TIMESTAMP}/pause_gsm_1.7B"
+
+torchrun \
+  --nproc_per_node=1 \
+  --master_addr=127.0.0.1 \
+  --master_port=29601 \
+  train_pause_pt.py \
+  --model_name $MODEL \
+  --dataset $DATASET \
+  --max_length 512 \
+  --lr 1e-5 \
+  --warmup_steps 50 \
+  --batch_size 2 \
+  --gradient_accumulation_steps 4 \
+  --num_epochs 3 \
+  --log_every 10 \
+  --log_samples_every 999999 \
+  --num_log_samples 3 \
+  --eval_every 99999 \
+  --save_every 99999 \
+  --eval_samples 1319 \
+  --eval_batch_size 64 \
+  --max_new_tokens 256 \
+  --output_dir $OUTPUT_DIR \
+  --use_lora \
+  --lora_r 16 \
+  --lora_alpha 32 \
+  --k_pause 8
