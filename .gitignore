@@ -11,6 +11,7 @@ results_*
 *.pt
 .DS_Store
 log/*
+!log/*.md
 
 # Local NCCL tuner placeholder created by repo-owned launchers on RunPod.
 dummy_tuner_config.txt

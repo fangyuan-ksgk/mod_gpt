@@ -1,233 +1,228 @@
 """
-Unified training script for arithmetic experiments.
-Supports baseline and SoRL modes, addition-only and mixed add+sub.
+Arithmetic training with Qwen3 + SorlModelWrapper.
 
-Usage:
-    python -m arithmetic.train --ops add --n_abs_tokens 0   # baseline addition
-    python -m arithmetic.train --ops add --n_abs_tokens 16  # SoRL addition
-    python -m arithmetic.train --ops add_sub --n_abs_tokens 0  # baseline mixed
-    python -m arithmetic.train --ops add --batch_size 512 --bf16  # fast baseline
+Baseline:  python -m arithmetic.train --mode baseline --ops add
+SoRL v6:   python -m arithmetic.train --mode sorl --ops add --abs_vocab 16
 """
 import os
 import sys
 import json
 import argparse
 import torch
-import time
+import random
 from pathlib import Path
-from contextlib import nullcontext
+from torch.utils.data import Dataset
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from arithmetic.model import ArithmeticModel
+from transformers import Qwen3Config, AutoTokenizer
+from sorl.sorl_wrapper import SorlModelWrapper
+from sorl.selfroute import SoRLTrainerv6
+from sorl.trainer_ablate import SoRLTrainer, SoRLConfig
 from arithmetic.datasets.addition import (
     generate_batch, eval_accuracy, NUM_TOKENS, ALL_LABELS,
 )
 
 torch.set_float32_matmul_precision('high')
 
+TOKENIZER_NAME = "Qwen/Qwen3-0.6B"
 
-def sorl_train_step(wrapper, tokens, loss_fn, K, n_rollouts, max_iterations,
-                    temperatures, alpha_info_gain, alpha_abs, alpha_soft_zipf,
-                    amp_ctx):
-    """SoRL training step with abstraction token search.
-    sorl_search requires batch=1, so we loop over samples and accumulate."""
-    from sorl.neo_utils import sorl_search
 
-    B = tokens.shape[0]
-    total_loss = torch.tensor(0.0, device=tokens.device)
+# ── Dataset adapter ─────────────────────────────────────────────────
 
-    for i in range(B):
-        sample = tokens[i:i+1]
+class ArithmeticDataset(Dataset):
+    """
+    On-the-fly arithmetic dataset formatted for SoRL trainers.
+    Returns {"input_ids": (seq_len,), "attention_mask": (seq_len,), "prompt_len": int}
+    """
+
+    def __init__(self, tokenizer, n_digits=6, ops="add", size=100_000):
+        self.tokenizer = tokenizer
+        self.n_digits = n_digits
+        self.ops = ops
+        self.size = size
+        self.prompt_len = 2 * n_digits + 2  # XXXXXX+YYYYYY=
+        self.seq_len = 3 * n_digits + 3     # + ZZZZZZZ
+
+    def __len__(self):
+        return self.size
+
+    def __getitem__(self, idx):
+        tokens, _, _ = generate_batch(1, self.n_digits, ops=self.ops,
+                                      use_sum9_aug=True, device="cpu")
+        token_ids = self._map_to_qwen_ids(tokens[0])
+        return {
+            "input_ids": token_ids,
+            "attention_mask": torch.ones(len(token_ids), dtype=torch.long),
+            "prompt_len": torch.tensor(self.prompt_len, dtype=torch.long),
+        }
+
+    def _map_to_qwen_ids(self, digit_tokens):
+        """Map our 0-12 token IDs to Qwen3 tokenizer IDs."""
+        # Our tokens: 0-9=digits, 10=+, 11==, 12=-
+        # Qwen3:      15-24=digits, 10=+, 28==, 12=-
+        mapping = {i: 15 + i for i in range(10)}  # digits
+        mapping[10] = 10   # +
+        mapping[11] = 28   # =
+        mapping[12] = 12   # -
+        return torch.tensor([mapping[t.item()] for t in digit_tokens], dtype=torch.long)
+
+
+def collate_fn(batch):
+    """Collate for uniform-length arithmetic sequences."""
+    return {
+        "input_ids": torch.stack([b["input_ids"] for b in batch]),
+        "attention_mask": torch.stack([b["attention_mask"] for b in batch]),
+        "prompt_len": torch.stack([b["prompt_len"] for b in batch]),
+    }
+
+
+# ── Accuracy callback ──────────────────────────────────────────────
+
+def compute_accuracy(model, tokenizer, dataset, device, num_samples, **kwargs):
+    """Accuracy callback for the trainer's eval loop."""
+    model.eval()
+    n_correct, n_total = 0, 0
+    prompt_len = dataset.prompt_len
+    seq_len = dataset.seq_len
+
+    for _ in range(num_samples):
+        item = dataset[0]  # random each time (online gen)
+        ids = item["input_ids"].unsqueeze(0).to(device)
+        attn = item["attention_mask"].unsqueeze(0).to(device)
 
         with torch.no_grad():
-            search_tokens, _, _ = sorl_search(
-                sample, wrapper.model, n=n_rollouts, K=K,
-                max_iterations=max_iterations,
-                memory_span=wrapper.memory_span,
-                attn_blocksize=wrapper.attn_blocksize,
-                temperature=temperatures,
-                truncate_seq_len=False,
-            )
+            out = model(ids, attention_mask=attn,
+                        memory_span_abs=1792, memory_span_traj=1792)
+            logits = out.logits
 
-        with amp_ctx:
-            base_loss = wrapper.train_loss(sample)
-            info_gain, abs_loss, zipf_loss = loss_fn(
-                search_tokens, wrapper.model, base_loss.detach(),
-                wrapper.memory_span, wrapper.attn_blocksize,
-            )
-        total_loss = total_loss + base_loss + alpha_info_gain * info_gain + alpha_abs * abs_loss + alpha_soft_zipf * zipf_loss
+        # Check answer digits
+        pred = logits[0, prompt_len - 1:-1].argmax(dim=-1)
+        target = ids[0, prompt_len:]
+        if (pred == target).all():
+            n_correct += 1
+        n_total += 1
 
-    return total_loss / B
+    model.train()
+    return {"accuracy": n_correct / max(n_total, 1)}
 
 
-def train(args):
-    device = args.device
-    n_params = None
+# ── Model factory ──────────────────────────────────────────────────
 
-    # ── Print config ────────────────────────────────────────
-    mode = "SoRL" if args.n_abs_tokens > 0 else "baseline"
-    print(f"{'═' * 60}")
-    print(f"  {mode} | ops={args.ops} | abs_tokens={args.n_abs_tokens}")
-    print(f"  arch: {args.n_layer}L/{args.n_head}H/{args.n_embd}d")
-    print(f"  train: {args.num_steps} steps, batch={args.batch_size}, lr={args.lr}")
-    print(f"  bf16={args.bf16}, compile={not args.no_compile}")
-    print(f"{'═' * 60}")
-
-    wrapper = ArithmeticModel(
-        n_digits=args.n_digits,
-        n_abs_tokens=args.n_abs_tokens,
-        n_layer=args.n_layer,
-        n_head=args.n_head,
-        n_embd=args.n_embd,
-        device=device,
-        compile_model=not args.no_compile,
-    )
-    model = wrapper.model
-    n_params = sum(p.numel() for p in model.parameters())
-    print(f"  params: {n_params:,}")
-
-    # ── AMP context ─────────────────────────────────────────
-    amp_ctx = torch.autocast(device_type='cuda', dtype=torch.bfloat16) if args.bf16 else nullcontext()
-    scaler = torch.amp.GradScaler('cuda', enabled=args.bf16)
-
-    # ── Optimizer + scheduler ───────────────────────────────
-    optimizer = torch.optim.AdamW(
-        model.parameters(), lr=args.lr, weight_decay=args.weight_decay,
-        betas=(0.9, 0.98),
-    )
-    warmup_steps = max(int(args.num_steps * 0.2), 10)
-    warmup_sched = torch.optim.lr_scheduler.LinearLR(
-        optimizer, start_factor=0.01, total_iters=warmup_steps
-    )
-    cosine_sched = torch.optim.lr_scheduler.CosineAnnealingLR(
-        optimizer, T_max=args.num_steps - warmup_steps
-    )
-    scheduler = torch.optim.lr_scheduler.SequentialLR(
-        optimizer, [warmup_sched, cosine_sched], milestones=[warmup_steps]
+def make_model(args, tokenizer):
+    """Create tiny Qwen3 wrapped in SorlModelWrapper."""
+    config = Qwen3Config(
+        hidden_size=args.n_embd,
+        num_hidden_layers=args.n_layer,
+        num_attention_heads=args.n_head,
+        num_key_value_heads=args.n_head,
+        intermediate_size=args.n_embd * 4,
+        vocab_size=tokenizer.vocab_size,
+        max_position_embeddings=128,
     )
 
-    # ── SoRL setup ──────────────────────────────────────────
-    loss_fn = None
-    if wrapper.is_sorl:
-        from sorl.info import SoRLLoss
-        loss_fn = SoRLLoss(wrapper.model.vocab_sizes[1])
-        temperatures = torch.tensor([0.0, 5.0], device=device)
+    # Always include abstract vocab (even baseline) to avoid edge case in
+    # _setup_vocabulary. For baseline, abs tokens exist but are never used.
+    abs_vocab = args.abs_vocab if args.abs_vocab > 0 else 1
+    model = SorlModelWrapper.from_scratch(
+        config,
+        full_vocab_size_list=[tokenizer.vocab_size, abs_vocab],
+        pad_token_id=tokenizer.pad_token_id,
+    )
+    return model
 
-    history = []
-    best_acc = 0.0
-    t0 = time.time()
 
-    for step in range(1, args.num_steps + 1):
-        model.train()
-        optimizer.zero_grad()
-
-        tokens, labels, _ = generate_batch(
-            args.batch_size, args.n_digits, ops=args.ops,
-            use_sum9_aug=True, device=device,
-        )
-
-        if wrapper.is_sorl:
-            loss = sorl_train_step(
-                wrapper, tokens, loss_fn,
-                K=args.sorl_K, n_rollouts=args.sorl_n,
-                max_iterations=args.sorl_max_iter,
-                temperatures=temperatures,
-                alpha_info_gain=args.alpha_info_gain,
-                alpha_abs=args.alpha_abs,
-                alpha_soft_zipf=args.alpha_soft_zipf,
-                amp_ctx=amp_ctx,
-            )
-        else:
-            with amp_ctx:
-                loss = wrapper.train_loss(tokens)
-
-        scaler.scale(loss).backward()
-        scaler.unscale_(optimizer)
-        torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
-        scaler.step(optimizer)
-        scaler.update()
-        scheduler.step()
-
-        # ── Logging ─────────────────────────────────────────
-        if step % args.log_every == 0:
-            model.eval()
-            with torch.no_grad(), amp_ctx:
-                eval_tokens, _, _ = generate_batch(
-                    256, args.n_digits, ops=args.ops,
-                    use_sum9_aug=False, device=device,
-                )
-                acc = wrapper.predict_accuracy(eval_tokens)
-
-            elapsed = time.time() - t0
-            steps_per_sec = step / elapsed
-            record = {"step": step, "loss": loss.item(), "acc": acc, "time": elapsed}
-            history.append(record)
-            marker = " *" if acc > best_acc else ""
-            print(f"step {step:6d} | loss {loss.item():.4f} | acc {acc:.3f} | {steps_per_sec:.1f} it/s{marker}")
-            if acc > best_acc:
-                best_acc = acc
-
-        # ── Detailed eval ───────────────────────────────────
-        if step % args.eval_every == 0:
-            model.eval()
-            results = eval_accuracy(wrapper, args.n_digits, args.ops, device)
-            print(f"\n{'─' * 70}")
-            for cat, res in results.items():
-                st = " | ".join(f"{t}:{v:.2f}" for t, v in sorted(res["per_subtask_acc"].items()))
-                print(f"  {cat:20s} | full:{res['full_acc']:.3f} | {st}")
-            print(f"{'─' * 70}\n")
-
-    # ── Save ────────────────────────────────────────────────
-    if args.save_dir:
-        save_dir = Path(args.save_dir)
-        wrapper.save(save_dir)
-        with open(save_dir / "history.json", "w") as f:
-            json.dump(history, f, indent=2)
-        cfg = {k: v for k, v in vars(args).items()}
-        cfg["n_params"] = n_params
-        with open(save_dir / "config.json", "w") as f:
-            json.dump(cfg, f, indent=2)
-        print(f"Saved to {save_dir}")
-
-    print(f"Best accuracy: {best_acc:.3f}")
-    return wrapper, history
-
+# ── Main ────────────────────────────────────────────────────────────
 
 def main():
     p = argparse.ArgumentParser()
-    # Task
-    p.add_argument("--ops", type=str, default="add", choices=["add", "add_sub"])
+    p.add_argument("--mode", choices=["baseline", "sorl"], default="baseline")
+    p.add_argument("--ops", choices=["add", "add_sub"], default="add")
     p.add_argument("--n_digits", type=int, default=6)
     # Architecture
-    p.add_argument("--n_layer", type=int, default=4, help="Quirke uses 3; GAT U-net min=2")
-    p.add_argument("--n_head", type=int, default=4, help="Quirke uses 4")
-    p.add_argument("--n_embd", type=int, default=512, help="Quirke uses 510; 512 divides by 4")
+    p.add_argument("--n_layer", type=int, default=3)
+    p.add_argument("--n_head", type=int, default=4)
+    p.add_argument("--n_embd", type=int, default=512)
     # SoRL
-    p.add_argument("--n_abs_tokens", type=int, default=0, help="0=baseline, >0=SoRL")
-    p.add_argument("--sorl_K", type=int, default=3, help="abstraction insertion ratio")
-    p.add_argument("--sorl_n", type=int, default=2, help="number of search rollouts")
-    p.add_argument("--sorl_max_iter", type=int, default=2, help="denoising iterations")
-    p.add_argument("--alpha_info_gain", type=float, default=10.0)
-    p.add_argument("--alpha_abs", type=float, default=0.1)
-    p.add_argument("--alpha_soft_zipf", type=float, default=1.0)
+    p.add_argument("--abs_vocab", type=int, default=0, help="0=baseline, >0=SoRL")
+    p.add_argument("--K", type=int, default=4, help="insert abstract token every K tokens")
+    p.add_argument("--trainer", choices=["v1", "v3", "v6"], default="v6")
     # Training
-    p.add_argument("--batch_size", type=int, default=512)
-    p.add_argument("--num_steps", type=int, default=20000, help="Quirke uses 15K-40K")
+    p.add_argument("--batch_size", type=int, default=64)
+    p.add_argument("--num_epochs", type=int, default=3)
+    p.add_argument("--dataset_size", type=int, default=100_000)
     p.add_argument("--lr", type=float, default=8e-5)
-    p.add_argument("--weight_decay", type=float, default=0.1)
-    # Compute
-    p.add_argument("--bf16", action="store_true", help="bfloat16 mixed precision")
-    p.add_argument("--no_compile", action="store_true")
-    # Logging
-    p.add_argument("--log_every", type=int, default=100)
-    p.add_argument("--eval_every", type=int, default=2000)
     # System
-    p.add_argument("--save_dir", type=str, default=None)
+    p.add_argument("--output_dir", type=str, default="ckpt/arithmetic")
     p.add_argument("--device", type=str, default="cuda")
-
     args = p.parse_args()
-    train(args)
+
+    # Enforce: baseline means abs_vocab=0
+    if args.mode == "baseline":
+        args.abs_vocab = 0
+
+    tokenizer = AutoTokenizer.from_pretrained(TOKENIZER_NAME)
+    model = make_model(args, tokenizer)
+    n_params = sum(p.numel() for p in model.parameters())
+
+    print(f"{'═' * 60}")
+    print(f"  mode={args.mode} | ops={args.ops} | abs_vocab={args.abs_vocab}")
+    print(f"  arch: {args.n_layer}L/{args.n_head}H/{args.n_embd}d | params: {n_params:,}")
+    print(f"  train: {args.num_epochs} epochs × {args.dataset_size} samples, batch={args.batch_size}")
+    print(f"{'═' * 60}")
+
+    train_ds = ArithmeticDataset(tokenizer, args.n_digits, args.ops, args.dataset_size)
+    val_ds = ArithmeticDataset(tokenizer, args.n_digits, args.ops, 1000)
+
+    cfg = SoRLConfig(
+        K=args.K,
+        batch_size=args.batch_size,
+        num_epochs=args.num_epochs,
+        lr=args.lr,
+        output_dir=args.output_dir,
+        log_every=50,
+        eval_every=500,
+        save_every=1000,
+        eval_samples=100,
+        # For baseline: all alpha=0 means loss = base_traj_loss
+        alpha_info_gain=0.0 if args.mode == "baseline" else 10.0,
+        alpha_abs=0.0 if args.mode == "baseline" else 0.1,
+        alpha_soft_zipf=0.0 if args.mode == "baseline" else 1.0,
+        alpha_traj=1.0,
+    )
+
+    if args.mode == "baseline" or args.trainer == "v1":
+        trainer = SoRLTrainer(
+            model, tokenizer, train_ds, val_ds,
+            compute_accuracy=compute_accuracy,
+            collate_fn=collate_fn,
+            config=cfg,
+            device=args.device,
+        )
+    elif args.trainer == "v6":
+        trainer = SoRLTrainerv6(
+            model, tokenizer, train_ds, val_ds,
+            compute_accuracy=compute_accuracy,
+            collate_fn=collate_fn,
+            config=cfg,
+            device=args.device,
+        )
+    elif args.trainer == "v3":
+        from sorl.trainer_ablate import SoRLTrainerv3
+        trainer = SoRLTrainerv3(
+            model, tokenizer, train_ds, val_ds,
+            compute_accuracy=compute_accuracy,
+            collate_fn=collate_fn,
+            config=cfg,
+            device=args.device,
+        )
+
+    # Save config
+    os.makedirs(args.output_dir, exist_ok=True)
+    with open(os.path.join(args.output_dir, "config.json"), "w") as f:
+        json.dump(vars(args), f, indent=2)
+
+    trainer.train()
 
 
 if __name__ == "__main__":
