@@ -973,7 +973,7 @@ class DeepMindCodeContestsDataset(Dataset):
         def _has_py3(ex):
             sols = ex.get("solutions", {})
             return 3 in sols.get("language", [])
-        self.dataset = raw.filter(_has_py3)
+        self.dataset = raw.filter(_has_py3, num_proc=4)
         self.tokenizer = tokenizer
         self.max_length = max_length
 
