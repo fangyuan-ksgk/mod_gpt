@@ -305,7 +305,8 @@ Estimated wall time: ~10-12 hours with parallelism.
 
 Full plan in [`docs/interpretability_study.md`](../docs/interpretability_study.md).
 
-**Token-level interventions** ([`arithmetic/interp_utils/interventions.py`](../arithmetic/interp_utils/interventions.py)):
+**Token-level interventions** ([`arithmetic/interp_utils/interventions.py`](../arithmetic/interp_utils/interventions.py)),
+tested in [`test_interventions.py`](../arithmetic/interp_utils/test_interventions.py) (20 tests, all passing):
 
 Every activation-level intervention from Quirke has a token-level SoRL analog:
 
