@@ -1,8 +1,8 @@
 ## Goal
 
 We mirror and extend Quirke et al.'s study on arithmetic in transformers.
-- Quirke: https://arxiv.org/abs/2402.02619 (addition + subtraction, 2024)
-- Nanda: https://arxiv.org/abs/2310.13121 (addition, ICLR 2024)
+- Quirke et al., https://arxiv.org/abs/2402.02619 (addition + subtraction, 2024)
+- Quirke & Barez, https://arxiv.org/abs/2310.13121 (addition, ICLR 2024)
 
 **Hypothesis:**
 Transformers learn carry/borrow circuits as latent mechanisms discoverable only through
