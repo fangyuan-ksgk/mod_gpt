@@ -969,11 +969,15 @@ class DeepMindCodeContestsDataset(Dataset):
 
     def __init__(self, split="train", tokenizer=None, max_length=1024):
         raw = load_dataset("deepmind/code_contests", split=split)
-        # Keep only problems that have at least one Python 3 solution (language==3)
-        def _has_py3(ex):
-            sols = ex.get("solutions", {})
-            return 3 in sols.get("language", [])
-        self.dataset = raw.filter(_has_py3, num_proc=4)
+        # For train: keep only problems with a Python 3 solution (language==3).
+        # For test/valid: keep all problems — gold solutions not needed for eval.
+        if split == "train":
+            def _has_py3(ex):
+                sols = ex.get("solutions", {})
+                return 3 in sols.get("language", [])
+            self.dataset = raw.filter(_has_py3, num_proc=4)
+        else:
+            self.dataset = raw
         self.tokenizer = tokenizer
         self.max_length = max_length
 
