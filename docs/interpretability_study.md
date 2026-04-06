@@ -11,7 +11,47 @@ explicit abstraction tokens, making them directly observable and intervenable.
 
 ---
 
-## Quirke's Interpretability Toolkit (what we replicate and extend)
+## Classical Mech Interp vs SoRL Interp — Summary
+
+The core claim: SoRL converts every activation-level analysis into a token-level analysis.
+
+```
+  ┌──────────────────────────────┬──────────────────────────────────────────────┐
+  │ Classical Mech Interp        │ SoRL Interp                                  │
+  │ (Quirke on baseline)         │ (our contribution)                           │
+  ├──────────────────────────────┼──────────────────────────────────────────────┤
+  │ Hypothesis: "head L0H1 at    │ Hypothesis: "token #3 encodes carry info"   │
+  │ P10 computes ST2"            │ — directly readable from token ID           │
+  ├──────────────────────────────┼──────────────────────────────────────────────┤
+  │ Discovery: automated search  │ Discovery: count P(token | subtask_label)   │
+  │ over all heads × positions   │ — one pass over labeled eval data           │
+  ├──────────────────────────────┼──────────────────────────────────────────────┤
+  │ Verification: PCA shows 3    │ Verification: 3 distinct token IDs used     │
+  │ clusters in head activations │ at tri-state positions                      │
+  ├──────────────────────────────┼──────────────────────────────────────────────┤
+  │ Intervention: patch head     │ Intervention: swap token value              │
+  │ activations between pairs    │ between paired questions                    │
+  │ (TransformerLens hooks)      │ (one line: tokens[pos] = new_val)           │
+  ├──────────────────────────────┼──────────────────────────────────────────────┤
+  │ Ablation: mean-ablate a head │ Ablation: replace token with placeholder    │
+  │ → measure accuracy drop      │ → measure accuracy drop                    │
+  ├──────────────────────────────┼──────────────────────────────────────────────┤
+  │ Ordering: verify head at P10 │ Ordering: verify token at position k        │
+  │ fires before head at P14     │ encodes info used by answer digit at k+n    │
+  ├──────────────────────────────┼──────────────────────────────────────────────┤
+  │ Polysemanticity: one head    │ Polysemanticity: one token used for both    │
+  │ computes SA + MD + ND        │ SA + MD? (test: does vocab >= sub-tasks     │
+  │ (discovered via ablation)    │ eliminate this?)                            │
+  ├──────────────────────────────┼──────────────────────────────────────────────┤
+  │ Tools needed: TransformerLens│ Tools needed: token indexing                │
+  │ hooks, cached activations,   │ (no hooks, no caching, no special          │
+  │ PCA, SAE training            │ frameworks)                                │
+  └──────────────────────────────┴──────────────────────────────────────────────┘
+```
+
+---
+
+## Quirke's Interpretability Toolkit (detailed)
 
 Quirke uses 6 analysis methods on baseline models. For each, we show the SoRL parallel.
 
@@ -139,14 +179,36 @@ For baseline models (no SoRL), extract internal representations:
 
 ### Phase 5: Paired Interventions
 
-For each reasoning mechanism (carry, borrow, cascade):
-- **Baseline:** activation patching — swap node activations between paired questions
-- **SoRL:** token swap — swap abstraction tokens between paired questions
-- **Measure:** error increase on the corresponding complexity class
+Implementation: [`arithmetic/interp_utils/interventions.py`](../arithmetic/interp_utils/interventions.py)
+(tested: [`test_interventions.py`](../arithmetic/interp_utils/test_interventions.py), 20 tests passing)
 
+For each reasoning mechanism (carry, borrow, cascade):
+
+**Baseline (activation-level):**
+- Mean ablation of attention head / MLP layer (Quirke's primary method)
+- Activation patching between paired questions
+
+**SoRL (token-level) — implemented utils:**
+
+| Function | Quirke analog | What it tests |
+|---|---|---|
+| `token_knockout(tokens, positions, placeholder)` | Mean ablation | Does removing this token break the answer? |
+| `knockout_at_digit(tokens, digit_idx, ...)` | Per-node ablation | Which abs tokens matter for digit N? |
+| `token_swap(tokens_a, tokens_b, positions)` | Activation patching | Does swapping tokens swap the answer? |
+| `swap_at_digit(tokens_a, tokens_b, digit_idx)` | Per-digit patching | Causal test for specific digit |
+| `token_replace(tokens, replacement_id)` | Zero/mean ablation | Replace with fixed value |
+| `token_replace_random(tokens, ...)` | Random perturbation | Noise injection baseline |
+| `token_shuffle(tokens, base_vocab)` | — (new) | Does token identity matter or just presence? |
+| `measure_intervention_effect(model, orig, interv)` | Accuracy measurement | Digits changed, accuracy drop |
+
+**Protocol:**
 The paired questions come from Quirke's tricase test generator: for each answer digit
 and ST value (0, 1, U), generate 100 questions. Intervention on the correct node/token
 should predictably change the answer.
+
+**Key experiment:** For a trained SoRL model, run `knockout_at_digit` for each digit 0-6,
+measure accuracy drop by complexity level. This produces a "quanta map" equivalent showing
+which abstraction tokens are load-bearing for which answer digits at which complexity.
 
 ### Phase 6: Feature-Token Mapping
 
