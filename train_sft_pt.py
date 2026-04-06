@@ -101,9 +101,13 @@ def parse_args():
                             "winogrande", "boolq", "openbookqa",
                             "commonsenseqa", "mmlu",
                             "aqua", "math", "scienceqa",
-                            "mbpp", "humaneval", "livecodebench", "codecontests",
+                            "mbpp", "humaneval", "livecodebench", "codecontests", "deepmind_code_contests",
                             "wildifeval", "xlam"])
-    p.add_argument("--max_length", type=int, default=256)
+    max_length_dict = {"gsm8k": 512, "math_qa": 512, "arc": 256, "hellaswag": 512, "winogrande": 256, "boolq": 512, "openbookqa": 256, "commonsenseqa": 256, "mmlu": 256,
+                       "mbpp": 1024, "humaneval": 1024, "livecodebench": 1024, "codecontests": 1024, "deepmind_code_contests": 1024, "wildifeval": 2048, "xlam": 1024}
+    max_new_tokens_dict = {"gsm8k": 128, "math_qa": 128, "arc": 64, "hellaswag": 64, "winogrande": 64, "boolq": 64, "openbookqa": 64, "commonsenseqa": 64, "mmlu": 64,
+                           "mbpp": 256, "humaneval": 256, "livecodebench": 256, "codecontests": 512, "deepmind_code_contests": 512, "wildifeval": 1024, "xlam": 256}
+    p.add_argument("--max_length", type=int, default=max_length_dict["gsm8k"])
 
     # Optimizer
     p.add_argument("--lr", type=float, default=1e-5)

@@ -30,13 +30,27 @@ MAX_LENGTH=512
 LOG_EVERY=10
 EVAL_EVERY=99999
 SAVE_EVERY=99999
-EVAL_SAMPLES=1300
 EVAL_BATCH_SIZE=64
 MAX_NEW_TOKENS=256
 
 # dataset: (gsm8k, scienceqa, math, arc)
 # model: (Qwen3-4B, Qwen3-8B, Qwen3-14B)
 # sft baseline (no SoRL, just LoRA)
+DS_MMLU="mmlu"
+DS_CSQA="commonsenseqa"
+
+eval_samples_for_dataset() {
+  local dataset=$1
+  case "$dataset" in
+    gsm8k) echo 1319 ;;
+    scienceqa) echo 2224 ;;
+    math) echo 5000 ;;
+    arc) echo 1172 ;;
+    mmlu) echo 2000 ;;
+    commonsenseqa) echo 1221 ;;
+    *) echo 1000 ;;
+  esac
+}
 
 TIMESTAMP=$(date +%Y%m%d_%H%M)
 EXP_IDX=0
@@ -62,6 +76,7 @@ run_bg() {
   local model=$1; shift
   local dataset=$1; shift
   local grad_accum=$((8 / BATCH_SIZE))
+  local eval_samples=$(eval_samples_for_dataset "$dataset")
   local output_dir="./ckpt/sweep_${TIMESTAMP}/exp${idx}_${tag}"
 
   echo "  Exp ${idx}: ${tag}  model=$(basename $model)  dataset=${dataset}  [GPU=${gpu}]"
@@ -82,7 +97,7 @@ run_bg() {
     --log_every $LOG_EVERY \
     --eval_every $EVAL_EVERY \
     --save_every $SAVE_EVERY \
-    --eval_samples $EVAL_SAMPLES \
+    --eval_samples $eval_samples \
     --eval_batch_size $EVAL_BATCH_SIZE \
     --max_new_tokens $MAX_NEW_TOKENS \
     --output_dir $output_dir \
@@ -104,6 +119,8 @@ run_bg "sft_gsm_4B"   $M4  $DS_GSM
 run_bg "sft_sci_4B"   $M4  $DS_SCI
 run_bg "sft_math_4B"  $M4  $DS_MATH
 run_bg "sft_arc_4B"   $M4  $DS_ARC
+run_bg "sft_mmlu_4B"  $M4  $DS_MMLU
+run_bg "sft_csqa_4B"  $M4  $DS_CSQA
 wait
 
 # ============================================================================
@@ -118,6 +135,8 @@ run_bg "sft_gsm_8B"   $M8  $DS_GSM
 run_bg "sft_sci_8B"   $M8  $DS_SCI
 run_bg "sft_math_8B"  $M8  $DS_MATH
 run_bg "sft_arc_8B"   $M8  $DS_ARC
+run_bg "sft_mmlu_8B"  $M8  $DS_MMLU
+run_bg "sft_csqa_8B"  $M8  $DS_CSQA
 wait
 
 # ============================================================================
@@ -132,6 +151,8 @@ run_bg "sft_gsm_14B"   $M14  $DS_GSM
 run_bg "sft_sci_14B"   $M14  $DS_SCI
 run_bg "sft_math_14B"  $M14  $DS_MATH
 run_bg "sft_arc_14B"   $M14  $DS_ARC
+run_bg "sft_mmlu_14B"  $M14  $DS_MMLU
+run_bg "sft_csqa_14B"  $M14  $DS_CSQA
 wait
 
 echo ""

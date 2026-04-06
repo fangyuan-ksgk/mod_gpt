@@ -32,8 +32,9 @@ MODEL_NAME="Qwen/Qwen3-0.6B"
 # - xlam (max len 1024 & new token 256)
 # - codecontest (max len & new token)
 
-DATASET="gsm8k"
-MAX_LENGTH=512
+DATASET="xlam"
+MAX_LENGTH=1024
+MAX_NEW_TOKENS=256
 
 # Optimizer
 LR=1e-5

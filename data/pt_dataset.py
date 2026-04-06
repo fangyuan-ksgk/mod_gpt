@@ -964,6 +964,96 @@ class WildIFEvalDataset(Dataset):
         return text.strip()
 
 
+class DeepMindCodeContestsDataset(Dataset):
+    """DeepMind Code Contests dataset (deepmind/code_contests)."""
+
+    def __init__(self, split="train", tokenizer=None, max_length=1024):
+        self.dataset = load_dataset("deepmind/code_contests", split=split)
+        self.tokenizer = tokenizer
+        self.max_length = max_length
+
+    def __len__(self):
+        return len(self.dataset)
+
+    def __getitem__(self, idx):
+        ex = self.dataset[idx]
+        description = ex.get("description", "").strip()
+
+        # Pick the first Python solution if available (language=3 is Python 3)
+        solutions = ex.get("solutions", {})
+        solution = ""
+        
+        if "language" in solutions and "solution" in solutions:
+            for lang, sol in zip(solutions["language"], solutions["solution"]):
+                # 3 is typically Python 3, 1 is Python 2
+                if lang in (3, 1):
+                    solution = sol.strip()
+                    break
+
+        prompt = f"# Problem:\n{description}\n\n# Solution:\n"
+        text = f"{prompt}{solution}" if solution else prompt
+
+        if self.tokenizer:
+            # Tokenize prompt only
+            prompt_ids = self.tokenizer(prompt, truncation=False, add_special_tokens=False)["input_ids"]
+            
+            # Tokenize full text
+            encoded = self.tokenizer(
+                text,
+                truncation=True,
+                max_length=self.max_length,
+                padding="max_length",
+                return_tensors="pt"
+            )
+            input_ids = encoded["input_ids"].squeeze(0)
+            attention_mask = encoded["attention_mask"].squeeze(0)
+
+            # Create labels: -100 for prompt and padding
+            labels = input_ids.clone()
+            labels[:len(prompt_ids)] = -100
+            labels[attention_mask == 0] = -100
+
+            return {
+                "input_ids": input_ids,
+                "attention_mask": attention_mask,
+                "labels": labels,
+                "prompt_len": len(prompt_ids)
+            }
+        
+        return {
+            "text": text,
+            "prompt": prompt,
+            "solution": solution
+        }
+
+    def get_test_cases(self, idx):
+        """Returns test cases for sandbox evaluation."""
+        ex = self.dataset[idx]
+        public_tests = ex.get("public_tests", {})
+        private_tests = ex.get("private_tests", {})
+        
+        inputs = []
+        outputs = []
+        
+        if "input" in public_tests and "output" in public_tests:
+            inputs.extend(public_tests["input"])
+            outputs.extend(public_tests["output"])
+            
+        if "input" in private_tests and "output" in private_tests:
+            inputs.extend(private_tests["input"])
+            outputs.extend(private_tests["output"])
+            
+        return {
+            "preamble": "",
+            "check": "",
+            "stdin": inputs,
+            "stdout": outputs,
+        }
+
+    def extract_answer(self, text):
+        return text.strip()
+
+
 class CodeContestsDataset(Dataset):
     """CodeContests-O competitive programming problems (train + test splits)."""
 
@@ -1093,7 +1183,7 @@ class XLAMDataset(Dataset):
     def __init__(self, split="train", tokenizer=None, max_length=1024):
         full = load_dataset("Salesforce/xlam-function-calling-60k", split="train")
         # Downsample: 8000 for train, 1500 for test
-        train_size = 8000
+        train_size = 10000
         test_size = 1500
         
         if split == "train":
@@ -1202,6 +1292,7 @@ DATASET_REGISTRY = {
     "mbpp": MBPPDataset,
     "livecodebench": LiveCodeBenchDataset,
     "codecontests": CodeContestsDataset, # data (down)loading takes an hour | training requires >400GB disk space
+    "deepmind_code_contests": DeepMindCodeContestsDataset,
     # Instruction following
     "wildifeval": WildIFEvalDataset,
     # Function calling
