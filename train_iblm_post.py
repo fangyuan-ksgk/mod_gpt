@@ -96,7 +96,7 @@ class RegTrainer(Trainer):
         final = ce_loss + self.reg_weight * reg_loss
         return (final, outputs) if return_outputs else final
 
-    def log(self, logs, **kwargs):
+    def log(self, logs, start_time=None, **kwargs):
         logs = dict(logs)
         if not any(k.startswith("eval_") for k in logs):
             if self._last_ce_loss is not None:
@@ -105,7 +105,10 @@ class RegTrainer(Trainer):
                 logs.setdefault("reg_loss", self._last_reg_loss.item())
             if self._last_mbe_val is not None:
                 logs.setdefault("mbe_val", self._last_mbe_val.item())
-        super().log(logs, **kwargs)
+        if start_time is not None:
+            super().log(logs, start_time, **kwargs)
+        else:
+            super().log(logs, **kwargs)
 
     def prediction_step(self, model, inputs, prediction_loss_only, ignore_keys=None):
         loss, logits, labels = super().prediction_step(model, inputs, prediction_loss_only, ignore_keys)
