@@ -1017,7 +1017,9 @@ class DeepMindCodeContestsDataset(Dataset):
                 "input_ids": input_ids,
                 "attention_mask": attention_mask,
                 "labels": labels,
-                "prompt_len": len(prompt_ids)
+                "prompt_len": len(prompt_ids),
+                "solution": solution,
+                "prompt": prompt,
             }
         
         return {
