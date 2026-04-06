@@ -72,7 +72,7 @@ class RegTrainer(Trainer):
     def compute_loss(self, model, inputs, return_outputs=False, num_items_in_batch=None):
         if "labels" not in inputs:
             inputs["labels"] = inputs["input_ids"].clone()
-        need_hidden = (self.reg_type != "none" and model.training) or (not model.training)
+        need_hidden = True
         outputs = model(**inputs, output_hidden_states=need_hidden, return_dict=True)
         ce_loss = outputs.loss
 
