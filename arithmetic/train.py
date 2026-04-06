@@ -33,8 +33,27 @@ WANDB_ENTITY = "nlp_and_interpretability"
 
 # ── Dataset adapter ─────────────────────────────────────────────────
 
-class ArithmeticDataset(Dataset):
+# Qwen3 token IDs for arithmetic characters (verified against Qwen3-0.6B tokenizer).
+# Each digit/operator maps to exactly 1 Qwen3 token — no merging.
+# WARNING: These IDs are specific to Qwen3. Do NOT use with other tokenizers.
+QWEN3_TOKEN_MAP = {
+    0: 15, 1: 16, 2: 17, 3: 18, 4: 19,   # digits 0-9
+    5: 20, 6: 21, 7: 22, 8: 23, 9: 24,
+    10: 10,   # '+'
+    11: 28,   # '='
+    12: 12,   # '-'
+}
+
+
+class Qwen3ArithmeticDataset(Dataset):
+    """
+    On-the-fly arithmetic dataset producing Qwen3 token IDs.
+    Only works with Qwen3 tokenizer — token IDs are hardcoded.
+    """
+
     def __init__(self, tokenizer, n_digits=6, ops="add", size=100_000):
+        assert "qwen" in type(tokenizer).__module__.lower() or "qwen" in getattr(tokenizer, 'name_or_path', '').lower(), \
+            f"This dataset only works with Qwen3 tokenizer, got {type(tokenizer)}"
         self.tokenizer = tokenizer
         self.n_digits = n_digits
         self.ops = ops
@@ -48,19 +67,12 @@ class ArithmeticDataset(Dataset):
     def __getitem__(self, idx):
         tokens, _, _ = generate_batch(1, self.n_digits, ops=self.ops,
                                       use_sum9_aug=True, device="cpu")
-        token_ids = self._map_to_qwen_ids(tokens[0])
+        token_ids = torch.tensor([QWEN3_TOKEN_MAP[t.item()] for t in tokens[0]], dtype=torch.long)
         return {
             "input_ids": token_ids,
             "attention_mask": torch.ones(len(token_ids), dtype=torch.long),
             "prompt_len": torch.tensor(self.prompt_len, dtype=torch.long),
         }
-
-    def _map_to_qwen_ids(self, digit_tokens):
-        mapping = {i: 15 + i for i in range(10)}
-        mapping[10] = 10   # +
-        mapping[11] = 28   # =
-        mapping[12] = 12   # -
-        return torch.tensor([mapping[t.item()] for t in digit_tokens], dtype=torch.long)
 
 
 def collate_fn(batch):
@@ -213,8 +225,8 @@ def main():
     if not args.no_wandb:
         wandb.config.update({"n_params": n_params})
 
-    train_ds = ArithmeticDataset(tokenizer, args.n_digits, args.ops, args.dataset_size)
-    val_ds = ArithmeticDataset(tokenizer, args.n_digits, args.ops, 1000)
+    train_ds = Qwen3ArithmeticDataset(tokenizer, args.n_digits, args.ops, args.dataset_size)
+    val_ds = Qwen3ArithmeticDataset(tokenizer, args.n_digits, args.ops, 1000)
 
     cfg = SoRLConfig(
         K=args.K,
