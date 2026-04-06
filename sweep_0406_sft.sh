@@ -28,6 +28,8 @@ NUM_EPOCHS=1
 MAX_LENGTH=512
 
 LOG_EVERY=10
+LOG_SAMPLES_EVERY=999999
+NUM_LOG_SAMPLES=3
 EVAL_EVERY=99999
 SAVE_EVERY=99999
 EVAL_BATCH_SIZE=64
@@ -84,7 +86,7 @@ run_bg() {
     --nproc_per_node=1 \
     --master_addr=$MASTER_ADDR \
     --master_port=$port \
-    train_sorl_post.py \
+    train_sft_pt.py \
     --model_name $model \
     --dataset $dataset \
     --max_length $MAX_LENGTH \
@@ -97,11 +99,13 @@ run_bg() {
     --eval_every $EVAL_EVERY \
     --save_every $SAVE_EVERY \
     --eval_samples $eval_samples \
+    --log_samples_every $LOG_SAMPLES_EVERY \
+    --num_log_samples $NUM_LOG_SAMPLES \
     --eval_batch_size $EVAL_BATCH_SIZE \
     --max_new_tokens $MAX_NEW_TOKENS \
     --output_dir $output_dir \
     --use_lora \
-    --lora_rank 16 \
+    --lora_r 16 \
     --lora_alpha 32 \
     "$@" &
 }
