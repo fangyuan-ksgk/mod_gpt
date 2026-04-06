@@ -51,18 +51,44 @@ The core claim: SoRL converts every activation-level analysis into a token-level
 
 ---
 
+## Quirke's Algorithmic Framework (paper sections 3.2-3.4)
+
+The model must internally implement these sub-tasks. Quirke discovers which nodes
+compute them via systematic ablation across 49 models.
+
+**Addition (section 3.2):**
+- **SA** — Base Add: `(Dn + D'n) mod 10`
+- **ST** — TriCase: `{1 if sum>=10, 0 if sum<=8, U if sum=9}` — tri-state carry classifier
+- **SV** — Cascade carry: `TriAdd(ST_n..ST_0)` — iteratively resolves U values left-to-right
+- Answer: `An = (SAn + SV_{n-1}) mod 10`
+
+**Subtraction (section 3.3):**
+- **MD** — Base Diff: `(Dn - D'n) mod 10`
+- **MB** — TriCase borrow: `{1 if Dn<D'n, 0 if Dn>D'n, U if Dn=D'n}`
+- **MV** — Cascade borrow: same TriAdd structure as SV
+- **ND** — Neg Diff: `(D'n - Dn) mod 10` (for negative answers)
+- **SGN** — Sign detection: attends to answer sign token
+
+**Mixed (section 3.4):**
+- **OPR** — Operator detection: attends to + or - in the question
+
+---
+
 ## Quirke's Interpretability Toolkit (detailed)
 
 Quirke uses 6 analysis methods on baseline models. For each, we show the SoRL parallel.
 
 ### 1. Algorithmic hypothesis + node search
 
-**Quirke:** Defines an exact mathematical algorithm for n-digit addition (SA, ST, SV subtasks)
-and subtraction (MD, MB, MV). Then automatically searches for attention heads and MLP layers
-("nodes") that implement each subtask. Each candidate node must satisfy:
+**Quirke:** Hypothesizes that specific attention heads and MLP layers ("nodes") implement
+SA, ST, and SV for each digit position. Automatically searches all (head, token_position)
+combinations. Each candidate must satisfy:
 - Attends to the correct input tokens (e.g., ST2 attends to D2 and D'2)
 - Positioned after relevant inputs but before the answer
-- PCA of its activations shows the expected number of clusters
+- PCA of its activations shows the expected number of clusters (3 for ST, 10 for SA)
+- Ablation produces the predicted answer change
+
+All 49 models pass. Same SA/ST/SV structure every time, though assigned to different heads.
 
 **SoRL parallel:** The algorithm's subtasks should appear as distinct abstraction tokens.
 Instead of searching over hidden nodes, we directly inspect which token the model emits

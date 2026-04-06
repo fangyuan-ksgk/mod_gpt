@@ -86,17 +86,52 @@ Baseline = same Qwen3 model, standard SFT, no abstraction tokens.
                ──── prompt (14 tokens) ────                         ── answer (7 tokens) ──
 ```
 
-### Sub-task labels (Quirke et al.)
+### Quirke's algorithmic sub-tasks (paper sections 3.2-3.4)
+
+The model must implement these sub-tasks internally. Quirke discovers them via ablation.
+
+**Addition (section 3.2):**
+
+```
+  ┌──────┬────────────────┬──────────────────────────────────────────────────────┐
+  │ Task │ Name           │ Definition                                           │
+  ├──────┼────────────────┼──────────────────────────────────────────────────────┤
+  │ SA   │ Base Add       │ (Dn + D'n) mod 10                                   │
+  │ ST   │ TriCase        │ 1 if sum>=10, 0 if sum<=8, U if sum=9               │
+  │ SV   │ Cascade carry  │ TriAdd(ST_n..ST_0) — resolves U's left-to-right     │
+  └──────┴────────────────┴──────────────────────────────────────────────────────┘
+  Answer digit: An = (SAn + SV_{n-1}) mod 10
+```
+
+**Subtraction (section 3.3):**
+
+```
+  ┌──────┬────────────────┬──────────────────────────────────────────────────────┐
+  │ Task │ Name           │ Definition                                           │
+  ├──────┼────────────────┼──────────────────────────────────────────────────────┤
+  │ MD   │ Base Diff      │ (Dn - D'n) mod 10                                   │
+  │ MB   │ TriCase borrow │ 1 if Dn<D'n, 0 if Dn>D'n, U if Dn=D'n             │
+  │ MV   │ Cascade borrow │ TriAdd(MB_n..MB_0) — resolves U's left-to-right     │
+  │ ND   │ Neg Diff       │ (D'n - Dn) mod 10 — for negative answers            │
+  │ SGN  │ Sign           │ attends to answer sign (+ or -)                      │
+  └──────┴────────────────┴──────────────────────────────────────────────────────┘
+```
+
+**Mixed (section 3.4):** adds OPR (operator detection — attends to + or - token).
+
+### Per-digit outcome labels (our dataset)
+
+We label each answer digit by its outcome — the observable result of the sub-tasks above.
 
 ```
   ┌───────────────────────────────────────────────────────────────────────────────┐
   │ Addition                                │ Subtraction (x >= y)               │
   ├─────┬──────────────┬────────────────────┼─────┬──────────────┬───────────────┤
   │ SA  │ Base Add     │ no carry           │ MD  │ Base Diff    │ no borrow     │
-  │ SC  │ Make Carry   │ sum >= 10          │ MB  │ Make Borrow  │ x_i < y_i     │
-  │ SS  │ Sum is 9     │ propagates carry   │ ME  │ Equal digits │ propagates    │
-  │ UC  │ Use Carry    │ consumes carry     │ UB  │ Use Borrow   │ consumes      │
-  │ US  │ Use Sum-9    │ cascade (hardest)  │ UD  │ Use Equal    │ cascade       │
+  │ SC  │ Make Carry   │ sum >= 10 (ST=1)   │ MB  │ Make Borrow  │ x < y (MB=1) │
+  │ SS  │ Sum is 9     │ sum = 9 (ST=U)     │ ME  │ Equal digits │ x = y (MB=U) │
+  │ UC  │ Use Carry    │ carry in, ST!=U    │ UB  │ Use Borrow   │ borrow in     │
+  │ US  │ Use Sum-9    │ carry in, ST=U     │ UD  │ Use Equal    │ borrow + equal│
   └─────┴──────────────┴────────────────────┴─────┴──────────────┴───────────────┘
 ```
 
