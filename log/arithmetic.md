@@ -255,34 +255,48 @@ How does abstract vocabulary size affect accuracy and token interpretability?
   ┌──────────┬────────────┬─────────────────────────────────────────────────┐
   │ Task     │ abs_vocab  │ Notes                                           │
   ├──────────┼────────────┼─────────────────────────────────────────────────┤
-  │ add      │ 4          │ fewer tokens than sub-tasks (5 add labels)      │
+  │ add      │ 0          │ baseline — no SoRL                              │
+  │ add      │ 1          │ single token — can it encode anything?          │
+  │ add      │ 2          │ binary — carry/no-carry?                        │
+  │ add      │ 4          │ undercomplete                                   │
+  │ add      │ 5          │ = number of addition sub-tasks (SA,SC,SS,UC,US) │
   │ add      │ 8          │                                                 │
+  │ add      │ 10         │ = total sub-tasks (5 add + 5 sub)               │
   │ add      │ 16         │ default                                         │
-  │ add      │ 32         │                                                 │
-  │ add      │ 64         │ overcomplete                                    │
-  │ add_sub  │ 4          │ fewer tokens than sub-tasks (10 total labels)   │
+  │ add      │ 20         │ overcomplete                                    │
+  │ add      │ 24         │ overcomplete                                    │
+  ├──────────┼────────────┼─────────────────────────────────────────────────┤
+  │ add_sub  │ 0          │ baseline — no SoRL                              │
+  │ add_sub  │ 1          │ single token                                    │
+  │ add_sub  │ 2          │ binary — add/sub or carry/borrow?               │
+  │ add_sub  │ 4          │                                                 │
+  │ add_sub  │ 5          │ = number of addition sub-tasks                  │
   │ add_sub  │ 8          │                                                 │
+  │ add_sub  │ 10         │ = total sub-tasks (5 add + 5 sub)               │
   │ add_sub  │ 16         │ default                                         │
-  │ add_sub  │ 32         │                                                 │
-  │ add_sub  │ 64         │ overcomplete                                    │
+  │ add_sub  │ 20         │ overcomplete                                    │
+  │ add_sub  │ 24         │ overcomplete                                    │
   └──────────┴────────────┴─────────────────────────────────────────────────┘
 ```
 
 Track: accuracy, vocab utilization, top-3 concentration, abs_loss, token-subtask correlation.
-Question: does vocab=5 (matching addition sub-tasks) give 1-to-1 token-mechanism mapping?
+Key questions:
+- Does vocab=5 give 1-to-1 token-mechanism mapping for addition?
+- Does vocab=10 give 1-to-1 for mixed add+sub?
+- What does the model do with 1 or 2 tokens? Collapse to carry/no-carry binary?
 
 ### Total runs
 
 ```
   Ablation 1:  4 runs   (2 tasks x 2 modes)
   Ablation 2: 20 runs   (2 tasks x 2 modes x 5 sizes)
-  Ablation 3: 10 runs   (2 tasks x 5 vocab sizes)
+  Ablation 3: 20 runs   (2 tasks x 10 vocab sizes, includes baseline)
   ─────────────────────
-  Total:      34 runs
+  Total:      44 runs   (minus overlap: baselines counted once → ~38 unique)
 ```
 
 3 GPUs, ~25 min per baseline run, SoRL ~2-4x slower.
-Estimated wall time: ~8-10 hours with parallelism.
+Estimated wall time: ~10-12 hours with parallelism.
 
 ### Phase 4: Interpretability (after training)
 
