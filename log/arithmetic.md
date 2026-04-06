@@ -121,18 +121,23 @@ The model must implement these sub-tasks internally. Quirke discovers them via a
 
 ### Per-digit outcome labels (our dataset)
 
-We label each answer digit by its outcome — the observable result of the sub-tasks above.
+We label each answer digit by its outcome. SA, SC, SS match Quirke's `MathsTask` enum
+exactly. UC, US are our additions for "incoming carry" cases (Quirke captures this via
+ST+SV mechanism rather than per-digit labels).
 
 ```
   ┌───────────────────────────────────────────────────────────────────────────────┐
   │ Addition                                │ Subtraction (x >= y)               │
   ├─────┬──────────────┬────────────────────┼─────┬──────────────┬───────────────┤
-  │ SA  │ Base Add     │ no carry           │ MD  │ Base Diff    │ no borrow     │
-  │ SC  │ Make Carry   │ sum >= 10 (ST=1)   │ MB  │ Make Borrow  │ x < y (MB=1) │
-  │ SS  │ Sum is 9     │ sum = 9 (ST=U)     │ ME  │ Equal digits │ x = y (MB=U) │
+  │ SA  │ Base Add     │ no carry  (=Quirke)│ MD  │ Base Diff    │ no borrow (=) │
+  │ SC  │ Make Carry   │ ST=1      (=Quirke)│ MB  │ Make Borrow  │ MB=1      (=) │
+  │ SS  │ Sum is 9     │ ST=U      (=Quirke)│ ME  │ Equal digits │ MB=U (≈MT)    │
   │ UC  │ Use Carry    │ carry in, ST!=U    │ UB  │ Use Borrow   │ borrow in     │
   │ US  │ Use Sum-9    │ carry in, ST=U     │ UD  │ Use Equal    │ borrow + equal│
   └─────┴──────────────┴────────────────────┴─────┴──────────────┴───────────────┘
+  (=) = exact match with Quirke's MathsTask enum
+  UC, US, UB, UD = our labels for "incoming carry/borrow" cases
+  Quirke captures these via the ST/SV (or MT/MV) cascade resolution mechanism
 ```
 
 ### Complexity (Quirke Table 8)
