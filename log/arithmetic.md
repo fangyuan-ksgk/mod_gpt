@@ -136,21 +136,30 @@ This increases cascade frequency so the model sees enough hard cases to learn.
 
 ```
   thoughtworks/arithmetic-sorl-data/
-  ├── add_6digit/
-  │   ├── train.parquet          500K examples
-  │   ├── val.parquet            10K examples
-  │   ├── eval_stratified.parquet  50 per complexity level (S0-S6) + 200 random
+  ├── add_6digit/                    # addition only
+  │   ├── train.parquet              500K examples
+  │   ├── val.parquet                10K examples
+  │   ├── eval_stratified.parquet    50 per complexity level (S0-S6) + 200 random
   │   └── config.json
-  └── add_sub_6digit/
-      ├── train.parquet          500K examples (50/50 add/sub)
-      ├── val.parquet            10K examples
-      ├── eval_stratified.parquet  50 per level (S0-S6, M0-M6) + 200 random each
+  ├── add_sub_6digit/                # mixed addition + subtraction
+  │   ├── train.parquet              500K examples (50/50 add/sub)
+  │   ├── val.parquet                10K examples
+  │   ├── eval_stratified.parquet    50 per level (S0-S6, M0-M6) + 200 random each
+  │   └── config.json
+  ├── add_handcrafted/               # Quirke's manual test questions (addition)
+  │   ├── test.parquet               108 questions: S0(24), S1(23), S2(23), S3(17), S4(9), S5(12)
+  │   └── config.json
+  └── sub_handcrafted/               # Quirke's manual test questions (subtraction)
+      ├── test.parquet               68 questions: M0(27), M1(18), M2(15), M3(8)
       └── config.json
 ```
 
 Each row has columns: `tokens, labels, op, complexity, cascade_depth, x_digits, y_digits, z_digits`
 
-The `eval_stratified` split has an additional `eval_category` column (e.g., `add_S0`, `sub_M3`).
+The `eval_stratified` splits have an additional `eval_category` column (e.g., `add_S0`, `sub_M3`).
+The `handcrafted` splits have `expected_complexity`, `x_val`, `y_val` — values taken directly
+from Quirke's [quanta_maths](https://github.com/PhilipQuirke/quanta_maths) repo.
+All complexity labels verified to match Quirke's expected values exactly.
 
 **Complexity distribution (add_6digit train, 500K):**
 
