@@ -84,11 +84,15 @@ arithmetic/
     └── sweep.sh             # sweep over tasks × vocab sizes across 3 GPUs
 ```
 
+Key files:
+- **[`arithmetic/train.py`](../arithmetic/train.py)** — entry point, model factory, dataset adapter, accuracy callback
+- **[`arithmetic/datasets/addition.py`](../arithmetic/datasets/addition.py)** — data generation with sub-task labels
+
 SoRL core (Fangyuan's code, unchanged):
-- `sorl/sorl_wrapper.py` — SorlModelWrapper (extends HF model with abstract vocab)
-- `sorl/selfroute.py` — SoRLTrainerv6 (self-routing, traj-only loss)
-- `sorl/trainer_ablate.py` — SoRLTrainer (v1), v2, v3, v4
-- `sorl/sorl_trainer.py` — sorl_search, loss functions
+- [`sorl/sorl_wrapper.py`](../sorl/sorl_wrapper.py) — SorlModelWrapper (extends HF model with abstract vocab)
+- [`sorl/selfroute.py`](../sorl/selfroute.py) — SoRLTrainerv6 (self-routing, traj-only loss)
+- [`sorl/trainer_ablate.py`](../sorl/trainer_ablate.py) — SoRLTrainer (v1), v2, v3, v4
+- [`sorl/sorl_trainer.py`](../sorl/sorl_trainer.py) — sorl_search, loss functions
 
 ### Compute
 
