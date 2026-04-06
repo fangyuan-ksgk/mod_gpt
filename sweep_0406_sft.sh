@@ -66,6 +66,22 @@ eval_samples_for_dataset() {
   esac
 }
 
+max_length_for_dataset() {
+  local dataset=$1
+  case "$dataset" in
+    deepmind_code_contests) echo 2048 ;;
+    *) echo 512 ;;
+  esac
+}
+
+max_new_tokens_for_dataset() {
+  local dataset=$1
+  case "$dataset" in
+    deepmind_code_contests) echo 1024 ;;
+    *) echo 256 ;;
+  esac
+}
+
 # ---- Parallel scheduling: 4 x H100 — 1 run/GPU ----
 # Usage: run_bg <tag> <model> <dataset>
 run_bg() {
@@ -78,9 +94,11 @@ run_bg() {
   local dataset=$1; shift
   local grad_accum=$((8 / BATCH_SIZE))
   local eval_samples=$(eval_samples_for_dataset "$dataset")
+  local max_len=$(max_length_for_dataset "$dataset")
+  local max_new=$(max_new_tokens_for_dataset "$dataset")
   local output_dir="./ckpt/sweep_${TIMESTAMP}/exp${idx}_${tag}"
 
-  echo "  Exp ${idx}: ${tag}  model=$(basename $model)  dataset=${dataset}  [GPU=${gpu}]"
+  echo "  Exp ${idx}: ${tag}  model=$(basename $model)  dataset=${dataset}  [GPU=${gpu}]  max_len=${max_len}"
 
   CUDA_VISIBLE_DEVICES=$gpu torchrun \
     --nproc_per_node=1 \
@@ -89,7 +107,7 @@ run_bg() {
     train_sft_pt.py \
     --model_name $model \
     --dataset $dataset \
-    --max_length $MAX_LENGTH \
+    --max_length $max_len \
     --lr $LR \
     --warmup_steps $WARMUP_STEPS \
     --batch_size $BATCH_SIZE \
@@ -102,7 +120,7 @@ run_bg() {
     --log_samples_every $LOG_SAMPLES_EVERY \
     --num_log_samples $NUM_LOG_SAMPLES \
     --eval_batch_size $EVAL_BATCH_SIZE \
-    --max_new_tokens $MAX_NEW_TOKENS \
+    --max_new_tokens $max_new \
     --output_dir $output_dir \
     --use_lora \
     --lora_r 16 \
@@ -111,37 +129,15 @@ run_bg() {
 }
 
 # ============================================================================
-# Batch 1: SFT Baseline on Qwen3-1.7B
+# Re-run: MMLU only for Batch 1 (1.7B) + Batch 2 (4B)  — all others done
 # ============================================================================
 echo ""
 echo "============================================================"
-echo "Batch 1: SFT Baseline on Qwen3-1.7B (${TIMESTAMP})"
+echo "Re-run MMLU: Qwen3-1.7B + Qwen3-4B (${TIMESTAMP})"
 echo "============================================================"
 
-run_bg "sft_gsm_1.7B"   $M16 $DS_GSM
-run_bg "sft_sci_1.7B"   $M16 $DS_SCI
-run_bg "sft_math_1.7B"  $M16 $DS_MATH
-run_bg "sft_arc_1.7B"   $M16 $DS_ARC
 run_bg "sft_mmlu_1.7B"  $M16 $DS_MMLU
-run_bg "sft_csqa_1.7B"  $M16 $DS_CSQA
-run_bg "sft_code_1.7B"  $M16 $DS_CODE
-wait
-
-# ============================================================================
-# Batch 2: SFT Baseline on Qwen3-4B
-# ============================================================================
-echo ""
-echo "============================================================"
-echo "Batch 2: SFT Baseline on Qwen3-4B (${TIMESTAMP})"
-echo "============================================================"
-
-run_bg "sft_gsm_4B"   $M4 $DS_GSM
-run_bg "sft_sci_4B"   $M4 $DS_SCI
-run_bg "sft_math_4B"  $M4 $DS_MATH
-run_bg "sft_arc_4B"   $M4 $DS_ARC
-run_bg "sft_mmlu_4B"  $M4 $DS_MMLU
-run_bg "sft_csqa_4B"  $M4 $DS_CSQA
-run_bg "sft_code_4B"  $M4 $DS_CODE
+run_bg "sft_mmlu_4B"    $M4  $DS_MMLU
 wait
 
 # ============================================================================

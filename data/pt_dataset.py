@@ -403,10 +403,17 @@ class MMLUDataset(Dataset):
 
     _IDX_TO_LETTER = {0: "A", 1: "B", 2: "C", 3: "D"}
 
+    _TRAIN_CAP = 10_000
+    _VAL_CAP   =  2_000
+
     def __init__(self, split="train", tokenizer=None, max_length=256):
         # MMLU uses 'auxiliary_train' for training, 'test' for eval
         hf_split = "auxiliary_train" if split == "train" else split
-        self.dataset = load_dataset("cais/mmlu", "all", split=hf_split)
+        ds = load_dataset("cais/mmlu", "all", split=hf_split)
+        cap = self._TRAIN_CAP if split == "train" else self._VAL_CAP
+        if len(ds) > cap:
+            ds = ds.shuffle(seed=42).select(range(cap))
+        self.dataset = ds
         self.tokenizer = tokenizer
         self.max_length = max_length
 
