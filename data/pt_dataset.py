@@ -1029,30 +1029,41 @@ class DeepMindCodeContestsDataset(Dataset):
         }
 
     def get_test_cases(self, idx):
-        """Returns test cases for sandbox evaluation."""
+        """Return list of {preamble, check} dicts for stdin/stdout testing."""
         ex = self.dataset[idx]
-        public_tests = ex.get("public_tests", {})
-        private_tests = ex.get("private_tests", {})
-        
-        inputs = []
-        outputs = []
-        
-        if "input" in public_tests and "output" in public_tests:
-            inputs.extend(public_tests["input"])
-            outputs.extend(public_tests["output"])
-            
-        if "input" in private_tests and "output" in private_tests:
-            inputs.extend(private_tests["input"])
-            outputs.extend(private_tests["output"])
-            
-        return {
-            "preamble": "",
-            "check": "",
-            "stdin": inputs,
-            "stdout": outputs,
-        }
+        inputs, outputs = [], []
+        for key in ["public_tests", "private_tests"]:
+            t = ex.get(key, {})
+            if "input" in t and "output" in t:
+                inputs.extend(t["input"])
+                outputs.extend(t["output"])
+            if inputs:
+                break
+
+        tests = []
+        for inp, out in zip(inputs, outputs):
+            inp_s = inp.strip() if isinstance(inp, str) else str(inp)
+            out_s = out.strip() if isinstance(out, str) else str(out)
+            preamble = (
+                "import sys, io as _io\n"
+                f"sys.stdin = _io.StringIO({repr(inp_s)})\n"
+                "_old_stdout = sys.stdout\n"
+                "sys.stdout = _io.StringIO()\n"
+            )
+            check = (
+                "_output = sys.stdout.getvalue()\n"
+                "sys.stdout = _old_stdout\n"
+                f"assert _output.strip() == {repr(out_s)}, "
+                f"f'Expected {repr(out_s)}, got {{_output.strip()!r}}'"
+            )
+            tests.append({"preamble": preamble, "check": check})
+        return tests
 
     def extract_answer(self, text):
+        marker = "# Solution:\n"
+        idx = text.find(marker)
+        if idx != -1:
+            return text[idx + len(marker):].strip()
         return text.strip()
 
 
