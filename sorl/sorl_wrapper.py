@@ -40,6 +40,7 @@ def left_pad_and_mask(
 SUPPORTED_MODELS = {
     "qwen2": "qwen2",
     "qwen3": "qwen3",  # Use AutoModelForCausalLM for both
+    "llama": "llama",  # Llama-3.x (same embed_tokens/lm_head layout as Qwen)
 }
 
 def infer_level(indices: torch.Tensor, vocab_sizes: torch.Tensor):
