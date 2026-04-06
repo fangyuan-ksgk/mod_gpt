@@ -968,7 +968,12 @@ class DeepMindCodeContestsDataset(Dataset):
     """DeepMind Code Contests dataset (deepmind/code_contests)."""
 
     def __init__(self, split="train", tokenizer=None, max_length=1024):
-        self.dataset = load_dataset("deepmind/code_contests", split=split)
+        raw = load_dataset("deepmind/code_contests", split=split)
+        # Keep only problems that have at least one Python 3 solution (language==3)
+        def _has_py3(ex):
+            sols = ex.get("solutions", {})
+            return 3 in sols.get("language", [])
+        self.dataset = raw.filter(_has_py3)
         self.tokenizer = tokenizer
         self.max_length = max_length
 
@@ -979,14 +984,12 @@ class DeepMindCodeContestsDataset(Dataset):
         ex = self.dataset[idx]
         description = ex.get("description", "").strip()
 
-        # Pick the first Python solution if available (language=3 is Python 3)
+        # Pick the first Python 3 solution (language==3 only; skip Python 2)
         solutions = ex.get("solutions", {})
         solution = ""
-        
         if "language" in solutions and "solution" in solutions:
             for lang, sol in zip(solutions["language"], solutions["solution"]):
-                # 3 is typically Python 3, 1 is Python 2
-                if lang in (3, 1):
+                if lang == 3:
                     solution = sol.strip()
                     break
 
@@ -1053,8 +1056,7 @@ class DeepMindCodeContestsDataset(Dataset):
             check = (
                 "_output = sys.stdout.getvalue()\n"
                 "sys.stdout = _old_stdout\n"
-                f"assert _output.strip() == {repr(out_s)}, "
-                f"f'Expected {repr(out_s)}, got {{_output.strip()!r}}'"
+                f"assert _output.strip() == {repr(out_s)}"
             )
             tests.append({"preamble": preamble, "check": check})
         return tests
@@ -1159,8 +1161,7 @@ class CodeContestsDataset(Dataset):
             check = (
                 "_output = sys.stdout.getvalue()\n"
                 "sys.stdout = _old_stdout\n"
-                f"assert _output.strip() == {repr(out_s)}, "
-                f"f'Expected {repr(out_s)}, got {{_output.strip()!r}}'"
+                f"assert _output.strip() == {repr(out_s)}"
             )
             tests.append({"preamble": preamble, "check": check})
         return tests
