@@ -1020,7 +1020,6 @@ class DeepMindCodeContestsDataset(Dataset):
             input_ids = encoded["input_ids"].squeeze(0)
             attention_mask = encoded["attention_mask"].squeeze(0)
 
-            # Create labels: -100 for prompt and padding
             labels = input_ids.clone()
             labels[:len(prompt_ids)] = -100
             labels[attention_mask == 0] = -100
