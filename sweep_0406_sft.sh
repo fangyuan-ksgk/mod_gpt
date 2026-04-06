@@ -24,7 +24,7 @@ N_GPUS=4
 LR=1e-5
 WARMUP_STEPS=50
 BATCH_SIZE=2
-NUM_EPOCHS=3
+NUM_EPOCHS=1
 MAX_LENGTH=512
 
 LOG_EVERY=10
@@ -33,40 +33,39 @@ SAVE_EVERY=99999
 EVAL_BATCH_SIZE=64
 MAX_NEW_TOKENS=256
 
-# dataset: (gsm8k, scienceqa, math, arc)
-# model: (Qwen3-4B, Qwen3-8B, Qwen3-14B)
-# sft baseline (no SoRL, just LoRA)
+TIMESTAMP=$(date +%Y%m%d_%H%M)
+EXP_IDX=0
+
+# Model + dataset shorthands
+M16="Qwen/Qwen3-1.7B"
+M4="Qwen/Qwen3-4B"
+M8="Qwen/Qwen3-8B"
+ML1="meta-llama/Llama-3.2-1B"
+ML3="meta-llama/Llama-3.2-3B"
+
+DS_GSM="gsm8k"
+DS_SCI="scienceqa"
+DS_ARC="arc"
 DS_MMLU="mmlu"
 DS_CSQA="commonsenseqa"
+DS_MATH="math"
+DS_CODE="deepmind_code_contests"
 
 eval_samples_for_dataset() {
   local dataset=$1
   case "$dataset" in
     gsm8k) echo 1319 ;;
     scienceqa) echo 2224 ;;
-    math) echo 5000 ;;
     arc) echo 1172 ;;
     mmlu) echo 2000 ;;
     commonsenseqa) echo 1221 ;;
+    deepmind_code_contests) echo 282 ;;
     *) echo 1000 ;;
   esac
 }
 
-TIMESTAMP=$(date +%Y%m%d_%H%M)
-EXP_IDX=0
-
-# Model + dataset shorthands
-M4="Qwen/Qwen3-4B"
-M8="Qwen/Qwen3-8B"
-M14="Qwen/Qwen3-14B"
-
-DS_GSM="gsm8k"
-DS_SCI="scienceqa"
-DS_MATH="math"
-DS_ARC="arc"
-
 # ---- Parallel scheduling: 4 x H100 — 1 run/GPU ----
-# Usage: run_bg <tag> <model> <dataset> [sorl flags...]
+# Usage: run_bg <tag> <model> <dataset>
 run_bg() {
   EXP_IDX=$((EXP_IDX + 1))
   local idx=$EXP_IDX
@@ -108,51 +107,88 @@ run_bg() {
 }
 
 # ============================================================================
-# Batch 1: SFT Baseline on Qwen3-4B
+# Batch 1: SFT Baseline on Qwen3-1.7B
 # ============================================================================
 echo ""
 echo "============================================================"
-echo "Batch 1: SFT Baseline on Qwen3-4B (${TIMESTAMP})"
+echo "Batch 1: SFT Baseline on Qwen3-1.7B (${TIMESTAMP})"
 echo "============================================================"
 
-run_bg "sft_gsm_4B"   $M4  $DS_GSM
-run_bg "sft_sci_4B"   $M4  $DS_SCI
-run_bg "sft_math_4B"  $M4  $DS_MATH
-run_bg "sft_arc_4B"   $M4  $DS_ARC
-run_bg "sft_mmlu_4B"  $M4  $DS_MMLU
-run_bg "sft_csqa_4B"  $M4  $DS_CSQA
+run_bg "sft_gsm_1.7B"   $M16 $DS_GSM
+run_bg "sft_sci_1.7B"   $M16 $DS_SCI
+run_bg "sft_math_1.7B"  $M16 $DS_MATH
+run_bg "sft_arc_1.7B"   $M16 $DS_ARC
+run_bg "sft_mmlu_1.7B"  $M16 $DS_MMLU
+run_bg "sft_csqa_1.7B"  $M16 $DS_CSQA
+run_bg "sft_code_1.7B"  $M16 $DS_CODE
 wait
 
 # ============================================================================
-# Batch 2: SFT Baseline on Qwen3-8B
+# Batch 2: SFT Baseline on Qwen3-4B
 # ============================================================================
 echo ""
 echo "============================================================"
-echo "Batch 2: SFT Baseline on Qwen3-8B (${TIMESTAMP})"
+echo "Batch 2: SFT Baseline on Qwen3-4B (${TIMESTAMP})"
 echo "============================================================"
 
-run_bg "sft_gsm_8B"   $M8  $DS_GSM
-run_bg "sft_sci_8B"   $M8  $DS_SCI
-run_bg "sft_math_8B"  $M8  $DS_MATH
-run_bg "sft_arc_8B"   $M8  $DS_ARC
-run_bg "sft_mmlu_8B"  $M8  $DS_MMLU
-run_bg "sft_csqa_8B"  $M8  $DS_CSQA
+run_bg "sft_gsm_4B"   $M4 $DS_GSM
+run_bg "sft_sci_4B"   $M4 $DS_SCI
+run_bg "sft_math_4B"  $M4 $DS_MATH
+run_bg "sft_arc_4B"   $M4 $DS_ARC
+run_bg "sft_mmlu_4B"  $M4 $DS_MMLU
+run_bg "sft_csqa_4B"  $M4 $DS_CSQA
+run_bg "sft_code_4B"  $M4 $DS_CODE
 wait
 
 # ============================================================================
-# Batch 3: SFT Baseline on Qwen3-14B
+# Batch 3: SFT Baseline on Qwen3-8B
 # ============================================================================
 echo ""
 echo "============================================================"
-echo "Batch 3: SFT Baseline on Qwen3-14B (${TIMESTAMP})"
+echo "Batch 3: SFT Baseline on Qwen3-8B (${TIMESTAMP})"
 echo "============================================================"
 
-run_bg "sft_gsm_14B"   $M14  $DS_GSM
-run_bg "sft_sci_14B"   $M14  $DS_SCI
-run_bg "sft_math_14B"  $M14  $DS_MATH
-run_bg "sft_arc_14B"   $M14  $DS_ARC
-run_bg "sft_mmlu_14B"  $M14  $DS_MMLU
-run_bg "sft_csqa_14B"  $M14  $DS_CSQA
+run_bg "sft_gsm_8B"   $M8 $DS_GSM
+run_bg "sft_sci_8B"   $M8 $DS_SCI
+run_bg "sft_math_8B"  $M8 $DS_MATH
+run_bg "sft_arc_8B"   $M8 $DS_ARC
+run_bg "sft_mmlu_8B"  $M8 $DS_MMLU
+run_bg "sft_csqa_8B"  $M8 $DS_CSQA
+run_bg "sft_code_8B"  $M8 $DS_CODE
+wait
+
+# ============================================================================
+# Batch 4: SFT Baseline on Llama-3.2-1B
+# ============================================================================
+echo ""
+echo "============================================================"
+echo "Batch 4: SFT Baseline on Llama-3.2-1B (${TIMESTAMP})"
+echo "============================================================"
+
+run_bg "sft_gsm_L1"   $ML1 $DS_GSM
+run_bg "sft_sci_L1"   $ML1 $DS_SCI
+run_bg "sft_math_L1"  $ML1 $DS_MATH
+run_bg "sft_arc_L1"   $ML1 $DS_ARC
+run_bg "sft_mmlu_L1"  $ML1 $DS_MMLU
+run_bg "sft_csqa_L1"  $ML1 $DS_CSQA
+run_bg "sft_code_L1"  $ML1 $DS_CODE
+wait
+
+# ============================================================================
+# Batch 5: SFT Baseline on Llama-3.2-3B
+# ============================================================================
+echo ""
+echo "============================================================"
+echo "Batch 5: SFT Baseline on Llama-3.2-3B (${TIMESTAMP})"
+echo "============================================================"
+
+run_bg "sft_gsm_L3"   $ML3 $DS_GSM
+run_bg "sft_sci_L3"   $ML3 $DS_SCI
+run_bg "sft_math_L3"  $ML3 $DS_MATH
+run_bg "sft_arc_L3"   $ML3 $DS_ARC
+run_bg "sft_mmlu_L3"  $ML3 $DS_MMLU
+run_bg "sft_csqa_L3"  $ML3 $DS_CSQA
+run_bg "sft_code_L3"  $ML3 $DS_CODE
 wait
 
 echo ""

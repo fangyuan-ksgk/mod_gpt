@@ -505,7 +505,8 @@ class MATHDataset(Dataset):
         parts = []
         for subj in self._SUBJECTS:
             parts.append(load_dataset("EleutherAI/hendrycks_math", subj, split=split))
-        self.dataset = concatenate_datasets(parts)
+        combined = concatenate_datasets(parts)
+        self.dataset = combined.select(range(min(2500, len(combined))))
         self.tokenizer = tokenizer
         self.max_length = max_length
 

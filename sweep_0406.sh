@@ -28,7 +28,7 @@ MAX_LENGTH=512
 LR=1e-5
 WARMUP_STEPS=50
 BATCH_SIZE=2
-NUM_EPOCHS=3
+NUM_EPOCHS=1
 
 LOG_EVERY=10
 EVAL_EVERY=99999
@@ -36,8 +36,8 @@ SAVE_EVERY=99999
 EVAL_BATCH_SIZE=64
 MAX_NEW_TOKENS=256
 
-# dataset: (gsm8k, scienceqa, math, arc)
-# model: (Qwen3-4B, Qwen3-8B, Qwen3-14B)
+# dataset: (gsm8k, scienceqa, arc, mmlu, commonsenseqa, deepmind_code_contests)
+# model: (Qwen3-1.7B, Qwen3-4B, Qwen3-8B, Llama-3.2-1B, Llama-3.2-3B)
 # sorl config: v1, v6
 
 R_V1="--alpha_info_gain 1.0 --alpha_abs 0.5"
@@ -58,6 +58,7 @@ ML3="meta-llama/Llama-3.2-3B"
 DS_GSM="gsm8k"
 DS_SCI="scienceqa"
 DS_MATH="math"
+DS_CODE="deepmind_code_contests"
 DS_ARC="arc"
 DS_MMLU="mmlu"
 DS_CSQA="commonsenseqa"
@@ -67,10 +68,11 @@ eval_samples_for_dataset() {
   case "$dataset" in
     gsm8k) echo 1319 ;;
     scienceqa) echo 2224 ;;
-    math) echo 5000 ;;
+    math) echo 2500 ;;
     arc) echo 1172 ;;
     mmlu) echo 2000 ;;
     commonsenseqa) echo 1221 ;;
+    deepmind_code_contests) echo 282 ;;
     *) echo 1000 ;;
   esac
 }
@@ -138,6 +140,8 @@ run_bg "v1_sci_4B"      $M4  $DS_SCI  $R_V1
 run_bg "v1_e10_sci_4B"  $M4  $DS_SCI  $R_V1_E10
 
 wait
+run_bg "v1_code_4B"     $M4  $DS_CODE $R_V1
+run_bg "v1_e10_code_4B" $M4  $DS_CODE $R_V1_E10
 run_bg "v1_math_4B"     $M4  $DS_MATH $R_V1
 run_bg "v1_e10_math_4B" $M4  $DS_MATH $R_V1_E10
 run_bg "v1_arc_4B"      $M4  $DS_ARC  $R_V1
@@ -162,6 +166,8 @@ run_bg "v6_sci_4B"      $M4  $DS_SCI  $R_V6
 run_bg "v6_e10_sci_4B"  $M4  $DS_SCI  $R_V6_E10
 
 wait
+run_bg "v6_code_4B"     $M4  $DS_CODE $R_V6
+run_bg "v6_e10_code_4B" $M4  $DS_CODE $R_V6_E10
 run_bg "v6_math_4B"     $M4  $DS_MATH $R_V6
 run_bg "v6_e10_math_4B" $M4  $DS_MATH $R_V6_E10
 run_bg "v6_arc_4B"      $M4  $DS_ARC  $R_V6
@@ -186,6 +192,8 @@ run_bg "v1_sci_8B"      $M8  $DS_SCI  $R_V1
 run_bg "v1_e10_sci_8B"  $M8  $DS_SCI  $R_V1_E10
 
 wait
+run_bg "v1_code_8B"     $M8  $DS_CODE $R_V1
+run_bg "v1_e10_code_8B" $M8  $DS_CODE $R_V1_E10
 run_bg "v1_math_8B"     $M8  $DS_MATH $R_V1
 run_bg "v1_e10_math_8B" $M8  $DS_MATH $R_V1_E10
 run_bg "v1_arc_8B"      $M8  $DS_ARC  $R_V1
@@ -210,6 +218,8 @@ run_bg "v6_sci_8B"      $M8  $DS_SCI  $R_V6
 run_bg "v6_e10_sci_8B"  $M8  $DS_SCI  $R_V6_E10
 
 wait
+run_bg "v6_code_8B"     $M8  $DS_CODE $R_V6
+run_bg "v6_e10_code_8B" $M8  $DS_CODE $R_V6_E10
 run_bg "v6_math_8B"     $M8  $DS_MATH $R_V6
 run_bg "v6_e10_math_8B" $M8  $DS_MATH $R_V6_E10
 run_bg "v6_arc_8B"      $M8  $DS_ARC  $R_V6
@@ -234,6 +244,8 @@ run_bg "v1_sci_1.7B"      $M16 $DS_SCI  $R_V1
 run_bg "v1_e10_sci_1.7B"  $M16 $DS_SCI  $R_V1_E10
 
 wait
+run_bg "v1_code_1.7B"     $M16 $DS_CODE $R_V1
+run_bg "v1_e10_code_1.7B" $M16 $DS_CODE $R_V1_E10
 run_bg "v1_math_1.7B"     $M16 $DS_MATH $R_V1
 run_bg "v1_e10_math_1.7B" $M16 $DS_MATH $R_V1_E10
 run_bg "v1_arc_1.7B"      $M16 $DS_ARC  $R_V1
@@ -258,6 +270,8 @@ run_bg "v6_sci_1.7B"      $M16 $DS_SCI  $R_V6
 run_bg "v6_e10_sci_1.7B"  $M16 $DS_SCI  $R_V6_E10
 
 wait
+run_bg "v6_code_1.7B"     $M16 $DS_CODE $R_V6
+run_bg "v6_e10_code_1.7B" $M16 $DS_CODE $R_V6_E10
 run_bg "v6_math_1.7B"     $M16 $DS_MATH $R_V6
 run_bg "v6_e10_math_1.7B" $M16 $DS_MATH $R_V6_E10
 run_bg "v6_arc_1.7B"      $M16 $DS_ARC  $R_V6
@@ -282,6 +296,8 @@ run_bg "v1_sci_L1"      $ML1 $DS_SCI  $R_V1
 run_bg "v1_e10_sci_L1"  $ML1 $DS_SCI  $R_V1_E10
 
 wait
+run_bg "v1_code_L1"     $ML1 $DS_CODE $R_V1
+run_bg "v1_e10_code_L1" $ML1 $DS_CODE $R_V1_E10
 run_bg "v1_math_L1"     $ML1 $DS_MATH $R_V1
 run_bg "v1_e10_math_L1" $ML1 $DS_MATH $R_V1_E10
 run_bg "v1_arc_L1"      $ML1 $DS_ARC  $R_V1
@@ -306,6 +322,8 @@ run_bg "v6_sci_L1"      $ML1 $DS_SCI  $R_V6
 run_bg "v6_e10_sci_L1"  $ML1 $DS_SCI  $R_V6_E10
 
 wait
+run_bg "v6_code_L1"     $ML1 $DS_CODE $R_V6
+run_bg "v6_e10_code_L1" $ML1 $DS_CODE $R_V6_E10
 run_bg "v6_math_L1"     $ML1 $DS_MATH $R_V6
 run_bg "v6_e10_math_L1" $ML1 $DS_MATH $R_V6_E10
 run_bg "v6_arc_L1"      $ML1 $DS_ARC  $R_V6
@@ -330,6 +348,8 @@ run_bg "v1_sci_L3"      $ML3 $DS_SCI  $R_V1
 run_bg "v1_e10_sci_L3"  $ML3 $DS_SCI  $R_V1_E10
 
 wait
+run_bg "v1_code_L3"     $ML3 $DS_CODE $R_V1
+run_bg "v1_e10_code_L3" $ML3 $DS_CODE $R_V1_E10
 run_bg "v1_math_L3"     $ML3 $DS_MATH $R_V1
 run_bg "v1_e10_math_L3" $ML3 $DS_MATH $R_V1_E10
 run_bg "v1_arc_L3"      $ML3 $DS_ARC  $R_V1
@@ -354,6 +374,8 @@ run_bg "v6_sci_L3"      $ML3 $DS_SCI  $R_V6
 run_bg "v6_e10_sci_L3"  $ML3 $DS_SCI  $R_V6_E10
 
 wait
+run_bg "v6_code_L3"     $ML3 $DS_CODE $R_V6
+run_bg "v6_e10_code_L3" $ML3 $DS_CODE $R_V6_E10
 run_bg "v6_math_L3"     $ML3 $DS_MATH $R_V6
 run_bg "v6_e10_math_L3" $ML3 $DS_MATH $R_V6_E10
 run_bg "v6_arc_L3"      $ML3 $DS_ARC  $R_V6
