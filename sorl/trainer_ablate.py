@@ -449,8 +449,13 @@ class SoRLTrainer:
         # Save abstract embedding rows + loss_fn + optimizer (always small)
         # Access embed_tokens / lm_head through the HF model inside SorlModelWrapper
         hf = self.raw_model.model  # Qwen3ForCausalLM (or PeftModel wrapping it)
-        embed_w = hf.model.embed_tokens.weight if hasattr(hf, "model") else hf.transformer.wte.weight
-        lm_head_w = hf.lm_head.weight
+        if hasattr(hf.model, "model"):  # LoRA: hf.model is Qwen3ForCausalLM
+            embed_w = hf.model.model.embed_tokens.weight
+            lm_head_w = hf.model.lm_head.weight
+        else:  # non-LoRA: hf is Qwen3ForCausalLM
+            embed_w = hf.model.embed_tokens.weight
+            lm_head_w = hf.lm_head.weight
+
         torch.save({
             "step": global_step,
             "epoch": epoch,
