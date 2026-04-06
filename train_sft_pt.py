@@ -347,6 +347,8 @@ def main():
     tokenizer = AutoTokenizer.from_pretrained(args.model_name)
     if tokenizer.pad_token_id is None:
         tokenizer.pad_token_id = tokenizer.eos_token_id
+    if "llama" in args.model_name.lower():
+        tokenizer.add_eos_token = True
 
     # ---- LoRA ----
     if args.use_lora:

@@ -462,6 +462,10 @@ def main():
         abstract_vocab_size_list=[args.abstract_vocab_size],
     )
     tokenizer = AutoTokenizer.from_pretrained(args.model_name)
+    if tokenizer.pad_token_id is None:
+        tokenizer.pad_token_id = tokenizer.eos_token_id
+    if "llama" in args.model_name.lower():
+        tokenizer.add_eos_token = True
     log(f"Total params: {sum(p.numel() for p in model.parameters())/1e6:.1f}M")
     log(f"Vocab: base={model.vocab_sizes[0].item()} + abstract={args.abstract_vocab_size} "
         f"= {model.total_vocab_size.item()}")
