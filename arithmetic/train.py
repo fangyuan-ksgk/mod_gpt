@@ -224,7 +224,7 @@ def main():
         output_dir=args.output_dir,
         log_every=50,
         eval_every=500,
-        save_every=1000,
+        save_every=999999,  # don't save intermediate checkpoints (disk space)
         eval_samples=100,
         alpha_info_gain=0.0 if args.mode == "baseline" else 10.0,
         alpha_abs=0.0 if args.mode == "baseline" else 0.1,
@@ -258,11 +258,15 @@ def main():
         wandb.log({"eval/final_accuracy": final_acc["accuracy"]})
         wandb.finish()
 
-    # Upload to HF Hub
+    # Upload to HF Hub + clean up local
     if args.push_to_hub:
         from arithmetic.hub import save_model
         metrics = {"history": trainer.history, "final_accuracy": final_acc["accuracy"]}
         save_model(model, vars(args), metrics, subfolder=run_name)
+        # Delete local checkpoint to save disk
+        import shutil
+        shutil.rmtree(args.output_dir, ignore_errors=True)
+        print(f"Cleaned up local: {args.output_dir}")
 
 
 if __name__ == "__main__":
