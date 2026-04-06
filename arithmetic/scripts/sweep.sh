@@ -33,7 +33,7 @@ run() {
     echo "[GPU ${GPU}] $(date +%H:%M:%S) START ${TAG}"
     CUDA_VISIBLE_DEVICES=${GPU} python -m arithmetic.train \
         --mode ${MODE} --ops ${OPS} \
-        --abs_vocab ${ABS} --K 4 --trainer v6 \
+        --abs_vocab ${ABS} --K 4 \
         --n_layer 3 --n_head 4 --n_embd 512 \
         --batch_size 64 --num_epochs ${EPOCHS} --dataset_size ${SIZE} \
         --lr 8e-5 --output_dir "${DIR}" --device cuda \

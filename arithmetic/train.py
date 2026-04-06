@@ -19,7 +19,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from transformers import Qwen3Config, AutoTokenizer
 from sorl.sorl_wrapper import SorlModelWrapper
 from sorl.selfroute import SoRLTrainerv6
-from sorl.trainer_ablate import SoRLTrainer, SoRLConfig
+from sorl.trainer_ablate import SoRLTrainer, SoRLConfig  # SoRLTrainer used for baseline (all alpha=0)
 from arithmetic.datasets.addition import (
     generate_batch, eval_accuracy, NUM_TOKENS, ALL_LABELS,
 )
@@ -184,7 +184,7 @@ def main():
     p.add_argument("--n_embd", type=int, default=512)
     p.add_argument("--abs_vocab", type=int, default=0)
     p.add_argument("--K", type=int, default=4)
-    p.add_argument("--trainer", choices=["v1", "v3", "v6"], default="v6")
+    # SoRL trainer is always v6 (self-routing). Baseline uses WandbSoRLTrainer with all alpha=0.
     p.add_argument("--batch_size", type=int, default=64)
     p.add_argument("--num_epochs", type=int, default=3)
     p.add_argument("--dataset_size", type=int, default=100_000)
@@ -244,10 +244,7 @@ def main():
         alpha_traj=1.0,
     )
 
-    TrainerCls = WandbSoRLTrainer if (args.mode == "baseline" or args.trainer == "v1") else WandbSoRLTrainerv6
-    if args.trainer == "v3":
-        from sorl.trainer_ablate import SoRLTrainerv3
-        TrainerCls = SoRLTrainerv3  # no wandb wrapper for v3 yet
+    TrainerCls = WandbSoRLTrainer if args.mode == "baseline" else WandbSoRLTrainerv6
 
     trainer = TrainerCls(
         model, tokenizer, train_ds, val_ds,
