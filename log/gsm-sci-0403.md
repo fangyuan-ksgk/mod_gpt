@@ -4,7 +4,7 @@
    ┌────────────┬──────────┬──────────┬──────────┬───────┐                                                                                                        
    │ Model      │ Dataset  │  Run 1   │  Run 2   │  Δ    │                                                                                                        
    ├────────────┼──────────┼──────────┼──────────┼───────┤                                                                                                        
-   │ 0.6B       │ GSM8K    │   49.0%  │   48.5%  │ -0.5  │                                                                                                        
+   │ 0.6B       │ GSM8K    │   48.0%  │   47.5%  │ -0.5  │                                                                                                        
    │ 1.7B       │ GSM8K    │   63.2%  │   61.8%  │ -1.4  │                                                                                                        
    │ 0.6B       │ SciQA    │   52.3%  │   52.2%  │ -0.1  │                                                                                                        
    │ 1.7B       │ SciQA    │   57.9%  │   58.3%  │ +0.4  │                                                                                                        
@@ -15,7 +15,7 @@
 
  #### Run 1. 
 
-Qwen3-0.6B | GSM8K | SFT=48.8%
+Qwen3-0.6B | GSM8K | SFT=47.5%
 ┌─────────┬─────────┬───────────────────────────────────────────────────┬────────┬────────┐
 │ Exp     │  Train  │ Config                                            │  NL%   │  K=4%  │
 ├─────────┼─────────┼───────────────────────────────────────────────────┼────────┼────────┤
@@ -114,7 +114,7 @@ Qwen3-1.7B | ScienceQA | SFT=58.1%
 SFT baselines: 0.6B GSM=48.8% | 1.7B GSM=62.5% | 0.6B SciQA=52.3% | 1.7B SciQA=58.1%
 
 ══════════════════════════════════════════════════════════════════════════════════════
-Qwen3-0.6B | GSM8K | SFT=48.8%
+Qwen3-0.6B | GSM8K | SFT=47.5%
 ┌────────┬────────────────────────────┬────────┬─────────┬─────┬───────┬────────┐
 │ Sweep  │ Config                     │  NL%   │  Acc[K] │ Gap │ Vocab │ Top3%  │
 ├────────┼────────────────────────────┼────────┼─────────┼─────┼───────┼────────┤
@@ -165,19 +165,7 @@ Qwen3-1.7B | ScienceQA | SFT=58.1%
 │ 0405   │ K=16, abs=32,  emb=1.0     │    —   │    —    │  —  │    —  │    —   │
 └────────┴────────────────────────────┴────────┴─────────┴─────┴───────┴────────┘
                                                                                                                                                                      
-VQ initialization: 
-whilst v6 takes the hidden[-V:] as the abstract logits prediction, we use Vector quantization module to train a "cluster" module that project hidden into abstract logits prediction, making abstraction routing based upon full hidden's info. However, this doesn't benefits v6 at all. 
-One less direction to try. 
 
-K=16, abs=64 — VQ vs non-VQ comparison
-┌────────┬────────┬──────────┬──────────────┬──────────────┬───────────────┬───────────────┐
-│ Model  │  Data  │          │  v6 (no VQ)  │   v6 + VQ    │ Δ NL          │ Δ Acc[K]      │
-├────────┼────────┼──────────┼──────────────┼──────────────┼───────────────┼───────────────┤
-│  0.6B  │ GSM8K  │  NL/K=16 │  46.3 / 45.7 │  47.1 / 44.9 │  +0.8         │  -0.8         │
-│  1.7B  │ GSM8K  │  NL/K=16 │  62.3 / 61.4 │  60.8 / 59.0 │  -1.5         │  -2.4         │
-│  0.6B  │ SciQA  │  NL/K=16 │  50.6 / 49.2 │  50.8 / 48.2 │  +0.2         │  -1.0         │
-│  1.7B  │ SciQA  │  NL/K=16 │  54.2 / 54.0 │  54.0 / 53.7 │  -0.2         │  -0.3         │
-└────────┴────────┴──────────┴──────────────┴──────────────┴───────────────┴───────────────┘
 
 ## Analysis
 
@@ -207,3 +195,20 @@ K=16, abs=64 — VQ vs non-VQ comparison
 
 
 The most obvious signal, is that v1 leads to improvement in NL[Acc]. And that emb_lr_mult is worth further tuning on each dataset. So future sweep can just use v1 & v2, former excel on Acc[NL] later better at Acc[K]
+
+
+
+
+Quick Sumary of experiment on ScienceQA & GSM8K with Qwen0.6 & 1.7B:
+v1 improves Acc[NL] most on ScienceQA, but its Acc[K] is still much lower, so it helps the model without actually making abstraction inference work well yet. v6 gives the best compression behavior: on GSM8K it nearly matches SFT under abstraction use, and on ScienceQA it looks improvable with higher emb_lr_mult.
+Concrete numbers
+ScienceQA, v1
+0.6B: Acc[NL] 60.0% vs SFT 52.3% (+7.7pp), but Acc[K] = 50.0%
+1.7B: Acc[NL] 60.0% vs SFT 58.1% (+1.9pp), but Acc[K] = 51.8%
+GSM8K, v6
+0.6B: Acc[K] 56.2% vs SFT 57.5% (-1.3pp), closest-to-SFT result while training abstractions
+1.7B: Acc[K] 62.4% vs SFT 62.5% (-0.1pp), which is the closest-to-SFT result while training abstractions
+ScienceQA, v6
+0.6B: improves from 50.0% to 55.0% when emb_lr_mult goes from 1 to 10, suggesting room to close the gap further
+One-line interpretation: v1 is best for improving the base model’s NL performance; v6 is best for learning usable compression.
+

@@ -1,49 +1,18 @@
 
- Qwen3-1.7B SFT | LoRA r=16 α=32 | lr=1e-5 | 1 epoch | max_len=512
-    ┌─────┬─────────────────────┬────────┬────────┬────────────┬───────────────────────────┐
-    │ Exp │ Dataset             │  Train │   Eval │   Accuracy │ Notes                     │
-    ├─────┼─────────────────────┼────────┼────────┼────────────┼───────────────────────────┤
-    │  1  │ gsm8k               │  7,473 │  1,319 │     59.4%  │ loss 1.03→0.30            │
-    │  2  │ scienceqa           │  6,508 │  2,224 │     51.7%  │ loss 1.97→0.81            │
-    │  3  │ math                │  2,500 │  1,000 │      0.7%  │ loss ~flat; answer repeat  │
-    │  4  │ arc                 │  1,418 │  1,172 │     75.9%  │ loss 2.90→0.003           │
-    │  5  │ mmlu                │ 99,842 │  2,000 │   RUNNING  │ ~69% done; 25 NaN losses  │
-    │  6  │ commonsenseqa       │  9,741 │  1,221 │     77.2%  │ loss 5.07→0.04            │
-    │  7  │ deepmind_code       │  8,139 │    282 │      0.4%  │ loss 2.57→0.65            │
-    └─────┴─────────────────────┴────────┴────────┴────────────┴───────────────────────────┘
-
-        ┌───────┬──────────────┬──────────┬─────────┬────────────┬──────────────┬──────┐                                           
-    │ Exp   │ Model        │ Dataset  │ Status  │  Accuracy  │ First→Last   │ NaN  │                                           
-    ├───────┼──────────────┼──────────┼─────────┼────────────┼──────────────┼──────┤                                           
-    │ exp1  │ Qwen3-1.7B   │ mmlu     │ done    │   56.8%    │ 3.81 → 0.007 │   8  │                                           
-    │ exp2  │ Qwen3-4B     │ mmlu     │ done    │   70.2%    │ 3.20 → 0.001 │   3  │                                           
-    │ exp3  │ Qwen3-8B     │ gsm8k    │ done    │   78.9%    │ 0.62 → 0.262 │   0  │                                           
-    │ exp4  │ Qwen3-8B     │ sciQA    │ done    │   61.8%    │ 1.82 → 0.200 │   0  │                                           
-    │ exp5  │ Qwen3-8B     │ math     │ done    │    8.0%    │ 1.82 → 0.552 │   0  │                                           
-    │ exp6  │ Qwen3-8B     │ arc      │ done    │   91.7%    │ 3.08 → 0.033 │   0  │                                           
-    │ exp7  │ Qwen3-8B     │ mmlu     │ done    │   74.6%    │ 3.45 → 0.002 │   3  │                                           
-    │ exp8  │ Qwen3-8B     │ csqa     │ done    │   86.4%    │ 4.55 → 0.010 │   0  │                                           
-    │ exp9  │ Qwen3-8B     │ code     │ RUNNING │     —      │     —        │   0  │                                           
-    │       │              │          │         │            │              │      │                                           
-    │ exp10 │ Llama-3.2-1B │ gsm8k    │ done    │   13.1%    │ 1.26 → 0.586 │   0  │                                           
-    │ exp11 │ Llama-3.2-1B │ sciQA    │ done    │   32.0%    │ 1.05 → 0.080 │   0  │                                           
-    │ exp12 │ Llama-3.2-1B │ math     │ done    │    3.2%    │ 1.11 → 0.922 │   0  │                                           
-    │ exp13 │ Llama-3.2-1B │ arc      │ done    │   44.1%    │ 4.19 → 0.153 │   0  │                                           
-    │ exp14 │ Llama-3.2-1B │ mmlu     │ done    │   44.0%    │ 3.41 → 0.041 │   8  │                                           
-    │ exp15 │ Llama-3.2-1B │ csqa     │ done    │   65.6%    │ 4.71 → 0.016 │   0  │                                           
-    │ exp16 │ Llama-3.2-1B │ code     │ done    │    0.7%    │ 0.98 → 1.091↑│   0  │                                           
-    │       │              │          │         │            │              │      │                                           
-    │ exp17 │ Llama-3.2-3B │ gsm8k    │ done    │   34.0%    │ 1.24 → 0.495 │   0  │                                           
-    │ exp18 │ Llama-3.2-3B │ sciQA    │ done    │   34.5%    │ 1.18 → 0.008 │   0  │                                           
-    │ exp19 │ Llama-3.2-3B │ math     │ done    │    9.0%    │ 1.09 → 1.051 │   0  │                                           
-    │ exp20 │ Llama-3.2-3B │ arc      │ done    │   69.2%    │ 2.32 → 0.118 │   0  │                                           
-    │ exp21 │ Llama-3.2-3B │ mmlu     │ done    │   54.6%    │ 3.51 → 0.010 │   4  │                                           
-    │ exp22 │ Llama-3.2-3B │ csqa     │ done    │   77.9%    │ 4.51 → 0.091 │   0  │                                           
-    │ exp23 │ Llama-3.2-3B │ code     │ done    │    1.1%    │ 0.98 → 0.859 │   0  │                                           
-    └───────┴──────────────┴──────────┴─────────┴────────────┴──────────────┴──────┘ 
+Combined SFT Sweep | LoRA r=16 α=32 | lr=1e-5 | 1 epoch | eff_bs=8                                                                                                       
+                                                                                                                                                                                    
+┌─────────────────┬────────┬────────┬────────┬────────┬────────┬────────┬────────┐                                                                                                     
+│ Model           │  gsm8k │  sciQA │  math  │   arc  │  mmlu  │  csqa  │  code  │                                                                                                     
+├─────────────────┼────────┼────────┼────────┼────────┼────────┼────────┼────────┤                                                                                                     
+│ Llama-3.2-1B    │  13.1  │  32.0  │   3.2  │  44.1  │  44.0  │  65.6  │   0.7  │                                                                                                     
+│ Llama-3.2-3B    │  34.0  │  34.5  │   9.0  │  69.2  │  54.6  │  77.9  │   1.1  │                                                                                                     
+│ Qwen3-1.7B      │  59.4  │  51.7  │   0.7  │  75.9  │  56.8  │  77.2  │   0.4  │                                                                                                     
+│ Qwen3-4B        │  77.0  │  60.7  │   0.9  │  86.9  │  70.2  │  83.3  │   2.1  │                                                                                                     
+│ Qwen3-8B        │  78.9  │  61.8  │   8.0  │  91.7  │  74.6  │  86.4  │  RUN   │                                                                                                     
+└─────────────────┴────────┴────────┴────────┴────────┴────────┴────────┴────────┘ 
 
 
-Qwen3-4B · v1 · LoRA(r=16,α=32) · K=4 · abs=128 · 1ep · combined
+Qwen3-4B · SoRL v1 · LoRA(r=16,α=32) · K=4 · abs=128 · 1ep · combined
 ┌───────────┬─────┬──────┬──────┬──────┬───────┬───────┐
 │ Dataset   │ emb │  NL% │  K4% │  Gap │ Vocab │   Src │
 ├───────────┼─────┼──────┼──────┼──────┼───────┼───────┤
@@ -66,3 +35,15 @@ Qwen3-4B · v1 · LoRA(r=16,α=32) · K=4 · abs=128 · 1ep · combined
 │           │  1x │    — │    — │    — │     — │   run │
 │ code      │   — │    — │    — │    — │     — │   run │
 └───────────┴─────┴──────┴──────┴──────┴───────┴───────┘
+
+
+Conclusion 1. 
+With 1 epoch, v1's "performance improvement" no longer holds. Therefore the claim that "SoRL v1 improves accuracy" is a false claim. 
+
+Hypothesis 1. 
+Perhaps SoRL needs longer time to learn properly. 
+
+Direction 1. 
+At 3 epoch, we can observe improvemnet in v1 Acc[NL] compared to SFT, but this is not the case at 1 epoch. It's worth running Qwen3-1.7B with 1 epoch (SoRL) to verify whether "epoch" affect the performance improvemnet in Acc[NL]. 
+At 3 epoch, the effect of learning rate multipler is also obvious, with 1 epoch, this effect also degrades. 
+
