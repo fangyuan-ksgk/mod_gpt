@@ -110,6 +110,27 @@ class SAETrainer:
         state = torch.load(Path(save_dir) / "sae.pt", map_location=self.config.device)
         self.sae.load_state_dict(state)
 
+    def save_to_hub(self, subfolder: str, train_info: dict = None,
+                    repo_id: str = "thoughtworks/arithmetic-sorl-saes"):
+        """Upload SAE to HuggingFace Hub."""
+        import tempfile
+        from huggingface_hub import HfApi
+        api = HfApi()
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            torch.save(self.sae.state_dict(), tmp / "sae.pt")
+            info = asdict(self.config)
+            if train_info:
+                info.update(train_info)
+            with open(tmp / "sae_config.json", "w") as f:
+                json.dump(info, f, indent=2)
+            api.upload_folder(
+                folder_path=str(tmp), repo_id=repo_id, repo_type="model",
+                path_in_repo=subfolder,
+                commit_message=f"Upload {subfolder}",
+            )
+        print(f"Saved to {repo_id}/{subfolder}")
+
 
 # ── Activation collection from Qwen3 models ───────────────────────
 
