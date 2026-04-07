@@ -112,14 +112,23 @@ class SAETrainer:
 
     def save_to_hub(self, subfolder: str, train_info: dict = None,
                     repo_id: str = "thoughtworks/arithmetic-sorl-saes"):
-        """Upload SAE to HuggingFace Hub."""
-        import tempfile
+        """Upload SAE to HuggingFace Hub with complete manifest."""
+        import tempfile, subprocess, datetime
         from huggingface_hub import HfApi
         api = HfApi()
+
+        git_hash = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
+
         with tempfile.TemporaryDirectory() as tmp:
             tmp = Path(tmp)
             torch.save(self.sae.state_dict(), tmp / "sae.pt")
-            info = asdict(self.config)
+            info = {
+                "sae_config": asdict(self.config),
+                "sae_repo": repo_id,
+                "subfolder": subfolder,
+                "git_commit": git_hash,
+                "timestamp": datetime.datetime.utcnow().isoformat(),
+            }
             if train_info:
                 info.update(train_info)
             with open(tmp / "sae_config.json", "w") as f:
@@ -129,7 +138,7 @@ class SAETrainer:
                 path_in_repo=subfolder,
                 commit_message=f"Upload {subfolder}",
             )
-        print(f"Saved to {repo_id}/{subfolder}")
+        print(f"    Saved to {repo_id}/{subfolder}")
 
 
 # ── Activation collection from Qwen3 models ───────────────────────
