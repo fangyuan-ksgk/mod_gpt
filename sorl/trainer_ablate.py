@@ -137,7 +137,7 @@ class SoRLConfig:
     random_K: Optional[tuple] = None          # e.g. (2, 4, 6, 8) — K choices per batch
     strip_suffix: Optional[tuple] = None      # e.g. (0.1, 1.0) — keep_frac range
     compress_prefix: Optional[tuple] = None   # e.g. (0.0, 0.8) — compress_frac range
-    random_mem_span: Optional[tuple] = None   # e.g. (64, 1792) — memory_span_abs range
+    random_mem_span: Optional[tuple] = None   # e.g. (64, 1792) — memory_span_abs range (int uniform)
 
 
 # ---------------------------------------------------------------------------

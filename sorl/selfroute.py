@@ -61,12 +61,19 @@ class SoRLTrainerv6(SoRLTrainerv3):
                 lg[:, :-1].contiguous().view(-1, lg.size(-1)), lab[:, 1:].contiguous().view(-1))
             del o, lg
 
+        # Per-batch randomization of memory_span_abs (enables KV-cache dropping robustness)
+        if cfg.random_mem_span is not None:
+            lo, hi = cfg.random_mem_span
+            mem_span = int(torch.randint(lo, hi + 1, (1,)).item())
+        else:
+            mem_span = cfg.memory_span_abs
+
         im = infer_insert_mask(ids, cfg.K, attn)
         ep = expand_prompt_len(pl, im)
         ed, ea = insert_tokens_with_padding(ids, attn, im, self.raw_model.vocab_sizes[0], self.pad_token_id)
         data, _, logits = self.raw_model.recursion(
             ed, ea, max_iterations=cfg.max_iterations,
-            memory_span_abs=cfg.memory_span_abs, memory_span_traj=cfg.memory_span_traj,
+            memory_span_abs=mem_span, memory_span_traj=cfg.memory_span_traj,
             temperature=cfg.temperature, prompt_len=ep)
 
         traj_loss = self._traj_loss_from_logits(logits, data, ea, ep, bv)
@@ -77,5 +84,5 @@ class SoRLTrainerv6(SoRLTrainerv3):
             "base_traj_loss": base_loss, "traj_loss": traj_loss,
             "contrastive_loss": z, "masked_traj_loss": z, "abs_loss": z,
             "zipf_bigram_loss": z, "ortho_loss": z, "anchor_loss": z, "jacobi_loss": z,
-            "K_this": cfg.K, "mem_abs": cfg.memory_span_abs,
+            "K_this": cfg.K, "mem_abs": mem_span,
         }
