@@ -102,7 +102,7 @@ class SorlModelWrapper(PreTrainedModel, GenerationMixin):
         new_total_vocab_size = wrapper.total_vocab_size.item()
         wrapper.model.resize_token_embeddings(new_total_vocab_size)
         wrapper.config.vocab_size = new_total_vocab_size
-        wrapper._init_abstract_embeddings_orthogonal()
+        # wrapper._init_abstract_embeddings_orthogonal()  # disabled: harmful for from-scratch training
         return wrapper
 
     @torch.no_grad()

@@ -214,7 +214,7 @@ def train_sft(model, train_ds, val_ds, args, run_name):
 class WandbSoRLTrainerv6(SoRLTrainerv6):
     def _log(self, msg):
         super()._log(msg)
-        if self.is_master and self.history["step"]:
+        if self.is_master and self.history["step"] and wandb.run is not None:
             wandb.log({
                 "loss": self.history["loss"][-1],
                 "base_loss": self.history["base_loss"][-1],
@@ -225,7 +225,7 @@ class WandbSoRLTrainerv6(SoRLTrainerv6):
 
     def evaluate(self, eval_K=None):
         result = super().evaluate(eval_K=eval_K)
-        if result and self.is_master:
+        if result and self.is_master and wandb.run is not None:
             wandb.log({"eval/accuracy": result["accuracy"]})
         return result
 
