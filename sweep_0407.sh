@@ -92,22 +92,22 @@ run_bg() {
     "$@" &
 }
 
-# # ============================================================================
-# # Batch 1 — V6 + random_mem_span (16,1024): KV-cache dropping robustness
-# # Baseline: fixed memory_span_abs=1792 (0405 result)
-# # ============================================================================
-# echo ""
-# echo "============================================================"
-# echo "Batch 1: V6 random_mem_span [16,1024] — 4 combos (${TIMESTAMP})"
-# echo "============================================================"
+# ============================================================================
+# Batch 1 — V6 + random_mem_span (16,1024): KV-cache dropping robustness
+# Baseline: fixed memory_span_abs=1792 (0405 result)
+# ============================================================================
+echo ""
+echo "============================================================"
+echo "Batch 1: V6 random_mem_span [16,1024] — 4 combos (${TIMESTAMP})"
+echo "============================================================"
 
-# run_bg "v6_rspan_gsm_06"  $M06 $DS_GSM $R_V6_RSPAN
-# run_bg "v6_rspan_gsm_17"  $M17 $DS_GSM $R_V6_RSPAN
-# run_bg "v6_rspan_sci_06"  $M06 $DS_SCI $R_V6_RSPAN
-# run_bg "v6_rspan_sci_17"  $M17 $DS_SCI $R_V6_RSPAN
+run_bg "v6_rspan_gsm_06"  $M06 $DS_GSM $R_V6_RSPAN
+run_bg "v6_rspan_gsm_17"  $M17 $DS_GSM $R_V6_RSPAN
+run_bg "v6_rspan_sci_06"  $M06 $DS_SCI $R_V6_RSPAN
+run_bg "v6_rspan_sci_17"  $M17 $DS_SCI $R_V6_RSPAN
 
-# echo "  4 experiments launched. Waiting..."
-# wait
+echo "  4 experiments launched. Waiting..."
+wait
 
 # # ============================================================================
 # # Batch 2 — V6 temperature ablation: 0.3 / 0.7 / 1.0 / 2.0 on 0.6B+gsm8k
@@ -219,19 +219,19 @@ run_ta_bg() {
 # ============================================================================
 # Batch 4 — Baselines: pause token + token assorted on 1.7B, 1 epoch
 # ============================================================================
-echo ""
-echo "============================================================"
-echo "Batch 2: Baselines (pause + TA) — 1.7B, 1 epoch (${TIMESTAMP})"
-echo "============================================================"
+# echo ""
+# echo "============================================================"
+# echo "Batch 2: Baselines (pause + TA) — 1.7B, 1 epoch (${TIMESTAMP})"
+# echo "============================================================"
 
-run_pause_bg "pause_gsm_17"  $M17 $DS_GSM
-run_pause_bg "pause_sci_17"  $M17 $DS_SCI
+# run_pause_bg "pause_gsm_17"  $M17 $DS_GSM
+# run_pause_bg "pause_sci_17"  $M17 $DS_SCI
 
-echo "  2 experiments launched. Waiting..."
-wait
+# echo "  2 experiments launched. Waiting..."
+# wait
 
-run_ta_bg    "ta_gsm_17"     $M17 $DS_GSM
-run_ta_bg    "ta_sci_17"     $M17 $DS_SCI
+# run_ta_bg    "ta_gsm_17"     $M17 $DS_GSM
+# run_ta_bg    "ta_sci_17"     $M17 $DS_SCI
 
 
 echo ""
