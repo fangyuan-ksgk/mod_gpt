@@ -254,9 +254,25 @@ def main():
         device=args.device,
     )
 
+    # Build manifest (self-describing config for this run)
+    import subprocess, datetime
+    git_hash = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
+    manifest = {
+        **vars(args),
+        "n_params": n_params,
+        "run_name": run_name,
+        "git_commit": git_hash,
+        "timestamp": datetime.datetime.utcnow().isoformat(),
+        "tokenizer": TOKENIZER_NAME,
+        "dataset_repo": "thoughtworks/arithmetic-sorl-data",
+        "dataset_config": f"{'add_sub_6digit' if args.ops == 'add_sub' else 'add_6digit'}",
+        "model_repo": "thoughtworks/arithmetic-sorl",
+        "trainer_version": "v6",
+    }
+
     os.makedirs(args.output_dir, exist_ok=True)
     with open(os.path.join(args.output_dir, "config.json"), "w") as f:
-        json.dump(vars(args), f, indent=2)
+        json.dump(manifest, f, indent=2)
 
     trainer.train()
 
@@ -270,8 +286,9 @@ def main():
     # Upload to HF Hub + clean up local
     if args.push_to_hub:
         from arithmetic.hub import save_model
+        manifest["final_accuracy"] = final_acc["accuracy"]
         metrics = {"history": trainer.history, "final_accuracy": final_acc["accuracy"]}
-        save_model(model, vars(args), metrics, subfolder=run_name)
+        save_model(model, manifest, metrics, subfolder=run_name)
         # Delete local checkpoint to save disk
         import shutil
         shutil.rmtree(args.output_dir, ignore_errors=True)
