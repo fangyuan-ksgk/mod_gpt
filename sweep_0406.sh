@@ -129,28 +129,28 @@ run_bg() {
 # ============================================================================
 # Batch 1: V1 (emb=1 vs emb=10) on Qwen3-4B
 # ============================================================================
-echo ""
-echo "============================================================"
-echo "Batch 1: V1 (emb=1 vs emb=10) on Qwen3-4B (${TIMESTAMP})"
-echo "============================================================"
+# echo ""
+# echo "============================================================"
+# echo "Batch 1: V1 (emb=1 vs emb=10) on Qwen3-4B (${TIMESTAMP})"
+# echo "============================================================"
 
-run_bg "v1_gsm_4B"      $M4  $DS_GSM  $R_V1
-run_bg "v1_e10_gsm_4B"  $M4  $DS_GSM  $R_V1_E10
-run_bg "v1_sci_4B"      $M4  $DS_SCI  $R_V1
-run_bg "v1_e10_sci_4B"  $M4  $DS_SCI  $R_V1_E10
+# run_bg "v1_gsm_4B"      $M4  $DS_GSM  $R_V1
+# run_bg "v1_e10_gsm_4B"  $M4  $DS_GSM  $R_V1_E10
+# run_bg "v1_sci_4B"      $M4  $DS_SCI  $R_V1
+# run_bg "v1_e10_sci_4B"  $M4  $DS_SCI  $R_V1_E10
 
-wait
-run_bg "v1_code_4B"     $M4  $DS_CODE $R_V1
-run_bg "v1_e10_code_4B" $M4  $DS_CODE $R_V1_E10
-run_bg "v1_math_4B"     $M4  $DS_MATH $R_V1
-run_bg "v1_e10_math_4B" $M4  $DS_MATH $R_V1_E10
-run_bg "v1_arc_4B"      $M4  $DS_ARC  $R_V1
-run_bg "v1_e10_arc_4B"  $M4  $DS_ARC  $R_V1_E10
-run_bg "v1_mmlu_4B"     $M4  $DS_MMLU $R_V1
-run_bg "v1_e10_mmlu_4B" $M4  $DS_MMLU $R_V1_E10
-run_bg "v1_csqa_4B"     $M4  $DS_CSQA $R_V1
-run_bg "v1_e10_csqa_4B" $M4  $DS_CSQA $R_V1_E10
-wait
+# wait
+# run_bg "v1_code_4B"     $M4  $DS_CODE $R_V1
+# run_bg "v1_e10_code_4B" $M4  $DS_CODE $R_V1_E10
+# run_bg "v1_math_4B"     $M4  $DS_MATH $R_V1
+# run_bg "v1_e10_math_4B" $M4  $DS_MATH $R_V1_E10
+# run_bg "v1_arc_4B"      $M4  $DS_ARC  $R_V1
+# run_bg "v1_e10_arc_4B"  $M4  $DS_ARC  $R_V1_E10
+# run_bg "v1_mmlu_4B"     $M4  $DS_MMLU $R_V1
+# run_bg "v1_e10_mmlu_4B" $M4  $DS_MMLU $R_V1_E10
+# run_bg "v1_csqa_4B"     $M4  $DS_CSQA $R_V1
+# run_bg "v1_e10_csqa_4B" $M4  $DS_CSQA $R_V1_E10
+# wait
 
 # ============================================================================
 # Batch 2: V6 (emb=1 vs emb=10) on Qwen3-4B
@@ -160,10 +160,10 @@ echo "============================================================"
 echo "Batch 2: V6 (emb=1 vs emb=10) on Qwen3-4B (${TIMESTAMP})"
 echo "============================================================"
 
-run_bg "v6_gsm_4B"      $M4  $DS_GSM  $R_V6
-run_bg "v6_e10_gsm_4B"  $M4  $DS_GSM  $R_V6_E10
-run_bg "v6_sci_4B"      $M4  $DS_SCI  $R_V6
-run_bg "v6_e10_sci_4B"  $M4  $DS_SCI  $R_V6_E10
+# run_bg "v6_gsm_4B"      $M4  $DS_GSM  $R_V6
+# run_bg "v6_e10_gsm_4B"  $M4  $DS_GSM  $R_V6_E10
+# run_bg "v6_sci_4B"      $M4  $DS_SCI  $R_V6
+# run_bg "v6_e10_sci_4B"  $M4  $DS_SCI  $R_V6_E10
 
 wait
 run_bg "v6_code_4B"     $M4  $DS_CODE $R_V6
@@ -181,28 +181,28 @@ wait
 # ============================================================================
 # Batch 3: V1 (emb=1 vs emb=10) on Qwen3-8B
 # ============================================================================
-echo ""
-echo "============================================================"
-echo "Batch 3: V1 (emb=1 vs emb=10) on Qwen3-8B (${TIMESTAMP})"
-echo "============================================================"
+# echo ""
+# echo "============================================================"
+# echo "Batch 3: V1 (emb=1 vs emb=10) on Qwen3-8B (${TIMESTAMP})"
+# echo "============================================================"
 
-run_bg "v1_gsm_8B"      $M8  $DS_GSM  $R_V1
-run_bg "v1_e10_gsm_8B"  $M8  $DS_GSM  $R_V1_E10
-run_bg "v1_sci_8B"      $M8  $DS_SCI  $R_V1
-run_bg "v1_e10_sci_8B"  $M8  $DS_SCI  $R_V1_E10
+# run_bg "v1_gsm_8B"      $M8  $DS_GSM  $R_V1
+# run_bg "v1_e10_gsm_8B"  $M8  $DS_GSM  $R_V1_E10
+# run_bg "v1_sci_8B"      $M8  $DS_SCI  $R_V1
+# run_bg "v1_e10_sci_8B"  $M8  $DS_SCI  $R_V1_E10
 
-wait
-run_bg "v1_code_8B"     $M8  $DS_CODE $R_V1
-run_bg "v1_e10_code_8B" $M8  $DS_CODE $R_V1_E10
-run_bg "v1_math_8B"     $M8  $DS_MATH $R_V1
-run_bg "v1_e10_math_8B" $M8  $DS_MATH $R_V1_E10
-run_bg "v1_arc_8B"      $M8  $DS_ARC  $R_V1
-run_bg "v1_e10_arc_8B"  $M8  $DS_ARC  $R_V1_E10
-run_bg "v1_mmlu_8B"     $M8  $DS_MMLU $R_V1
-run_bg "v1_e10_mmlu_8B" $M8  $DS_MMLU $R_V1_E10
-run_bg "v1_csqa_8B"     $M8  $DS_CSQA $R_V1
-run_bg "v1_e10_csqa_8B" $M8  $DS_CSQA $R_V1_E10
-wait
+# wait
+# run_bg "v1_code_8B"     $M8  $DS_CODE $R_V1
+# run_bg "v1_e10_code_8B" $M8  $DS_CODE $R_V1_E10
+# run_bg "v1_math_8B"     $M8  $DS_MATH $R_V1
+# run_bg "v1_e10_math_8B" $M8  $DS_MATH $R_V1_E10
+# run_bg "v1_arc_8B"      $M8  $DS_ARC  $R_V1
+# run_bg "v1_e10_arc_8B"  $M8  $DS_ARC  $R_V1_E10
+# run_bg "v1_mmlu_8B"     $M8  $DS_MMLU $R_V1
+# run_bg "v1_e10_mmlu_8B" $M8  $DS_MMLU $R_V1_E10
+# run_bg "v1_csqa_8B"     $M8  $DS_CSQA $R_V1
+# run_bg "v1_e10_csqa_8B" $M8  $DS_CSQA $R_V1_E10
+# wait
 
 # ============================================================================
 # Batch 4: V6 (emb=1 vs emb=10) on Qwen3-8B
@@ -233,28 +233,28 @@ wait
 # ============================================================================
 # Batch 5: V1 (emb=1 vs emb=10) on Qwen3-1.7B
 # ============================================================================
-echo ""
-echo "============================================================"
-echo "Batch 5: V1 (emb=1 vs emb=10) on Qwen3-1.7B (${TIMESTAMP})"
-echo "============================================================"
+# echo ""
+# echo "============================================================"
+# echo "Batch 5: V1 (emb=1 vs emb=10) on Qwen3-1.7B (${TIMESTAMP})"
+# echo "============================================================"
 
-run_bg "v1_gsm_1.7B"      $M16 $DS_GSM  $R_V1
-run_bg "v1_e10_gsm_1.7B"  $M16 $DS_GSM  $R_V1_E10
-run_bg "v1_sci_1.7B"      $M16 $DS_SCI  $R_V1
-run_bg "v1_e10_sci_1.7B"  $M16 $DS_SCI  $R_V1_E10
+# run_bg "v1_gsm_1.7B"      $M16 $DS_GSM  $R_V1
+# run_bg "v1_e10_gsm_1.7B"  $M16 $DS_GSM  $R_V1_E10
+# run_bg "v1_sci_1.7B"      $M16 $DS_SCI  $R_V1
+# run_bg "v1_e10_sci_1.7B"  $M16 $DS_SCI  $R_V1_E10
 
-wait
-run_bg "v1_code_1.7B"     $M16 $DS_CODE $R_V1
-run_bg "v1_e10_code_1.7B" $M16 $DS_CODE $R_V1_E10
-run_bg "v1_math_1.7B"     $M16 $DS_MATH $R_V1
-run_bg "v1_e10_math_1.7B" $M16 $DS_MATH $R_V1_E10
-run_bg "v1_arc_1.7B"      $M16 $DS_ARC  $R_V1
-run_bg "v1_e10_arc_1.7B"  $M16 $DS_ARC  $R_V1_E10
-run_bg "v1_mmlu_1.7B"     $M16 $DS_MMLU $R_V1
-run_bg "v1_e10_mmlu_1.7B" $M16 $DS_MMLU $R_V1_E10
-run_bg "v1_csqa_1.7B"     $M16 $DS_CSQA $R_V1
-run_bg "v1_e10_csqa_1.7B" $M16 $DS_CSQA $R_V1_E10
-wait
+# wait
+# run_bg "v1_code_1.7B"     $M16 $DS_CODE $R_V1
+# run_bg "v1_e10_code_1.7B" $M16 $DS_CODE $R_V1_E10
+# run_bg "v1_math_1.7B"     $M16 $DS_MATH $R_V1
+# run_bg "v1_e10_math_1.7B" $M16 $DS_MATH $R_V1_E10
+# run_bg "v1_arc_1.7B"      $M16 $DS_ARC  $R_V1
+# run_bg "v1_e10_arc_1.7B"  $M16 $DS_ARC  $R_V1_E10
+# run_bg "v1_mmlu_1.7B"     $M16 $DS_MMLU $R_V1
+# run_bg "v1_e10_mmlu_1.7B" $M16 $DS_MMLU $R_V1_E10
+# run_bg "v1_csqa_1.7B"     $M16 $DS_CSQA $R_V1
+# run_bg "v1_e10_csqa_1.7B" $M16 $DS_CSQA $R_V1_E10
+# wait
 
 # ============================================================================
 # Batch 6: V6 (emb=1 vs emb=10) on Qwen3-1.7B
@@ -285,28 +285,28 @@ wait
 # ============================================================================
 # Batch 7: V1 (emb=1 vs emb=10) on Llama-3.2-1B
 # ============================================================================
-echo ""
-echo "============================================================"
-echo "Batch 7: V1 (emb=1 vs emb=10) on Llama-3.2-1B (${TIMESTAMP})"
-echo "============================================================"
+# echo ""
+# echo "============================================================"
+# echo "Batch 7: V1 (emb=1 vs emb=10) on Llama-3.2-1B (${TIMESTAMP})"
+# echo "============================================================"
 
-run_bg "v1_gsm_L1"      $ML1 $DS_GSM  $R_V1
-run_bg "v1_e10_gsm_L1"  $ML1 $DS_GSM  $R_V1_E10
-run_bg "v1_sci_L1"      $ML1 $DS_SCI  $R_V1
-run_bg "v1_e10_sci_L1"  $ML1 $DS_SCI  $R_V1_E10
+# run_bg "v1_gsm_L1"      $ML1 $DS_GSM  $R_V1
+# run_bg "v1_e10_gsm_L1"  $ML1 $DS_GSM  $R_V1_E10
+# run_bg "v1_sci_L1"      $ML1 $DS_SCI  $R_V1
+# run_bg "v1_e10_sci_L1"  $ML1 $DS_SCI  $R_V1_E10
 
-wait
-run_bg "v1_code_L1"     $ML1 $DS_CODE $R_V1
-run_bg "v1_e10_code_L1" $ML1 $DS_CODE $R_V1_E10
-run_bg "v1_math_L1"     $ML1 $DS_MATH $R_V1
-run_bg "v1_e10_math_L1" $ML1 $DS_MATH $R_V1_E10
-run_bg "v1_arc_L1"      $ML1 $DS_ARC  $R_V1
-run_bg "v1_e10_arc_L1"  $ML1 $DS_ARC  $R_V1_E10
-run_bg "v1_mmlu_L1"     $ML1 $DS_MMLU $R_V1
-run_bg "v1_e10_mmlu_L1" $ML1 $DS_MMLU $R_V1_E10
-run_bg "v1_csqa_L1"     $ML1 $DS_CSQA $R_V1
-run_bg "v1_e10_csqa_L1" $ML1 $DS_CSQA $R_V1_E10
-wait
+# wait
+# run_bg "v1_code_L1"     $ML1 $DS_CODE $R_V1
+# run_bg "v1_e10_code_L1" $ML1 $DS_CODE $R_V1_E10
+# run_bg "v1_math_L1"     $ML1 $DS_MATH $R_V1
+# run_bg "v1_e10_math_L1" $ML1 $DS_MATH $R_V1_E10
+# run_bg "v1_arc_L1"      $ML1 $DS_ARC  $R_V1
+# run_bg "v1_e10_arc_L1"  $ML1 $DS_ARC  $R_V1_E10
+# run_bg "v1_mmlu_L1"     $ML1 $DS_MMLU $R_V1
+# run_bg "v1_e10_mmlu_L1" $ML1 $DS_MMLU $R_V1_E10
+# run_bg "v1_csqa_L1"     $ML1 $DS_CSQA $R_V1
+# run_bg "v1_e10_csqa_L1" $ML1 $DS_CSQA $R_V1_E10
+# wait
 
 # ============================================================================
 # Batch 8: V6 (emb=1 vs emb=10) on Llama-3.2-1B
@@ -337,28 +337,28 @@ wait
 # ============================================================================
 # Batch 9: V1 (emb=1 vs emb=10) on Llama-3.2-3B
 # ============================================================================
-echo ""
-echo "============================================================"
-echo "Batch 9: V1 (emb=1 vs emb=10) on Llama-3.2-3B (${TIMESTAMP})"
-echo "============================================================"
+# echo ""
+# echo "============================================================"
+# echo "Batch 9: V1 (emb=1 vs emb=10) on Llama-3.2-3B (${TIMESTAMP})"
+# echo "============================================================"
 
-run_bg "v1_gsm_L3"      $ML3 $DS_GSM  $R_V1
-run_bg "v1_e10_gsm_L3"  $ML3 $DS_GSM  $R_V1_E10
-run_bg "v1_sci_L3"      $ML3 $DS_SCI  $R_V1
-run_bg "v1_e10_sci_L3"  $ML3 $DS_SCI  $R_V1_E10
+# run_bg "v1_gsm_L3"      $ML3 $DS_GSM  $R_V1
+# run_bg "v1_e10_gsm_L3"  $ML3 $DS_GSM  $R_V1_E10
+# run_bg "v1_sci_L3"      $ML3 $DS_SCI  $R_V1
+# run_bg "v1_e10_sci_L3"  $ML3 $DS_SCI  $R_V1_E10
 
-wait
-run_bg "v1_code_L3"     $ML3 $DS_CODE $R_V1
-run_bg "v1_e10_code_L3" $ML3 $DS_CODE $R_V1_E10
-run_bg "v1_math_L3"     $ML3 $DS_MATH $R_V1
-run_bg "v1_e10_math_L3" $ML3 $DS_MATH $R_V1_E10
-run_bg "v1_arc_L3"      $ML3 $DS_ARC  $R_V1
-run_bg "v1_e10_arc_L3"  $ML3 $DS_ARC  $R_V1_E10
-run_bg "v1_mmlu_L3"     $ML3 $DS_MMLU $R_V1
-run_bg "v1_e10_mmlu_L3" $ML3 $DS_MMLU $R_V1_E10
-run_bg "v1_csqa_L3"     $ML3 $DS_CSQA $R_V1
-run_bg "v1_e10_csqa_L3" $ML3 $DS_CSQA $R_V1_E10
-wait
+# wait
+# run_bg "v1_code_L3"     $ML3 $DS_CODE $R_V1
+# run_bg "v1_e10_code_L3" $ML3 $DS_CODE $R_V1_E10
+# run_bg "v1_math_L3"     $ML3 $DS_MATH $R_V1
+# run_bg "v1_e10_math_L3" $ML3 $DS_MATH $R_V1_E10
+# run_bg "v1_arc_L3"      $ML3 $DS_ARC  $R_V1
+# run_bg "v1_e10_arc_L3"  $ML3 $DS_ARC  $R_V1_E10
+# run_bg "v1_mmlu_L3"     $ML3 $DS_MMLU $R_V1
+# run_bg "v1_e10_mmlu_L3" $ML3 $DS_MMLU $R_V1_E10
+# run_bg "v1_csqa_L3"     $ML3 $DS_CSQA $R_V1
+# run_bg "v1_e10_csqa_L3" $ML3 $DS_CSQA $R_V1_E10
+# wait
 
 # ============================================================================
 # Batch 10: V6 (emb=1 vs emb=10) on Llama-3.2-3B
