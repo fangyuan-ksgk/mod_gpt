@@ -474,11 +474,39 @@ class SoRLTrainer:
     def evaluate(self, eval_K=None):
         if self.compute_accuracy is None or self.val_dataset is None:
             return None
+        cfg = self.config
         self.raw_model.eval()
+
+        if cfg.random_mem_span is not None and eval_K is not None:
+            lo, hi = cfg.random_mem_span
+            n_spans = 4
+            spans = sorted(set(
+                int(round(lo + (hi - lo) * i / (n_spans - 1))) for i in range(n_spans)
+            ))
+            span_results = {}
+            for span in spans:
+                r = self.compute_accuracy(
+                    self.raw_model, self.tokenizer, self.val_dataset,
+                    self.device, cfg.eval_samples, eval_K=eval_K,
+                    response_only_abs=cfg.response_only_abs,
+                    memory_span_abs=span,
+                )
+                span_results[span] = r
+            self.raw_model.train()
+            avg_acc = sum(r["accuracy"] for r in span_results.values()) / len(span_results)
+            return {
+                "accuracy": avg_acc,
+                "correct": sum(r["correct"] for r in span_results.values()),
+                "total": sum(r["total"] for r in span_results.values()),
+                "K": eval_K,
+                "span_results": span_results,
+            }
+
         result = self.compute_accuracy(
             self.raw_model, self.tokenizer, self.val_dataset,
-            self.device, self.config.eval_samples, eval_K=eval_K,
-            response_only_abs=self.config.response_only_abs,
+            self.device, cfg.eval_samples, eval_K=eval_K,
+            response_only_abs=cfg.response_only_abs,
+            memory_span_abs=cfg.memory_span_abs,
         )
         self.raw_model.train()
         return result

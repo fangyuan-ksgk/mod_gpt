@@ -635,19 +635,25 @@ def main():
     if is_master:
         log("--- Final evaluation (K=None, NL-only) ---")
         result = trainer.evaluate()
+        def _log_result(res, label):
+            if not res:
+                return
+            log(f"Final accuracy [{label}]: {res['accuracy']*100:.1f}% ({res['correct']}/{res['total']})")
+            if "span_results" in res:
+                for span, sr in sorted(res["span_results"].items()):
+                    log(f"  mem_span={span:5d}: {sr['accuracy']*100:.1f}% ({sr['correct']}/{sr['total']})")
+            if "mono_stats" in res:
+                ms = res["mono_stats"]
+                log(f"  Inner-monologue: effective_vocab={ms['effective_vocab_size']}, "
+                    f"abs_ratio={ms['abs_ratio']:.1%}, top10={ms['top10']}")
+
         if result:
-            log(f"Final accuracy [K=None]: {result['accuracy']*100:.1f}% "
-                f"({result['correct']}/{result['total']})")
+            _log_result(result, "K=None")
         if has_aux or args.use_v6: # <- so that self-routing run also gets Acc[K] evaluation
             log(f"--- Final evaluation (K={config.K}, with abstractions) ---")
             result_k = trainer.evaluate(eval_K=config.K)
             if result_k:
-                log(f"Final accuracy [K={config.K}]: {result_k['accuracy']*100:.1f}% "
-                    f"({result_k['correct']}/{result_k['total']})")
-                if "mono_stats" in result_k:
-                    ms = result_k["mono_stats"]
-                    log(f"  Inner-monologue: effective_vocab={ms['effective_vocab_size']}, "
-                        f"abs_ratio={ms['abs_ratio']:.1%}, top10={ms['top10']}")
+                _log_result(result_k, f"K={config.K}")
 
         # Save history
         hist_path = os.path.join(args.output_dir, "history.json")
