@@ -3,14 +3,14 @@ data/openweb10B/
 .data/openweb10B
 .data/openweb10B/
 *.pyc
-logs/* 
+# logs/* 
 *.png
 *.bin
 results_*
 *.gif
 *.pt
 .DS_Store
-log/*
+log/qwen16-ckpt/*
 
 # Local NCCL tuner placeholder created by repo-owned launchers on RunPod.
 dummy_tuner_config.txt

@@ -1,0 +1,1 @@
+Qwen3-0.6B | SFT | max_len 512 | max_new_token 256 |  
