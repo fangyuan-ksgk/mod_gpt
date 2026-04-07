@@ -137,7 +137,7 @@ class SAETrainer:
 def collect_activations(
     model, tokenizer, layer: int = -1,
     n_digits: int = 6, ops: str = "add",
-    n_batches: int = 200, batch_size: int = 64,
+    n_batches: int = 2000, batch_size: int = 512,
     positions: str = "answer", device: str = "cuda",
 ) -> torch.Tensor:
     """
