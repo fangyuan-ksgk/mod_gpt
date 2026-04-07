@@ -15,3 +15,5 @@ log/*
 
 # Local NCCL tuner placeholder created by repo-owned launchers on RunPod.
 dummy_tuner_config.txt
+wandb/
+ckpt/
