@@ -16,8 +16,10 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 import torch
+import wandb
 import optuna
 from optuna.trial import TrialState
+from optuna_integration.wandb import WeightsAndBiasesCallback
 from transformers import AutoTokenizer, Qwen3Config
 from sorl.sorl_wrapper import SorlModelWrapper
 from sorl.trainer_ablate import SoRLTrainer, SoRLConfig
@@ -125,6 +127,20 @@ def objective(trial, args, tokenizer):
     acc = eval_with_generation(model, val_ds, args.device, K=K, num_samples=100)
     print(f"  Trial {trial.number} final accuracy: {acc:.3f}")
 
+    # Log to wandb
+    try:
+        run = wandb.init(
+            project="sorl-arithmetic-optuna",
+            entity="nlp_and_interpretability",
+            name=f"trial_{trial.number}_acc{acc:.2f}",
+            config=trial.params,
+            reinit=True,
+        )
+        wandb.log({"final_accuracy": acc, **trial.params})
+        wandb.finish()
+    except:
+        pass
+
     # Cleanup
     del model, trainer
     torch.cuda.empty_cache()
@@ -159,9 +175,19 @@ def main():
         load_if_exists=True,
     )
 
+    wandb_callback = WeightsAndBiasesCallback(
+        metric_name="accuracy",
+        wandb_kwargs={
+            "project": "sorl-arithmetic-optuna",
+            "entity": "nlp_and_interpretability",
+        },
+        as_multirun=True,
+    )
+
     study.optimize(
         lambda trial: objective(trial, args, tokenizer),
         n_trials=args.n_trials,
+        callbacks=[wandb_callback],
     )
 
     print(f"\n{'═' * 60}")
