@@ -2,13 +2,14 @@
 Arithmetic training with Qwen3 + SorlModelWrapper.
 
 Baseline (SFT): python -m arithmetic.train --mode baseline --ops add
-SoRL v6:        python -m arithmetic.train --mode sorl --ops add --abs_vocab 16
+SoRL v1:        python -m arithmetic.train --mode sorl --ops add --abs_vocab 16
 """
 import os
 import sys
 import json
 import argparse
 import time
+import math
 import torch
 import torch.nn as nn
 import wandb
@@ -19,8 +20,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from transformers import Qwen3Config, AutoTokenizer
 from sorl.sorl_wrapper import SorlModelWrapper
-from sorl.selfroute import SoRLTrainerv6
-from sorl.trainer_ablate import SoRLConfig
+from sorl.trainer_ablate import SoRLTrainer, SoRLConfig
 from arithmetic.datasets.addition import (
     generate_batch, eval_accuracy, NUM_TOKENS, ALL_LABELS,
 )
@@ -31,18 +31,16 @@ TOKENIZER_NAME = "Qwen/Qwen3-0.6B"
 WANDB_PROJECT = "sorl-arithmetic"
 WANDB_ENTITY = "nlp_and_interpretability"
 
-# Qwen3 token IDs for arithmetic characters (verified against Qwen3-0.6B tokenizer).
-# WARNING: These IDs are specific to Qwen3. Do NOT use with other tokenizers.
 QWEN3_TOKEN_MAP = {
     0: 15, 1: 16, 2: 17, 3: 18, 4: 19,
     5: 20, 6: 21, 7: 22, 8: 23, 9: 24,
     10: 10, 11: 28, 12: 12,
 }
+QWEN3_INV_MAP = {v: k for k, v in QWEN3_TOKEN_MAP.items()}
 
 
 class Qwen3ArithmeticDataset(Dataset):
     """On-the-fly arithmetic dataset producing Qwen3 token IDs."""
-
     def __init__(self, tokenizer, n_digits=6, ops="add", size=100_000):
         assert "qwen" in type(tokenizer).__module__.lower() or "qwen" in getattr(tokenizer, 'name_or_path', '').lower()
         self.tokenizer = tokenizer
@@ -74,13 +72,47 @@ def collate_fn(batch):
     }
 
 
-# ── Accuracy ────────────────────────────────────────────────────────
+# ── Eval: generates with abstraction tokens, scores trajectory only ──
 
-def compute_accuracy(model, dataset, device, num_samples=200):
-    """Evaluate accuracy: argmax prediction on answer tokens."""
+def eval_with_generation(model, dataset, device, K=4, num_samples=200):
+    """
+    Proper SoRL eval: generate with abstraction tokens interleaved,
+    then strip them and check trajectory predictions.
+    """
     model.eval()
-    n_correct, n_total = 0, 0
+    base_v = model.vocab_sizes[0].item()
     prompt_len = dataset.prompt_len
+    n_correct = 0
+
+    for _ in range(num_samples):
+        item = dataset[0]
+        ids = item["input_ids"].unsqueeze(0).to(device)
+        prompt = ids[:, :prompt_len]
+        attn = torch.ones_like(prompt)
+        true_answer = ids[0, prompt_len:]
+
+        with torch.no_grad():
+            generated = model.generate(
+                prompt, max_new_tokens=25, attention_mask=attn,
+                temperature=0.0, K=K, memory_span_abs=1792, memory_span_traj=1792,
+            )
+
+        traj_tokens = generated[0][generated[0] < base_v]
+        pred_answer = traj_tokens[prompt_len:]
+
+        if len(pred_answer) >= len(true_answer) and (pred_answer[:len(true_answer)] == true_answer).all():
+            n_correct += 1
+
+    model.train()
+    return n_correct / max(num_samples, 1)
+
+
+def eval_sft(model, dataset, device, num_samples=200):
+    """SFT eval: no abstraction tokens, just forward pass."""
+    model.eval()
+    prompt_len = dataset.prompt_len
+    base_v = model.vocab_sizes[0].item()
+    n_correct = 0
 
     for _ in range(num_samples):
         item = dataset[0]
@@ -88,49 +120,39 @@ def compute_accuracy(model, dataset, device, num_samples=200):
         attn = item["attention_mask"].unsqueeze(0).to(device)
 
         with torch.no_grad():
-            out = model(ids, attention_mask=attn,
-                        memory_span_abs=1792, memory_span_traj=1792)
-        pred = out.logits[0, prompt_len - 1:-1].argmax(dim=-1)
+            out = model(ids, attention_mask=attn, memory_span_abs=1792, memory_span_traj=1792)
+        pred = out.logits[0, prompt_len - 1:-1, :base_v].argmax(dim=-1)
         target = ids[0, prompt_len:]
         if (pred == target).all():
             n_correct += 1
-        n_total += 1
 
     model.train()
-    return n_correct / max(n_total, 1)
+    return n_correct / max(num_samples, 1)
 
 
 def compute_accuracy_for_trainer(model, tokenizer, dataset, device, num_samples, **kwargs):
-    """Wrapper matching SoRLTrainer's callback signature."""
-    return {"accuracy": compute_accuracy(model, dataset, device, num_samples)}
+    """Callback for SoRLTrainer eval — uses generation with abs tokens."""
+    K = kwargs.get("eval_K", 4)
+    acc = eval_with_generation(model, dataset, device, K=K, num_samples=num_samples)
+    return {"accuracy": acc}
 
 
 # ── Model factory ──────────────────────────────────────────────────
 
 def make_model(args, tokenizer):
     config = Qwen3Config(
-        hidden_size=args.n_embd,
-        num_hidden_layers=args.n_layer,
-        num_attention_heads=args.n_head,
-        num_key_value_heads=args.n_head,
-        intermediate_size=args.n_embd * 4,
-        vocab_size=tokenizer.vocab_size,
+        hidden_size=args.n_embd, num_hidden_layers=args.n_layer,
+        num_attention_heads=args.n_head, num_key_value_heads=args.n_head,
+        intermediate_size=args.n_embd * 4, vocab_size=tokenizer.vocab_size,
         max_position_embeddings=128,
     )
     abs_vocab = args.abs_vocab if args.abs_vocab > 0 else 1
-    return SorlModelWrapper.from_scratch(
-        config,
-        full_vocab_size_list=[tokenizer.vocab_size, abs_vocab],
-        pad_token_id=tokenizer.pad_token_id,
-    )
+    return SorlModelWrapper.from_scratch(config, [tokenizer.vocab_size, abs_vocab], tokenizer.pad_token_id)
 
 
 # ── SFT baseline trainer ──────────────────────────────────────────
 
 def train_sft(model, train_ds, val_ds, args, run_name):
-    """
-    Plain SFT: cross-entropy on answer tokens. No SoRL, no abstraction tokens.
-    """
     device = args.device
     model = model.to(device)
     model.train()
@@ -139,8 +161,7 @@ def train_sft(model, train_ds, val_ds, args, run_name):
     loader = DataLoader(train_ds, batch_size=args.batch_size, shuffle=True,
                         collate_fn=collate_fn, num_workers=0)
 
-    optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=0.01,
-                                   betas=(0.9, 0.98))
+    optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=0.01, betas=(0.9, 0.98))
     total_steps = len(loader) * args.num_epochs
     warmup_steps = int(total_steps * 0.2)
 
@@ -153,26 +174,17 @@ def train_sft(model, train_ds, val_ds, args, run_name):
             ids = batch["input_ids"].to(device)
             attn = batch["attention_mask"].to(device)
 
-            # Forward
-            out = model(ids, attention_mask=attn,
-                        memory_span_abs=1792, memory_span_traj=1792)
-            logits = out.logits
-
-            # Loss on answer tokens only
+            out = model(ids, attention_mask=attn, memory_span_abs=1792, memory_span_traj=1792)
             labels = ids.clone()
-            labels[:, :prompt_len] = -100  # mask question
-            shift_logits = logits[:, :-1].contiguous()
+            labels[:, :prompt_len] = -100
+            shift_logits = out.logits[:, :-1].contiguous()
             shift_labels = labels[:, 1:].contiguous()
             loss = nn.CrossEntropyLoss(ignore_index=-100)(
-                shift_logits.view(-1, shift_logits.size(-1)),
-                shift_labels.view(-1),
-            )
+                shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1))
 
-            # LR schedule: linear warmup + cosine decay
             if global_step < warmup_steps:
                 lr = args.lr * global_step / max(warmup_steps, 1)
             else:
-                import math
                 progress = (global_step - warmup_steps) / max(total_steps - warmup_steps, 1)
                 lr = args.lr * 0.5 * (1 + math.cos(math.pi * progress))
             for pg in optimizer.param_groups:
@@ -184,43 +196,37 @@ def train_sft(model, train_ds, val_ds, args, run_name):
             optimizer.step()
             global_step += 1
 
-            # Logging
             if global_step % 50 == 0:
-                elapsed = time.time() - t_start
-                print(f"epoch {epoch + global_step/len(loader)/args.num_epochs:.3f}/{args.num_epochs} | "
-                      f"loss={loss.item():.4f} | lr={lr:.2e} | {elapsed:.0f}s")
+                print(f"step {global_step} | loss={loss.item():.4f} | lr={lr:.2e}")
                 history["step"].append(global_step)
                 history["loss"].append(loss.item())
                 history["base_loss"].append(loss.item())
                 history["lr"].append(lr)
-                if not args.no_wandb:
-                    wandb.log({"loss": loss.item(), "base_loss": loss.item(), "lr": lr,
-                               "step": global_step}, step=global_step)
+                if wandb.run is not None:
+                    wandb.log({"loss": loss.item(), "lr": lr}, step=global_step)
 
-            # Eval
             if global_step % 500 == 0:
-                acc = compute_accuracy(model, val_ds, device, 100)
+                acc = eval_sft(model, val_ds, device, 100)
                 print(f"  --- Eval step {global_step}: accuracy={acc:.3f} ---")
-                if not args.no_wandb:
+                if wandb.run is not None:
                     wandb.log({"eval/accuracy": acc}, step=global_step)
-
-        print(f"=== Epoch {epoch + 1} complete ===")
 
     return history
 
 
-# ── Wandb-aware v6 trainer ─────────────────────────────────────────
+# ── Wandb-aware v1 trainer ─────────────────────────────────────────
 
-class WandbSoRLTrainerv6(SoRLTrainerv6):
+class WandbSoRLTrainer(SoRLTrainer):
     def _log(self, msg):
         super()._log(msg)
         if self.is_master and self.history["step"] and wandb.run is not None:
             wandb.log({
                 "loss": self.history["loss"][-1],
                 "base_loss": self.history["base_loss"][-1],
-                "traj_loss": self.history["traj_loss"][-1],
+                "info_loss": self.history["info_loss"][-1],
+                "abs_loss": self.history["abs_loss"][-1],
+                "zipf_loss": self.history["zipf_loss"][-1],
                 "lr": self.history["lr"][-1],
-                "step": self.history["step"][-1],
             }, step=self.history["step"][-1])
 
     def evaluate(self, eval_K=None):
@@ -237,14 +243,18 @@ def main():
     p.add_argument("--mode", choices=["baseline", "sorl"], default="baseline")
     p.add_argument("--ops", choices=["add", "add_sub"], default="add")
     p.add_argument("--n_digits", type=int, default=6)
-    p.add_argument("--n_layer", type=int, default=3)
-    p.add_argument("--n_head", type=int, default=4)
-    p.add_argument("--n_embd", type=int, default=512)
+    p.add_argument("--n_layer", type=int, default=2)
+    p.add_argument("--n_head", type=int, default=3)
+    p.add_argument("--n_embd", type=int, default=510)
     p.add_argument("--abs_vocab", type=int, default=0)
     p.add_argument("--K", type=int, default=4)
+    # v1 SoRL hyperparams (Fangyuan's recommended defaults)
+    p.add_argument("--alpha_info_gain", type=float, default=10.0)
+    p.add_argument("--alpha_abs", type=float, default=0.1)
+    p.add_argument("--alpha_soft_zipf", type=float, default=1.0)
     p.add_argument("--batch_size", type=int, default=64)
-    p.add_argument("--num_epochs", type=int, default=3)
-    p.add_argument("--dataset_size", type=int, default=100_000)
+    p.add_argument("--num_epochs", type=int, default=5)
+    p.add_argument("--dataset_size", type=int, default=500_000)
     p.add_argument("--lr", type=float, default=8e-5)
     p.add_argument("--output_dir", type=str, default="ckpt/arithmetic")
     p.add_argument("--device", type=str, default="cuda")
@@ -261,7 +271,7 @@ def main():
     if args.K != 4 and args.mode == "sorl":
         run_name += f"_K{args.K}"
     run_name += f"_{args.dataset_size // 1000}K"
-    if args.n_layer != 3 or args.n_head != 4 or args.n_embd != 512:
+    if args.n_layer != 2 or args.n_head != 3 or args.n_embd != 510:
         run_name += f"_{args.n_layer}L{args.n_head}H{args.n_embd}d"
 
     if not args.no_wandb:
@@ -279,16 +289,18 @@ def main():
     print(f"  {run_name}")
     print(f"  arch: {args.n_layer}L/{args.n_head}H/{args.n_embd}d | params: {n_params:,}")
     print(f"  train: {args.num_epochs} epochs x {args.dataset_size} samples, batch={args.batch_size}")
-    print(f"  mode: {args.mode}" + (f" | abs_vocab={args.abs_vocab} K={args.K}" if args.mode == "sorl" else " | pure SFT"))
+    if args.mode == "sorl":
+        print(f"  SoRL v1: abs={args.abs_vocab} K={args.K} ig={args.alpha_info_gain} abs={args.alpha_abs} zipf={args.alpha_soft_zipf}")
+    else:
+        print(f"  pure SFT")
     print(f"{'═' * 60}")
 
-    if not args.no_wandb:
+    if wandb.run is not None:
         wandb.config.update({"n_params": n_params})
 
     train_ds = Qwen3ArithmeticDataset(tokenizer, args.n_digits, args.ops, args.dataset_size)
     val_ds = Qwen3ArithmeticDataset(tokenizer, args.n_digits, args.ops, 1000)
 
-    # Build manifest
     import subprocess, datetime
     git_hash = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
     manifest = {
@@ -296,50 +308,46 @@ def main():
         "n_params": n_params,
         "run_name": run_name,
         "git_commit": git_hash,
-        "timestamp": datetime.datetime.utcnow().isoformat(),
+        "timestamp": datetime.datetime.now(datetime.UTC).isoformat(),
         "tokenizer": TOKENIZER_NAME,
         "dataset_repo": "thoughtworks/arithmetic-sorl-data",
         "dataset_config": "add_sub_6digit" if args.ops == "add_sub" else "add_6digit",
         "model_repo": "thoughtworks/arithmetic-sorl",
-        "trainer_version": "sft" if args.mode == "baseline" else "v6",
+        "trainer_version": "sft" if args.mode == "baseline" else "v1",
     }
 
     os.makedirs(args.output_dir, exist_ok=True)
     with open(os.path.join(args.output_dir, "config.json"), "w") as f:
         json.dump(manifest, f, indent=2)
 
-    # ── Train ───────────────────────────────────────────────────
     if args.mode == "baseline":
         history = train_sft(model, train_ds, val_ds, args, run_name)
+        final_acc = eval_sft(model, val_ds, args.device, 200)
     else:
         cfg = SoRLConfig(
-            K=args.K,
-            batch_size=args.batch_size,
-            num_epochs=args.num_epochs,
-            lr=args.lr,
+            K=args.K, batch_size=args.batch_size,
+            num_epochs=args.num_epochs, lr=args.lr,
             output_dir=args.output_dir,
-            log_every=50, eval_every=500,
-            save_every=999999,
-            eval_samples=100,
-            alpha_traj=1.0,
+            log_every=50, eval_every=500, save_every=999999, eval_samples=100,
+            alpha_info_gain=args.alpha_info_gain,
+            alpha_abs=args.alpha_abs,
+            alpha_soft_zipf=args.alpha_soft_zipf,
+            alpha_traj=0.0,  # v1 uses info_gain, not traj
         )
-        trainer = WandbSoRLTrainerv6(
+        trainer = WandbSoRLTrainer(
             model, tokenizer, train_ds, val_ds,
             compute_accuracy=compute_accuracy_for_trainer,
-            collate_fn=collate_fn,
-            config=cfg, device=args.device,
+            collate_fn=collate_fn, config=cfg, device=args.device,
         )
         trainer.train()
         history = trainer.history
+        final_acc = eval_with_generation(model, val_ds, args.device, K=args.K, num_samples=200)
 
-    # Final eval
-    final_acc = compute_accuracy(model, val_ds, args.device, 200)
     print(f"Final accuracy: {final_acc:.3f}")
-    if not args.no_wandb:
+    if wandb.run is not None:
         wandb.log({"eval/final_accuracy": final_acc})
         wandb.finish()
 
-    # Upload to HF Hub + clean up local
     if args.push_to_hub:
         from arithmetic.hub import save_model
         manifest["final_accuracy"] = final_acc
@@ -347,7 +355,6 @@ def main():
         save_model(model, manifest, metrics, subfolder=run_name)
         import shutil
         shutil.rmtree(args.output_dir, ignore_errors=True)
-        print(f"Cleaned up local: {args.output_dir}")
 
 
 if __name__ == "__main__":
