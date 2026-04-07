@@ -215,17 +215,42 @@ Questions: does SoRL match baseline accuracy? Does it need less data for S4-S6?
 
 Questions: does vocab=5 give 1-to-1 token-mechanism mapping? What happens at vocab=1?
 
-### Total: 36 unique runs
+### Ablation 4: K sweep (abstraction insertion frequency, at 500K)
+
+K = every K trajectory tokens, insert one abstraction token.
 
 ```
-  Baselines:           10 runs  (~2h GPU-time)
-  SoRL (data eff.):    10 runs  (~6h GPU-time)
-  SoRL (vocab sweep):  16 runs  (~24h GPU-time)
+  ┌──────────┬────────────────────────────────────────────────────────┐
+  │ Task     │ K values (at vocab=5, 10, 16)                         │
+  ├──────────┼────────────────────────────────────────────────────────┤
+  │ add      │ K=2, 3, 4* (each x vocab 5, 10, 16)                  │  9 runs
+  │ add_sub  │ K=2, 3, 4* (each x vocab 5, 10, 16)                  │  9 runs
+  └──────────┴────────────────────────────────────────────────────────┘  = 18 runs
+  * K=4 already in vocab sweep
+```
+
+K=2: ~7 abs tokens per sequence (dense reasoning). K=4: ~3-4 abs tokens (sparse).
+
+### Ablation 5: Undersized model (2L/3H/510d, add_sub at 500K)
+
+```
+  abs_vocab: 0 (baseline), 1, 2, 5, 8, 10, 16                      = 7 runs
+```
+
+Does SoRL help when the model is undersized for mixed add+sub?
+
+### Total: ~69 runs + 10 SAE training runs
+
+```
+  Ablation 1+2 (data eff.):    20 runs
+  Ablation 3 (vocab sweep):    16 runs
+  Ablation 4 (K sweep):        12 runs (K=2,3 only; K=4 in ablation 3)
+  Ablation 5 (undersized):      7 runs
+  Extra vocab gap-fills:         4 runs
+  SAEs (key models):            10 runs (3 layers, k={32} or {8,16,32,64})
   ──────────────────────────────────────────
-  Total:               36 runs  (~32h GPU-time, ~12h wall with 3 GPUs)
+  Total:                        69 jobs
 ```
-
-If time remains: architecture sweep ({2L,4L,6L} x {3H,4H}), LR sweep, K sweep.
 
 ---
 
