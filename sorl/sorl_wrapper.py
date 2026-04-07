@@ -4,7 +4,6 @@ from typing import List, Optional, Tuple
 import torch.nn.functional as F
 import torch.nn as nn
 import torch
-from torch.nn.attention.flex_attention import create_block_mask
 
 def left_pad_and_mask(
     sequences: List[torch.Tensor], pad_id: int = 0
@@ -66,7 +65,7 @@ class SorlModelWrapper(PreTrainedModel, GenerationMixin):
         self.model_type = model_type
         
         # Use AutoModelForCausalLM to load the correct model class
-        self.model = AutoModelForCausalLM.from_config(config)
+        self.model = AutoModelForCausalLM.from_config(config, attn_implementation="eager")
         self.full_vocab_size_list = None
     
     @classmethod
@@ -76,6 +75,7 @@ class SorlModelWrapper(PreTrainedModel, GenerationMixin):
         wrapper = cls(config)
         wrapper.model = AutoModelForCausalLM.from_pretrained(
             model_name_or_path, 
+            attn_implementation="eager",
             **kwargs
         )
 
@@ -135,83 +135,55 @@ class SorlModelWrapper(PreTrainedModel, GenerationMixin):
         lm_head_w[base_vocab:] = ortho
 
     def forward(self, input_ids, attention_mask=None, memory_span_abs=1792, memory_span_traj=1792, **kwargs):
-        # Create SORL block mask for flex attention with information bottleneck
-        sorl_block_mask = self._create_sorl_block_mask(input_ids, memory_span_abs, memory_span_traj)
-
-        # Training does not benefit from KV cache and it inflates memory usage.
+        sorl_attention_mask = self._create_sorl_attention_mask(
+            input_ids, attention_mask, memory_span_abs, memory_span_traj
+        )
         if self.training:
             kwargs.setdefault("use_cache", False)
-        
-        # attention_mask: masks padding tokens; block_mask: handles SoRL-specific attention
-        return self.model.forward(input_ids=input_ids, attention_mask=attention_mask, block_mask=sorl_block_mask, **kwargs)
+        kwargs.pop("block_mask", None)
+        return self.model.forward(input_ids=input_ids, attention_mask=sorl_attention_mask, **kwargs)
 
-    def _create_sorl_block_mask(self, input_ids: torch.Tensor, memory_span_abs: int = 1792, memory_span_traj: int = 1792):
-        """Create SORL block mask with information bottleneck - separate memory spans for abstract vs trajectory tokens"""
+    def _create_sorl_attention_mask(self, input_ids: torch.Tensor, attention_mask: Optional[torch.Tensor] = None, memory_span_abs: int = 1792, memory_span_traj: int = 1792):
         batch_size, seq_len = input_ids.shape
-        device = input_ids.device        
+        device = input_ids.device
         
-        # Pre-compute document boundaries and levels
         doc_boundary_token_id = self._get_doc_boundary_token_id()
         docs = (input_ids == doc_boundary_token_id).cumsum(1)
-        levels = infer_level(input_ids, self.vocab_sizes)  # Vocabulary levels
+        levels = infer_level(input_ids, self.vocab_sizes)
         accum_levels = levels.cumsum(1)
+        pos = torch.arange(seq_len, device=device)
+        q_pos = pos.view(1, seq_len, 1)
+        kv_pos = pos.view(1, 1, seq_len)
 
-        max_idx = seq_len - 1
+        causal_mask = q_pos >= kv_pos
+        document_mask = docs[:, :, None] == docs[:, None, :]
+        window_mask = (q_pos - kv_pos) < 1792
 
-        def _safe_idx(i):
-            # create_block_mask may probe indices at block boundaries (e.g. one-past-end).
-            # Clamp before tensor indexing to avoid out-of-bounds while gating with in_bounds.
-            if torch.is_tensor(i):
-                return torch.clamp(i, min=0, max=max_idx)
-            return max(0, min(i, max_idx))
-        
-        def sorl_mask_fn(b, h, q_idx, kv_idx):
-            """SORL mask function with information bottleneck"""
-            in_bounds = (q_idx >= 0) & (q_idx < seq_len) & (kv_idx >= 0) & (kv_idx < seq_len)
-            q_safe = _safe_idx(q_idx)
-            kv_safe = _safe_idx(kv_idx)
+        to_abstract = levels[:, None, :] > 0
+        from_abstract = levels[:, :, None] > 0
+        skip_abs = accum_levels[:, :, None] > accum_levels[:, None, :]
 
-            # Causal constraint
-            causal_mask = q_idx >= kv_idx
-            
-            # Document constraint
-            document_mask = docs[b, q_safe] == docs[b, kv_safe]
-            
-            # Window constraint
-            window_mask = q_idx - kv_idx < 1792  # attn_blocksize
-            
-            # Level-based memory compression (information bottleneck)
-            to_abstract = levels[b, kv_safe] > 0
-            from_abstract = levels[b, q_safe] > 0
-            
-            # Skip accumulated abstract levels
-            skip_abs = accum_levels[b, q_safe] > accum_levels[b, kv_safe]
-            
-            # Different memory spans for abstract vs trajectory tokens
-            traj_memory_span = (q_idx - kv_idx) <= memory_span_traj
-            abs_memory_span = (q_idx - kv_idx) <= memory_span_abs
-            
-            # Information bottleneck mask
-            memory_compression_mask = (
-                to_abstract |  # Always attend to abstract tokens
-                (from_abstract & abs_memory_span) |  # From abstract: use abstract memory span
-                (~from_abstract & traj_memory_span & ~skip_abs)  # From trajectory: use traj memory span, skip accumulated abs
-            )
-            
-            return in_bounds & causal_mask & document_mask & window_mask & memory_compression_mask
-        
-        # Create block mask using the mask function (compiled to avoid materializing full seq x seq tensor)
-        block_mask = create_block_mask(
-            sorl_mask_fn, 
-            B=batch_size, 
-            H=self.model.config.num_attention_heads,
-            Q_LEN=seq_len, 
-            KV_LEN=seq_len, 
-            device=device,
-            # _compile=True if "cuda" in str(device) else False,
+        traj_memory_span = (q_pos - kv_pos) <= memory_span_traj
+        abs_memory_span = (q_pos - kv_pos) <= memory_span_abs
+
+        memory_compression_mask = (
+            to_abstract |
+            (from_abstract & abs_memory_span) |
+            (~from_abstract & traj_memory_span & ~skip_abs)
         )
-        
-        return block_mask
+
+        allowed = causal_mask & document_mask & window_mask & memory_compression_mask
+
+        if attention_mask is not None:
+            if attention_mask.dim() == 4:
+                return attention_mask
+            key_valid = attention_mask.to(torch.bool)[:, None, :]
+            allowed = allowed & key_valid
+
+        dtype = self.model.get_input_embeddings().weight.dtype
+        additive_mask = torch.zeros((batch_size, 1, seq_len, seq_len), dtype=dtype, device=device)
+        additive_mask = additive_mask.masked_fill(~allowed[:, None, :, :], torch.finfo(dtype).min)
+        return additive_mask
 
     def _get_doc_boundary_token_id(self) -> int:
         # Prefer explicit override, then model config defaults.
@@ -288,11 +260,12 @@ class SorlModelWrapper(PreTrainedModel, GenerationMixin):
         nl_since_abs = torch.zeros(generated_ids.size(0), dtype=torch.long, device=generated_ids.device)
 
         for _ in range(max_new_tokens):
-            # Forward pass
+            sorl_attention_mask = self._create_sorl_attention_mask(
+                generated_ids, attention_mask, memory_span_abs, memory_span_traj
+            )
             outputs = self.model.forward(
                 input_ids=generated_ids,
-                attention_mask=attention_mask,
-                block_mask=self._create_sorl_block_mask(generated_ids, memory_span_abs, memory_span_traj),
+                attention_mask=sorl_attention_mask,
                 use_cache=False,
             )
             next_token_logits = outputs.logits[:, -1, :]
@@ -371,9 +344,11 @@ class SorlModelWrapper(PreTrainedModel, GenerationMixin):
 
         # Phase 1: generate abstract tokens
         for _ in range(n_inner_cot_tokens):
-            block_mask = self._create_sorl_block_mask(generated_ids, memory_span_abs, memory_span_traj)
+            sorl_attention_mask = self._create_sorl_attention_mask(
+                generated_ids, attention_mask, memory_span_abs, memory_span_traj
+            )
             outputs = self.model.forward(
-                input_ids=generated_ids, attention_mask=attention_mask, block_mask=block_mask, use_cache=False,
+                input_ids=generated_ids, attention_mask=sorl_attention_mask, use_cache=False,
             )
             logits = outputs.logits[:, -1, :]
             # Mask base vocab — only allow abstract tokens
@@ -389,9 +364,11 @@ class SorlModelWrapper(PreTrainedModel, GenerationMixin):
 
         # Phase 2: generate NL answer tokens
         for _ in range(max_new_tokens):
-            block_mask = self._create_sorl_block_mask(generated_ids, memory_span_abs, memory_span_traj)
+            sorl_attention_mask = self._create_sorl_attention_mask(
+                generated_ids, attention_mask, memory_span_abs, memory_span_traj
+            )
             outputs = self.model.forward(
-                input_ids=generated_ids, attention_mask=attention_mask, block_mask=block_mask, use_cache=False,
+                input_ids=generated_ids, attention_mask=sorl_attention_mask, use_cache=False,
             )
             logits = outputs.logits[:, -1, :]
             # Mask abstract vocab — only allow base (NL) tokens
@@ -425,10 +402,12 @@ class SorlModelWrapper(PreTrainedModel, GenerationMixin):
             scalar_temp = max(float(temperature), 1e-10)
 
         for col in abs_cols:
-            block_mask = self._create_sorl_block_mask(idx, memory_span_abs, memory_span_traj)
+            sorl_attention_mask = self._create_sorl_attention_mask(
+                idx, attention_mask, memory_span_abs, memory_span_traj
+            )
             outputs = self.model.forward(
-                input_ids=idx, attention_mask=attention_mask,
-                block_mask=block_mask, use_cache=False,
+                input_ids=idx, attention_mask=sorl_attention_mask,
+                use_cache=False,
             )
             pred_pos = col - 1  # next-token prediction: logits[t] predicts token[t+1]
             logits_at = outputs.logits[:, pred_pos, :]  # (B, V)
@@ -442,7 +421,9 @@ class SorlModelWrapper(PreTrainedModel, GenerationMixin):
             new_token = torch.multinomial(probs, num_samples=1).squeeze(-1)  # (B,)
             idx[:, col] = new_token.to(idx.dtype)
 
-        block_mask = self._create_sorl_block_mask(idx, memory_span_abs, memory_span_traj)
+        sorl_attention_mask = self._create_sorl_attention_mask(
+            idx, attention_mask, memory_span_abs, memory_span_traj
+        )
         labels = idx.clone()
         labels[attention_mask == 0] = -100
         if prompt_len is not None:
@@ -450,8 +431,8 @@ class SorlModelWrapper(PreTrainedModel, GenerationMixin):
             labels[seq_idx < prompt_len.unsqueeze(1)] = -100
 
         outputs = self.model.forward(
-            input_ids=idx, attention_mask=attention_mask,
-            block_mask=block_mask, use_cache=False,
+            input_ids=idx, attention_mask=sorl_attention_mask,
+            use_cache=False,
         )
         shift_logits = outputs.logits[..., :-1, :].contiguous()
         shift_labels = labels[..., 1:].contiguous()
@@ -507,13 +488,13 @@ class SorlModelWrapper(PreTrainedModel, GenerationMixin):
         else:
             temp_expanded = temperature
 
-        block_mask = self._create_sorl_block_mask(idx, memory_span_abs, memory_span_traj)
-
         for it in range(max_iterations): 
+            sorl_attention_mask = self._create_sorl_attention_mask(
+                idx, attention_mask, memory_span_abs, memory_span_traj
+            )
             outputs = self.model.forward(
                 input_ids=idx, 
-                attention_mask=attention_mask,
-                block_mask=block_mask,
+                attention_mask=sorl_attention_mask,
                 use_cache=False,
             )
             logits = outputs.logits
@@ -527,12 +508,13 @@ class SorlModelWrapper(PreTrainedModel, GenerationMixin):
             seq_idx = torch.arange(labels.size(1), device=labels.device).unsqueeze(0)
             labels[seq_idx < prompt_len.unsqueeze(1)] = -100
 
-        block_mask = self._create_sorl_block_mask(idx, memory_span_abs, memory_span_traj)
+        sorl_attention_mask = self._create_sorl_attention_mask(
+            idx, attention_mask, memory_span_abs, memory_span_traj
+        )
         
         outputs = self.model.forward(
             input_ids=idx, 
-            attention_mask=attention_mask,
-            block_mask=block_mask,
+            attention_mask=sorl_attention_mask,
             use_cache=False,
         )
 
