@@ -268,7 +268,7 @@ class SorlModelWrapper(PreTrainedModel, GenerationMixin):
         n_response_abs = torch.zeros(generated_ids.size(0), dtype=torch.long, device=generated_ids.device)
 
         use_response_counter = (response_only_abs or cot_only_abs) and K is not None
-        use_abs_prefix = abs_prefix_max is not None
+        use_abs_prefix = abs_prefix_max is not None and K is not None
 
         for _ in range(max_new_tokens):
             sorl_attention_mask = self._create_sorl_attention_mask(

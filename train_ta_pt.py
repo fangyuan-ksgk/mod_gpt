@@ -301,10 +301,27 @@ def ta_collate_fn(batch, pad_token_id, max_length=None):
 # Decoding helpers
 # ---------------------------------------------------------------------------
 
-def _decode_ta(ids_1d, tokenizer, latent_offset, skip_special_tokens=True):
-    """Decode a sequence, filtering out latent token IDs (>= latent_offset)."""
-    valid = [int(t) for t in ids_1d.tolist() if int(t) < latent_offset]
-    return tokenizer.decode(valid, skip_special_tokens=skip_special_tokens)
+def _decode_ta(ids_1d, tokenizer, latent_offset, skip_special_tokens=True,
+               show_abs=False):
+    """Decode a sequence.  When show_abs=True, latent tokens appear as [ABS:k]
+    (0-indexed) instead of being silently dropped."""
+    if not show_abs:
+        valid = [int(t) for t in ids_1d.tolist() if int(t) < latent_offset]
+        return tokenizer.decode(valid, skip_special_tokens=skip_special_tokens)
+    # Render with inline [ABS:k] markers
+    parts, buf = [], []
+    for t in ids_1d.tolist():
+        tid = int(t)
+        if tid >= latent_offset:
+            if buf:
+                parts.append(tokenizer.decode(buf, skip_special_tokens=skip_special_tokens))
+                buf = []
+            parts.append(f"[ABS:{tid - latent_offset}]")
+        else:
+            buf.append(tid)
+    if buf:
+        parts.append(tokenizer.decode(buf, skip_special_tokens=skip_special_tokens))
+    return "".join(parts)
 
 
 def _left_pad_prompts(prompts, pad_id):
@@ -342,6 +359,7 @@ def evaluate_accuracy_ta(
     is_humaneval = isinstance(dataset, HumanEvalDataset)
 
     all_full_texts = [None] * n
+    all_full_texts_abs = [None] * n
     all_prompt_texts = [None] * n
     all_preds = [None] * n
     all_golds = [None] * n
@@ -375,8 +393,10 @@ def evaluate_accuracy_ta(
             pad_len = max_pl - prompt_lens[j]
             gen_ids = generated[j, pad_len:]
             full_text = _decode_ta(gen_ids, tokenizer, latent_offset)
+            full_text_abs = _decode_ta(gen_ids, tokenizer, latent_offset, show_abs=True)
             prompt_text = tokenizer.decode(prompts[j], skip_special_tokens=True)
             all_full_texts[i] = full_text
+            all_full_texts_abs[i] = full_text_abs
             all_prompt_texts[i] = prompt_text
             all_preds[i] = extract_fn(full_text)
             all_golds[i] = extract_fn(ref_texts[j])
@@ -417,6 +437,7 @@ def evaluate_accuracy_ta(
             "idx": i,
             "question": all_prompt_texts[i][:200],
             "response": all_full_texts[i][len(all_prompt_texts[i]):].strip()[:300],
+            "response_abs": all_full_texts_abs[i][len(all_prompt_texts[i]):].strip()[:400],
             "gold": all_golds[i],
             "pred": all_preds[i],
             "correct": is_correct_list[i],
@@ -435,6 +456,8 @@ def evaluate_accuracy_ta(
             log_fn(f"\n--- Sample {s['idx']} ---")
             log_fn(f"  Q: {s['question']}")
             log_fn(f"  Response: {s['response']}")
+            if s.get('response_abs') and s['response_abs'] != s['response']:
+                log_fn(f"  Response(abs): {s['response_abs']}")
             log_fn(f"  Gold: {s['gold']} | Pred: {s['pred']} | "
                    f"{'CORRECT' if s['correct'] else 'WRONG'}")
         log_fn(f"{'='*60}\n")
@@ -471,11 +494,16 @@ def log_sample_generations_ta(
         )
 
         full_text = _decode_ta(generated[0], tokenizer, latent_offset)
+        full_text_abs = _decode_ta(generated[0], tokenizer, latent_offset, show_abs=True)
         question_text = tokenizer.decode(
             item["input_ids"][:prompt_len], skip_special_tokens=True
         )
         log_fn(f"\n[{i}] Q: {question_text[:150]}")
-        log_fn(f"    Response: {full_text[len(question_text):].strip()[:300]}")
+        resp = full_text[len(question_text):].strip()[:300]
+        resp_abs = full_text_abs[len(question_text):].strip()[:400]
+        log_fn(f"    Response: {resp}")
+        if resp_abs != resp:
+            log_fn(f"    Response(abs): {resp_abs}")
 
     log_fn(f"{'~'*120}\n")
     model.train()
