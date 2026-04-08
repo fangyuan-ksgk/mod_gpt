@@ -245,6 +245,8 @@ class SorlModelWrapper(PreTrainedModel, GenerationMixin):
         memory_span_abs: int = 1792,
         memory_span_traj: int = 1792,
         response_only_abs: bool = False,
+        cot_only_abs: bool = False,
+        answer_token_id: int = 820,
     ):
         import torch.nn.functional as F
         
@@ -257,10 +259,12 @@ class SorlModelWrapper(PreTrainedModel, GenerationMixin):
         levels_cache = infer_level(generated_ids, self.vocab_sizes)
         masks = torch.stack([self.l0_mask, self.abs_mask], dim=0).to(generated_ids.device)
 
-        # For response_only_abs: track NL tokens generated since start/last abstract.
-        # This avoids looking back into the prompt (which has no abstract tokens)
-        # and matches the training pattern: K NL tokens, then 1 ABS, repeat.
+        # For response_only_abs / cot_only_abs: track NL tokens since last abstract.
         nl_since_abs = torch.zeros(generated_ids.size(0), dtype=torch.long, device=generated_ids.device)
+        # For cot_only_abs: track whether the answer delimiter has been emitted per sequence.
+        past_answer = torch.zeros(generated_ids.size(0), dtype=torch.bool, device=generated_ids.device)
+
+        use_response_counter = (response_only_abs or cot_only_abs) and K is not None
 
         for _ in range(max_new_tokens):
             sorl_attention_mask = self._create_sorl_attention_mask(
@@ -277,10 +281,12 @@ class SorlModelWrapper(PreTrainedModel, GenerationMixin):
                 # Periodic: force abstract token every K trajectory tokens
                 if K is None:
                     next_token_level = torch.zeros(generated_ids.size(0), dtype=torch.long, device=generated_ids.device)
-                elif response_only_abs:
+                elif use_response_counter:
                     # Count NL tokens generated since start of response (or last abstract).
                     # Force abstract after K NL tokens, matching training pattern.
-                    next_token_level = (nl_since_abs >= K).long()
+                    # cot_only_abs: also suppress abstract insertion once answer delimiter seen.
+                    want_abs = (nl_since_abs >= K) & (~past_answer if cot_only_abs else torch.ones_like(past_answer))
+                    next_token_level = want_abs.long()
                 else:
                     next_token_level = 1 - (levels_cache[:, -K:] > 0).any(dim=-1).long()
 
@@ -304,10 +310,13 @@ class SorlModelWrapper(PreTrainedModel, GenerationMixin):
             if free_form:
                 next_token_level = (next_token_id.squeeze(-1) > self.vocab_sizes[0].item()).long()
 
-            # Update NL counter for response_only_abs mode
-            if response_only_abs and K is not None:
+            # Update counters
+            if use_response_counter:
                 is_abs = (next_token_level > 0)
                 nl_since_abs = torch.where(is_abs, torch.zeros_like(nl_since_abs), nl_since_abs + 1)
+            if cot_only_abs:
+                hit_answer = (next_token_id.squeeze(-1) == answer_token_id)
+                past_answer = past_answer | hit_answer
 
             # Update sequences
             generated_ids = torch.cat([generated_ids, next_token_id], dim=1)

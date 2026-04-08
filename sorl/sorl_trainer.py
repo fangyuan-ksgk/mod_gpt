@@ -11,7 +11,7 @@ from transformers.trainer_utils import EvalPrediction
 from sorl.info import hollow_sinkhorn_transform, get_zipf_prior
 
 # ----- infer insertion mask -----
-def infer_insert_mask(data, K, attention_mask, prompt_len=None):
+def infer_insert_mask(data, K, attention_mask, prompt_len=None, answer_token_id=None):
     batch_size, seq_len = data.shape
     positions = torch.arange(seq_len, device=data.device).unsqueeze(0).expand(batch_size, -1)
     if prompt_len is not None:
@@ -21,6 +21,15 @@ def infer_insert_mask(data, K, attention_mask, prompt_len=None):
         insert_mask = (response_positions % K == 0) & (response_positions > 0) & attention_mask
     else:
         insert_mask = (positions % K == 0) & (positions > 0) & attention_mask
+    if answer_token_id is not None:
+        # CoT-only mode: also exclude positions at/after the answer delimiter (e.g. '####', token 820).
+        ans_match = (data == answer_token_id)  # (B, L)
+        has_ans   = ans_match.any(dim=1)       # (B,)
+        ans_pos   = torch.where(has_ans,
+                                ans_match.float().argmax(dim=1),
+                                torch.full((batch_size,), seq_len, device=data.device, dtype=torch.long))
+        before_ans   = positions < ans_pos.unsqueeze(1)  # (B, L)
+        insert_mask  = insert_mask & before_ans
     return insert_mask
 
 # ----- expand prompt len ----- 
@@ -200,13 +209,18 @@ def sorl_search(
     temperature: Union[float, torch.Tensor] = 0.0,
     truncate_seq: bool = True,
     response_only_abs: bool = False,
+    cot_only_abs: bool = False,
+    answer_token_id: int = 820,
 ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """
     Perform SoRL search: generate rollouts and select best sequences.
     """
 
-    # we insert abs tokens on full sequences (or response-only if response_only_abs)
-    insert_mask = infer_insert_mask(input_ids, K, attention_mask, prompt_len=prompt_len if response_only_abs else None)
+    # cot_only_abs implies response_only_abs + also excludes the answer region
+    use_prompt_len   = prompt_len if (response_only_abs or cot_only_abs) else None
+    use_answer_tok   = answer_token_id if cot_only_abs else None
+    insert_mask = infer_insert_mask(input_ids, K, attention_mask,
+                                    prompt_len=use_prompt_len, answer_token_id=use_answer_tok)
     expanded_prompt_len = expand_prompt_len(prompt_len, insert_mask)
     expanded_data, expanded_mask = insert_tokens_with_padding(input_ids, attention_mask, insert_mask, model.vocab_sizes[0], pad_token_id)
 
@@ -247,6 +261,8 @@ def sorl_search_ar(
     memory_span_traj: int = 1792,
     temperature: Union[float, torch.Tensor] = 0.0,
     response_only_abs: bool = False,
+    cot_only_abs: bool = False,
+    answer_token_id: int = 820,
 ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """
     AR-based SoRL search: generate abstract tokens left-to-right with causal conditioning.
@@ -255,8 +271,11 @@ def sorl_search_ar(
     Cost: O(n_abs_positions) forward passes per rollout (vs O(max_iterations) for recursion).
     Still >>K times cheaper than GRPO which rolls out NL tokens too.
     """
-    # Insert placeholder abstract tokens (response-only if response_only_abs)
-    insert_mask = infer_insert_mask(input_ids, K, attention_mask, prompt_len=prompt_len if response_only_abs else None)
+    # cot_only_abs implies response_only_abs + also excludes the answer region
+    use_prompt_len = prompt_len if (response_only_abs or cot_only_abs) else None
+    use_answer_tok = answer_token_id if cot_only_abs else None
+    insert_mask = infer_insert_mask(input_ids, K, attention_mask,
+                                    prompt_len=use_prompt_len, answer_token_id=use_answer_tok)
     expanded_prompt_len = expand_prompt_len(prompt_len, insert_mask)
     expanded_data, expanded_mask = insert_tokens_with_padding(
         input_ids, attention_mask, insert_mask, model.vocab_sizes[0], pad_token_id

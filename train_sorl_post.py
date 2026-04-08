@@ -131,6 +131,10 @@ def parse_args():
                    help="keep_frac range as 'lo,hi', e.g. '0.1,1.0'")
     p.add_argument("--compress_prefix", type=str, default=None,
                    help="compress_frac range as 'lo,hi', e.g. '0.0,0.8'")
+    p.add_argument("--compress_m_set", type=str, default=None,
+                   help="TA-style M_SET: comma-separated NL-token counts, e.g. '0,16,32,64,128'")
+    p.add_argument("--cot_only_abs", action="store_true",
+                   help="Insert abstract tokens only in CoT (response excl. answer region after ####)")
     p.add_argument("--random_mem_span", type=str, default=None,
                    help="memory_span_abs range as 'lo,hi', e.g. '64,1792'")
 
@@ -239,7 +243,7 @@ def compute_accuracy_fn_factory(tokenizer, max_new_tokens, num_log_samples, log_
     """Returns a compute_accuracy(model, tokenizer, dataset, device, num_samples, eval_K=None) callable."""
     pad_id = tokenizer.pad_token_id if tokenizer.pad_token_id is not None else 0
 
-    def _eval_with_K(model, dataset, device, n, K_value, response_only_abs=False, memory_span_abs=None):
+    def _eval_with_K(model, dataset, device, n, K_value, response_only_abs=False, cot_only_abs=False, memory_span_abs=None):
         """Run batched generation with a given K and return (correct, total, samples, mono_stats).
 
         mono_stats is a dict of inner-monologue statistics when K_value is not None, else None.
@@ -287,6 +291,7 @@ def compute_accuracy_fn_factory(tokenizer, max_new_tokens, num_log_samples, log_
                 max_new_tokens=max_new_tokens,
                 temperature=0.0, K=K_value, free_form=False,
                 response_only_abs=response_only_abs,
+                cot_only_abs=cot_only_abs,
             )
             if memory_span_abs is not None:
                 gen_kwargs["memory_span_abs"] = memory_span_abs
@@ -396,7 +401,7 @@ def compute_accuracy_fn_factory(tokenizer, max_new_tokens, num_log_samples, log_
         return correct, total, samples, mono_stats
 
     @torch.no_grad()
-    def compute_accuracy_fn(model, _tokenizer, dataset, device, num_samples, eval_K=None, response_only_abs=False, memory_span_abs=None):
+    def compute_accuracy_fn(model, _tokenizer, dataset, device, num_samples, eval_K=None, response_only_abs=False, cot_only_abs=False, memory_span_abs=None):
         model.eval()
         extract_fn = getattr(dataset, "extract_answer", None)
         if extract_fn is None:
@@ -404,7 +409,7 @@ def compute_accuracy_fn_factory(tokenizer, max_new_tokens, num_log_samples, log_
 
         n = min(num_samples, len(dataset))
 
-        c, t, samps, mono_stats = _eval_with_K(model, dataset, device, n, K_value=eval_K, response_only_abs=response_only_abs, memory_span_abs=memory_span_abs)
+        c, t, samps, mono_stats = _eval_with_K(model, dataset, device, n, K_value=eval_K, response_only_abs=response_only_abs, cot_only_abs=cot_only_abs, memory_span_abs=memory_span_abs)
         acc = c / max(t, 1)
         result = {"accuracy": acc, "correct": c, "total": t, "K": eval_K}
 
@@ -541,10 +546,12 @@ def main():
         mask_nl_mode=args.mask_nl_mode,
         n_inner=args.n_inner,
         response_only_abs=args.response_only_abs,
+        cot_only_abs=args.cot_only_abs,
         use_ste=not args.no_ste,
         random_K=tuple(int(x) for x in args.random_K.split(',')) if args.random_K else None,
         strip_suffix=tuple(float(x) for x in args.strip_suffix.split(',')) if args.strip_suffix else None,
         compress_prefix=tuple(float(x) for x in args.compress_prefix.split(',')) if args.compress_prefix else None,
+        compress_m_set=tuple(int(x) for x in args.compress_m_set.split(',')) if args.compress_m_set else None,
         random_mem_span=tuple(int(x) for x in args.random_mem_span.split(',')) if args.random_mem_span else None,
         vq_abs_pretrain_steps=args.vq_abs_pretrain_steps,
         vq_abs_pretrain_lr=args.vq_abs_pretrain_lr,
