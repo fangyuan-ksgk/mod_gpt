@@ -291,31 +291,59 @@ def random_add_example(n_digits: int, use_sum9_aug: bool = False,
     return make_add_example(x_digits, y_digits, n_digits)
 
 
-def random_sub_example(n_digits: int) -> ArithmeticExample:
-    while True:
-        x_digits = [random.randint(0, 9) for _ in range(n_digits)]
+def random_sub_example(n_digits: int, use_borrow_aug: bool = False) -> ArithmeticExample:
+    """
+    Generate x - y where x >= y.
+    Enrichment (Quirke Appendix D):
+      - 1% chance: identical operands (x == y, tests sign prediction)
+      - 99% chance if enriching: increment y digits (more borrows)
+    """
+    x_digits = [random.randint(0, 9) for _ in range(n_digits)]
+
+    if use_borrow_aug:
+        if random.randint(1, 100) == 1:
+            # Equal operands: answer is 0000000
+            y_digits = list(x_digits)
+        else:
+            # Force ~40% of digit positions to be equal (creates MB=U → borrow cascades)
+            # Analogous to sum-to-9 enrichment for addition
+            y_digits = [random.randint(0, 9) for _ in range(n_digits)]
+            for i in range(n_digits):
+                if random.random() < 0.4:
+                    y_digits[i] = x_digits[i]
+    else:
         y_digits = [random.randint(0, 9) for _ in range(n_digits)]
-        x_val = int("".join(str(d) for d in x_digits))
-        y_val = int("".join(str(d) for d in y_digits))
-        if x_val >= y_val:
-            return make_sub_example(x_digits, y_digits, n_digits)
+
+    # Ensure x >= y
+    x_val = int("".join(str(d) for d in x_digits))
+    y_val = int("".join(str(d) for d in y_digits))
+    if x_val < y_val:
+        x_digits, y_digits = y_digits, x_digits
+
+    return make_sub_example(x_digits, y_digits, n_digits)
 
 
 # ── Batch generation ────────────────────────────────────────────────
 
 def generate_batch(batch_size: int, n_digits: int = 6,
-                   ops: str = "add", use_sum9_aug: bool = True,
+                   ops: str = "add", use_enrichment: bool = True,
                    device: str = "cuda"):
-    do_aug = use_sum9_aug and (random.random() < 0.6)
+    """
+    Online batch generation with Quirke enrichment (Appendix D).
+    60% of batches are enriched:
+      - Addition: 40% of digit positions forced to sum-to-9 (carry cascades)
+      - Subtraction: y digits incremented (more borrows) + 1% equal operands
+    """
+    do_enrich = use_enrichment and (random.random() < 0.6)
     examples = []
     for _ in range(batch_size):
         if ops == "add":
-            examples.append(random_add_example(n_digits, use_sum9_aug=do_aug))
+            examples.append(random_add_example(n_digits, use_sum9_aug=do_enrich))
         elif ops == "add_sub":
             if random.random() < 0.5:
-                examples.append(random_add_example(n_digits, use_sum9_aug=do_aug))
+                examples.append(random_add_example(n_digits, use_sum9_aug=do_enrich))
             else:
-                examples.append(random_sub_example(n_digits))
+                examples.append(random_sub_example(n_digits, use_borrow_aug=do_enrich))
         else:
             raise ValueError(f"Unknown ops: {ops}")
 
