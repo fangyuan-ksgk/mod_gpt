@@ -110,192 +110,247 @@ run_bg() {
 # 3. Ablate on "K"
 # 4. more model (1.7B, 4B, llama 1B, llama 2B)
 
+# # ===========================================================================
+# # Batch 3 — 1.7B scale: v6 vs v7, GSM8K + SciQA (4 runs, 2/GPU)
+# # ===========================================================================
+# echo ""
+# echo "Batch 3: 1.7B v6 vs v7 — GSM8K + SciQA"
+
+# run_bg "v6_17b_gsm_pfx8" $M17 $DS_GSM \
+#   --use_v6 --K 8 $ABS --abs_prefix_max 8 \
+#   --max_iterations 4
+
+# run_bg "v7_17b_gsm_pfx8" $M17 $DS_GSM \
+#   --use_v7 --K 8 $ABS --abs_prefix_max 8 \
+#   --max_iterations 4
+
+# run_bg "v6_17b_sci_pfx8" $M17 $DS_SCI \
+#   --use_v6 --K 8 $ABS --abs_prefix_max 8 \
+#   --max_iterations 4
+
+# run_bg "v7_17b_sci_pfx8" $M17 $DS_SCI \
+#   --use_v7 --K 8 $ABS --abs_prefix_max 8 \
+#   --max_iterations 4
+
+# wait
+
+# # ===========================================================================
+# # Batch 4 — max_iterations ablation: v7, 0.6B, GSM8K (4 runs, 2/GPU)
+# #   Already have iter=4 from batch 1.
+# # ===========================================================================
+# echo ""
+# echo "Batch 4: v7 iter ablation — i1, i2, i8, i16"
+
+# run_bg "v7_06b_gsm_i1" $M06 $DS_GSM \
+#   --use_v7 --K 8 $ABS --abs_prefix_max 8 \
+#   --max_iterations 1
+
+# run_bg "v7_06b_gsm_i2" $M06 $DS_GSM \
+#   --use_v7 --K 8 $ABS --abs_prefix_max 8 \
+#   --max_iterations 2
+
+# run_bg "v7_06b_gsm_i8" $M06 $DS_GSM \
+#   --use_v7 --K 8 $ABS --abs_prefix_max 8 \
+#   --max_iterations 8
+
+# run_bg "v7_06b_gsm_i16" $M06 $DS_GSM \
+#   --use_v7 --K 8 $ABS --abs_prefix_max 8 \
+#   --max_iterations 16
+
+# wait
+
+# # ===========================================================================
+# # Batch 5 — abs_prefix_max ablation: v7, 0.6B, GSM8K, iter=4 (4 runs, 2/GPU)
+# #   K tracks pfx (K=pfx). Already have pfx=8 from batch 1.
+# # ===========================================================================
+# echo ""
+# echo "Batch 5: v7 prefix ablation — pfx1, pfx2, pfx4, pfx16"
+
+# run_bg "v7_06b_gsm_pfx1" $M06 $DS_GSM \
+#   --use_v7 --K 1 $ABS --abs_prefix_max 1 \
+#   --max_iterations 4
+
+# run_bg "v7_06b_gsm_pfx2" $M06 $DS_GSM \
+#   --use_v7 --K 2 $ABS --abs_prefix_max 2 \
+#   --max_iterations 4
+
+# run_bg "v7_06b_gsm_pfx4" $M06 $DS_GSM \
+#   --use_v7 --K 4 $ABS --abs_prefix_max 4 \
+#   --max_iterations 4
+
+# run_bg "v7_06b_gsm_pfx16" $M06 $DS_GSM \
+#   --use_v7 --K 16 $ABS --abs_prefix_max 16 \
+#   --max_iterations 4
+
+# wait
+
+# # ===========================================================================
+# # Batch 6 — K ablation: v7, 0.6B, GSM8K, iter=4, pfx=8 (4 runs, 2/GPU)
+# #   K varies independently of pfx. Already have K=8 from batch 1.
+# # ===========================================================================
+# echo ""
+# echo "Batch 6: v7 K ablation — K2, K4, K16, K32"
+
+# run_bg "v7_06b_gsm_K2" $M06 $DS_GSM \
+#   --use_v7 --K 2 $ABS --abs_prefix_max 8 \
+#   --max_iterations 4
+
+# run_bg "v7_06b_gsm_K4" $M06 $DS_GSM \
+#   --use_v7 --K 4 $ABS --abs_prefix_max 8 \
+#   --max_iterations 4
+
+# run_bg "v7_06b_gsm_K16" $M06 $DS_GSM \
+#   --use_v7 --K 16 $ABS --abs_prefix_max 8 \
+#   --max_iterations 4
+
+# run_bg "v7_06b_gsm_K32" $M06 $DS_GSM \
+#   --use_v7 --K 32 $ABS --abs_prefix_max 8 \
+#   --max_iterations 4
+
+# wait
+
+# # ===========================================================================
+# # Batch 7 — Llama-1B: v6 vs v7, GSM8K + SciQA (4 runs, 2/GPU)
+# # ===========================================================================
+# echo ""
+# echo "Batch 7: Llama-1B v6 vs v7 — GSM8K + SciQA"
+
+# run_bg "v6_l1b_gsm_pfx8" $ML1 $DS_GSM \
+#   --use_v6 --K 8 $ABS --abs_prefix_max 8 \
+#   --max_iterations 4
+
+# run_bg "v7_l1b_gsm_pfx8" $ML1 $DS_GSM \
+#   --use_v7 --K 8 $ABS --abs_prefix_max 8 \
+#   --max_iterations 4
+
+# run_bg "v6_l1b_sci_pfx8" $ML1 $DS_SCI \
+#   --use_v6 --K 8 $ABS --abs_prefix_max 8 \
+#   --max_iterations 4
+
+# run_bg "v7_l1b_sci_pfx8" $ML1 $DS_SCI \
+#   --use_v7 --K 8 $ABS --abs_prefix_max 8 \
+#   --max_iterations 4
+
+# wait
+
+# # ===========================================================================
+# # Batch 8 — Llama-3B: v6 vs v7, GSM8K (2 runs, 1/GPU — 4B class)
+# # ===========================================================================
+# echo ""
+# echo "Batch 8: Llama-3B v6 vs v7 — GSM8K (1/GPU)"
+
+# run_bg "v6_l3b_gsm_pfx8" $ML3 $DS_GSM \
+#   --use_v6 --K 8 $ABS --abs_prefix_max 8 \
+#   --max_iterations 4
+
+# run_bg "v7_l3b_gsm_pfx8" $ML3 $DS_GSM \
+#   --use_v7 --K 8 $ABS --abs_prefix_max 8 \
+#   --max_iterations 4
+
+# wait
+
+# # ===========================================================================
+# # Batch 9 — Llama-3B: v6 vs v7, SciQA (2 runs, 1/GPU — 4B class)
+# # ===========================================================================
+# echo ""
+# echo "Batch 9: Llama-3B v6 vs v7 — SciQA (1/GPU)"
+
+# run_bg "v6_l3b_sci_pfx8" $ML3 $DS_SCI \
+#   --use_v6 --K 8 $ABS --abs_prefix_max 8 \
+#   --max_iterations 4
+
+# run_bg "v7_l3b_sci_pfx8" $ML3 $DS_SCI \
+#   --use_v7 --K 8 $ABS --abs_prefix_max 8 \
+#   --max_iterations 4
+
+# wait
+
+# # ===========================================================================
+# # Batch 10 — Qwen3-4B: v6 vs v7, GSM8K (2 runs, 1/GPU — 4B class)
+# # ===========================================================================
+# echo ""
+# echo "Batch 10: Qwen3-4B v6 vs v7 — GSM8K (1/GPU)"
+
+# run_bg "v6_q4b_gsm_pfx8" $M4B $DS_GSM \
+#   --use_v6 --K 8 $ABS --abs_prefix_max 8 \
+#   --max_iterations 4
+
+# run_bg "v7_q4b_gsm_pfx8" $M4B $DS_GSM \
+#   --use_v7 --K 8 $ABS --abs_prefix_max 8 \
+#   --max_iterations 4
+
+# wait
+
+# # ===========================================================================
+# # Batch 11 — Qwen3-4B: v6 vs v7, SciQA (2 runs, 1/GPU — 4B class)
+# # ===========================================================================
+# echo ""
+# echo "Batch 11: Qwen3-4B v6 vs v7 — SciQA (1/GPU)"
+
+# run_bg "v6_q4b_sci_pfx8" $M4B $DS_SCI \
+#   --use_v6 --K 8 $ABS --abs_prefix_max 8 \
+#   --max_iterations 4
+
+# run_bg "v7_q4b_sci_pfx8" $M4B $DS_SCI \
+#   --use_v7 --K 8 $ABS --abs_prefix_max 8 \
+#   --max_iterations 4
+
+# wait
+
 # ===========================================================================
-# Batch 3 — 1.7B scale: v6 vs v7, GSM8K + SciQA (4 runs, 2/GPU)
+# Batch 12 — Strip prefix_abs: inline abstractions (4 runs, 0.6B, 2/GPU)
+#   Test: does deep supervision still help when abs tokens are scattered
+#         in CoT instead of being a contiguous prefix?
+#   ABS_INLINE omits --prefix_abs and --abs_prefix_max.
 # ===========================================================================
+ABS_INLINE="--abstract_vocab_size 32 --alpha_traj 1.0"
+
 echo ""
-echo "Batch 3: 1.7B v6 vs v7 — GSM8K + SciQA"
+echo "Batch 12: no prefix_abs — v6 vs v7 inline, GSM + SCI"
 
-run_bg "v6_17b_gsm_pfx8" $M17 $DS_GSM \
-  --use_v6 --K 8 $ABS --abs_prefix_max 8 \
+run_bg "v7_inline_06b_gsm" $M06 $DS_GSM \
+  --use_v7 --K 8 $ABS_INLINE \
   --max_iterations 4
 
-run_bg "v7_17b_gsm_pfx8" $M17 $DS_GSM \
-  --use_v7 --K 8 $ABS --abs_prefix_max 8 \
+run_bg "v6_inline_06b_gsm" $M06 $DS_GSM \
+  --use_v6 --K 8 $ABS_INLINE \
   --max_iterations 4
 
-run_bg "v6_17b_sci_pfx8" $M17 $DS_SCI \
-  --use_v6 --K 8 $ABS --abs_prefix_max 8 \
+run_bg "v7_inline_06b_sci" $M06 $DS_SCI \
+  --use_v7 --K 8 $ABS_INLINE \
   --max_iterations 4
 
-run_bg "v7_17b_sci_pfx8" $M17 $DS_SCI \
-  --use_v7 --K 8 $ABS --abs_prefix_max 8 \
+run_bg "v6_inline_06b_sci" $M06 $DS_SCI \
+  --use_v6 --K 8 $ABS_INLINE \
   --max_iterations 4
 
 wait
 
 # ===========================================================================
-# Batch 4 — max_iterations ablation: v7, 0.6B, GSM8K (4 runs, 2/GPU)
-#   Already have iter=4 from batch 1.
+# Batch 13 — Minimal abstractions (4 runs, 0.6B, GSM, 2/GPU)
+#   Test: how little abstraction machinery does v7 need?
+#   Baseline comparison: v7 K=8 vocab=32 pfx=8 from batch 1.
 # ===========================================================================
 echo ""
-echo "Batch 4: v7 iter ablation — i1, i2, i8, i16"
+echo "Batch 13: minimal abs — K1/v2, K1/v32, K8/v2, v6 K1/v2"
 
-run_bg "v7_06b_gsm_i1" $M06 $DS_GSM \
-  --use_v7 --K 8 $ABS --abs_prefix_max 8 \
-  --max_iterations 1
-
-run_bg "v7_06b_gsm_i2" $M06 $DS_GSM \
-  --use_v7 --K 8 $ABS --abs_prefix_max 8 \
-  --max_iterations 2
-
-run_bg "v7_06b_gsm_i8" $M06 $DS_GSM \
-  --use_v7 --K 8 $ABS --abs_prefix_max 8 \
-  --max_iterations 8
-
-run_bg "v7_06b_gsm_i16" $M06 $DS_GSM \
-  --use_v7 --K 8 $ABS --abs_prefix_max 8 \
-  --max_iterations 16
-
-wait
-
-# ===========================================================================
-# Batch 5 — abs_prefix_max ablation: v7, 0.6B, GSM8K, iter=4 (4 runs, 2/GPU)
-#   K tracks pfx (K=pfx). Already have pfx=8 from batch 1.
-# ===========================================================================
-echo ""
-echo "Batch 5: v7 prefix ablation — pfx1, pfx2, pfx4, pfx16"
-
-run_bg "v7_06b_gsm_pfx1" $M06 $DS_GSM \
-  --use_v7 --K 1 $ABS --abs_prefix_max 1 \
+run_bg "v7_K1_v2_06b_gsm" $M06 $DS_GSM \
+  --use_v7 --K 1 --abstract_vocab_size 2 --prefix_abs --abs_prefix_max 1 --alpha_traj 1.0 \
   --max_iterations 4
 
-run_bg "v7_06b_gsm_pfx2" $M06 $DS_GSM \
-  --use_v7 --K 2 $ABS --abs_prefix_max 2 \
+run_bg "v7_K1_v32_06b_gsm" $M06 $DS_GSM \
+  --use_v7 --K 1 --abstract_vocab_size 32 --prefix_abs --abs_prefix_max 1 --alpha_traj 1.0 \
   --max_iterations 4
 
-run_bg "v7_06b_gsm_pfx4" $M06 $DS_GSM \
-  --use_v7 --K 4 $ABS --abs_prefix_max 4 \
+run_bg "v7_K8_v2_06b_gsm" $M06 $DS_GSM \
+  --use_v7 --K 8 --abstract_vocab_size 2 --prefix_abs --abs_prefix_max 8 --alpha_traj 1.0 \
   --max_iterations 4
 
-run_bg "v7_06b_gsm_pfx16" $M06 $DS_GSM \
-  --use_v7 --K 16 $ABS --abs_prefix_max 16 \
-  --max_iterations 4
-
-wait
-
-# ===========================================================================
-# Batch 6 — K ablation: v7, 0.6B, GSM8K, iter=4, pfx=8 (4 runs, 2/GPU)
-#   K varies independently of pfx. Already have K=8 from batch 1.
-# ===========================================================================
-echo ""
-echo "Batch 6: v7 K ablation — K2, K4, K16, K32"
-
-run_bg "v7_06b_gsm_K2" $M06 $DS_GSM \
-  --use_v7 --K 2 $ABS --abs_prefix_max 8 \
-  --max_iterations 4
-
-run_bg "v7_06b_gsm_K4" $M06 $DS_GSM \
-  --use_v7 --K 4 $ABS --abs_prefix_max 8 \
-  --max_iterations 4
-
-run_bg "v7_06b_gsm_K16" $M06 $DS_GSM \
-  --use_v7 --K 16 $ABS --abs_prefix_max 8 \
-  --max_iterations 4
-
-run_bg "v7_06b_gsm_K32" $M06 $DS_GSM \
-  --use_v7 --K 32 $ABS --abs_prefix_max 8 \
-  --max_iterations 4
-
-wait
-
-# ===========================================================================
-# Batch 7 — Llama-1B: v6 vs v7, GSM8K + SciQA (4 runs, 2/GPU)
-# ===========================================================================
-echo ""
-echo "Batch 7: Llama-1B v6 vs v7 — GSM8K + SciQA"
-
-run_bg "v6_l1b_gsm_pfx8" $ML1 $DS_GSM \
-  --use_v6 --K 8 $ABS --abs_prefix_max 8 \
-  --max_iterations 4
-
-run_bg "v7_l1b_gsm_pfx8" $ML1 $DS_GSM \
-  --use_v7 --K 8 $ABS --abs_prefix_max 8 \
-  --max_iterations 4
-
-run_bg "v6_l1b_sci_pfx8" $ML1 $DS_SCI \
-  --use_v6 --K 8 $ABS --abs_prefix_max 8 \
-  --max_iterations 4
-
-run_bg "v7_l1b_sci_pfx8" $ML1 $DS_SCI \
-  --use_v7 --K 8 $ABS --abs_prefix_max 8 \
-  --max_iterations 4
-
-wait
-
-# ===========================================================================
-# Batch 8 — Llama-3B: v6 vs v7, GSM8K (2 runs, 1/GPU — 4B class)
-# ===========================================================================
-echo ""
-echo "Batch 8: Llama-3B v6 vs v7 — GSM8K (1/GPU)"
-
-run_bg "v6_l3b_gsm_pfx8" $ML3 $DS_GSM \
-  --use_v6 --K 8 $ABS --abs_prefix_max 8 \
-  --max_iterations 4
-
-run_bg "v7_l3b_gsm_pfx8" $ML3 $DS_GSM \
-  --use_v7 --K 8 $ABS --abs_prefix_max 8 \
-  --max_iterations 4
-
-wait
-
-# ===========================================================================
-# Batch 9 — Llama-3B: v6 vs v7, SciQA (2 runs, 1/GPU — 4B class)
-# ===========================================================================
-echo ""
-echo "Batch 9: Llama-3B v6 vs v7 — SciQA (1/GPU)"
-
-run_bg "v6_l3b_sci_pfx8" $ML3 $DS_SCI \
-  --use_v6 --K 8 $ABS --abs_prefix_max 8 \
-  --max_iterations 4
-
-run_bg "v7_l3b_sci_pfx8" $ML3 $DS_SCI \
-  --use_v7 --K 8 $ABS --abs_prefix_max 8 \
-  --max_iterations 4
-
-wait
-
-# ===========================================================================
-# Batch 10 — Qwen3-4B: v6 vs v7, GSM8K (2 runs, 1/GPU — 4B class)
-# ===========================================================================
-echo ""
-echo "Batch 10: Qwen3-4B v6 vs v7 — GSM8K (1/GPU)"
-
-run_bg "v6_q4b_gsm_pfx8" $M4B $DS_GSM \
-  --use_v6 --K 8 $ABS --abs_prefix_max 8 \
-  --max_iterations 4
-
-run_bg "v7_q4b_gsm_pfx8" $M4B $DS_GSM \
-  --use_v7 --K 8 $ABS --abs_prefix_max 8 \
-  --max_iterations 4
-
-wait
-
-# ===========================================================================
-# Batch 11 — Qwen3-4B: v6 vs v7, SciQA (2 runs, 1/GPU — 4B class)
-# ===========================================================================
-echo ""
-echo "Batch 11: Qwen3-4B v6 vs v7 — SciQA (1/GPU)"
-
-run_bg "v6_q4b_sci_pfx8" $M4B $DS_SCI \
-  --use_v6 --K 8 $ABS --abs_prefix_max 8 \
-  --max_iterations 4
-
-run_bg "v7_q4b_sci_pfx8" $M4B $DS_SCI \
-  --use_v7 --K 8 $ABS --abs_prefix_max 8 \
+run_bg "v6_K1_v2_06b_gsm" $M06 $DS_GSM \
+  --use_v6 --K 1 --abstract_vocab_size 2 --prefix_abs --abs_prefix_max 1 --alpha_traj 1.0 \
   --max_iterations 4
 
 wait
 
 echo ""
-echo "All done. 11 batches, 34 experiments total."
+echo "All done. 13 batches, 42 experiments total."
