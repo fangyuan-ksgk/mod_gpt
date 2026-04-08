@@ -1,8 +1,8 @@
 """
 HuggingFace Hub utilities for arithmetic experiments.
 
-Model repo:   amirali1985/arithmetic-sorl
-Dataset repo: amirali1985/arithmetic-sorl-data
+Model repo:   thoughtworks/arithmetic-sorl
+Dataset repo: thoughtworks/arithmetic-sorl-data
 
 Structure (model repo):
     add_baseline/          # model checkpoint + config + metrics
