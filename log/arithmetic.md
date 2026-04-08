@@ -322,8 +322,26 @@ The interesting regime is **low data** where baselines struggle.
   └─────────┴────────┴────────┴────────┴────────┴────────┘
 ```
 
-The 25K regime (S3=48%, S5=44%, S6=22%) is where SoRL data efficiency matters.
-SoRL at 25K/50K runs pending — will show if abstraction tokens help on cascades.
+**SoRL v1 (abs=10, K=4) vs baseline at 25K data:**
+
+```
+  ┌─────────┬────────────┬────────────┬─────────┐
+  │ Case    │  Baseline  │  SoRL v1   │  Delta   │
+  ├─────────┼────────────┼────────────┼─────────┤
+  │ S0-S2   │   ~99%     │   ~97%     │  ~even   │
+  │ S3      │    62%     │    68%     │   +6%    │
+  │ S4      │    60%     │    58%     │   -2%    │
+  │ S5      │    60%     │    64%     │   +4%    │
+  │ S6      │    34%     │    26%     │   -8%    │
+  │ M0-M2   │   ~99%     │   ~98%     │  ~even   │
+  │ M3      │    68%     │    26%     │  -42%    │
+  │ M4      │    25%     │     0%     │  -25%    │
+  └─────────┴────────────┴────────────┴─────────┘
+```
+
+SoRL does NOT help at low data. Addition cascades are roughly even.
+Subtraction borrows are significantly worse with SoRL (M3: 68%→26%, M4: 25%→0%).
+The abstraction tokens may consume model capacity needed for the core task.
 
 
 ### 3. Vocabulary utilization
