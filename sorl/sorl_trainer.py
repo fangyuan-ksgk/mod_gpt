@@ -195,6 +195,52 @@ def corrupt_abstract_tokens(
     return corrupted
 
 
+def move_abs_to_cot_prefix(
+    data: torch.Tensor,
+    attention_mask: torch.Tensor,
+    prompt_len: torch.Tensor,
+    base_vocab: int,
+    pad_token_id: int,
+    answer_token_id: int = 820,
+) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    """
+    Rearrange each sequence so all CoT abstract tokens form a prefix block:
+      before:  [Q] [nl [ABS] nl [ABS] nl ...] [#### ans]
+      after:   [Q] [ABS ABS ... ABS] [nl nl ... nl] [#### ans]
+
+    Prompt and answer regions are untouched. Token count is unchanged.
+    Returns (new_data, new_attn, prompt_len) — prompt_len is unchanged.
+    """
+    B = data.shape[0]
+    out_seqs = []
+    for b in range(B):
+        valid  = int(attention_mask[b].sum())
+        pl     = int(prompt_len[b].item())
+        seq    = data[b, :valid]
+        prompt = seq[:pl]
+        resp   = seq[pl:]
+
+        ans_pos = (resp == answer_token_id).nonzero(as_tuple=True)[0]
+        if len(ans_pos):
+            ai  = ans_pos[0].item()
+            cot = resp[:ai]
+            ans = resp[ai:]
+        else:
+            cot, ans = resp, resp[:0]
+
+        abs_toks = cot[cot >= base_vocab]
+        nl_toks  = cot[cot <  base_vocab]
+        out_seqs.append(torch.cat([prompt, abs_toks, nl_toks, ans]))
+
+    max_len  = max(s.shape[0] for s in out_seqs)
+    new_data = data.new_full((B, max_len), pad_token_id)
+    new_attn = attention_mask.new_zeros(B, max_len)
+    for b, s in enumerate(out_seqs):
+        new_data[b, :s.shape[0]] = s
+        new_attn[b, :s.shape[0]] = 1
+    return new_data, new_attn, prompt_len
+
+
 def sorl_search(
     model,
     input_ids: torch.Tensor,
@@ -243,7 +289,13 @@ def sorl_search(
     best_data, best_ppt, best_ppt_advantage = select_best_sequences(
         search_data, search_ppt, n, expanded_data.shape[0]
     )
-    
+
+    if cot_only_abs:
+        best_data, expanded_mask, expanded_prompt_len = move_abs_to_cot_prefix(
+            best_data, expanded_mask, expanded_prompt_len,
+            int(model.vocab_sizes[0].item()), pad_token_id, answer_token_id,
+        )
+
     return best_data, best_ppt, best_ppt_advantage, expanded_mask, expanded_prompt_len
 
 # fn 1. corrupt abstraction sequence 
@@ -298,6 +350,12 @@ def sorl_search_ar(
     best_data, best_ppt, best_ppt_advantage = select_best_sequences(
         search_data, search_ppt, n, expanded_data.shape[0]
     )
+
+    if cot_only_abs:
+        best_data, expanded_mask, expanded_prompt_len = move_abs_to_cot_prefix(
+            best_data, expanded_mask, expanded_prompt_len,
+            int(model.vocab_sizes[0].item()), pad_token_id, answer_token_id,
+        )
 
     return best_data, best_ppt, best_ppt_advantage, expanded_mask, expanded_prompt_len
 
