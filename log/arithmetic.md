@@ -264,4 +264,104 @@ Token-level intervention utils: [`interventions.py`](../arithmetic/interp_utils/
 
 ## Results
 
-(pending — tables will be added here as runs complete)
+All models: 2L/3H/510d Qwen3 from scratch on 6-digit add+sub.
+SoRL: v1 trainer (alpha_info_gain=10, alpha_abs=0.1, alpha_zipf=1.0).
+Eval: recursion + teacher-forced (matches training procedure).
+Note: v6 trainer produces 0% accuracy from scratch — v1 required.
+
+### 1. SoRL accuracy across vocab size and K
+
+All at 500K data, 5 epochs. Accuracy = full-sequence match on 100 random examples.
+
+```
+  ┌───────────┬──────────────────────────────────────────────────────────┐
+  │ abs_vocab  │ K=1         K=2         K=3         K=4                │
+  ├───────────┼──────────────────────────────────────────────────────────┤
+  │ baseline   │                                     100%               │
+  │  1         │                                     100%               │
+  │  2         │                                     100%               │
+  │  5         │                                     100%               │
+  │ 10         │ 100%        100%        100%        100%               │
+  │ 16         │             100%         99%        100%               │
+  │ 20         │                                     100%               │
+  └───────────┴──────────────────────────────────────────────────────────┘
+  (blank = not yet trained)
+```
+
+SoRL v1 matches baseline accuracy at 100% across all tested vocab sizes (1-20)
+and K values (1-4). Abstraction tokens do not degrade performance.
+
+
+### 2. Hard cases: accuracy by Quirke complexity
+
+Cascade carries (S3-S6) and borrows (M3-M4) are the hardest cases.
+At 500K data both baseline and SoRL get 100% everywhere.
+The interesting regime is **low data** where baselines struggle.
+
+**Baseline SFT on add_sub at different dataset sizes:**
+
+```
+  ┌─────────┬────────┬────────┬────────┬────────┬────────┬────────┬────────┬────────┐
+  │ Data    │  S0    │  S1    │  S2    │  S3    │  S4    │  S5    │  S6    │ random │
+  ├─────────┼────────┼────────┼────────┼────────┼────────┼────────┼────────┼────────┤
+  │  10K    │   0%   │   0%   │   0%   │   0%   │   0%   │   4%   │  10%   │   0%   │
+  │  25K    │  98%   │  98%   │  96%   │  48%   │  66%   │  44%   │  22%   │  97%   │
+  │  50K    │ 100%   │ 100%   │ 100%   │  94%   │  82%   │  72%   │   *    │  99%   │
+  │ 100K    │ 100%   │ 100%   │ 100%   │ 100%   │ 100%   │ 100%   │ 100%   │ 100%   │
+  │ 500K    │ 100%   │ 100%   │ 100%   │ 100%   │ 100%   │ 100%   │ 100%   │ 100%   │
+  └─────────┴────────┴────────┴────────┴────────┴────────┴────────┴────────┴────────┘
+  * S6 not evaluated at 50K (insufficient stratified examples)
+
+  Subtraction (same data sizes):
+  ┌─────────┬────────┬────────┬────────┬────────┬────────┐
+  │ Data    │  M0    │  M1    │  M2    │  M3    │  M4    │
+  ├─────────┼────────┼────────┼────────┼────────┼────────┤
+  │  25K    │  98%   │  98%   │ 100%   │  64%   │  44%   │
+  │  50K    │ 100%   │ 100%   │ 100%   │  80%   │  89%   │
+  │ 100K+   │ 100%   │ 100%   │ 100%   │ 100%   │ 100%   │
+  └─────────┴────────┴────────┴────────┴────────┴────────┘
+```
+
+The 25K regime (S3=48%, S5=44%, S6=22%) is where SoRL data efficiency matters.
+SoRL at 25K/50K runs pending — will show if abstraction tokens help on cascades.
+
+
+### 3. Vocabulary utilization
+
+How many abstraction tokens does the model actually use?
+
+**Vocab utilization at K=4 (add_sub, 500K, 100 examples):**
+
+```
+  ┌───────────┬────────┬────────┬─────────────────────────────────────────┐
+  │ abs_vocab  │ used   │ top-3  │ distribution (top 5 tokens)            │
+  ├───────────┼────────┼────────┼─────────────────────────────────────────┤
+  │  1         │  1/1   │ 100%   │ t1:100%                                │
+  │  2         │  1/2   │ 100%   │ t1:100%                                │
+  │  5         │  3/5   │ 100%   │ t3:72% t1:19% t2:10%                  │
+  │ 10         │  7/10  │  69%   │ t4:27% t2:22% t1:20% t3:12% t5:10%   │
+  │ 16         │ 12/16  │  70%   │ t1:33% t2:28% t3:8% t5:6% t9:4%      │
+  │ 20         │ 15/20  │  51%   │ t1:21% t6:19% t5:11% t2:11% t7:6%    │
+  └───────────┴────────┴────────┴─────────────────────────────────────────┘
+```
+
+Pattern: ~70% of vocab is used. Top-3 concentration decreases with larger vocab
+(100% at vocab=5 → 51% at vocab=20). Distribution is Zipf-like, not uniform.
+
+**Vocab utilization across K (abs_vocab=10, add_sub, 500K):**
+
+```
+  ┌─────┬────────┬────────┬──────────────────────────────────┐
+  │ K   │ used   │ top-3  │ top 3 tokens                     │
+  ├─────┼────────┼────────┼──────────────────────────────────┤
+  │  1  │  7/10  │  68%   │ t7:34% t3:20% t1:14%            │
+  │  2  │  7/10  │  87%   │ t1:43% t3:25% t4:19%            │
+  │  3  │  7/10  │  84%   │ t2:50% t1:22% t5:11%            │
+  │  4  │  7/10  │  69%   │ t4:27% t2:22% t1:20%            │
+  └─────┴────────┴────────┴──────────────────────────────────┘
+```
+
+K does NOT affect utilization count (always 7/10). But K=2,3 concentrate more
+on fewer tokens (87% top-3) vs K=1,4 (~68% top-3).
+
+Pending: vocab 25-100 utilization results (running).
