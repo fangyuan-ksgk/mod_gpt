@@ -83,6 +83,9 @@ Watch disk: `df -h /` should stay above 200GB free.
 Use `arithmetic/scripts/gpu_queue.py` for all multi-job runs. Don't manually assign GPUs.
 Previous sweep scripts (`sweep.sh`) had race conditions with wave-based GPU assignment.
 
+Benchmarked: 2 jobs per GPU gives 58% speed each (116% total throughput vs sequential).
+Use `max_per_gpu=2` for throughput, `max_per_gpu=1` for fastest per-job completion.
+
 ## HuggingFace Repos
 
 - Models: `thoughtworks/arithmetic-sorl` — each subfolder has `train_config.json` (full manifest), `metrics.json`, `model.safetensors`
@@ -93,10 +96,11 @@ Previous sweep scripts (`sweep.sh`) had race conditions with wave-based GPU assi
 
 **Only `/workspace/` persists across sessions.** Everything under `/home/newuser/` and `/tmp/` is lost on restart.
 
-On session startup, restore logs:
-```bash
-cp /workspace/sorl_logs/*.txt /tmp/
-```
+**On session startup (Claude's responsibility, not user's):**
+1. `cp /workspace/sorl_logs/*.txt /tmp/` — restore logs
+2. Verify symlinks: `~/.claude` → `/workspace/.sorl_claude`, `~/codes/mod_gpt` → `/workspace/codes/mod_gpt`
+3. Check if any background jobs are still running: `nvidia-smi`, `ps aux | grep arithmetic`
+4. Set wandb key if needed (user will provide)
 
 Logs are saved to `/workspace/sorl_logs/`:
 - `vs_log.txt` — current vocab sweep queue log
