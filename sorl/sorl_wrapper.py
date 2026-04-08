@@ -67,7 +67,7 @@ class SorlModelWrapper(PreTrainedModel, GenerationMixin):
         # Use AutoModelForCausalLM to load the correct model class
         self.model = AutoModelForCausalLM.from_config(config, attn_implementation="eager")
         self.full_vocab_size_list = None
-        self.use_memory_compression = True   # set False to use plain causal+doc+window mask
+        self.use_memory_compression = False  # set True to enable bottleneck block mask
     
     @classmethod
     def from_pretrained(cls, model_name_or_path: str, abstract_vocab_size_list: List[int], **kwargs) -> "SorlModelWrapper":

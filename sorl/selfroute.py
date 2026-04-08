@@ -68,7 +68,12 @@ class SoRLTrainerv6(SoRLTrainerv3):
         else:
             mem_span = cfg.memory_span_abs
 
-        im = infer_insert_mask(ids, cfg.K, attn)
+        use_prompt_len = pl  if cfg.cot_only_abs else None
+        use_answer_tok = 820 if cfg.cot_only_abs else None
+        im = infer_insert_mask(ids, cfg.K, attn,
+                               prompt_len=use_prompt_len,
+                               answer_token_id=use_answer_tok,
+                               abs_prefix_max=cfg.abs_prefix_max)
         ep = expand_prompt_len(pl, im)
         ed, ea = insert_tokens_with_padding(ids, attn, im, self.raw_model.vocab_sizes[0], self.pad_token_id)
         data, _, logits = self.raw_model.recursion(
