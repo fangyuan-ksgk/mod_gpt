@@ -120,6 +120,10 @@ Check: `tail /workspace/sorl_logs/vs_log.txt` or `grep DONE /workspace/sorl_logs
 
 To monitor live: `tail -f /tmp/vs_log.txt` (if session is still active)
 
+## TODOs
+
+Check [`TODO.md`](TODO.md) periodically for status. Update as tasks complete.
+
 ## Key Files
 
 - `arithmetic/train.py` — main entry point (SFT baseline + SoRL v1)
