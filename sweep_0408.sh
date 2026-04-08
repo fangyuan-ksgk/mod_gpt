@@ -21,7 +21,7 @@ export TORCH_NCCL_HEARTBEAT_TIMEOUT_SEC=3600
 # ============================================================================
 MASTER_ADDR=127.0.0.1
 BASE_PORT=29501
-N_GPUS=3
+N_GPUS=2
 
 MODEL_NAME="Qwen/Qwen3-0.6B"
 DATASET="gsm8k"
@@ -148,65 +148,155 @@ run_bg() {
 #   Axes: max_iterations ∈ {1, 4, 8}, dataset ∈ {gsm8k, scienceqa}
 # ===========================================================================
 
-# --- Batch 2a: GSM8K × max_iterations ---
+# # --- Batch 2a: GSM8K × max_iterations ---
+# echo ""
+# echo "Batch 2a: v6 prefix-8, Qwen1.7B, GSM8K, sweep max_iterations"
+
+# run_bg "v6_pfx8_gsm_i1" $M17 $DS_GSM \
+#   --use_v6 --K 8 --abstract_vocab_size 32 \
+#   --prefix_abs --abs_prefix_max 8 \
+#   --max_iterations 1
+
+# run_bg "v6_pfx8_gsm_i4" $M17 $DS_GSM \
+#   --use_v6 --K 8 --abstract_vocab_size 32 \
+#   --prefix_abs --abs_prefix_max 8 \
+#   --max_iterations 4
+
+# run_bg "v6_pfx8_gsm_i8" $M17 $DS_GSM \
+#   --use_v6 --K 8 --abstract_vocab_size 32 \
+#   --prefix_abs --abs_prefix_max 8 \
+#   --max_iterations 8
+
+# wait
+
+# # --- Batch 2b: ScienceQA × max_iterations ---
+# echo ""
+# echo "Batch 2b: v6 prefix-8, Qwen1.7B, ScienceQA, sweep max_iterations"
+
+# run_bg "v6_pfx8_sci_i1" $M17 $DS_SCI \
+#   --use_v6 --K 8 --abstract_vocab_size 32 \
+#   --prefix_abs --abs_prefix_max 8 \
+#   --max_iterations 1
+
+# run_bg "v6_pfx8_sci_i4" $M17 $DS_SCI \
+#   --use_v6 --K 8 --abstract_vocab_size 32 \
+#   --prefix_abs --abs_prefix_max 8 \
+#   --max_iterations 4
+
+# run_bg "v6_pfx8_sci_i8" $M17 $DS_SCI \
+#   --use_v6 --K 8 --abstract_vocab_size 32 \
+#   --prefix_abs --abs_prefix_max 8 \
+#   --max_iterations 8
+
+# wait
+
+# # --- Batch 2c: best iter (8) + NL compression ---
+# echo ""
+# echo "Batch 2c: v6 prefix-8 iter=8, Qwen1.7B, +compression"
+
+# run_bg "v6_pfx8_gsm_i8_drop" $M17 $DS_GSM \
+#   --use_v6 --K 8 --abstract_vocab_size 32 \
+#   --prefix_abs --abs_prefix_max 8 \
+#   --max_iterations 8 \
+#   --compress_m_set 0,8,16,24,32,64
+
+# run_bg "v6_pfx8_sci_i8_drop" $M17 $DS_SCI \
+#   --use_v6 --K 8 --abstract_vocab_size 32 \
+#   --prefix_abs --abs_prefix_max 8 \
+#   --max_iterations 8 \
+#   --compress_m_set 0,8,16,24,32,64
+
+# run_bg "v6_pfx16_gsm_i16" $M17 $DS_GSM \
+#   --use_v6 --K 16 --abstract_vocab_size 32 \
+#   --prefix_abs --abs_prefix_max 16 \
+#   --max_iterations 16
+
+# wait
+
+# ===========================================================================
+# Batches 3a–3e — v6 prefix deeper sweep (2 per batch, 10 total)
+#   All use --use_v6, iter=abs_prefix_max (perfect alignment) unless noted.
+#   Base: Qwen3-1.7B, GSM8K, abs_vocab=32, pfx8, iter=8, emb_lr=1x, 1ep
+# ===========================================================================
+
+# --- Batch 3a: prefix length (GSM8K, 1.7B) ---
 echo ""
-echo "Batch 2a: v6 prefix-8, Qwen1.7B, GSM8K, sweep max_iterations"
+echo "Batch 3a: prefix length sweep — pfx4 vs pfx16"
 
-run_bg "v6_pfx8_gsm_i1" $M17 $DS_GSM \
-  --use_v6 --K 8 --abstract_vocab_size 32 \
-  --prefix_abs --abs_prefix_max 8 \
-  --max_iterations 1
-
-run_bg "v6_pfx8_gsm_i4" $M17 $DS_GSM \
-  --use_v6 --K 8 --abstract_vocab_size 32 \
-  --prefix_abs --abs_prefix_max 8 \
+run_bg "v6_pfx4_gsm_i4" $M17 $DS_GSM \
+  --use_v6 --K 4 --abstract_vocab_size 32 \
+  --prefix_abs --abs_prefix_max 4 \
   --max_iterations 4
 
-run_bg "v6_pfx8_gsm_i8" $M17 $DS_GSM \
-  --use_v6 --K 8 --abstract_vocab_size 32 \
-  --prefix_abs --abs_prefix_max 8 \
-  --max_iterations 8
+run_bg "v6_pfx16_sci_i16" $M17 $DS_SCI \
+  --use_v6 --K 16 --abstract_vocab_size 32 \
+  --prefix_abs --abs_prefix_max 16 \
+  --max_iterations 16
 
 wait
 
-# --- Batch 2b: ScienceQA × max_iterations ---
+# --- Batch 3b: emb_lr_mult fine-grained (GSM8K, 1.7B, pfx8, iter=8) ---
 echo ""
-echo "Batch 2b: v6 prefix-8, Qwen1.7B, ScienceQA, sweep max_iterations"
+echo "Batch 3b: emb_lr_mult — 3x vs 5x"
 
-run_bg "v6_pfx8_sci_i1" $M17 $DS_SCI \
+run_bg "v6_pfx8_gsm_emb3" $M17 $DS_GSM \
   --use_v6 --K 8 --abstract_vocab_size 32 \
   --prefix_abs --abs_prefix_max 8 \
-  --max_iterations 1
+  --max_iterations 8 \
+  --emb_lr_mult 3.0
 
-run_bg "v6_pfx8_sci_i4" $M17 $DS_SCI \
+run_bg "v6_pfx8_gsm_emb5" $M17 $DS_GSM \
   --use_v6 --K 8 --abstract_vocab_size 32 \
   --prefix_abs --abs_prefix_max 8 \
-  --max_iterations 4
-
-run_bg "v6_pfx8_sci_i8" $M17 $DS_SCI \
-  --use_v6 --K 8 --abstract_vocab_size 32 \
-  --prefix_abs --abs_prefix_max 8 \
-  --max_iterations 8
+  --max_iterations 8 \
+  --emb_lr_mult 5.0
 
 wait
 
-# --- Batch 2c: best iter (8) + NL compression ---
+# --- Batch 3c: emb_lr_mult continued (GSM8K, 1.7B, pfx8, iter=8) ---
 echo ""
-echo "Batch 2c: v6 prefix-8 iter=8, Qwen1.7B, +compression"
+echo "Batch 3c: emb_lr_mult — 10x vs 20x"
 
-run_bg "v6_pfx8_gsm_i8_drop" $M17 $DS_GSM \
+run_bg "v6_pfx8_gsm_emb10" $M17 $DS_GSM \
   --use_v6 --K 8 --abstract_vocab_size 32 \
   --prefix_abs --abs_prefix_max 8 \
   --max_iterations 8 \
-  --compress_m_set 0,8,16,24,32,64
+  --emb_lr_mult 10.0
 
-run_bg "v6_pfx8_sci_i8_drop" $M17 $DS_SCI \
+run_bg "v6_pfx8_gsm_emb20" $M17 $DS_GSM \
   --use_v6 --K 8 --abstract_vocab_size 32 \
   --prefix_abs --abs_prefix_max 8 \
   --max_iterations 8 \
-  --compress_m_set 0,8,16,24,32,64
+  --emb_lr_mult 20.0
 
-run_bg "v6_pfx16_gsm_i16" $M17 $DS_GSM \
+wait
+
+# --- Batch 3d: prefix length × dataset (1.7B, iter=match) ---
+echo ""
+echo "Batch 3d: prefix length — pfx4 GSM vs pfx16 GSM"
+
+run_bg "v6_pfx4_gsm" $M17 $DS_GSM \
+  --use_v6 --K 4 --abstract_vocab_size 32 \
+  --prefix_abs --abs_prefix_max 4 \
+  --max_iterations 4
+
+run_bg "v6_pfx16_gsm" $M17 $DS_GSM \
+  --use_v6 --K 16 --abstract_vocab_size 32 \
+  --prefix_abs --abs_prefix_max 16 \
+  --max_iterations 16
+
+wait
+
+# --- Batch 3e: best emb_lr on SciQA + prefix length on SciQA ---
+echo ""
+echo "Batch 3e: SciQA — pfx4 vs pfx16"
+
+run_bg "v6_pfx4_sci" $M17 $DS_SCI \
+  --use_v6 --K 4 --abstract_vocab_size 32 \
+  --prefix_abs --abs_prefix_max 4 \
+  --max_iterations 4
+
+run_bg "v6_pfx16_sci" $M17 $DS_SCI \
   --use_v6 --K 16 --abstract_vocab_size 32 \
   --prefix_abs --abs_prefix_max 16 \
   --max_iterations 16
