@@ -111,37 +111,107 @@ run_bg() {
 # (c) v1 prefix-8 + NL drop — same as (a) + TA-style NL dropping
 # (d) v6 prefix-8 + NL drop — same as (b) + TA-style NL dropping
 # ===========================================================================
+# wait
+
+# # (a) v1 prefix-8: trainable ABS, closed-loop
+# run_bg "v1_pfx8" $M06 $DS_GSM \
+#   --K 8 --abstract_vocab_size 32 \
+#   --prefix_abs --abs_prefix_max 8 \
+#   --alpha_abs 1.0
+
+# # (b) v6 prefix-8: frozen diagonal, closed-loop
+# run_bg "v6_pfx8" $M06 $DS_GSM \
+#   --use_v6 --K 8 --abstract_vocab_size 32 \
+#   --prefix_abs --abs_prefix_max 8
+
+# # (c) v1 prefix-8 + NL drop
+# run_bg "v1_pfx8_drop" $M06 $DS_GSM \
+#   --K 8 --abstract_vocab_size 32 \
+#   --prefix_abs --abs_prefix_max 8 \
+#   --alpha_abs 1.0 \
+#   --compress_m_set 0,8,16,24,32,64
+
+# wait
+
+# # (d) v6 prefix-8 + NL drop
+# run_bg "v6_pfx8_drop" $M06 $DS_GSM \
+#   --use_v6 --K 8 --abstract_vocab_size 32 \
+#   --prefix_abs --abs_prefix_max 8 \
+#   --compress_m_set 0,8,16,24,32,64
+
+# wait
+
+# ===========================================================================
+# Batch 2 — v6 prefix-8 scale-up: Qwen3-1.7B, sweep max_iterations
+#   v6 search refines abstract tokens via Jacobi iterations.
+#   max_iterations = abs_prefix_max → perfect train-inference alignment.
+#   Axes: max_iterations ∈ {1, 4, 8}, dataset ∈ {gsm8k, scienceqa}
+# ===========================================================================
+
+# --- Batch 2a: GSM8K × max_iterations ---
+echo ""
+echo "Batch 2a: v6 prefix-8, Qwen1.7B, GSM8K, sweep max_iterations"
+
+run_bg "v6_pfx8_gsm_i1" $M17 $DS_GSM \
+  --use_v6 --K 8 --abstract_vocab_size 32 \
+  --prefix_abs --abs_prefix_max 8 \
+  --max_iterations 1
+
+run_bg "v6_pfx8_gsm_i4" $M17 $DS_GSM \
+  --use_v6 --K 8 --abstract_vocab_size 32 \
+  --prefix_abs --abs_prefix_max 8 \
+  --max_iterations 4
+
+run_bg "v6_pfx8_gsm_i8" $M17 $DS_GSM \
+  --use_v6 --K 8 --abstract_vocab_size 32 \
+  --prefix_abs --abs_prefix_max 8 \
+  --max_iterations 8
+
 wait
 
-# (a) v1 prefix-8: trainable ABS, closed-loop
-run_bg "v1_pfx8" $M06 $DS_GSM \
-  --K 8 --abstract_vocab_size 32 \
-  --prefix_abs --abs_prefix_max 8 \
-  --alpha_abs 1.0
+# --- Batch 2b: ScienceQA × max_iterations ---
+echo ""
+echo "Batch 2b: v6 prefix-8, Qwen1.7B, ScienceQA, sweep max_iterations"
 
-# (b) v6 prefix-8: frozen diagonal, closed-loop
-run_bg "v6_pfx8" $M06 $DS_GSM \
+run_bg "v6_pfx8_sci_i1" $M17 $DS_SCI \
   --use_v6 --K 8 --abstract_vocab_size 32 \
-  --prefix_abs --abs_prefix_max 8
-
-# (c) v1 prefix-8 + NL drop
-run_bg "v1_pfx8_drop" $M06 $DS_GSM \
-  --K 8 --abstract_vocab_size 32 \
   --prefix_abs --abs_prefix_max 8 \
-  --alpha_abs 1.0 \
+  --max_iterations 1
+
+run_bg "v6_pfx8_sci_i4" $M17 $DS_SCI \
+  --use_v6 --K 8 --abstract_vocab_size 32 \
+  --prefix_abs --abs_prefix_max 8 \
+  --max_iterations 4
+
+run_bg "v6_pfx8_sci_i8" $M17 $DS_SCI \
+  --use_v6 --K 8 --abstract_vocab_size 32 \
+  --prefix_abs --abs_prefix_max 8 \
+  --max_iterations 8
+
+wait
+
+# --- Batch 2c: best iter (8) + NL compression ---
+echo ""
+echo "Batch 2c: v6 prefix-8 iter=8, Qwen1.7B, +compression"
+
+run_bg "v6_pfx8_gsm_i8_drop" $M17 $DS_GSM \
+  --use_v6 --K 8 --abstract_vocab_size 32 \
+  --prefix_abs --abs_prefix_max 8 \
+  --max_iterations 8 \
   --compress_m_set 0,8,16,24,32,64
 
-wait
-
-# (d) v6 prefix-8 + NL drop
-run_bg "v6_pfx8_drop" $M06 $DS_GSM \
+run_bg "v6_pfx8_sci_i8_drop" $M17 $DS_SCI \
   --use_v6 --K 8 --abstract_vocab_size 32 \
   --prefix_abs --abs_prefix_max 8 \
+  --max_iterations 8 \
   --compress_m_set 0,8,16,24,32,64
 
+run_bg "v6_pfx16_gsm_i16" $M17 $DS_GSM \
+  --use_v6 --K 16 --abstract_vocab_size 32 \
+  --prefix_abs --abs_prefix_max 16 \
+  --max_iterations 16
+
 wait
-
-
 
 
 # ---- Baseline runners (separate scripts) ----
@@ -242,7 +312,7 @@ run_ta_bg() {
 # echo "  Batch 4 complete."
 
 
-echo ""
-echo "============================================================"
-echo "All 16 experiments complete. Results in ./ckpt/sweep_${TIMESTAMP}/"
-echo "============================================================"
+# echo ""
+# echo "============================================================"
+# echo "All 16 experiments complete. Results in ./ckpt/sweep_${TIMESTAMP}/"
+# echo "============================================================"
