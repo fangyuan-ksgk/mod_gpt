@@ -21,7 +21,7 @@ export TORCH_NCCL_HEARTBEAT_TIMEOUT_SEC=3600
 # ============================================================================
 MASTER_ADDR=127.0.0.1
 BASE_PORT=29501
-N_GPUS=2
+N_GPUS=3
 
 MODEL_NAME="Qwen/Qwen3-0.6B"
 DATASET="gsm8k"
@@ -99,35 +99,47 @@ run_bg() {
 }
 
 # ===========================================================================
-# Batch 1 - V1 (no memory compression mask) | gsm8k | 3 epochs
-# - alpha_abs = 1.0: trainable abstract projection (unlike v6 frozen diagonal)
-# - eval mode auto-derived: no abs_prefix_max → free-form; abs_prefix_max → constrained prefix
-# (a). cot_only_abs=True, variable prefix → free-form eval (auto)
-# (b). cot_only_abs=True, abs_prefix_max=8 → constrained 8-ABS prefix eval (auto)
-# (c). cot_only_abs=True, compress_m_set → drop NL prefix, free-form eval (auto)
+# Batch 1 — Prefix-first ABS: [Q][ABS×N][CoT][#### ans]
+#   Search & training operate on the SAME prefix layout → closed loop.
+#   --prefix_abs + --abs_prefix_max=N → insert_prefix_abs (contiguous block)
+#
+# V1: trainable abstract projection (alpha_abs > 0)
+# V6: frozen diagonal projection  (--use_v6, alpha_abs=0 by default)
+#
+# (a) v1 prefix-8  — trainable ABS prefix, constrained eval
+# (b) v6 prefix-8  — frozen diagonal ABS prefix, constrained eval
+# (c) v1 prefix-8 + NL drop — same as (a) + TA-style NL dropping
+# (d) v6 prefix-8 + NL drop — same as (b) + TA-style NL dropping
 # ===========================================================================
 wait
- 
-# (a) cot only, variable prefix, free-form eval (auto since no abs_prefix_max)
-run_bg "v1_cot_ff" $M06 $DS_GSM \
-  --K 16 --abstract_vocab_size 32 \
-  --cot_only_abs \
+
+# (a) v1 prefix-8: trainable ABS, closed-loop
+run_bg "v1_pfx8" $M06 $DS_GSM \
+  --K 8 --abstract_vocab_size 32 \
+  --prefix_abs --abs_prefix_max 8 \
   --alpha_abs 1.0
- 
-# (b) cot only, fixed 8-ABS prefix → constrained prefix eval (auto)
-run_bg "v1_cot_trunc" $M06 $DS_GSM \
-  --K 16 --abstract_vocab_size 32 \
-  --cot_only_abs --abs_prefix_max 8 \
-  --alpha_abs 1.0
- 
-wait
- 
-# (c) cot only, variable prefix + TA-style NL drop, free-form eval (auto)
-run_bg "v1_cot_drop" $M06 $DS_GSM \
-  --K 16 --abstract_vocab_size 32 \
-  --cot_only_abs \
+
+# (b) v6 prefix-8: frozen diagonal, closed-loop
+run_bg "v6_pfx8" $M06 $DS_GSM \
+  --use_v6 --K 8 --abstract_vocab_size 32 \
+  --prefix_abs --abs_prefix_max 8
+
+# (c) v1 prefix-8 + NL drop
+run_bg "v1_pfx8_drop" $M06 $DS_GSM \
+  --K 8 --abstract_vocab_size 32 \
+  --prefix_abs --abs_prefix_max 8 \
   --alpha_abs 1.0 \
-  --compress_m_set 0,16,32,64
+  --compress_m_set 0,8,16,24,32,64
+
+wait
+
+# (d) v6 prefix-8 + NL drop
+run_bg "v6_pfx8_drop" $M06 $DS_GSM \
+  --use_v6 --K 8 --abstract_vocab_size 32 \
+  --prefix_abs --abs_prefix_max 8 \
+  --compress_m_set 0,8,16,24,32,64
+
+wait
 
 
 
@@ -211,23 +223,23 @@ run_ta_bg() {
 #           Each (model, dataset) pair launches pause + ta in parallel (1 GPU each),
 #           then waits before the next pair.
 # ============================================================================
-echo ""
-echo "============================================================"
-echo "Batch 4: Baselines (pause + TA) — 4 models × 5 datasets (${TIMESTAMP})"
-echo "============================================================"
+# echo ""
+# echo "============================================================"
+# echo "Batch 4: Baselines (pause + TA) — 4 models × 5 datasets (${TIMESTAMP})"
+# echo "============================================================"
 
-for mp in "17:$M17" "4b:$M4" "l1:$ML1" "l3:$ML3"; do
-    mtag="${mp%%:*}"; model="${mp#*:}"
-    for dp in "gsm:$DS_GSM" "sci:$DS_SCI" "arc:$DS_ARC" "mml:$DS_MMLU" "csqa:$DS_CSQA"; do
-        dtag="${dp%%:*}"; ds="${dp#*:}"
-        run_pause_bg "pause_${dtag}_${mtag}" "$model" "$ds"
-        run_ta_bg    "ta_${dtag}_${mtag}"    "$model" "$ds"
-        echo "  Waiting for pause_${dtag}_${mtag} + ta_${dtag}_${mtag}..."
-        wait
-    done
-done
+# for mp in "17:$M17" "4b:$M4" "l1:$ML1" "l3:$ML3"; do
+#     mtag="${mp%%:*}"; model="${mp#*:}"
+#     for dp in "gsm:$DS_GSM" "sci:$DS_SCI" "arc:$DS_ARC" "mml:$DS_MMLU" "csqa:$DS_CSQA"; do
+#         dtag="${dp%%:*}"; ds="${dp#*:}"
+#         run_pause_bg "pause_${dtag}_${mtag}" "$model" "$ds"
+#         run_ta_bg    "ta_${dtag}_${mtag}"    "$model" "$ds"
+#         echo "  Waiting for pause_${dtag}_${mtag} + ta_${dtag}_${mtag}..."
+#         wait
+#     done
+# done
 
-echo "  Batch 4 complete."
+# echo "  Batch 4 complete."
 
 
 echo ""

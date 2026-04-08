@@ -137,6 +137,8 @@ def parse_args():
                    help="Insert abstract tokens only in CoT (response excl. answer region after ####)")
     p.add_argument("--abs_prefix_max", type=int, default=None,
                    help="Cap CoT abs prefix to N tokens; eval forces exactly N ABS then free NL (Option 2)")
+    p.add_argument("--prefix_abs", action="store_true",
+                   help="Prefix-first ABS: contiguous [Q][ABS×N][CoT][#### ans] layout (requires --abs_prefix_max)")
     p.add_argument("--free_form_eval", action="store_true",
                    help="Evaluate with free_form=True: no forced ABS positions, model generates freely (Option 1)")
     p.add_argument("--random_mem_span", type=str, default=None,
@@ -538,6 +540,7 @@ def main():
         response_only_abs=args.response_only_abs,
         cot_only_abs=args.cot_only_abs,
         abs_prefix_max=args.abs_prefix_max,
+        prefix_abs=args.prefix_abs,
         free_form_eval=args.free_form_eval,
         use_ste=not args.no_ste,
         random_K=tuple(int(x) for x in args.random_K.split(',')) if args.random_K else None,

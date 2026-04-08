@@ -26,7 +26,8 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data import DataLoader, DistributedSampler
 
 from sorl.sorl_trainer import (sorl_search, sorl_search_ar, SoRLLoss, SoRLLoss_v2, corrupt_abstract_tokens,
-                               infer_insert_mask, expand_prompt_len, insert_tokens_with_padding)
+                               infer_insert_mask, expand_prompt_len, insert_tokens_with_padding,
+                               insert_prefix_abs)
 from data.pt_dataset import collate_fn as default_collate_fn
 
 
@@ -68,6 +69,7 @@ class SoRLConfig:
     response_only_abs: bool = False  # Only insert abstract tokens in the response (not query/prompt)
     cot_only_abs: bool = False       # Insert abstract tokens only in CoT (response excl. answer region)
     abs_prefix_max: Optional[int] = None  # Cap CoT abs prefix to this many tokens (Option 2)
+    prefix_abs: bool = False         # Prefix-first ABS: contiguous [Q][ABS×N][CoT][#### ans] (requires abs_prefix_max)
     free_form_eval: bool = False     # Eval with free_form=True (no forced ABS positions, Option 1)
 
     # Loss weights
@@ -451,6 +453,7 @@ class SoRLTrainer:
                     response_only_abs=cfg.response_only_abs,
                     cot_only_abs=cfg.cot_only_abs,
                     abs_prefix_max=cfg.abs_prefix_max,
+                    prefix_abs=cfg.prefix_abs,
                 )
             else:
                 best_data, best_ppt, best_ppt_adv, expanded_attn_mask, expanded_prompt_len = sorl_search(
@@ -463,6 +466,7 @@ class SoRLTrainer:
                     response_only_abs=cfg.response_only_abs,
                     cot_only_abs=cfg.cot_only_abs,
                     abs_prefix_max=cfg.abs_prefix_max,
+                    prefix_abs=cfg.prefix_abs,
                 )
 
         # TA-style M_SET: drop m NL tokens from CoT prefix (keeps abs tokens)
@@ -915,6 +919,7 @@ class SoRLTrainerv2(SoRLTrainer):
                     response_only_abs=cfg.response_only_abs,
                     cot_only_abs=cfg.cot_only_abs,
                     abs_prefix_max=cfg.abs_prefix_max,
+                    prefix_abs=cfg.prefix_abs,
                 )
             else:
                 best_data, best_ppt, best_ppt_adv, expanded_attn_mask, expanded_prompt_len = sorl_search(
@@ -927,6 +932,7 @@ class SoRLTrainerv2(SoRLTrainer):
                     response_only_abs=cfg.response_only_abs,
                     cot_only_abs=cfg.cot_only_abs,
                     abs_prefix_max=cfg.abs_prefix_max,
+                    prefix_abs=cfg.prefix_abs,
                 )
 
         # SoRLLoss_v2: returns (traj_loss, abs_loss, zipf_kl) — no base_traj_loss arg

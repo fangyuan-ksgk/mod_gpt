@@ -1,8 +1,8 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from sorl.trainer_ablate import SoRLTrainerv3, _DDPForwardProxy
-from sorl.sorl_trainer import infer_insert_mask, expand_prompt_len, insert_tokens_with_padding
+from sorl.trainer_ablate import SoRLTrainerv3, _DDPForwardProxy, _drop_nl_prefix_m_set
+from sorl.sorl_trainer import infer_insert_mask, expand_prompt_len, insert_tokens_with_padding, insert_prefix_abs
 
 
 class SoRLTrainerv6(SoRLTrainerv3):
@@ -68,18 +68,32 @@ class SoRLTrainerv6(SoRLTrainerv3):
         else:
             mem_span = cfg.memory_span_abs
 
-        use_prompt_len = pl  if cfg.cot_only_abs else None
-        use_answer_tok = 820 if cfg.cot_only_abs else None
-        im = infer_insert_mask(ids, cfg.K, attn,
-                               prompt_len=use_prompt_len,
-                               answer_token_id=use_answer_tok,
-                               abs_prefix_max=cfg.abs_prefix_max)
-        ep = expand_prompt_len(pl, im)
-        ed, ea = insert_tokens_with_padding(ids, attn, im, self.raw_model.vocab_sizes[0], self.pad_token_id)
+        if cfg.prefix_abs:
+            assert cfg.abs_prefix_max is not None, "prefix_abs requires abs_prefix_max"
+            ed, ea = insert_prefix_abs(ids, attn, pl, cfg.abs_prefix_max,
+                                       self.raw_model.vocab_sizes[0], self.pad_token_id)
+            ep = pl  # unchanged — ABS block is response prefix
+        else:
+            use_prompt_len = pl  if cfg.cot_only_abs else None
+            use_answer_tok = 820 if cfg.cot_only_abs else None
+            im = infer_insert_mask(ids, cfg.K, attn,
+                                   prompt_len=use_prompt_len,
+                                   answer_token_id=use_answer_tok,
+                                   abs_prefix_max=cfg.abs_prefix_max)
+            ep = expand_prompt_len(pl, im)
+            ed, ea = insert_tokens_with_padding(ids, attn, im, self.raw_model.vocab_sizes[0], self.pad_token_id)
         data, _, logits = self.raw_model.recursion(
             ed, ea, max_iterations=cfg.max_iterations,
             memory_span_abs=mem_span, memory_span_traj=cfg.memory_span_traj,
             temperature=cfg.temperature, prompt_len=ep)
+
+        # TA-style M_SET: drop m NL tokens from CoT prefix (keeps abs tokens)
+        if cfg.compress_m_set:
+            data, ea, ep = _drop_nl_prefix_m_set(
+                data, ea, ep, bv, self.pad_token_id, m_set=cfg.compress_m_set)
+            # Re-forward after dropping to get correct logits for traj_loss
+            sorl_attn = self.raw_model._create_sorl_attention_mask(data, ea, mem_span, cfg.memory_span_traj)
+            logits = self.raw_model.model.forward(input_ids=data, attention_mask=sorl_attn, use_cache=False).logits
 
         traj_loss = self._traj_loss_from_logits(logits, data, ea, ep, bv)
         z = torch.tensor(0.0, device=self.device)

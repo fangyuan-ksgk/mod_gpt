@@ -66,6 +66,33 @@ def insert_tokens_with_padding(input_ids, attention_mask, insert_mask, placehold
     
     return expanded_tokens, expanded_mask
 
+# ----- prefix-first ABS insertion -----
+def insert_prefix_abs(data, attention_mask, prompt_len, n_abs, placeholder_token, pad_token_id):
+    """Insert n_abs contiguous ABS placeholders at the start of each response.
+
+    Layout: [Q₁...Qₚ] [PLACEHOLDER × n_abs] [C₁...Cₘ] [#### ans] [PAD...]
+
+    prompt_len is unchanged (ABS block is part of the response prefix).
+    """
+    B, L = data.shape
+    new_L = L + n_abs
+    new_data = data.new_full((B, new_L), pad_token_id)
+    new_attn = attention_mask.new_zeros(B, new_L)
+    for b in range(B):
+        pl = prompt_len[b].item()
+        valid = int(attention_mask[b].sum().item())
+        # prompt (unchanged)
+        new_data[b, :pl] = data[b, :pl]
+        new_attn[b, :pl] = 1
+        # ABS prefix block
+        new_data[b, pl:pl + n_abs] = placeholder_token
+        new_attn[b, pl:pl + n_abs] = 1
+        # response (CoT + answer)
+        resp_len = valid - pl
+        new_data[b, pl + n_abs:pl + n_abs + resp_len] = data[b, pl:valid]
+        new_attn[b, pl + n_abs:pl + n_abs + resp_len] = 1
+    return new_data, new_attn
+
 # ------ Drop token ------
 def drop_tokens(expanded_data, expanded_mask, remove_prob: float, placeholder_token: int):
     abs_1d = (expanded_data[0] >= placeholder_token)
@@ -202,50 +229,6 @@ def corrupt_abstract_tokens(
     return corrupted
 
 
-def move_abs_to_cot_prefix(
-    data: torch.Tensor,
-    attention_mask: torch.Tensor,
-    prompt_len: torch.Tensor,
-    base_vocab: int,
-    pad_token_id: int,
-    answer_token_id: int = 820,
-) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-    """
-    Rearrange each sequence so all CoT abstract tokens form a prefix block:
-      before:  [Q] [nl [ABS] nl [ABS] nl ...] [#### ans]
-      after:   [Q] [ABS ABS ... ABS] [nl nl ... nl] [#### ans]
-
-    Prompt and answer regions are untouched. Token count is unchanged.
-    Returns (new_data, new_attn, prompt_len) — prompt_len is unchanged.
-    """
-    B = data.shape[0]
-    out_seqs = []
-    for b in range(B):
-        valid  = int(attention_mask[b].sum())
-        pl     = int(prompt_len[b].item())
-        seq    = data[b, :valid]
-        prompt = seq[:pl]
-        resp   = seq[pl:]
-
-        ans_pos = (resp == answer_token_id).nonzero(as_tuple=True)[0]
-        if len(ans_pos):
-            ai  = ans_pos[0].item()
-            cot = resp[:ai]
-            ans = resp[ai:]
-        else:
-            cot, ans = resp, resp[:0]
-
-        abs_toks = cot[cot >= base_vocab]
-        nl_toks  = cot[cot <  base_vocab]
-        out_seqs.append(torch.cat([prompt, abs_toks, nl_toks, ans]))
-
-    max_len  = max(s.shape[0] for s in out_seqs)
-    new_data = data.new_full((B, max_len), pad_token_id)
-    new_attn = attention_mask.new_zeros(B, max_len)
-    for b, s in enumerate(out_seqs):
-        new_data[b, :s.shape[0]] = s
-        new_attn[b, :s.shape[0]] = 1
-    return new_data, new_attn, prompt_len
 
 
 def sorl_search(
@@ -265,19 +248,27 @@ def sorl_search(
     cot_only_abs: bool = False,
     answer_token_id: int = 820,
     abs_prefix_max: Optional[int] = None,
+    prefix_abs: bool = False,
 ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """
     Perform SoRL search: generate rollouts and select best sequences.
     """
 
-    # cot_only_abs implies response_only_abs + also excludes the answer region
-    use_prompt_len   = prompt_len if (response_only_abs or cot_only_abs) else None
-    use_answer_tok   = answer_token_id if cot_only_abs else None
-    insert_mask = infer_insert_mask(input_ids, K, attention_mask,
-                                    prompt_len=use_prompt_len, answer_token_id=use_answer_tok,
-                                    abs_prefix_max=abs_prefix_max)
-    expanded_prompt_len = expand_prompt_len(prompt_len, insert_mask)
-    expanded_data, expanded_mask = insert_tokens_with_padding(input_ids, attention_mask, insert_mask, model.vocab_sizes[0], pad_token_id)
+    if prefix_abs:
+        assert abs_prefix_max is not None, "prefix_abs requires abs_prefix_max"
+        expanded_data, expanded_mask = insert_prefix_abs(
+            input_ids, attention_mask, prompt_len, abs_prefix_max,
+            model.vocab_sizes[0], pad_token_id)
+        expanded_prompt_len = prompt_len  # unchanged — ABS block is response prefix
+    else:
+        # cot_only_abs implies response_only_abs + also excludes the answer region
+        use_prompt_len   = prompt_len if (response_only_abs or cot_only_abs) else None
+        use_answer_tok   = answer_token_id if cot_only_abs else None
+        insert_mask = infer_insert_mask(input_ids, K, attention_mask,
+                                        prompt_len=use_prompt_len, answer_token_id=use_answer_tok,
+                                        abs_prefix_max=abs_prefix_max)
+        expanded_prompt_len = expand_prompt_len(prompt_len, insert_mask)
+        expanded_data, expanded_mask = insert_tokens_with_padding(input_ids, attention_mask, insert_mask, model.vocab_sizes[0], pad_token_id)
 
     # Batch all rollouts together: repeat_interleave so each sample has n consecutive rollouts
     repeated_data = expanded_data.repeat_interleave(n, dim=0)
@@ -299,12 +290,6 @@ def sorl_search(
         search_data, search_ppt, n, expanded_data.shape[0]
     )
 
-    if cot_only_abs:
-        best_data, expanded_mask, expanded_prompt_len = move_abs_to_cot_prefix(
-            best_data, expanded_mask, expanded_prompt_len,
-            int(model.vocab_sizes[0].item()), pad_token_id, answer_token_id,
-        )
-
     return best_data, best_ppt, best_ppt_advantage, expanded_mask, expanded_prompt_len
 
 # fn 1. corrupt abstraction sequence 
@@ -325,6 +310,7 @@ def sorl_search_ar(
     cot_only_abs: bool = False,
     answer_token_id: int = 820,
     abs_prefix_max: Optional[int] = None,
+    prefix_abs: bool = False,
 ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """
     AR-based SoRL search: generate abstract tokens left-to-right with causal conditioning.
@@ -333,16 +319,23 @@ def sorl_search_ar(
     Cost: O(n_abs_positions) forward passes per rollout (vs O(max_iterations) for recursion).
     Still >>K times cheaper than GRPO which rolls out NL tokens too.
     """
-    # cot_only_abs implies response_only_abs + also excludes the answer region
-    use_prompt_len = prompt_len if (response_only_abs or cot_only_abs) else None
-    use_answer_tok = answer_token_id if cot_only_abs else None
-    insert_mask = infer_insert_mask(input_ids, K, attention_mask,
-                                    prompt_len=use_prompt_len, answer_token_id=use_answer_tok,
-                                    abs_prefix_max=abs_prefix_max)
-    expanded_prompt_len = expand_prompt_len(prompt_len, insert_mask)
-    expanded_data, expanded_mask = insert_tokens_with_padding(
-        input_ids, attention_mask, insert_mask, model.vocab_sizes[0], pad_token_id
-    )
+    if prefix_abs:
+        assert abs_prefix_max is not None, "prefix_abs requires abs_prefix_max"
+        expanded_data, expanded_mask = insert_prefix_abs(
+            input_ids, attention_mask, prompt_len, abs_prefix_max,
+            model.vocab_sizes[0], pad_token_id)
+        expanded_prompt_len = prompt_len
+    else:
+        # cot_only_abs implies response_only_abs + also excludes the answer region
+        use_prompt_len = prompt_len if (response_only_abs or cot_only_abs) else None
+        use_answer_tok = answer_token_id if cot_only_abs else None
+        insert_mask = infer_insert_mask(input_ids, K, attention_mask,
+                                        prompt_len=use_prompt_len, answer_token_id=use_answer_tok,
+                                        abs_prefix_max=abs_prefix_max)
+        expanded_prompt_len = expand_prompt_len(prompt_len, insert_mask)
+        expanded_data, expanded_mask = insert_tokens_with_padding(
+            input_ids, attention_mask, insert_mask, model.vocab_sizes[0], pad_token_id
+        )
 
     # Batch all rollouts together
     repeated_data = expanded_data.repeat_interleave(n, dim=0)
@@ -361,12 +354,6 @@ def sorl_search_ar(
     best_data, best_ppt, best_ppt_advantage = select_best_sequences(
         search_data, search_ppt, n, expanded_data.shape[0]
     )
-
-    if cot_only_abs:
-        best_data, expanded_mask, expanded_prompt_len = move_abs_to_cot_prefix(
-            best_data, expanded_mask, expanded_prompt_len,
-            int(model.vocab_sizes[0].item()), pad_token_id, answer_token_id,
-        )
 
     return best_data, best_ppt, best_ppt_advantage, expanded_mask, expanded_prompt_len
 
