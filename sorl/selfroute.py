@@ -93,9 +93,5 @@ class SoRLTrainerv6(SoRLTrainerv3):
         }
 
 
-# # v7. frozen abstract head, concatenate
 
-# class SoRlTrainerv7(SoRlTrainerv3): 
-#     # abstract projection is trainable, but, the search process uses a frozen
-#     # abstract projection matrix with the diagonal matrix trick
-#     # key is to bypass "searching"
+
