@@ -89,11 +89,32 @@ Previous sweep scripts (`sweep.sh`) had race conditions with wave-based GPU assi
 - Datasets: `thoughtworks/arithmetic-sorl-data` — configs: add_6digit, add_sub_6digit, add_handcrafted, sub_handcrafted
 - SAEs: `thoughtworks/arithmetic-sorl-saes` — on hold
 
+## Session Persistence
+
+**Only `/workspace/` persists across sessions.** Everything under `/home/newuser/` and `/tmp/` is lost on restart.
+
+On session startup, restore logs:
+```bash
+cp /workspace/sorl_logs/*.txt /tmp/
+```
+
+Logs are saved to `/workspace/sorl_logs/`:
+- `vs_log.txt` — current vocab sweep queue log
+- `v1_log.txt` — v1 sweep queue log  
+- `test_v1.log`, `test_v1_addsub.log` — initial v1 training runs
+- `optuna_log.txt` — hyperparameter search
+- `queue_log.txt` — earlier queue runs
+
+The code is at `/workspace/codes/mod_gpt` (symlinked from `/home/newuser/codes/mod_gpt`).
+The `.claude` dir is at `/workspace/.sorl_claude` (symlinked from `~/.claude`).
+
 ## What's Running
 
-Check: `tail /tmp/vs_log.txt` or `grep DONE /tmp/vs_log.txt`
+Check: `tail /workspace/sorl_logs/vs_log.txt` or `grep DONE /workspace/sorl_logs/vs_log.txt`
 - Vocab sweep to abs=100 at K=1 and K=4
 - Low-data SoRL (25K, 50K) for cascade carry comparison
+
+To monitor live: `tail -f /tmp/vs_log.txt` (if session is still active)
 
 ## Key Files
 
