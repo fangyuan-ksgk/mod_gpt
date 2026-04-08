@@ -22,7 +22,7 @@ from transformers import Qwen3Config, AutoTokenizer
 from sorl.sorl_wrapper import SorlModelWrapper
 from sorl.trainer_ablate import SoRLTrainer, SoRLConfig
 from arithmetic.datasets.addition import (
-    generate_batch, eval_accuracy, NUM_TOKENS, ALL_LABELS,
+    generate_batch, NUM_TOKENS, ALL_LABELS,
 )
 
 torch.set_float32_matmul_precision('high')
