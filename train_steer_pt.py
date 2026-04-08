@@ -563,19 +563,19 @@ def main():
     def evaluate():
         if val_ds is None:
             return None
-        # For eval, use the raw model directly (no DDP wrapper issues)
-        eval_wrapper = type(wrapper).__new__(type(wrapper))
-        nn.Module.__init__(eval_wrapper)
-        eval_wrapper.model = raw_model
-        eval_wrapper._prompt_lens = None if hasattr(wrapper, '_prompt_lens') else None
-        eval_wrapper._steering_map = None if hasattr(wrapper, '_steering_map') else None
-        return evaluate_accuracy(
-            eval_wrapper, tokenizer, val_ds, device,
+        # Temporarily point wrapper at raw_model (skip DDP) for generation.
+        # Hooks are registered on raw_model's layers, so steering stays active.
+        prev_model = wrapper.model
+        wrapper.model = raw_model
+        result = evaluate_accuracy(
+            wrapper, tokenizer, val_ds, device,
             num_samples=args.eval_samples,
             max_new_tokens=args.max_new_tokens,
             num_log_samples=args.num_log_samples,
             log_fn=log, eval_batch_size=args.eval_batch_size,
         )
+        wrapper.model = prev_model
+        return result
 
     # ---- Training loop ----
     history = {"step": [], "loss": [], "lr": []}

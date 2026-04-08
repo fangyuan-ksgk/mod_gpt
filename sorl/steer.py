@@ -61,9 +61,6 @@ class StackedAbstractionWrapper(nn.Module):
             self._hooks.append(hook)
 
     def _steering_hook(self, module, input, output):
-        if self._steering_map is None:
-            return output
-
         if isinstance(output, tuple):
             hidden_states = output[0]
             rest = output[1:]
@@ -71,9 +68,23 @@ class StackedAbstractionWrapper(nn.Module):
             hidden_states = output
             rest = None
 
-        steer_map = self._steering_map          # (B, S)
-        mask = steer_map >= 0
+        if self._steering_map is not None:
+            # Training path: use pre-computed VQ codes
+            steer_map = self._steering_map          # (B, S)
+        else:
+            # Generation fallback: V6-style diagonal routing over all positions
+            B, S, D = hidden_states.shape
+            with torch.no_grad():
+                pos_codes = hidden_states[..., -self.C_SIZE:].argmax(dim=-1)
+            steer_map = torch.full((B, S), -1, dtype=torch.long,
+                                   device=hidden_states.device)
+            for b in range(B):
+                n_chunks = S // self.L
+                for c in range(n_chunks):
+                    ps = c * self.L
+                    steer_map[b, ps:ps + self.L] = pos_codes[b, ps]
 
+        mask = steer_map >= 0
         if mask.any():
             safe_codes = steer_map.clamp(min=0)
             steer_vecs = self.steering_emb(safe_codes)              # (B, S, D)
@@ -114,8 +125,10 @@ class StackedAbstractionWrapper(nn.Module):
         return outputs
 
     def generate(self, **kwargs):
+        # _steering_map=None → hook falls back to V6-style diagonal routing
         self._steering_map = None
-        return self.model.generate(**kwargs)
+        out = self.model.generate(**kwargs)
+        return out
 
     # ---- save / load ----
 
@@ -196,9 +209,6 @@ class StackedAbstractionWrapperV6(nn.Module):
             self._hooks.append(hook)
 
     def _steering_hook(self, module, input, output):
-        if self._prompt_lens is None:
-            return output                       # no-op during generate
-
         if isinstance(output, tuple):
             hidden_states = output[0]
             rest = output[1:]
@@ -213,10 +223,11 @@ class StackedAbstractionWrapperV6(nn.Module):
             pos_codes = hidden_states[..., -self.C_SIZE:].argmax(dim=-1)   # (B, S)
 
         # Build chunk-level code map: first position determines chunk code
+        # When _prompt_lens is None (generation), steer ALL positions (start=0)
         chunk_codes = torch.full((B, S), -1, dtype=torch.long,
                                  device=hidden_states.device)
         for b in range(B):
-            start = int(self._prompt_lens[b])
+            start = 0 if self._prompt_lens is None else int(self._prompt_lens[b])
             n_resp = S - start
             n_chunks = n_resp // self.L
             for c in range(n_chunks):
@@ -246,8 +257,10 @@ class StackedAbstractionWrapperV6(nn.Module):
         return outputs
 
     def generate(self, **kwargs):
+        # _prompt_lens=None → hook steers ALL positions (start=0)
         self._prompt_lens = None
-        return self.model.generate(**kwargs)
+        out = self.model.generate(**kwargs)
+        return out
 
     # ---- save / load ----
 

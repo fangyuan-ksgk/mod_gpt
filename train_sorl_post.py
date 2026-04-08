@@ -26,7 +26,7 @@ from transformers import AutoTokenizer
 from sorl.sorl_wrapper import SorlModelWrapper, left_pad_and_mask
 from sorl.trainer_ablate import (SoRLTrainer, SoRLTrainerv2, SoRLTrainerv3, SoRLTrainerv4, SoRLTrainerv5,
                                 SoRLConfig)
-from sorl.selfroute import SoRLTrainerv6
+from sorl.selfroute import SoRLTrainerv6, SoRLTrainerv7
 from data.pt_dataset import get_dataset
 
 
@@ -95,6 +95,8 @@ def parse_args():
                    help="Use SoRLTrainerv5 (STE single-rollout: differentiable recursion, no multi-rollout search)")
     p.add_argument("--use_v6", action="store_true",
                    help="Use SoRLTrainerv6 (self-routing: fixed diagonal lm_head, traj_loss only)")
+    p.add_argument("--use_v7", action="store_true",
+                   help="Use SoRLTrainerv7 (deep supervision: per-iteration backward+step, HRM pattern)")
     p.add_argument("--no_ste", action="store_true",
                    help="v5 only: disable STE (hard recursion ablation). Same pipeline, no gradient through abstract selection.")
     p.add_argument("--n_inner", type=int, default=4,
@@ -565,7 +567,9 @@ def main():
     has_aux = (config.alpha_info_gain != 0 or config.alpha_abs != 0 or config.alpha_soft_zipf != 0 or config.alpha_ortho != 0)
 
     # ---- Trainer ----
-    if args.use_v6:
+    if args.use_v7:
+        TrainerCls = SoRLTrainerv7
+    elif args.use_v6:
         TrainerCls = SoRLTrainerv6
     elif args.use_v5:
         TrainerCls = SoRLTrainerv5
@@ -609,7 +613,7 @@ def main():
 
         if result:
             _log_result(result, "K=None")
-        if has_aux or args.use_v6: # <- so that self-routing run also gets Acc[K] evaluation
+        if has_aux or args.use_v6 or args.use_v7: # <- so that self-routing run also gets Acc[K] evaluation
             log(f"--- Final evaluation (K={config.K}, with abstractions) ---")
             result_k = trainer.evaluate(eval_K=config.K)
             if result_k:

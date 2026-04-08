@@ -522,9 +522,10 @@ class SorlModelWrapper(PreTrainedModel, GenerationMixin):
         # Sample new abstract tokens (clone to avoid in-place modification of forward input)
         idx_new = self.extract_and_sample(logits, idx.clone(), recursion_mask, temperature)
 
-        # Compute per-token loss
+        # Compute per-token loss (NL tokens only — v6 does not predict abstract tokens)
         labels = idx_new.clone()
         labels[attention_mask == 0] = -100
+        labels[recursion_mask] = -100  # mask abstract token positions
         if prompt_len is not None:
             seq_idx = torch.arange(labels.size(1), device=labels.device).unsqueeze(0)
             labels[seq_idx < prompt_len.unsqueeze(1)] = -100

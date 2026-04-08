@@ -1,7 +1,10 @@
+import os
+import time
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from sorl.trainer_ablate import SoRLTrainerv3, _DDPForwardProxy, _drop_nl_prefix_m_set
+import torch.distributed as dist
+from sorl.trainer_ablate import SoRLTrainerv3, _DDPForwardProxy, _drop_nl_prefix_m_set, _get_lr
 from sorl.sorl_trainer import infer_insert_mask, expand_prompt_len, insert_tokens_with_padding, insert_prefix_abs
 
 
@@ -108,5 +111,211 @@ class SoRLTrainerv6(SoRLTrainerv3):
         }
 
 
+class SoRLTrainerv7(SoRLTrainerv6):
+    """Deep supervision v7: backward+step at each recursion iteration.
+
+    Instead of N Jacobi iterations (no grad) + 1 final forward (v6),
+    v7 computes _traj_loss_from_logits at every iteration and updates
+    the model, so each subsequent iteration benefits from improved weights.
+    Matches the HRM deep-supervision training pattern (Fig. 4).
+    """
+
+    def _prepare_recursion_inputs(self, batch):
+        """Shared data prep: insert prefix abs, build masks, compute base_loss."""
+        cfg = self.config
+        ids = batch["input_ids"].to(self.device)
+        attn = batch["attention_mask"].to(self.device)
+        pl = batch["prompt_len"].to(self.device)
+        bv = int(self.raw_model.vocab_sizes[0].item())
+
+        # Base traj loss (logging only)
+        with torch.no_grad():
+            lab = ids.clone(); lab[attn == 0] = -100
+            si = torch.arange(lab.size(1), device=self.device).unsqueeze(0)
+            lab[si < pl.unsqueeze(1)] = -100
+            o = self.raw_model(input_ids=ids, attention_mask=attn,
+                               memory_span_abs=cfg.memory_span_abs,
+                               memory_span_traj=cfg.memory_span_traj)
+            lg = o.logits.clone(); lg[:, :, bv:] = -float("inf")
+            base_loss = nn.CrossEntropyLoss(ignore_index=-100)(
+                lg[:, :-1].contiguous().view(-1, lg.size(-1)),
+                lab[:, 1:].contiguous().view(-1))
+            del o, lg
+
+        # Insert abstract tokens
+        if cfg.prefix_abs:
+            assert cfg.abs_prefix_max is not None
+            ed, ea = insert_prefix_abs(ids, attn, pl, cfg.abs_prefix_max,
+                                       self.raw_model.vocab_sizes[0], self.pad_token_id)
+            ep = pl
+        else:
+            use_prompt_len = pl if cfg.cot_only_abs else None
+            use_answer_tok = 820 if cfg.cot_only_abs else None
+            im = infer_insert_mask(ids, cfg.K, attn,
+                                   prompt_len=use_prompt_len,
+                                   answer_token_id=use_answer_tok,
+                                   abs_prefix_max=cfg.abs_prefix_max)
+            ep = expand_prompt_len(pl, im)
+            ed, ea = insert_tokens_with_padding(ids, attn, im,
+                                                self.raw_model.vocab_sizes[0],
+                                                self.pad_token_id)
+
+        # Recursion mask
+        vocab_size_0 = self.raw_model.vocab_sizes[0].to(self.device)
+        recursion_mask = (ed >= vocab_size_0)
+        recursion_mask[:, 0] = False
+
+        # Per-batch memory span randomization
+        if cfg.random_mem_span is not None:
+            lo, hi = cfg.random_mem_span
+            mem_span = int(torch.randint(lo, hi + 1, (1,)).item())
+        else:
+            mem_span = cfg.memory_span_abs
+
+        return ed, ea, ep, recursion_mask, mem_span, base_loss, bv
+
+    def train(self, resume_from=None):
+        cfg = self.config
+        os.makedirs(cfg.output_dir, exist_ok=True)
+
+        dataloader = self._make_dataloader(self.train_dataset, shuffle=True)
+        # total_steps counts data batches (not per-iteration sub-steps)
+        total_steps = len(dataloader) * cfg.num_epochs
+
+        # Optimizer
+        emb_params, other_params = [], []
+        for name, p in self.model.named_parameters():
+            if "embed_tokens" in name or "lm_head" in name:
+                emb_params.append(p)
+            else:
+                other_params.append(p)
+        optimizer = torch.optim.AdamW([
+            {"params": other_params, "lr": cfg.lr},
+            {"params": emb_params, "lr": cfg.lr * cfg.emb_lr_mult},
+        ], weight_decay=cfg.weight_decay)
+
+        start_epoch, start_step = 0, 0
+        if resume_from and os.path.exists(resume_from):
+            ckpt = torch.load(resume_from, map_location=self.device)
+            self.raw_model.load_state_dict(ckpt["model"])
+            optimizer.load_state_dict(ckpt["optimizer"])
+            start_epoch = ckpt.get("epoch", 0)
+            start_step = ckpt.get("step", 0)
+            self._log(f"Resumed from {resume_from} (epoch={start_epoch}, step={start_step})")
+
+        n_iter = cfg.max_iterations
+        self._log(f"v7 deep-supervision trainer | N_iter={n_iter} | "
+                  f"Total steps: {total_steps} | Steps/epoch: {len(dataloader)} | "
+                  f"Effective batch: {cfg.batch_size * self.world_size}")
+
+        if cfg.vq_abs_pretrain_steps > 0:
+            self._pretrain_abs_projection_vq()
+
+        self.model.train()
+        global_step = start_step
+
+        if cfg.emb_warmup_steps > 0 and global_step < cfg.emb_warmup_steps:
+            self._freeze_non_abstract()
+
+        if torch.cuda.is_available():
+            torch.cuda.reset_peak_memory_stats(self.device)
+
+        t_start = time.time()
+
+        for epoch in range(start_epoch, cfg.num_epochs):
+            if self.ddp and hasattr(dataloader.sampler, "set_epoch"):
+                dataloader.sampler.set_epoch(epoch)
+
+            for batch_idx, batch in enumerate(dataloader):
+                effective_step = epoch * len(dataloader) + batch_idx
+                if effective_step < start_step:
+                    continue
+
+                lr = _get_lr(global_step, total_steps, cfg.warmup_steps, cfg.cooldown_frac, cfg.lr)
+
+                # ---- Deep supervision: N iterations with backward+step each ----
+                ed, ea, ep, recursion_mask, mem_span, base_loss, bv = \
+                    self._prepare_recursion_inputs(batch)
+
+                idx = ed
+                iter_losses = []
+                for it in range(n_iter):
+                    optimizer.param_groups[0]["lr"] = lr
+                    optimizer.param_groups[1]["lr"] = lr * cfg.emb_lr_mult
+
+                    idx_new, _ptl, logits = self.raw_model.recursion_step(
+                        idx, ea, recursion_mask, temperature=cfg.temperature,
+                        memory_span_abs=mem_span, memory_span_traj=cfg.memory_span_traj,
+                        prompt_len=ep,
+                    )
+                    traj_loss = self._traj_loss_from_logits(logits, idx_new, ea, ep, bv)
+                    loss = cfg.alpha_traj * traj_loss
+
+                    optimizer.zero_grad(set_to_none=True)
+                    loss.backward()
+                    if cfg.max_grad_norm > 0:
+                        torch.nn.utils.clip_grad_norm_(self.model.parameters(), cfg.max_grad_norm)
+                    optimizer.step()
+
+                    iter_losses.append(traj_loss.item())
+                    idx = idx_new
+                    del logits, _ptl, loss
+
+                global_step += 1
+
+                # Emb warmup transition
+                if cfg.emb_warmup_steps > 0 and global_step == cfg.emb_warmup_steps:
+                    self._unfreeze_all()
+
+                # ---- Logging ----
+                if self.is_master and (batch_idx + 1) % cfg.log_every == 0:
+                    elapsed = time.time() - t_start
+                    frac_done = max(global_step, 1) / max(total_steps, 1)
+                    epoch_frac = epoch + (batch_idx + 1) / len(dataloader)
+                    eta = elapsed / frac_done * (1 - frac_done) if frac_done > 0 else 0
+                    eta_m, eta_s = divmod(int(eta), 60)
+                    eta_h, eta_m = divmod(eta_m, 60)
+                    eta_str = f"{eta_h}h{eta_m:02d}m{eta_s:02d}s" if eta_h else f"{eta_m}m{eta_s:02d}s"
+                    peak = (f"Mem: {torch.cuda.max_memory_allocated(self.device)/1024**3:.2f}GB"
+                            if torch.cuda.is_available() else "")
+                    avg_traj = sum(iter_losses) / len(iter_losses)
+                    self._log(
+                        f"epoch {epoch_frac:.3f}/{cfg.num_epochs} | remain: {eta_str} | "
+                        f"traj={avg_traj:.4f} base={base_loss.item():.4f} "
+                        f"iter[0]={iter_losses[0]:.4f} iter[-1]={iter_losses[-1]:.4f} "
+                        f"| K={cfg.K} mem={mem_span} "
+                        f"| lr={lr:.2e} | {peak}"
+                    )
+                    self.history["step"].append(global_step)
+                    self.history["loss"].append(avg_traj)
+                    self.history["base_loss"].append(base_loss.item())
+                    self.history["traj_loss"].append(iter_losses[-1])
+                    self.history["lr"].append(lr)
+
+                del ed, ea, ep, idx, iter_losses, base_loss
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+
+                # Eval
+                if global_step > 0 and global_step % cfg.eval_every == 0:
+                    result = self.evaluate()
+                    if result is not None:
+                        self._log(f"--- Eval step {global_step}: {result} ---")
+
+                # Checkpoint
+                if global_step > 0 and global_step % cfg.save_every == 0:
+                    ckpt_path = os.path.join(cfg.output_dir, f"step_{global_step}.pt")
+                    self.save_checkpoint(ckpt_path, epoch, global_step, optimizer)
+
+            self._log(f"=== Epoch {epoch+1} complete ===")
+
+        final_path = os.path.join(cfg.output_dir, "final.pt")
+        self.save_checkpoint(final_path, cfg.num_epochs, global_step, optimizer)
+        self._log("Training complete!")
+
+        if self.ddp:
+            dist.destroy_process_group()
+
+        return self.history
 
 
