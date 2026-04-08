@@ -493,6 +493,51 @@ class SorlModelWrapper(PreTrainedModel, GenerationMixin):
         idx[recursion_mask] = new_tokens.to(idx.dtype)
         return idx
 
+    def recursion_step(self, idx, attention_mask, recursion_mask, temperature,
+                       memory_span_abs=1792, memory_span_traj=1792, prompt_len=None):
+        """Single recursion iteration for deep supervision.
+
+        Returns (idx_detached, per_token_loss, logits):
+          - idx_detached: updated sequence with new abstract tokens, detached for next step
+          - per_token_loss: (B, L-1) per-token CE loss from this iteration's forward pass
+          - logits: raw logits from this iteration
+
+        Usage (deep supervision, matches HRM Fig. 4):
+            recursion_mask = (idx >= model.vocab_sizes[0])
+            recursion_mask[:, 0] = False
+            for step in range(N_supervision):
+                idx, loss, logits = model.recursion_step(
+                    idx, attn, recursion_mask, temperature=0.0, prompt_len=pl)
+                loss.mean().backward()
+                opt.step(); opt.zero_grad()
+        """
+        sorl_attention_mask = self._create_sorl_attention_mask(
+            idx, attention_mask, memory_span_abs, memory_span_traj
+        )
+        outputs = self.model.forward(
+            input_ids=idx, attention_mask=sorl_attention_mask, use_cache=False,
+        )
+        logits = outputs.logits
+
+        # Sample new abstract tokens
+        idx = self.extract_and_sample(logits, idx, recursion_mask, temperature)
+
+        # Compute per-token loss
+        labels = idx.clone()
+        labels[attention_mask == 0] = -100
+        if prompt_len is not None:
+            seq_idx = torch.arange(labels.size(1), device=labels.device).unsqueeze(0)
+            labels[seq_idx < prompt_len.unsqueeze(1)] = -100
+
+        shift_logits = logits[..., :-1, :].contiguous()
+        shift_labels = labels[..., 1:].contiguous()
+        loss_fct = nn.CrossEntropyLoss(reduction='none', ignore_index=-100)
+        per_token_loss = loss_fct(
+            shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1)
+        ).view(idx.shape[0], -1)
+
+        return idx.detach(), per_token_loss, logits
+
     def recursion(self, idx, attention_mask, max_iterations=5, memory_span_abs=1792, memory_span_traj=1792, attn_blocksize=1792, temperature=0.0, prompt_len=None, differentiable=False):
         """Perform recursion on abstract tokens with information bottleneck mask.
         If differentiable=True, uses Straight-Through Estimator (STE) on the final iteration
