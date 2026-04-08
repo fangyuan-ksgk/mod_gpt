@@ -111,7 +111,7 @@ run_bg() {
 # (c) v1 prefix-8 + NL drop — same as (a) + TA-style NL dropping
 # (d) v6 prefix-8 + NL drop — same as (b) + TA-style NL dropping
 # ===========================================================================
-# wait
+
 
 # # (a) v1 prefix-8: trainable ABS, closed-loop
 # run_bg "v1_pfx8" $M06 $DS_GSM \
@@ -377,12 +377,12 @@ run_ta_bg() {
     "$@" &
 }
 
-# ============================================================================
-# Batch 4 — Baselines: pause token + token assorted
-#           4 models × 5 datasets × 2 baselines = 40 experiments, 1 epoch each
-#           Each (model, dataset) pair launches pause + ta in parallel (1 GPU each),
-#           then waits before the next pair.
-# ============================================================================
+# # ============================================================================
+# # Batch 4 — Baselines: pause token + token assorted
+# #           4 models × 5 datasets × 2 baselines = 40 experiments, 1 epoch each
+# #           Each (model, dataset) pair launches pause + ta in parallel (1 GPU each),
+# #           then waits before the next pair.
+# # ============================================================================
 # echo ""
 # echo "============================================================"
 # echo "Batch 4: Baselines (pause + TA) — 4 models × 5 datasets (${TIMESTAMP})"
@@ -401,8 +401,7 @@ run_ta_bg() {
 
 # echo "  Batch 4 complete."
 
-
-# echo ""
-# echo "============================================================"
-# echo "All 16 experiments complete. Results in ./ckpt/sweep_${TIMESTAMP}/"
-# echo "============================================================"
+# # echo ""
+# # echo "============================================================"
+# # echo "All 16 experiments complete. Results in ./ckpt/sweep_${TIMESTAMP}/"
+# # echo "============================================================"
