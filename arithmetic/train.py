@@ -140,8 +140,8 @@ def eval_sft(model, dataset, device, num_samples=200):
 
 
 def compute_accuracy_for_trainer(model, tokenizer, dataset, device, num_samples, **kwargs):
-    """Callback for SoRLTrainer eval — uses generation with abs tokens."""
-    K = kwargs.get("eval_K", 4)
+    """Callback for SoRLTrainer eval — uses recursion (matches training)."""
+    K = kwargs.get("eval_K") or 4  # eval_K can be None
     acc = eval_with_recursion(model, dataset, device, K=K, num_samples=num_samples)
     return {"accuracy": acc}
 
