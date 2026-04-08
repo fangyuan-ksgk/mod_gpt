@@ -74,33 +74,42 @@ def collate_fn(batch):
 
 # ── Eval: generates with abstraction tokens, scores trajectory only ──
 
-def eval_with_generation(model, dataset, device, K=4, num_samples=200):
+def eval_with_recursion(model, dataset, device, K=4, num_samples=200):
     """
-    Proper SoRL eval: generate with abstraction tokens interleaved,
-    then strip them and check trajectory predictions.
+    SoRL eval using recursion (same procedure as training):
+    insert placeholders, denoise via recursion, teacher-force trajectory predictions.
     """
+    from sorl.sorl_trainer import infer_insert_mask, insert_tokens_with_padding, expand_prompt_len
+
     model.eval()
     base_v = model.vocab_sizes[0].item()
     prompt_len = dataset.prompt_len
+    pad_id = dataset.tokenizer.pad_token_id
     n_correct = 0
 
     for _ in range(num_samples):
         item = dataset[0]
         ids = item["input_ids"].unsqueeze(0).to(device)
-        prompt = ids[:, :prompt_len]
-        attn = torch.ones_like(prompt)
+        attn = item["attention_mask"].unsqueeze(0).to(device)
+        pl_t = item["prompt_len"].unsqueeze(0).to(device)
         true_answer = ids[0, prompt_len:]
 
         with torch.no_grad():
-            generated = model.generate(
-                prompt, max_new_tokens=25, attention_mask=attn,
-                temperature=0.0, K=K, memory_span_abs=1792, memory_span_traj=1792,
+            im = infer_insert_mask(ids, K, attn)
+            ep = expand_prompt_len(pl_t, im)
+            ed, ea = insert_tokens_with_padding(ids, attn, im, model.vocab_sizes[0], pad_id)
+            data, ppt, logits = model.recursion(
+                ed, ea, max_iterations=2,
+                memory_span_abs=1792, memory_span_traj=1792,
+                temperature=0.0, prompt_len=ep,
             )
 
-        traj_tokens = generated[0][generated[0] < base_v]
-        pred_answer = traj_tokens[prompt_len:]
+            # Extract trajectory predictions at answer positions
+            is_traj = data[0, 1:] < base_v
+            pred_logits = logits[0, :-1][is_traj][:, :base_v].argmax(dim=-1)
+            pred_answer = pred_logits[-7:]  # last 7 trajectory tokens = answer
 
-        if len(pred_answer) >= len(true_answer) and (pred_answer[:len(true_answer)] == true_answer).all():
+        if (pred_answer == true_answer).all():
             n_correct += 1
 
     model.train()
@@ -133,7 +142,7 @@ def eval_sft(model, dataset, device, num_samples=200):
 def compute_accuracy_for_trainer(model, tokenizer, dataset, device, num_samples, **kwargs):
     """Callback for SoRLTrainer eval — uses generation with abs tokens."""
     K = kwargs.get("eval_K", 4)
-    acc = eval_with_generation(model, dataset, device, K=K, num_samples=num_samples)
+    acc = eval_with_recursion(model, dataset, device, K=K, num_samples=num_samples)
     return {"accuracy": acc}
 
 
@@ -341,7 +350,7 @@ def main():
         )
         trainer.train()
         history = trainer.history
-        final_acc = eval_with_generation(model, val_ds, args.device, K=args.K, num_samples=200)
+        final_acc = eval_with_recursion(model, val_ds, args.device, K=args.K, num_samples=200)
 
     print(f"Final accuracy: {final_acc:.3f}")
     if wandb.run is not None:

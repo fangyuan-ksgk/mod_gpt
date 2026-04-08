@@ -25,7 +25,7 @@ from sorl.sorl_wrapper import SorlModelWrapper
 from sorl.trainer_ablate import SoRLTrainer, SoRLConfig
 from arithmetic.train import (
     Qwen3ArithmeticDataset, collate_fn,
-    eval_with_generation, TOKENIZER_NAME,
+    eval_with_recursion, TOKENIZER_NAME,
 )
 
 
@@ -67,7 +67,7 @@ class PruningSoRLTrainer(SoRLTrainer):
             return None
         self.raw_model.eval()
         # Use proper generation eval
-        acc = eval_with_generation(
+        acc = eval_with_recursion(
             self.raw_model, self.val_dataset, self.device,
             K=self.config.K, num_samples=50,  # fewer samples for speed
         )
@@ -124,7 +124,7 @@ def objective(trial, args, tokenizer):
         return 0.0
 
     # Final eval with more samples
-    acc = eval_with_generation(model, val_ds, args.device, K=K, num_samples=100)
+    acc = eval_with_recursion(model, val_ds, args.device, K=K, num_samples=100)
     print(f"  Trial {trial.number} final accuracy: {acc:.3f}")
 
     # Log to wandb
