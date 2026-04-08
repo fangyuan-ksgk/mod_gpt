@@ -14,10 +14,6 @@ Root cause: v6's traj-only loss gives no gradient signal to make abstractions us
 
 Fangyuan confirmed: "v6 doesn't work well with from-scratch training. v1 works well in pre-training."
 
-### Orthogonal init doesn't help
-
-Disabling `_init_abstract_embeddings_orthogonal()` in `SorlModelWrapper.from_scratch()` made no difference for v6. Still 0%. Left disabled anyway per Fangyuan's suggestion.
-
 ### Eval must use recursion, not generation
 
 `model.generate()` samples abstraction tokens autoregressively — doesn't match training's search+recursion procedure. Results:
@@ -29,11 +25,65 @@ Disabling `_init_abstract_embeddings_orthogonal()` in `SorlModelWrapper.from_scr
   model.generate():                   0%  ← WRONG
 ```
 
-The model learns to use abstraction tokens filled by recursion (iterative denoising). `model.generate()` fills them differently, breaking predictions. Always use `eval_with_recursion()` from `train.py`.
+Always use `eval_with_recursion()` from `train.py`.
 
 ### Baseline must be pure SFT
 
-Earlier baselines used `SoRLTrainer` with all `alpha=0`. While functionally equivalent to SFT (the `has_aux=False` path skips search entirely), it's confusing. Switched to explicit SFT training loop — `nn.CrossEntropyLoss` on answer tokens, no SoRL anything.
+Switched to explicit SFT training loop — `nn.CrossEntropyLoss` on answer tokens, no SoRL anything.
+
+### Data enrichment was missing for subtraction
+
+Original data only enriched addition (sum-to-9). Subtraction borrow cascades (M3-M5) were extremely rare:
+M3=0.7%, M4=0.04%. Fixed by forcing 40% of digit positions to equal (creates MB=U cascades).
+Now M3=3.0%, M4=0.8%.
+
+### SoRL needs more epochs than baseline
+
+At 25K data with 5 epochs: SoRL was worse than baseline on cascades.
+At 25K data with 10 epochs: SoRL crushes baseline (S6: 34%→100%, M3: 68%→100%).
+SoRL has more to learn (abstractions + task) so it needs ~2x more iterations.
+
+## SoRL v1 Hyperparameters
+
+### Current defaults (Fangyuan's recommended)
+
+```
+alpha_info_gain = 10.0    # weight on p(s|a)/p(s) — forces abstractions to help
+alpha_abs = 0.1           # weight on p(a|s) — abstract token prediction loss
+alpha_soft_zipf = 1.0     # Zipfian distribution regularizer on abstract tokens
+alpha_traj = 0.0          # v1 uses info_gain, not traj
+K = 4                     # insert 1 abstract token every K trajectory tokens
+lr = 8e-5
+batch_size = 64
+num_epochs = 5-10         # 5 minimum, 10 for low-data regimes
+```
+
+### Tuning for vocab diversity (Fangyuan's guidance)
+
+- **Increase `alpha_soft_zipf`** — main knob for encouraging richer vocab usage
+- **Decrease `alpha_abs`** — may increase diversity but hurt performance
+- **Lower `alpha_info_loss`** — may increase diversity but degrade accuracy
+- Balance: push zipf first, only touch abs/info_gain if zipf alone isn't enough
+
+### Sweep axes
+
+1. **vocab_size**: 1, 2, 5, 10, 16, 20, 25, 30, 40, 50, 70, 100
+2. **K**: 1, 2, 3, 4 (K=1 = abs token every position, K=4 = every 4th)
+3. **alpha_soft_zipf**: try 2.0, 5.0, 10.0 to push diversity
+4. **dataset size**: 10K, 25K, 50K, 75K, 100K, 250K, 500K
+
+## Vocab Collapse Pattern
+
+~70% of vocab is used, Zipf-like distribution (not total collapse):
+
+```
+  vocab=5:  3/5 used, top-3 = 100%
+  vocab=10: 7/10 used, top-3 = 69%
+  vocab=20: 15/20 used, top-3 = 51%
+```
+
+K does NOT affect utilization count (always 7/10 at vocab=10 across K=1-4).
+K=2,3 concentrate MORE on fewer tokens than K=1,4.
 
 ## Architecture
 
@@ -41,93 +91,50 @@ Earlier baselines used `SoRLTrainer` with all `alpha=0`. While functionally equi
 - **Tokenizer**: Qwen3-0.6B (each digit/operator = 1 token, uniform 21-token sequences)
 - Token mapping hardcoded in `QWEN3_TOKEN_MAP` — only works with Qwen3
 - `prompt_len=14`, `answer_len=7`
-
-## Training Config (v1 SoRL)
-
-```
-alpha_info_gain = 10.0    # Fangyuan's recommended default
-alpha_abs = 0.1
-alpha_soft_zipf = 1.0
-alpha_traj = 0.0          # v1 uses info_gain, not traj
-lr = 8e-5
-batch_size = 64
-num_epochs = 5            # 3 not enough for some configs
-K = 4                     # default, also sweep 1-3
-```
-
-## Vocab Collapse Pattern
-
-Not total collapse (unlike GSM8K where 1-3 tokens dominated at 100%). Instead a Zipf-like distribution:
-
-- ~70% of vocab is actively used regardless of vocab size
-- Top-3 concentration decreases with larger vocab (100% at v=5 → 51% at v=20)
-- K does NOT affect utilization count (always 7/10 at vocab=10 across K=1-4)
-- K=2,3 concentrate MORE on fewer tokens than K=1,4
-
-## Data Efficiency
-
-At 500K data: both baseline and SoRL get 100% on all complexity levels (S0-S6, M0-M4).
-
-At 25K data (the interesting regime):
-- Baseline struggles on cascades: S3=48%, S5=44%, S6=22%
-- SoRL at 25K: runs pending — key experiment for data efficiency story
-
-## Disk Space
-
-Models are ~640MB each (168M params × 4 bytes, dominated by Qwen3 embedding table).
-Intermediate checkpoints disabled (`save_every=999999`). Models upload to HF then delete local.
-Watch disk: `df -h /` should stay above 200GB free.
-
-## GPU Queue
-
-Use `arithmetic/scripts/gpu_queue.py` for all multi-job runs. Don't manually assign GPUs.
-Previous sweep scripts (`sweep.sh`) had race conditions with wave-based GPU assignment.
-
-Benchmarked: 2 jobs per GPU gives 58% speed each (116% total throughput vs sequential).
-Use `max_per_gpu=2` for throughput, `max_per_gpu=1` for fastest per-job completion.
+- No bf16 (trainer_ablate.py doesn't support it — TODO)
 
 ## HuggingFace Repos
 
-- Models: `thoughtworks/arithmetic-sorl` — each subfolder has `train_config.json` (full manifest), `metrics.json`, `model.safetensors`
-- Datasets: `thoughtworks/arithmetic-sorl-data` — configs: add_6digit, add_sub_6digit, add_handcrafted, sub_handcrafted
-- SAEs: `thoughtworks/arithmetic-sorl-saes` — on hold
+- **Models**: `thoughtworks/arithmetic-sorl`
+  - `non_enriched/` — 32 models trained WITHOUT subtraction borrow enrichment
+  - Root level — enriched models (to be trained)
+- **Datasets**: `thoughtworks/arithmetic-sorl-data` — regenerated with enrichment
+- **SAEs**: `thoughtworks/arithmetic-sorl-saes` — empty, on hold
+
+## Disk Space
+
+Models are ~640MB each. Intermediate checkpoints disabled (`save_every=999999`).
+Models upload to HF then delete local. Watch: `df -h /` should stay above 200GB.
+
+## GPU Queue
+
+Use `arithmetic/scripts/gpu_queue.py`. Don't manually assign GPUs.
+2 jobs per GPU = 58% speed each, 116% total throughput.
+
+**Important**: SAE jobs must NOT be interleaved with model training jobs.
+Run all model training first, confirm uploads, then run SAEs separately.
 
 ## Session Persistence
 
-**Only `/workspace/` persists across sessions.** Everything under `/home/newuser/` and `/tmp/` is lost on restart.
+**Only `/workspace/` persists across sessions.**
 
-**On session startup (Claude's responsibility, not user's):**
+**On session startup (Claude's responsibility):**
 1. `cp /workspace/sorl_logs/*.txt /tmp/` — restore logs
 2. Verify symlinks: `~/.claude` → `/workspace/.sorl_claude`, `~/codes/mod_gpt` → `/workspace/codes/mod_gpt`
-3. Check if any background jobs are still running: `nvidia-smi`, `ps aux | grep arithmetic`
+3. Check background jobs: `nvidia-smi`, `ps aux | grep arithmetic`
 4. Set wandb key if needed (user will provide)
+5. Check `TODO.md` for pending work
 
-Logs are saved to `/workspace/sorl_logs/`:
-- `vs_log.txt` — current vocab sweep queue log
-- `v1_log.txt` — v1 sweep queue log  
-- `test_v1.log`, `test_v1_addsub.log` — initial v1 training runs
-- `optuna_log.txt` — hyperparameter search
-- `queue_log.txt` — earlier queue runs
-
-The code is at `/workspace/codes/mod_gpt` (symlinked from `/home/newuser/codes/mod_gpt`).
-The `.claude` dir is at `/workspace/.sorl_claude` (symlinked from `~/.claude`).
-
-## What's Running
-
-Check: `tail /workspace/sorl_logs/vs_log.txt` or `grep DONE /workspace/sorl_logs/vs_log.txt`
-- Vocab sweep to abs=100 at K=1 and K=4
-- Low-data SoRL (25K, 50K) for cascade carry comparison
-
-To monitor live: `tail -f /tmp/vs_log.txt` (if session is still active)
+Logs saved to `/workspace/sorl_logs/`.
 
 ## TODOs
 
-Check [`TODO.md`](TODO.md) periodically for status. Update as tasks complete.
+Check [`TODO.md`](TODO.md) periodically for status.
 
 ## Key Files
 
-- `arithmetic/train.py` — main entry point (SFT baseline + SoRL v1)
-- `arithmetic/datasets/addition.py` — data gen with Quirke labels + ST/SV ground truth
+- `arithmetic/train.py` — SFT baseline + SoRL v1 training
+- `arithmetic/datasets/addition.py` — data gen with Quirke labels + enrichment
 - `arithmetic/hub.py` — HF save/load
 - `arithmetic/interp_utils/interventions.py` — token-level interventions
 - `arithmetic/scripts/gpu_queue.py` — GPU job scheduler
