@@ -247,6 +247,7 @@ class SorlModelWrapper(PreTrainedModel, GenerationMixin):
         response_only_abs: bool = False,
         cot_only_abs: bool = False,
         answer_token_id: int = 820,
+        abs_prefix_max: Optional[int] = None,
     ):
         import torch.nn.functional as F
         
@@ -263,8 +264,11 @@ class SorlModelWrapper(PreTrainedModel, GenerationMixin):
         nl_since_abs = torch.zeros(generated_ids.size(0), dtype=torch.long, device=generated_ids.device)
         # For cot_only_abs: track whether the answer delimiter has been emitted per sequence.
         past_answer = torch.zeros(generated_ids.size(0), dtype=torch.bool, device=generated_ids.device)
+        # For abs_prefix_max: count ABS tokens generated in the response so far.
+        n_response_abs = torch.zeros(generated_ids.size(0), dtype=torch.long, device=generated_ids.device)
 
         use_response_counter = (response_only_abs or cot_only_abs) and K is not None
+        use_abs_prefix = abs_prefix_max is not None
 
         for _ in range(max_new_tokens):
             sorl_attention_mask = self._create_sorl_attention_mask(
@@ -277,7 +281,14 @@ class SorlModelWrapper(PreTrainedModel, GenerationMixin):
             )
             next_token_logits = outputs.logits[:, -1, :]
 
-            if not free_form:
+            if use_abs_prefix:
+                # Phase 1: force ABS token until abs_prefix_max abs tokens generated.
+                # Phase 2: free-form NL after that (mask out placeholder only).
+                in_prefix = n_response_abs < abs_prefix_max
+                next_token_level = in_prefix.long()  # 1=ABS, 0=NL
+                allowed_mask = masks[next_token_level]
+                next_token_logits = next_token_logits.masked_fill(~allowed_mask, -float("inf"))
+            elif not free_form:
                 # Periodic: force abstract token every K trajectory tokens
                 if K is None:
                     next_token_level = torch.zeros(generated_ids.size(0), dtype=torch.long, device=generated_ids.device)
@@ -311,6 +322,9 @@ class SorlModelWrapper(PreTrainedModel, GenerationMixin):
                 next_token_level = (next_token_id.squeeze(-1) > self.vocab_sizes[0].item()).long()
 
             # Update counters
+            if use_abs_prefix:
+                is_abs = (next_token_level > 0)
+                n_response_abs = n_response_abs + is_abs.long()
             if use_response_counter:
                 is_abs = (next_token_level > 0)
                 nl_since_abs = torch.where(is_abs, torch.zeros_like(nl_since_abs), nl_since_abs + 1)

@@ -11,7 +11,8 @@ from transformers.trainer_utils import EvalPrediction
 from sorl.info import hollow_sinkhorn_transform, get_zipf_prior
 
 # ----- infer insertion mask -----
-def infer_insert_mask(data, K, attention_mask, prompt_len=None, answer_token_id=None):
+def infer_insert_mask(data, K, attention_mask, prompt_len=None, answer_token_id=None,
+                      abs_prefix_max=None):
     batch_size, seq_len = data.shape
     positions = torch.arange(seq_len, device=data.device).unsqueeze(0).expand(batch_size, -1)
     if prompt_len is not None:
@@ -30,6 +31,12 @@ def infer_insert_mask(data, K, attention_mask, prompt_len=None, answer_token_id=
                                 torch.full((batch_size,), seq_len, device=data.device, dtype=torch.long))
         before_ans   = positions < ans_pos.unsqueeze(1)  # (B, L)
         insert_mask  = insert_mask & before_ans
+    if abs_prefix_max is not None:
+        # Limit total ABS insertions per sequence to abs_prefix_max.
+        for b in range(batch_size):
+            true_pos = insert_mask[b].nonzero(as_tuple=True)[0]
+            if len(true_pos) > abs_prefix_max:
+                insert_mask[b, true_pos[abs_prefix_max:]] = False
     return insert_mask
 
 # ----- expand prompt len ----- 
@@ -257,6 +264,7 @@ def sorl_search(
     response_only_abs: bool = False,
     cot_only_abs: bool = False,
     answer_token_id: int = 820,
+    abs_prefix_max: Optional[int] = None,
 ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """
     Perform SoRL search: generate rollouts and select best sequences.
@@ -266,7 +274,8 @@ def sorl_search(
     use_prompt_len   = prompt_len if (response_only_abs or cot_only_abs) else None
     use_answer_tok   = answer_token_id if cot_only_abs else None
     insert_mask = infer_insert_mask(input_ids, K, attention_mask,
-                                    prompt_len=use_prompt_len, answer_token_id=use_answer_tok)
+                                    prompt_len=use_prompt_len, answer_token_id=use_answer_tok,
+                                    abs_prefix_max=abs_prefix_max)
     expanded_prompt_len = expand_prompt_len(prompt_len, insert_mask)
     expanded_data, expanded_mask = insert_tokens_with_padding(input_ids, attention_mask, insert_mask, model.vocab_sizes[0], pad_token_id)
 
@@ -315,6 +324,7 @@ def sorl_search_ar(
     response_only_abs: bool = False,
     cot_only_abs: bool = False,
     answer_token_id: int = 820,
+    abs_prefix_max: Optional[int] = None,
 ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """
     AR-based SoRL search: generate abstract tokens left-to-right with causal conditioning.
@@ -327,7 +337,8 @@ def sorl_search_ar(
     use_prompt_len = prompt_len if (response_only_abs or cot_only_abs) else None
     use_answer_tok = answer_token_id if cot_only_abs else None
     insert_mask = infer_insert_mask(input_ids, K, attention_mask,
-                                    prompt_len=use_prompt_len, answer_token_id=use_answer_tok)
+                                    prompt_len=use_prompt_len, answer_token_id=use_answer_tok,
+                                    abs_prefix_max=abs_prefix_max)
     expanded_prompt_len = expand_prompt_len(prompt_len, insert_mask)
     expanded_data, expanded_mask = insert_tokens_with_padding(
         input_ids, attention_mask, insert_mask, model.vocab_sizes[0], pad_token_id

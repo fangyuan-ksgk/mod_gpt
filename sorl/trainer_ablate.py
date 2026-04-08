@@ -67,6 +67,8 @@ class SoRLConfig:
     ar_search: bool = False  # Use AR generation instead of parallel recursion for abstract tokens
     response_only_abs: bool = False  # Only insert abstract tokens in the response (not query/prompt)
     cot_only_abs: bool = False       # Insert abstract tokens only in CoT (response excl. answer region)
+    abs_prefix_max: Optional[int] = None  # Cap CoT abs prefix to this many tokens (Option 2)
+    free_form_eval: bool = False     # Eval with free_form=True (no forced ABS positions, Option 1)
 
     # Loss weights
     alpha_info_gain: float = 10.0
@@ -448,6 +450,7 @@ class SoRLTrainer:
                     temperature=cfg.temperature,
                     response_only_abs=cfg.response_only_abs,
                     cot_only_abs=cfg.cot_only_abs,
+                    abs_prefix_max=cfg.abs_prefix_max,
                 )
             else:
                 best_data, best_ppt, best_ppt_adv, expanded_attn_mask, expanded_prompt_len = sorl_search(
@@ -459,6 +462,7 @@ class SoRLTrainer:
                     temperature=cfg.temperature,
                     response_only_abs=cfg.response_only_abs,
                     cot_only_abs=cfg.cot_only_abs,
+                    abs_prefix_max=cfg.abs_prefix_max,
                 )
 
         info_gain_loss, abs_loss, zipf_bigram_loss = self.loss_fn(
@@ -549,6 +553,8 @@ class SoRLTrainer:
                     self.device, cfg.eval_samples, eval_K=eval_K,
                     response_only_abs=cfg.response_only_abs,
                     cot_only_abs=cfg.cot_only_abs,
+                    abs_prefix_max=cfg.abs_prefix_max,
+                    free_form=cfg.free_form_eval,
                     memory_span_abs=span,
                 )
                 span_results[span] = r
@@ -567,6 +573,8 @@ class SoRLTrainer:
             self.device, cfg.eval_samples, eval_K=eval_K,
             response_only_abs=cfg.response_only_abs,
             cot_only_abs=cfg.cot_only_abs,
+            abs_prefix_max=cfg.abs_prefix_max,
+            free_form=cfg.free_form_eval,
             memory_span_abs=cfg.memory_span_abs,
         )
         self.raw_model.train()
@@ -896,6 +904,7 @@ class SoRLTrainerv2(SoRLTrainer):
                     temperature=cfg.temperature,
                     response_only_abs=cfg.response_only_abs,
                     cot_only_abs=cfg.cot_only_abs,
+                    abs_prefix_max=cfg.abs_prefix_max,
                 )
             else:
                 best_data, best_ppt, best_ppt_adv, expanded_attn_mask, expanded_prompt_len = sorl_search(
@@ -907,6 +916,7 @@ class SoRLTrainerv2(SoRLTrainer):
                     temperature=cfg.temperature,
                     response_only_abs=cfg.response_only_abs,
                     cot_only_abs=cfg.cot_only_abs,
+                    abs_prefix_max=cfg.abs_prefix_max,
                 )
 
         # SoRLLoss_v2: returns (traj_loss, abs_loss, zipf_kl) — no base_traj_loss arg
@@ -1208,6 +1218,7 @@ class SoRLTrainerv3(SoRLTrainer):
                 temperature=cfg.temperature,
                 response_only_abs=cfg.response_only_abs,
                 cot_only_abs=cfg.cot_only_abs,
+                abs_prefix_max=cfg.abs_prefix_max,
             )
 
         # ---- Randomization 2: Strip suffix abstractions ----
@@ -1620,6 +1631,7 @@ class SoRLTrainerv4(SoRLTrainerv3):
                         temperature=cfg.temperature,
                         response_only_abs=cfg.response_only_abs,
                         cot_only_abs=cfg.cot_only_abs,
+                        abs_prefix_max=cfg.abs_prefix_max,
                     )
 
                 # ---- Inner loop: n_inner steps on the same searched sequence ----

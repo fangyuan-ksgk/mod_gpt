@@ -135,6 +135,10 @@ def parse_args():
                    help="TA-style M_SET: comma-separated NL-token counts, e.g. '0,16,32,64,128'")
     p.add_argument("--cot_only_abs", action="store_true",
                    help="Insert abstract tokens only in CoT (response excl. answer region after ####)")
+    p.add_argument("--abs_prefix_max", type=int, default=None,
+                   help="Cap CoT abs prefix to N tokens; eval forces exactly N ABS then free NL (Option 2)")
+    p.add_argument("--free_form_eval", action="store_true",
+                   help="Evaluate with free_form=True: no forced ABS positions, model generates freely (Option 1)")
     p.add_argument("--random_mem_span", type=str, default=None,
                    help="memory_span_abs range as 'lo,hi', e.g. '64,1792'")
 
@@ -243,7 +247,8 @@ def compute_accuracy_fn_factory(tokenizer, max_new_tokens, num_log_samples, log_
     """Returns a compute_accuracy(model, tokenizer, dataset, device, num_samples, eval_K=None) callable."""
     pad_id = tokenizer.pad_token_id if tokenizer.pad_token_id is not None else 0
 
-    def _eval_with_K(model, dataset, device, n, K_value, response_only_abs=False, cot_only_abs=False, memory_span_abs=None):
+    def _eval_with_K(model, dataset, device, n, K_value, response_only_abs=False, cot_only_abs=False,
+                     abs_prefix_max=None, free_form=False, memory_span_abs=None):
         """Run batched generation with a given K and return (correct, total, samples, mono_stats).
 
         mono_stats is a dict of inner-monologue statistics when K_value is not None, else None.
@@ -289,9 +294,10 @@ def compute_accuracy_fn_factory(tokenizer, max_new_tokens, num_log_samples, log_
                 input_ids=input_ids,
                 attention_mask=attn_mask,
                 max_new_tokens=max_new_tokens,
-                temperature=0.0, K=K_value, free_form=False,
+                temperature=0.0, K=K_value, free_form=free_form,
                 response_only_abs=response_only_abs,
                 cot_only_abs=cot_only_abs,
+                abs_prefix_max=abs_prefix_max,
             )
             if memory_span_abs is not None:
                 gen_kwargs["memory_span_abs"] = memory_span_abs
@@ -401,7 +407,8 @@ def compute_accuracy_fn_factory(tokenizer, max_new_tokens, num_log_samples, log_
         return correct, total, samples, mono_stats
 
     @torch.no_grad()
-    def compute_accuracy_fn(model, _tokenizer, dataset, device, num_samples, eval_K=None, response_only_abs=False, cot_only_abs=False, memory_span_abs=None):
+    def compute_accuracy_fn(model, _tokenizer, dataset, device, num_samples, eval_K=None, response_only_abs=False, cot_only_abs=False,
+                             abs_prefix_max=None, free_form=False, memory_span_abs=None):
         model.eval()
         extract_fn = getattr(dataset, "extract_answer", None)
         if extract_fn is None:
@@ -409,7 +416,8 @@ def compute_accuracy_fn_factory(tokenizer, max_new_tokens, num_log_samples, log_
 
         n = min(num_samples, len(dataset))
 
-        c, t, samps, mono_stats = _eval_with_K(model, dataset, device, n, K_value=eval_K, response_only_abs=response_only_abs, cot_only_abs=cot_only_abs, memory_span_abs=memory_span_abs)
+        c, t, samps, mono_stats = _eval_with_K(model, dataset, device, n, K_value=eval_K, response_only_abs=response_only_abs, cot_only_abs=cot_only_abs,
+                                                abs_prefix_max=abs_prefix_max, free_form=free_form, memory_span_abs=memory_span_abs)
         acc = c / max(t, 1)
         result = {"accuracy": acc, "correct": c, "total": t, "K": eval_K}
 
@@ -547,6 +555,8 @@ def main():
         n_inner=args.n_inner,
         response_only_abs=args.response_only_abs,
         cot_only_abs=args.cot_only_abs,
+        abs_prefix_max=args.abs_prefix_max,
+        free_form_eval=args.free_form_eval,
         use_ste=not args.no_ste,
         random_K=tuple(int(x) for x in args.random_K.split(',')) if args.random_K else None,
         strip_suffix=tuple(float(x) for x in args.strip_suffix.split(',')) if args.strip_suffix else None,
