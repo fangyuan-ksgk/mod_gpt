@@ -618,7 +618,7 @@ def main():
 
             # Forward
             if args.mode == "v6":
-                outputs = wrapper(input_ids, attn, labels, prompt_lens=prompt_len)
+                outputs = wrapper(input_ids, attn, labels)
             elif args.mode == "vq":
                 outputs = wrapper(input_ids, attn, labels,
                                   chunk_codes_list=batch['chunk_codes_list'],

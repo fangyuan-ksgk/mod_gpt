@@ -168,10 +168,11 @@ class StackedAbstractionWrapperV6(nn.Module):
     determine abstract codes at runtime.  No VQ-VAE needed.
 
     At selected transformer layer(s):
-      1. Chunk response hidden states into L-token windows.
+      1. Chunk ALL hidden states into L-token windows.
       2. code = argmax(h_first[-C_SIZE:])   (diagonal routing, detached)
       3. hidden += steering_emb[code] * scale
 
+    Steering is unconditional — every representable position is steered.
     The routing is non-differentiable (fixed diagonal + argmax).
     Only the steering embeddings and (optionally) model params are learned.
     """
@@ -193,7 +194,6 @@ class StackedAbstractionWrapperV6(nn.Module):
             inject_layers = [n_layers // 2]
         self.inject_layers = inject_layers
 
-        self._prompt_lens = None    # (B,) int tensor — positions < pl not steered
         self._hooks = []
         self._register_hooks()
 
@@ -222,21 +222,16 @@ class StackedAbstractionWrapperV6(nn.Module):
         with torch.no_grad():
             pos_codes = hidden_states[..., -self.C_SIZE:].argmax(dim=-1)   # (B, S)
 
-        # Build chunk-level code map: first position determines chunk code
-        # When _prompt_lens is None (generation), steer ALL positions (start=0)
-        chunk_codes = torch.full((B, S), -1, dtype=torch.long,
-                                 device=hidden_states.device)
-        for b in range(B):
-            start = 0 if self._prompt_lens is None else int(self._prompt_lens[b])
-            n_resp = S - start
-            n_chunks = n_resp // self.L
+        # Chunk-level codes: first position of each L-window determines code
+        n_chunks = S // self.L
+        if n_chunks > 0:
+            chunk_codes = torch.full((B, S), -1, dtype=torch.long,
+                                     device=hidden_states.device)
             for c in range(n_chunks):
-                ps = start + c * self.L
-                pe = ps + self.L
-                chunk_codes[b, ps:pe] = pos_codes[b, ps]
+                ps = c * self.L
+                chunk_codes[:, ps:ps + self.L] = pos_codes[:, ps:ps + 1]
 
-        mask = chunk_codes >= 0
-        if mask.any():
+            mask = chunk_codes >= 0
             safe_codes = chunk_codes.clamp(min=0)
             steer_vecs = self.steering_emb(safe_codes)          # (B, S, D)
             steer_vecs = steer_vecs * mask.unsqueeze(-1).float() * self.scale
@@ -246,21 +241,14 @@ class StackedAbstractionWrapperV6(nn.Module):
 
     # ---- forward / generate ----
 
-    def forward(self, input_ids, attention_mask=None, labels=None,
-                prompt_lens=None, **kwargs):
-        self._prompt_lens = prompt_lens
-        outputs = self.model(
+    def forward(self, input_ids, attention_mask=None, labels=None, **kwargs):
+        return self.model(
             input_ids=input_ids, attention_mask=attention_mask,
             labels=labels, **kwargs
         )
-        self._prompt_lens = None
-        return outputs
 
     def generate(self, **kwargs):
-        # _prompt_lens=None → hook steers ALL positions (start=0)
-        self._prompt_lens = None
-        out = self.model.generate(**kwargs)
-        return out
+        return self.model.generate(**kwargs)
 
     # ---- save / load ----
 
