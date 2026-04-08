@@ -91,3 +91,11 @@ class SoRLTrainerv6(SoRLTrainerv3):
             "zipf_bigram_loss": z, "ortho_loss": z, "anchor_loss": z, "jacobi_loss": z,
             "K_this": cfg.K, "mem_abs": mem_span,
         }
+
+
+# v7. frozen abstract head, concatenate
+
+class SoRlTrainerv7(SoRlTrainerv3): 
+    # abstract projection is trainable, but, the search process uses a frozen
+    # abstract projection matrix with the diagonal matrix trick
+    # key is to bypass "searching"

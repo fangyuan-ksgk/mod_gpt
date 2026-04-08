@@ -30,7 +30,7 @@ MAX_LENGTH=512
 LR=1e-5
 WARMUP_STEPS=50
 BATCH_SIZE=2
-NUM_EPOCHS=3
+NUM_EPOCHS=1
 
 LOG_EVERY=10
 EVAL_EVERY=99999
@@ -98,56 +98,39 @@ run_bg() {
     "$@" &
 }
 
-# ============================================================================
-# Batch 1 — V6 + random_mem_span (16,1024): KV-cache dropping robustness
-# Baseline: fixed memory_span_abs=1792 (0405 result)
-# ============================================================================
-# echo ""
-# echo "============================================================"
-# echo "Batch 1: V6 random_mem_span [16,1024] — 4 combos (${TIMESTAMP})"
-# echo "============================================================"
+# ===========================================================================
+# Batch 1 - V1 (no memory compression mask) | gsm8k | 3 epochs
+# - alpha_abs = 1.0: trainable abstract projection (unlike v6 frozen diagonal)
+# - eval mode auto-derived: no abs_prefix_max → free-form; abs_prefix_max → constrained prefix
+# (a). cot_only_abs=True, variable prefix → free-form eval (auto)
+# (b). cot_only_abs=True, abs_prefix_max=8 → constrained 8-ABS prefix eval (auto)
+# (c). cot_only_abs=True, compress_m_set → drop NL prefix, free-form eval (auto)
+# ===========================================================================
+wait
+ 
+# (a) cot only, variable prefix, free-form eval (auto since no abs_prefix_max)
+run_bg "v1_cot_ff" $M06 $DS_GSM \
+  --K 16 --abstract_vocab_size 32 \
+  --cot_only_abs \
+  --alpha_abs 1.0
+ 
+# (b) cot only, fixed 8-ABS prefix → constrained prefix eval (auto)
+run_bg "v1_cot_trunc" $M06 $DS_GSM \
+  --K 16 --abstract_vocab_size 32 \
+  --cot_only_abs --abs_prefix_max 8 \
+  --alpha_abs 1.0
+ 
+wait
+ 
+# (c) cot only, variable prefix + TA-style NL drop, free-form eval (auto)
+run_bg "v1_cot_drop" $M06 $DS_GSM \
+  --K 16 --abstract_vocab_size 32 \
+  --cot_only_abs \
+  --alpha_abs 1.0 \
+  --compress_m_set 0,16,32,64
 
-# run_bg "v6_rspan_gsm_06"  $M06 $DS_GSM $R_V6_RSPAN
-# run_bg "v6_rspan_gsm_17"  $M17 $DS_GSM $R_V6_RSPAN
-# run_bg "v6_rspan_sci_06"  $M06 $DS_SCI $R_V6_RSPAN
-# run_bg "v6_rspan_sci_17"  $M17 $DS_SCI $R_V6_RSPAN
 
-# echo "  4 experiments launched. Waiting..."
-# wait
 
-# # ============================================================================
-# # Batch 2 — V6 temperature ablation: 0.3 / 0.7 / 1.0 / 2.0 on 0.6B+gsm8k
-# # Baseline: default temperature=1.0 (0405 result)
-# # ============================================================================
-# echo ""
-# echo "============================================================"
-# echo "Batch 2: V6 temperature ablation — 0.6B gsm8k (${TIMESTAMP})"
-# echo "============================================================"
-
-# run_bg "v6_temp03"  $M06 $DS_GSM $R_V6  --temperature 0.3
-# run_bg "v6_temp07"  $M06 $DS_GSM $R_V6  --temperature 0.7
-# run_bg "v6_temp10"  $M06 $DS_GSM $R_V6  --temperature 1.0
-# run_bg "v6_temp20"  $M06 $DS_GSM $R_V6  --temperature 2.0
-
-# echo "  4 experiments launched. Waiting..."
-# wait
-
-# # ============================================================================
-# # Batch 3 — V6 max_iterations ablation: iter=4 vs default iter=2
-# # Baseline: default max_iterations=2 (0405 result)
-# # ============================================================================
-# echo ""
-# echo "============================================================"
-# echo "Batch 3: V6 max_iterations=4 — 4 combos (${TIMESTAMP})"
-# echo "============================================================"
-
-# run_bg "v6_iter4_gsm_06"  $M06 $DS_GSM $R_V6  --max_iterations 4
-# run_bg "v6_iter4_gsm_17"  $M17 $DS_GSM $R_V6  --max_iterations 4
-# run_bg "v6_iter4_sci_06"  $M06 $DS_SCI $R_V6  --max_iterations 4
-# run_bg "v6_iter4_sci_17"  $M17 $DS_SCI $R_V6  --max_iterations 4
-
-# echo "  4 experiments launched. Waiting..."
-# wait
 
 # ---- Baseline runners (separate scripts) ----
 run_pause_bg() {

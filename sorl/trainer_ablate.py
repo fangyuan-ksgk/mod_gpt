@@ -465,6 +465,12 @@ class SoRLTrainer:
                     abs_prefix_max=cfg.abs_prefix_max,
                 )
 
+        # TA-style M_SET: drop m NL tokens from CoT prefix (keeps abs tokens)
+        if cfg.compress_m_set:
+            best_data, expanded_attn_mask, expanded_prompt_len = _drop_nl_prefix_m_set(
+                best_data, expanded_attn_mask, expanded_prompt_len,
+                base_vocab, self.pad_token_id, m_set=cfg.compress_m_set)
+
         info_gain_loss, abs_loss, zipf_bigram_loss = self.loss_fn(
             best_data, model, base_traj_loss.detach(),
             expanded_attn_mask, cfg.memory_span_abs, cfg.memory_span_traj,
@@ -547,6 +553,8 @@ class SoRLTrainer:
                 int(round(lo + (hi - lo) * i / (n_spans - 1))) for i in range(n_spans)
             ))
             span_results = {}
+            # Auto free_form: cot_only_abs with no abs_prefix_max → free-form
+            use_free_form = cfg.free_form_eval or (cfg.cot_only_abs and cfg.abs_prefix_max is None)
             for span in spans:
                 r = self.compute_accuracy(
                     self.raw_model, self.tokenizer, self.val_dataset,
@@ -554,7 +562,7 @@ class SoRLTrainer:
                     response_only_abs=cfg.response_only_abs,
                     cot_only_abs=cfg.cot_only_abs,
                     abs_prefix_max=cfg.abs_prefix_max,
-                    free_form=cfg.free_form_eval,
+                    free_form=use_free_form,
                     memory_span_abs=span,
                 )
                 span_results[span] = r
@@ -568,13 +576,15 @@ class SoRLTrainer:
                 "span_results": span_results,
             }
 
+        # Auto free_form: cot_only_abs with no abs_prefix_max → free-form
+        use_free_form = cfg.free_form_eval or (cfg.cot_only_abs and cfg.abs_prefix_max is None)
         result = self.compute_accuracy(
             self.raw_model, self.tokenizer, self.val_dataset,
             self.device, cfg.eval_samples, eval_K=eval_K,
             response_only_abs=cfg.response_only_abs,
             cot_only_abs=cfg.cot_only_abs,
             abs_prefix_max=cfg.abs_prefix_max,
-            free_form=cfg.free_form_eval,
+            free_form=use_free_form,
             memory_span_abs=cfg.memory_span_abs,
         )
         self.raw_model.train()
