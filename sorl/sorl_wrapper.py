@@ -67,6 +67,7 @@ class SorlModelWrapper(PreTrainedModel, GenerationMixin):
         # Use AutoModelForCausalLM to load the correct model class
         self.model = AutoModelForCausalLM.from_config(config, attn_implementation="eager")
         self.full_vocab_size_list = None
+        self.use_memory_compression = True   # set False to use plain causal+doc+window mask
     
     @classmethod
     def from_pretrained(cls, model_name_or_path: str, abstract_vocab_size_list: List[int], **kwargs) -> "SorlModelWrapper":
@@ -166,13 +167,15 @@ class SorlModelWrapper(PreTrainedModel, GenerationMixin):
         traj_memory_span = (q_pos - kv_pos) <= memory_span_traj
         abs_memory_span = (q_pos - kv_pos) <= memory_span_abs
 
-        memory_compression_mask = (
-            to_abstract |
-            (from_abstract & abs_memory_span) |
-            (~from_abstract & traj_memory_span & ~skip_abs)
-        )
-
-        allowed = causal_mask & document_mask & window_mask & memory_compression_mask
+        if self.use_memory_compression:
+            memory_compression_mask = (
+                to_abstract |
+                (from_abstract & abs_memory_span) |
+                (~from_abstract & traj_memory_span & ~skip_abs)
+            )
+            allowed = causal_mask & document_mask & window_mask & memory_compression_mask
+        else:
+            allowed = causal_mask & document_mask & window_mask
 
         if attention_mask is not None:
             if attention_mask.dim() == 4:

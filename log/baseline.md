@@ -9,8 +9,23 @@ Pause token seems to work better than TokenAssorted (later one seems to require 
     │                  │         │           │          │          │                                                                                                                                               
     │ exp3_ta_gsm      │ ta      │ gsm8k     │   28.5%  │ 370/1300 │                                                                                                                                               
     │ exp4_ta_sci      │ ta      │ scienceqa │   17.3%  │ 225/1300 │                                                                                                                                               
-    └──────────────────┴─────────┴───────────┴──────────┴──────────┘                                                                                                                                               
-                                                                                                                                                                                                                   
+    └──────────────────┴─────────┴───────────┴──────────┴──────────┘                                                                                       
+                                                    
+
+ ● Qwen3-4B | sweep_20260407_1025 | 1300-sample eval | 1 epoch, lr=1e-5, bs=8                                                                                        
+    ┌──────────────────┬─────────┬───────────┬──────────┬──────────┐                                                                                                
+    │ Exp              │ Method  │ Dataset   │ Acc      │  Correct │                                                                                                
+    ├──────────────────┼─────────┼───────────┼──────────┼──────────┤                                                                                                
+    │ exp1_pause_gsm   │ pause   │ gsm8k     │   78.6%  │1022/1300 │                                                                                                
+    │ exp2_pause_sci   │ pause   │ scienceqa │   63.8%  │ 829/1300 │                                                                                                
+    │                  │         │           │          │          │                                                                                                
+    │ exp3_ta_gsm      │ ta      │ gsm8k     │   60.9%  │ 792/1300 │                                                                                                
+    │ exp4_ta_sci      │ ta      │ scienceqa │   68.0%  │ 884/1300 │                                                                                                
+    └──────────────────┴─────────┴───────────┴──────────┴──────────┘                                                                                                
+  TA replacement schedule is M_SET=[0,16,32,64,128,160,196] (effectively                     
+  [0,16,32,64,128,160,192] after the floor). All other args match. 
+  
+                                                                                                                  
   Setup: All four runs are Qwen3-1.7B, full FT, 1 epoch, lr=1e-5, bs=2×grad_accum=4, max_length=512, eval on 1300 samples. K=8 for both methods.                                                                   
                                                                                                                                                                                                                  
   - pause (<pause> token, k_pause=8): trains normally — final losses ~0.2–0.5, accuracy lands near or slightly below the GSM8K baseline (62.7% from CLAUDE.md).                                                    

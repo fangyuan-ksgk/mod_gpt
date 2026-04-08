@@ -8,7 +8,8 @@ DEFAULT_L      = 16     # chunk size (compression rate)
 DEFAULT_C_SIZE = 1024   # codebook size
 DEFAULT_D_BOT  = 256    # bottleneck dim
 DEFAULT_BETA   = 0.25   # commitment loss weight
-DEFAULT_M_SET  = [0, 72, 128, 160, 192, 224, 256]  # replacement schedule
+# DEFAULT_M_SET  = [0, 72, 128, 160, 192, 224, 256]  # replacement schedule -> This doesn't work
+DEFAULT_M_SET = [0, 16, 32, 64, 128] # -> works better in our case, ScienceQA specifically
 
 
 # ---------------------------------------------------------------------------

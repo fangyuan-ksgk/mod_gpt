@@ -137,6 +137,7 @@ class SoRLConfig:
     random_K: Optional[tuple] = None          # e.g. (2, 4, 6, 8) — K choices per batch
     strip_suffix: Optional[tuple] = None      # e.g. (0.1, 1.0) — keep_frac range
     compress_prefix: Optional[tuple] = None   # e.g. (0.0, 0.8) — compress_frac range
+    compress_m_set: Optional[tuple] = None    # e.g. (0, 16, 32, 64, 128) — TA-style M_SET schedule
     random_mem_span: Optional[tuple] = None   # e.g. (64, 1792) — memory_span_abs range (int uniform)
 
 
@@ -217,6 +218,61 @@ def _drop_nl_prefix(best_data, exp_attn, exp_pl, base_vocab, pad_token_id, compr
         suffix = response[cutoff:]
         new_seqs.append(torch.cat([prompt, prefix_abs, suffix]))
         new_pls.append(pl)
+    max_len = max(s.shape[0] for s in new_seqs)
+    new_data = torch.full((B, max_len), pad_token_id, device=best_data.device, dtype=best_data.dtype)
+    new_attn = torch.zeros((B, max_len), device=best_data.device, dtype=exp_attn.dtype)
+    for b, s in enumerate(new_seqs):
+        new_data[b, :s.shape[0]] = s
+        new_attn[b, :s.shape[0]] = 1
+    new_pl = torch.tensor(new_pls, device=best_data.device)
+    return new_data, new_attn, new_pl
+
+
+def _drop_nl_prefix_m_set(best_data, exp_attn, exp_pl, base_vocab, pad_token_id, m_set,
+                           answer_token_id=820):
+    """TA-style M_SET schedule: drop exactly m NL tokens from the CoT prefix only.
+
+    m is sampled from m_set (e.g. (0,16,32,64,128)), capped at the number of
+    NL tokens in the CoT (response up to the answer delimiter).
+    Abstract tokens in the compressed CoT prefix are kept; the answer region
+    (from answer_token_id onwards) is never touched.
+
+    Result: [Q] [abs_1..abs_{m//K}] [CoT_NL_{m+1}..] [answer_delimiter answer]
+    """
+    B, L = best_data.shape
+    new_seqs, new_pls = [], []
+    for b in range(B):
+        pl = exp_pl[b].item() if isinstance(exp_pl, torch.Tensor) else exp_pl[b]
+        valid_len = int(exp_attn[b].sum().item())
+        seq = best_data[b, :valid_len]
+        prompt = seq[:pl]
+        response = seq[pl:]
+
+        # Split response into CoT and answer (protect answer from compression)
+        ans_match = (response == answer_token_id).nonzero(as_tuple=True)[0]
+        if len(ans_match) > 0:
+            ans_idx = ans_match[0].item()
+            cot    = response[:ans_idx]
+            answer = response[ans_idx:]
+        else:
+            cot    = response
+            answer = response[:0]  # empty — no answer delimiter found
+
+        nl_positions = (cot < base_vocab).nonzero(as_tuple=True)[0]  # NL indices in CoT only
+        n_nl = len(nl_positions)
+        m = _random.choice(m_set)
+        m = min(m, n_nl)
+
+        if m == 0:
+            new_seqs.append(seq)
+        else:
+            # cutoff: position in `cot` just after the m-th NL token
+            cutoff = nl_positions[m - 1].item() + 1
+            prefix_abs = cot[:cutoff][cot[:cutoff] >= base_vocab]  # abs only from CoT prefix
+            cot_suffix = cot[cutoff:]                               # remaining CoT (NL + abs)
+            new_seqs.append(torch.cat([prompt, prefix_abs, cot_suffix, answer]))
+        new_pls.append(pl)
+
     max_len = max(s.shape[0] for s in new_seqs)
     new_data = torch.full((B, max_len), pad_token_id, device=best_data.device, dtype=best_data.dtype)
     new_attn = torch.zeros((B, max_len), device=best_data.device, dtype=exp_attn.dtype)
@@ -1159,6 +1215,12 @@ class SoRLTrainerv3(SoRLTrainer):
             best_data, expanded_attn_mask, expanded_prompt_len = _drop_nl_prefix(
                 best_data, expanded_attn_mask, expanded_prompt_len,
                 base_vocab, self.pad_token_id, compress_frac=frac)
+
+        # ---- Randomization 3b: TA-style M_SET compress prefix ----
+        if cfg.compress_m_set:
+            best_data, expanded_attn_mask, expanded_prompt_len = _drop_nl_prefix_m_set(
+                best_data, expanded_attn_mask, expanded_prompt_len,
+                base_vocab, self.pad_token_id, m_set=cfg.compress_m_set)
 
         # 3. Corrupt abstract tokens → corrupted_traj_loss (no grad)
         corrupted_data = corrupt_abstract_tokens(

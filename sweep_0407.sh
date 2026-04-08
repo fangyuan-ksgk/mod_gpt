@@ -51,8 +51,14 @@ EXP_IDX=0
 # Model + dataset shorthands
 M06="Qwen/Qwen3-0.6B"
 M17="Qwen/Qwen3-1.7B"
+M4="Qwen/Qwen3-4B"
+ML1="meta-llama/Llama-3.2-1B"
+ML3="meta-llama/Llama-3.2-3B"
 DS_GSM="gsm8k"
 DS_SCI="scienceqa"
+DS_ARC="arc"
+DS_MMLU="mmlu"
+DS_CSQA="commonsenseqa"
 
 # ---- Parallel scheduling: 4 x H100 — 1 run/GPU ----
 # Usage: run_bg <tag> <model> <dataset> [sorl flags...]
@@ -96,18 +102,18 @@ run_bg() {
 # Batch 1 — V6 + random_mem_span (16,1024): KV-cache dropping robustness
 # Baseline: fixed memory_span_abs=1792 (0405 result)
 # ============================================================================
-echo ""
-echo "============================================================"
-echo "Batch 1: V6 random_mem_span [16,1024] — 4 combos (${TIMESTAMP})"
-echo "============================================================"
+# echo ""
+# echo "============================================================"
+# echo "Batch 1: V6 random_mem_span [16,1024] — 4 combos (${TIMESTAMP})"
+# echo "============================================================"
 
-run_bg "v6_rspan_gsm_06"  $M06 $DS_GSM $R_V6_RSPAN
-run_bg "v6_rspan_gsm_17"  $M17 $DS_GSM $R_V6_RSPAN
-run_bg "v6_rspan_sci_06"  $M06 $DS_SCI $R_V6_RSPAN
-run_bg "v6_rspan_sci_17"  $M17 $DS_SCI $R_V6_RSPAN
+# run_bg "v6_rspan_gsm_06"  $M06 $DS_GSM $R_V6_RSPAN
+# run_bg "v6_rspan_gsm_17"  $M17 $DS_GSM $R_V6_RSPAN
+# run_bg "v6_rspan_sci_06"  $M06 $DS_SCI $R_V6_RSPAN
+# run_bg "v6_rspan_sci_17"  $M17 $DS_SCI $R_V6_RSPAN
 
-echo "  4 experiments launched. Waiting..."
-wait
+# echo "  4 experiments launched. Waiting..."
+# wait
 
 # # ============================================================================
 # # Batch 2 — V6 temperature ablation: 0.3 / 0.7 / 1.0 / 2.0 on 0.6B+gsm8k
@@ -217,21 +223,28 @@ run_ta_bg() {
 }
 
 # ============================================================================
-# Batch 4 — Baselines: pause token + token assorted on 1.7B, 1 epoch
+# Batch 4 — Baselines: pause token + token assorted
+#           4 models × 5 datasets × 2 baselines = 40 experiments, 1 epoch each
+#           Each (model, dataset) pair launches pause + ta in parallel (1 GPU each),
+#           then waits before the next pair.
 # ============================================================================
-# echo ""
-# echo "============================================================"
-# echo "Batch 2: Baselines (pause + TA) — 1.7B, 1 epoch (${TIMESTAMP})"
-# echo "============================================================"
+echo ""
+echo "============================================================"
+echo "Batch 4: Baselines (pause + TA) — 4 models × 5 datasets (${TIMESTAMP})"
+echo "============================================================"
 
-# run_pause_bg "pause_gsm_17"  $M17 $DS_GSM
-# run_pause_bg "pause_sci_17"  $M17 $DS_SCI
+for mp in "17:$M17" "4b:$M4" "l1:$ML1" "l3:$ML3"; do
+    mtag="${mp%%:*}"; model="${mp#*:}"
+    for dp in "gsm:$DS_GSM" "sci:$DS_SCI" "arc:$DS_ARC" "mml:$DS_MMLU" "csqa:$DS_CSQA"; do
+        dtag="${dp%%:*}"; ds="${dp#*:}"
+        run_pause_bg "pause_${dtag}_${mtag}" "$model" "$ds"
+        run_ta_bg    "ta_${dtag}_${mtag}"    "$model" "$ds"
+        echo "  Waiting for pause_${dtag}_${mtag} + ta_${dtag}_${mtag}..."
+        wait
+    done
+done
 
-# echo "  2 experiments launched. Waiting..."
-# wait
-
-# run_ta_bg    "ta_gsm_17"     $M17 $DS_GSM
-# run_ta_bg    "ta_sci_17"     $M17 $DS_SCI
+echo "  Batch 4 complete."
 
 
 echo ""
