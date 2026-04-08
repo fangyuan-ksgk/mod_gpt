@@ -519,11 +519,11 @@ class SorlModelWrapper(PreTrainedModel, GenerationMixin):
         )
         logits = outputs.logits
 
-        # Sample new abstract tokens
-        idx = self.extract_and_sample(logits, idx, recursion_mask, temperature)
+        # Sample new abstract tokens (clone to avoid in-place modification of forward input)
+        idx_new = self.extract_and_sample(logits, idx.clone(), recursion_mask, temperature)
 
         # Compute per-token loss
-        labels = idx.clone()
+        labels = idx_new.clone()
         labels[attention_mask == 0] = -100
         if prompt_len is not None:
             seq_idx = torch.arange(labels.size(1), device=labels.device).unsqueeze(0)
@@ -536,7 +536,7 @@ class SorlModelWrapper(PreTrainedModel, GenerationMixin):
             shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1)
         ).view(idx.shape[0], -1)
 
-        return idx.detach(), per_token_loss, logits
+        return idx_new.detach(), per_token_loss, logits
 
     def recursion(self, idx, attention_mask, max_iterations=5, memory_span_abs=1792, memory_span_traj=1792, attn_blocksize=1792, temperature=0.0, prompt_len=None, differentiable=False):
         """Perform recursion on abstract tokens with information bottleneck mask.
