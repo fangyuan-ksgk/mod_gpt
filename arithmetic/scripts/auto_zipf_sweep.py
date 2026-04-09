@@ -136,6 +136,33 @@ def main():
 
     print(f"\nZipf sweep complete! Log: {ZIPF_LOG}")
 
+    # Write final results to arithmetic.md
+    write_results()
+
+
+def write_results():
+    """Fetch full catalog and write results to log/arithmetic.md."""
+    from arithmetic.catalog import ModelCatalog
+
+    print("\nWriting results to log/arithmetic.md...")
+    cat = ModelCatalog()
+    cat.fetch(verbose=False)
+    cat.write_results_md("/workspace/codes/mod_gpt/log/arithmetic.md")
+    cat.save("/workspace/codes/mod_gpt/log/catalog.json")
+    cat.print_table()
+
+    # Also commit results
+    import subprocess
+    subprocess.run(["git", "-C", "/workspace/codes/mod_gpt", "add",
+                    "log/arithmetic.md", "log/catalog.json"], check=False)
+    subprocess.run(["git", "-C", "/workspace/codes/mod_gpt", "commit", "-m",
+                    "auto-update: arithmetic.md with sweep results\n\n"
+                    "Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>"],
+                   check=False)
+    subprocess.run(["git", "-C", "/workspace/codes/mod_gpt", "push", "origin", "HEAD"],
+                   check=False)
+    print("Results committed and pushed.")
+
 
 if __name__ == "__main__":
     main()

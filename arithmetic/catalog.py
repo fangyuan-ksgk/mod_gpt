@@ -32,6 +32,7 @@ class ModelEntry:
     name: str                          # subfolder path on HF (e.g. "non_enriched/add_baseline_100K")
     config: dict = field(default_factory=dict)  # full train_config.json
     enriched: bool = False             # whether trained with enriched data
+    metrics: dict = field(default_factory=dict)  # full metrics.json (includes per-split eval)
 
     @property
     def mode(self) -> str:
@@ -60,6 +61,20 @@ class ModelEntry:
     @property
     def accuracy(self) -> Optional[float]:
         return self.config.get("final_accuracy")
+
+    @property
+    def sft_accuracy(self) -> Optional[float]:
+        return self.config.get("sft_accuracy")
+
+    def split_accuracy(self, eval_key: str = "sft_eval", split: str = None) -> Optional[float]:
+        """Get accuracy for a specific split from metrics. eval_key: 'sft_eval' or 'sorl_eval'."""
+        ev = self.metrics.get(eval_key, {})
+        if not ev:
+            return None
+        if split:
+            s = ev.get("splits", {}).get(split, {})
+            return s.get("full_accuracy") if s else None
+        return ev.get("summary", {}).get("overall_accuracy")
 
     @property
     def arch(self) -> str:
@@ -92,6 +107,8 @@ class ModelCatalog:
         if verbose:
             print(f"Found {len(config_files)} models in {self.repo_id}")
 
+        metrics_files = set(f for f in all_files if f.endswith("metrics.json"))
+
         self.entries = []
         for cf in sorted(config_files):
             subfolder = str(Path(cf).parent)
@@ -102,7 +119,20 @@ class ModelCatalog:
                     local_dir="/tmp/hf_cache/arithmetic-sorl",
                 )
                 config = json.load(open(local))
-                self.entries.append(ModelEntry(name=subfolder, config=config, enriched=enriched))
+                # Also fetch metrics.json if available
+                metrics = {}
+                mf = f"{subfolder}/metrics.json"
+                if mf in metrics_files:
+                    try:
+                        ml = hf_hub_download(
+                            self.repo_id, mf,
+                            local_dir="/tmp/hf_cache/arithmetic-sorl",
+                        )
+                        metrics = json.load(open(ml))
+                    except Exception:
+                        pass
+                self.entries.append(ModelEntry(name=subfolder, config=config,
+                                              enriched=enriched, metrics=metrics))
                 if verbose:
                     print(f"  {subfolder}")
             except Exception as e:
@@ -135,27 +165,48 @@ class ModelCatalog:
                 results.append(entry)
         return results
 
-    def print_table(self, entries: list[ModelEntry] | None = None):
+    def print_table(self, entries: list[ModelEntry] | None = None, hard_splits: bool = True):
         """Print box-drawing table of all (or filtered) models."""
         entries = entries or self.entries
         if not entries:
             print("No models to display.")
             return
 
+        def _fmt_acc(v):
+            return f"{v:.0%}" if v is not None else "?"
+
+        def _split_acc(e, eval_key, split):
+            return _fmt_acc(e.split_accuracy(eval_key, split))
+
         # Column definitions: (header, width, getter)
         cols = [
-            ("Name",     40, lambda e: e.name.removeprefix("non_enriched/")),
-            ("Mode",      5, lambda e: e.mode),
-            ("Trainer",   7, lambda e: e.trainer),
-            ("Ops",       7, lambda e: e.ops),
-            ("Data",      6, lambda e: f"{e.dataset_size // 1000}K" if e.dataset_size else "?"),
-            ("Vocab",     5, lambda e: str(e.abs_vocab)),
-            ("K",         3, lambda e: str(e.K)),
-            ("Arch",     12, lambda e: e.arch),
-            ("Epochs",    6, lambda e: str(e.config.get("num_epochs", "?"))),
-            ("Acc",       5, lambda e: f"{e.accuracy:.0%}" if e.accuracy is not None else "?"),
-            ("Enrich",    6, lambda e: "yes" if e.enriched else "no"),
+            ("Name",     36, lambda e: e.name.removeprefix("non_enriched/")),
+            ("Mode",      4, lambda e: e.mode[:4]),
+            ("Ops",       4, lambda e: e.ops[:4]),
+            ("Data",      5, lambda e: f"{e.dataset_size // 1000}K" if e.dataset_size else "?"),
+            ("V",         3, lambda e: str(e.abs_vocab)),
+            ("K",         2, lambda e: str(e.K)),
+            ("Acc",       5, lambda e: _fmt_acc(e.accuracy)),
+            ("SFT",       5, lambda e: _fmt_acc(e.sft_accuracy)),
         ]
+
+        if hard_splits:
+            # Key hard splits — pick eval based on mode
+            def _hard(split):
+                def getter(e):
+                    ek = "sorl_eval" if e.mode == "sorl" else "sft_eval"
+                    return _split_acc(e, ek, split)
+                return getter
+
+            cols += [
+                ("S5",    4, _hard("add_S5")),
+                ("S6",    4, _hard("add_S6")),
+                ("C6",    4, _hard("add_C6")),
+                ("M5",    4, _hard("sub_M5")),
+                ("B5",    4, _hard("sub_B5")),
+            ]
+
+        cols.append(("Enr", 3, lambda e: "Y" if e.enriched else "N"))
 
         # Build table
         header = "│".join(f" {h:<{w}} " for h, w, _ in cols)
@@ -172,9 +223,72 @@ class ModelCatalog:
         print(f"└{'┴'.join('─' * (w + 2) for _, w, _ in cols)}┘")
         print(f"  {len(entries)} models")
 
+    def write_results_md(self, path: str = "log/arithmetic.md",
+                         entries: list[ModelEntry] | None = None):
+        """Write results to a markdown file with per-split breakdown."""
+        import datetime
+        entries = entries or self.entries
+        if not entries:
+            return
+
+        lines = [
+            "# Arithmetic Experiment Results",
+            "",
+            f"Auto-generated: {datetime.datetime.now(datetime.UTC).strftime('%Y-%m-%d %H:%M UTC')}",
+            f"Models: {len(entries)} from `{self.repo_id}`",
+            "",
+        ]
+
+        # Group by enriched / mode
+        for enriched, enr_label in [(False, "Non-Enriched"), (True, "Enriched")]:
+            group = [e for e in entries if e.enriched == enriched]
+            if not group:
+                continue
+            lines.append(f"## {enr_label}")
+            lines.append("")
+
+            for mode in ["baseline", "sorl"]:
+                subgroup = [e for e in group if e.mode == mode]
+                if not subgroup:
+                    continue
+                lines.append(f"### {mode.upper()}")
+                lines.append("")
+
+                # Table header
+                has_hard = any(e.metrics.get("sft_eval") or e.metrics.get("sorl_eval") for e in subgroup)
+                hdr = "| Name | Ops | Data | Vocab | K | Acc | SFT |"
+                sep = "|------|-----|------|-------|---|-----|-----|"
+                if has_hard:
+                    hdr += " S5 | S6 | C6 | M5 | B5 |"
+                    sep += "----|----|----|----|----|"
+                lines.append(hdr)
+                lines.append(sep)
+
+                for e in sorted(subgroup, key=lambda x: (x.ops, x.dataset_size, x.abs_vocab)):
+                    def fa(v):
+                        return f"{v:.0%}" if v is not None else "—"
+
+                    name = e.name.removeprefix("non_enriched/")
+                    row = f"| {name} | {e.ops} | {e.dataset_size//1000}K | {e.abs_vocab} | {e.K} | {fa(e.accuracy)} | {fa(e.sft_accuracy)} |"
+
+                    if has_hard:
+                        ek = "sorl_eval" if e.mode == "sorl" else "sft_eval"
+                        for split in ["add_S5", "add_S6", "add_C6", "sub_M5", "sub_B5"]:
+                            row += f" {fa(e.split_accuracy(ek, split))} |"
+
+                    lines.append(row)
+
+                lines.append("")
+
+        Path(path).parent.mkdir(parents=True, exist_ok=True)
+        with open(path, "w") as f:
+            f.write("\n".join(lines) + "\n")
+        print(f"Wrote results to {path} ({len(entries)} models)")
+
     def save(self, path: str):
         """Save catalog to JSON (avoids re-fetching)."""
-        data = [{"name": e.name, "config": e.config, "enriched": e.enriched} for e in self.entries]
+        data = [{"name": e.name, "config": e.config, "enriched": e.enriched,
+                 "metrics": e.metrics} for e in self.entries]
         with open(path, "w") as f:
             json.dump(data, f, indent=2)
         print(f"Saved catalog ({len(self.entries)} models) to {path}")
@@ -184,7 +298,9 @@ class ModelCatalog:
         """Load catalog from JSON."""
         cat = cls(repo_id=repo_id)
         data = json.load(open(path))
-        cat.entries = [ModelEntry(name=d["name"], config=d["config"], enriched=d["enriched"]) for d in data]
+        cat.entries = [ModelEntry(name=d["name"], config=d["config"],
+                                  enriched=d.get("enriched", False),
+                                  metrics=d.get("metrics", {})) for d in data]
         print(f"Loaded catalog ({len(cat.entries)} models) from {path}")
         return cat
 
