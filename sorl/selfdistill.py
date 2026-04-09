@@ -146,51 +146,48 @@ class SoRLTrainerv8(SoRLTrainerv6):
                 bv   = int(self.raw_model.vocab_sizes[0].item())
                 model = _DDPForwardProxy(self.model, self.raw_model) if self.ddp else self.raw_model
 
-                # ---- 1. Teacher forward on [query][cot][answer] ----
-                # base_loss is TRAINED (with grad); h_teacher is detached for KD
-                lab = ids.clone(); lab[attn == 0] = -100
-                si = torch.arange(lab.size(1), device=self.device).unsqueeze(0)
-                lab[si < pl.unsqueeze(1)] = -100
-
-                teacher_out = model(
-                    input_ids=ids, attention_mask=attn,
-                    output_hidden_states=True,
-                )
-                lg = teacher_out.logits.clone()
-                lg[:, :, bv:] = -float("inf")
-                base_loss = nn.CrossEntropyLoss(ignore_index=-100)(
-                    lg[:, :-1].contiguous().view(-1, lg.size(-1)),
-                    lab[:, 1:].contiguous().view(-1),
-                )
-                # detach hidden states for KD target (stop gradient to teacher)
-                h_teacher = teacher_out.hidden_states[-1].detach()  # (B, L, D)
-                del teacher_out, lg
-
-                # ---- 2. Build compressed student sequence ----
-                comp_data, comp_attn, ans_pos_t, ans_pos_s = \
-                    self._build_compressed_seq(ids, attn, pl, n_abs)
+                # ---- 1. Build compressed student sequence (no grad needed) ----
+                with torch.no_grad():
+                    comp_data, comp_attn, ans_pos_t, ans_pos_s = \
+                        self._build_compressed_seq(ids, attn, pl, n_abs)
 
                 # recursion mask (abstract positions)
                 vocab_size_0 = self.raw_model.vocab_sizes[0].to(self.device)
                 recursion_mask = (comp_data >= vocab_size_0)
                 recursion_mask[:, 0] = False
 
-                # ---- 3. Deep supervision iterations ----
-                idx = comp_data
-                iter_comp, iter_kd = [], []
-
                 optimizer.param_groups[0]["lr"] = lr
                 optimizer.param_groups[1]["lr"] = lr * cfg.emb_lr_mult
 
+                # label mask for base CE (constant across iters)
+                lab = ids.clone(); lab[attn == 0] = -100
+                si = torch.arange(lab.size(1), device=self.device).unsqueeze(0)
+                lab[si < pl.unsqueeze(1)] = -100
+
                 B = ids.size(0)
-                D = h_teacher.size(-1)
+                idx = comp_data
+                iter_comp, iter_kd, iter_base = [], [], []
 
-                # pre-gather teacher hidden at answer position (constant across iters)
-                t_idx = ans_pos_t.clamp(max=h_teacher.size(1) - 1)
-                h_t = h_teacher[torch.arange(B, device=self.device), t_idx]  # (B, D)
-
+                # ---- 2. Deep supervision iterations ----
                 for it in range(n_iter):
-                    # student forward (with hidden states)
+                    # teacher forward — fresh graph each iter
+                    teacher_out = model(
+                        input_ids=ids, attention_mask=attn,
+                        output_hidden_states=True,
+                    )
+                    lg = teacher_out.logits.clone()
+                    lg[:, :, bv:] = -float("inf")
+                    base_loss = nn.CrossEntropyLoss(ignore_index=-100)(
+                        lg[:, :-1].contiguous().view(-1, lg.size(-1)),
+                        lab[:, 1:].contiguous().view(-1),
+                    )
+                    # detach for KD target
+                    t_idx = ans_pos_t.clamp(max=teacher_out.hidden_states[-1].size(1) - 1)
+                    h_t = teacher_out.hidden_states[-1].detach()[
+                        torch.arange(B, device=self.device), t_idx]  # (B, D)
+                    del teacher_out, lg
+
+                    # student forward
                     student_out = model(
                         input_ids=idx, attention_mask=comp_attn,
                         output_hidden_states=True,
@@ -209,7 +206,7 @@ class SoRLTrainerv8(SoRLTrainerv6):
                     h_student_all = student_out.hidden_states[-1]  # (B, L', D)
                     s_idx = ans_pos_s.clamp(max=h_student_all.size(1) - 1)
                     h_s = h_student_all[torch.arange(B, device=self.device), s_idx]  # (B, D)
-                    kd_loss = F.l1_loss(h_s, h_t.detach())
+                    kd_loss = F.l1_loss(h_s, h_t)
 
                     loss = base_loss + cfg.alpha_traj * compress_loss + cfg.alpha_kd * kd_loss
 
@@ -222,8 +219,9 @@ class SoRLTrainerv8(SoRLTrainerv6):
 
                     iter_comp.append(compress_loss.item())
                     iter_kd.append(kd_loss.item())
+                    iter_base.append(base_loss.item())
                     idx = idx_new.detach()
-                    del logits, student_out, h_student_all, loss
+                    del logits, student_out, h_student_all, loss, base_loss
 
                 global_step += 1
 
@@ -245,9 +243,10 @@ class SoRLTrainerv8(SoRLTrainerv6):
                             if torch.cuda.is_available() else "")
                     avg_c = sum(iter_comp) / len(iter_comp)
                     avg_k = sum(iter_kd)   / len(iter_kd)
+                    avg_b = sum(iter_base) / len(iter_base)
                     self._log(
                         f"epoch {ep_frac:.3f}/{cfg.num_epochs} | remain: {eta_str} | "
-                        f"comp={avg_c:.4f} kd={avg_k:.4f} base={base_loss.item():.4f} "
+                        f"comp={avg_c:.4f} kd={avg_k:.4f} base={avg_b:.4f} "
                         f"comp[0]={iter_comp[0]:.4f} comp[-1]={iter_comp[-1]:.4f} "
                         f"kd[0]={iter_kd[0]:.4f} kd[-1]={iter_kd[-1]:.4f} "
                         f"| K={n_abs} "
@@ -255,12 +254,12 @@ class SoRLTrainerv8(SoRLTrainerv6):
                     )
                     self.history["step"].append(global_step)
                     self.history["loss"].append(avg_c)
-                    self.history["base_loss"].append(base_loss.item())
+                    self.history["base_loss"].append(avg_b)
                     self.history["traj_loss"].append(iter_comp[-1])
                     self.history["lr"].append(lr)
 
                 del ids, attn, pl, comp_data, comp_attn, idx
-                del h_teacher, h_t, iter_comp, iter_kd, base_loss
+                del iter_comp, iter_kd, iter_base
                 if torch.cuda.is_available():
                     torch.cuda.empty_cache()
 
