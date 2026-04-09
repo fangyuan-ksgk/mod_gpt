@@ -300,10 +300,19 @@ class BoolQDataset(Dataset):
 
 
 class OpenBookQADataset(Dataset):
-    """OpenBookQA science reasoning (4-way multiple choice)."""
+    """OpenBookQA science reasoning (4-way multiple choice).
+
+    For split="test", validation and test are combined (~1000 samples).
+    """
 
     def __init__(self, split="train", tokenizer=None, max_length=256):
-        self.dataset = load_dataset("allenai/openbookqa", "main", split=split)
+        from datasets import concatenate_datasets as _cat
+        if split == "test":
+            val = load_dataset("allenai/openbookqa", "main", split="validation")
+            tst = load_dataset("allenai/openbookqa", "main", split="test")
+            self.dataset = _cat([val, tst])
+        else:
+            self.dataset = load_dataset("allenai/openbookqa", "main", split=split)
         self.tokenizer = tokenizer
         self.max_length = max_length
 
@@ -496,6 +505,89 @@ class AQuADataset(Dataset):
             return match.group(1).upper()
         match = re.search(r"[Tt]he answer is\s*\(?([A-Ea-e])\)?", text)
         return match.group(1).upper() if match else None
+
+
+class HotpotQADataset(Dataset):
+    """HotpotQA multi-hop question answering (supporting-facts context only).
+
+    Uses only paragraphs cited in supporting_facts for manageable context length.
+    Train capped to 20k, test = val+test capped to 4k.
+
+    Prompt format:
+        Context:
+        [Title]: [sentences...]
+        Question: ...
+        Answer:
+
+    Response format:
+        [answer]
+        #### [answer]
+    """
+
+    _TRAIN_CAP = 20_000
+    _TEST_CAP  =  4_000
+
+    def __init__(self, split="train", tokenizer=None, max_length=512):
+        from datasets import concatenate_datasets as _cat
+        if split == "test":
+            val = load_dataset("hotpot_qa", "fullwiki", split="validation", trust_remote_code=True)
+            tst = load_dataset("hotpot_qa", "fullwiki", split="test", trust_remote_code=True)
+            combined = _cat([val, tst])
+            if len(combined) > self._TEST_CAP:
+                combined = combined.shuffle(seed=42).select(range(self._TEST_CAP))
+            self.dataset = combined
+        else:
+            ds = load_dataset("hotpot_qa", "fullwiki", split="train", trust_remote_code=True)
+            if len(ds) > self._TRAIN_CAP:
+                ds = ds.shuffle(seed=42).select(range(self._TRAIN_CAP))
+            self.dataset = ds
+        self.tokenizer = tokenizer
+        self.max_length = max_length
+
+    def __len__(self):
+        return len(self.dataset)
+
+    def __getitem__(self, idx):
+        ex = self.dataset[idx]
+        prompt, text = self.parse_sample(ex)
+        prompt_len = len(self.tokenizer(prompt, add_special_tokens=False)["input_ids"])
+        enc = self.tokenizer(text, truncation=True, max_length=self.max_length,
+                             padding="max_length", return_tensors="pt")
+        prompt_len = min(prompt_len, self.max_length)
+        return {
+            "input_ids": enc["input_ids"].squeeze(0),
+            "attention_mask": enc["attention_mask"].squeeze(0),
+            "prompt_len": prompt_len,
+        }
+
+    @staticmethod
+    def parse_sample(ex):
+        """Return (prompt, full_text).  Uses supporting-facts paragraphs only."""
+        question = ex["question"]
+        answer = ex["answer"]
+
+        context_titles = ex["context"]["title"]
+        context_sents = ex["context"]["sentences"]
+        sf_titles = set(ex["supporting_facts"]["title"])
+
+        paras = []
+        for t_idx, title in enumerate(context_titles):
+            if title in sf_titles:
+                sents = "".join(context_sents[t_idx]).strip()
+                paras.append(f"{title}: {sents}")
+
+        context_str = "\n".join(paras)
+        prompt = f"Context:\n{context_str}\nQuestion: {question}\nAnswer:"
+        text = f"{prompt} {answer}\n#### {answer}"
+        return prompt, text
+
+    @staticmethod
+    def extract_answer(text):
+        match = re.search(r"####\s*(.+?)(?:\n|$)", text)
+        if match:
+            return match.group(1).strip()
+        match = re.search(r"Answer:\s*(.+?)(?:\n|$)", text)
+        return match.group(1).strip() if match else None
 
 
 class MATHDataset(Dataset):
@@ -1316,6 +1408,8 @@ DATASET_REGISTRY = {
     "aqua": AQuADataset,
     "math": MATHDataset,
     "scienceqa": ScienceQADataset, # verified
+    # Multi-hop QA
+    "hotpotqa": HotpotQADataset,
     # Code generation
     "humaneval": HumanEvalDataset,
     "mbpp": MBPPDataset,

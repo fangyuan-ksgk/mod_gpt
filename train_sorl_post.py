@@ -47,6 +47,7 @@ def parse_args():
                             "winogrande", "boolq", "openbookqa",
                             "commonsenseqa", "mmlu",
                             "aqua", "math", "scienceqa",
+                            "hotpotqa",
                             "humaneval", "mbpp", "livecodebench", "codecontests", "deepmind_code_contests"])
     p.add_argument("--max_length", type=int, default=512)
 
