@@ -27,6 +27,7 @@ from sorl.sorl_wrapper import SorlModelWrapper, left_pad_and_mask
 from sorl.trainer_ablate import (SoRLTrainer, SoRLTrainerv2, SoRLTrainerv3, SoRLTrainerv4, SoRLTrainerv5,
                                 SoRLConfig)
 from sorl.selfroute import SoRLTrainerv6, SoRLTrainerv7
+from sorl.selfdistill import SoRLTrainerv8
 from data.pt_dataset import get_dataset
 
 
@@ -97,6 +98,14 @@ def parse_args():
                    help="Use SoRLTrainerv6 (self-routing: fixed diagonal lm_head, traj_loss only)")
     p.add_argument("--use_v7", action="store_true",
                    help="Use SoRLTrainerv7 (deep supervision: per-iteration backward+step, HRM pattern)")
+    p.add_argument("--v7_outer", action="store_true",
+                   help="v7 outer-loop: accumulate grads across iterations, step once at end")
+    p.add_argument("--use_v8", action="store_true",
+                   help="Use SoRLTrainerv8 (self-distill: KD from full CoT to compressed [query][abs][answer])")
+    p.add_argument("--alpha_kd", type=float, default=1.0,
+                   help="v8: weight for hidden-state distillation loss")
+    p.add_argument("--answer_token_id", type=int, default=820,
+                   help="v8: token id of answer delimiter (e.g. 820 for ####)")
     p.add_argument("--no_ste", action="store_true",
                    help="v5 only: disable STE (hard recursion ablation). Same pipeline, no gradient through abstract selection.")
     p.add_argument("--n_inner", type=int, default=4,
@@ -544,6 +553,9 @@ def main():
         abs_prefix_max=args.abs_prefix_max,
         prefix_abs=args.prefix_abs,
         free_form_eval=args.free_form_eval,
+        v7_accumulate_iters=args.v7_outer,
+        alpha_kd=args.alpha_kd,
+        answer_token_id=args.answer_token_id,
         use_ste=not args.no_ste,
         random_K=tuple(int(x) for x in args.random_K.split(',')) if args.random_K else None,
         strip_suffix=tuple(float(x) for x in args.strip_suffix.split(',')) if args.strip_suffix else None,
@@ -567,7 +579,9 @@ def main():
     has_aux = (config.alpha_info_gain != 0 or config.alpha_abs != 0 or config.alpha_soft_zipf != 0 or config.alpha_ortho != 0)
 
     # ---- Trainer ----
-    if args.use_v7:
+    if args.use_v8:
+        TrainerCls = SoRLTrainerv8
+    elif args.use_v7:
         TrainerCls = SoRLTrainerv7
     elif args.use_v6:
         TrainerCls = SoRLTrainerv6
@@ -613,7 +627,7 @@ def main():
 
         if result:
             _log_result(result, "K=None")
-        if has_aux or args.use_v6 or args.use_v7: # <- so that self-routing run also gets Acc[K] evaluation
+        if has_aux or args.use_v6 or args.use_v7 or args.use_v8: # <- so that self-routing run also gets Acc[K] evaluation
             log(f"--- Final evaluation (K={config.K}, with abstractions) ---")
             result_k = trainer.evaluate(eval_K=config.K)
             if result_k:
