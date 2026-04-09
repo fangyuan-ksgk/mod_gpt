@@ -217,6 +217,8 @@ def train_sft(model, train_ds, val_ds, args, run_name):
             if global_step % 500 == 0:
                 acc = eval_sft(model, val_ds, device, 100)
                 print(f"  --- Eval step {global_step}: accuracy={acc:.3f} ---")
+                history.setdefault("eval_step", []).append(global_step)
+                history.setdefault("eval_accuracy", []).append(acc)
                 if wandb.run is not None:
                     wandb.log({"eval/accuracy": acc}, step=global_step)
 
@@ -240,8 +242,12 @@ class WandbSoRLTrainer(SoRLTrainer):
 
     def evaluate(self, eval_K=None):
         result = super().evaluate(eval_K=eval_K)
-        if result and self.is_master and wandb.run is not None:
-            wandb.log({"eval/accuracy": result["accuracy"]})
+        if result and self.is_master:
+            self.history.setdefault("eval_step", []).append(
+                self.history["step"][-1] if self.history["step"] else 0)
+            self.history.setdefault("eval_accuracy", []).append(result["accuracy"])
+            if wandb.run is not None:
+                wandb.log({"eval/accuracy": result["accuracy"]})
         return result
 
 
