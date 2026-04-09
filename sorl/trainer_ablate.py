@@ -71,6 +71,7 @@ class SoRLConfig:
     abs_prefix_max: Optional[int] = None  # Cap CoT abs prefix to this many tokens (Option 2)
     prefix_abs: bool = False         # Prefix-first ABS: contiguous [Q][ABS×N][CoT][#### ans] (requires abs_prefix_max)
     free_form_eval: bool = False     # Eval with free_form=True (no forced ABS positions, Option 1)
+    v7_accumulate_iters: bool = False  # v7 outer-loop: accumulate grads across iterations, step once at end
 
     # Loss weights
     alpha_info_gain: float = 10.0

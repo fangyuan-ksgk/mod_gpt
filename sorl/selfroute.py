@@ -239,27 +239,39 @@ class SoRLTrainerv7(SoRLTrainerv6):
 
                 idx = ed
                 iter_losses = []
-                for it in range(n_iter):
-                    optimizer.param_groups[0]["lr"] = lr
-                    optimizer.param_groups[1]["lr"] = lr * cfg.emb_lr_mult
+                accumulate = cfg.v7_accumulate_iters  # outer-loop mode
 
+                optimizer.param_groups[0]["lr"] = lr
+                optimizer.param_groups[1]["lr"] = lr * cfg.emb_lr_mult
+                if accumulate:
+                    optimizer.zero_grad(set_to_none=True)
+
+                for it in range(n_iter):
                     idx_new, _ptl, logits = self.raw_model.recursion_step(
                         idx, ea, recursion_mask, temperature=cfg.temperature,
                         memory_span_abs=mem_span, memory_span_traj=cfg.memory_span_traj,
                         prompt_len=ep,
                     )
                     traj_loss = self._traj_loss_from_logits(logits, idx_new, ea, ep, bv)
-                    loss = cfg.alpha_traj * traj_loss
+                    loss = cfg.alpha_traj * traj_loss / (n_iter if accumulate else 1)
 
-                    optimizer.zero_grad(set_to_none=True)
-                    loss.backward()
-                    if cfg.max_grad_norm > 0:
-                        torch.nn.utils.clip_grad_norm_(self.model.parameters(), cfg.max_grad_norm)
-                    optimizer.step()
+                    if accumulate:
+                        loss.backward()
+                    else:
+                        optimizer.zero_grad(set_to_none=True)
+                        loss.backward()
+                        if cfg.max_grad_norm > 0:
+                            torch.nn.utils.clip_grad_norm_(self.model.parameters(), cfg.max_grad_norm)
+                        optimizer.step()
 
                     iter_losses.append(traj_loss.item())
                     idx = idx_new
                     del logits, _ptl, loss
+
+                if accumulate:
+                    if cfg.max_grad_norm > 0:
+                        torch.nn.utils.clip_grad_norm_(self.model.parameters(), cfg.max_grad_norm)
+                    optimizer.step()
 
                 global_step += 1
 

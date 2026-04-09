@@ -297,5 +297,85 @@ run_bg "v7_q4b_sci_pfx8" $M4B $DS_SCI \
 
 wait
 
+# ===========================================================================
+# Batch 12 — v7 outer-loop: 0.6B + 1.7B, GSM + SCI (4 runs, 2/GPU)
+#   --v7_outer: accumulate grads across iterations, step once at end.
+#   Compare against v7 inner-loop (batches 1-2) and v6 (batches 1-2).
+# ===========================================================================
 echo ""
-echo "All done. 13 batches, 42 experiments total."
+echo "Batch 12: v7 outer — 0.6B + 1.7B, GSM + SCI"
+
+run_bg "v7o_06b_gsm_pfx8" $M06 $DS_GSM \
+  --use_v7 --v7_outer --K 8 $ABS --abs_prefix_max 8 \
+  --max_iterations 4
+
+run_bg "v7o_06b_sci_pfx8" $M06 $DS_SCI \
+  --use_v7 --v7_outer --K 8 $ABS --abs_prefix_max 8 \
+  --max_iterations 4
+
+run_bg "v7o_17b_gsm_pfx8" $M17 $DS_GSM \
+  --use_v7 --v7_outer --K 8 $ABS --abs_prefix_max 8 \
+  --max_iterations 4
+
+run_bg "v7o_17b_sci_pfx8" $M17 $DS_SCI \
+  --use_v7 --v7_outer --K 8 $ABS --abs_prefix_max 8 \
+  --max_iterations 4
+
+wait
+
+# ===========================================================================
+# Batch 13 — v7 outer-loop: Llama-1B, GSM + SCI (2 runs, 2/GPU)
+# ===========================================================================
+echo ""
+echo "Batch 13: v7 outer — Llama-1B, GSM + SCI"
+
+run_bg "v7o_l1b_gsm_pfx8" $ML1 $DS_GSM \
+  --use_v7 --v7_outer --K 8 $ABS --abs_prefix_max 8 \
+  --max_iterations 4
+
+run_bg "v7o_l1b_sci_pfx8" $ML1 $DS_SCI \
+  --use_v7 --v7_outer --K 8 $ABS --abs_prefix_max 8 \
+  --max_iterations 4
+
+wait
+
+# ===========================================================================
+# Batch 14 — v7 outer-loop: Llama-3B, GSM + SCI (2 runs, 1/GPU — 4B class)
+# ===========================================================================
+echo ""
+echo "Batch 14: v7 outer — Llama-3B, GSM + SCI (1/GPU)"
+
+run_bg "v7o_l3b_gsm_pfx8" $ML3 $DS_GSM \
+  --use_v7 --v7_outer --K 8 $ABS --abs_prefix_max 8 \
+  --max_iterations 4
+
+run_bg "v7o_l3b_sci_pfx8" $ML3 $DS_SCI \
+  --use_v7 --v7_outer --K 8 $ABS --abs_prefix_max 8 \
+  --max_iterations 4
+
+wait
+
+# ===========================================================================
+# Batch 15 — v7 outer-loop: Qwen3-4B, GSM + SCI (2 runs, 1/GPU — 4B class)
+# ===========================================================================
+echo ""
+echo "Batch 15: v7 outer — Qwen3-4B, GSM + SCI (1/GPU)"
+
+run_bg "v7o_q4b_gsm_pfx8" $M4B $DS_GSM \
+  --use_v7 --v7_outer --K 8 $ABS --abs_prefix_max 8 \
+  --max_iterations 4
+
+run_bg "v7o_q4b_sci_pfx8" $M4B $DS_SCI \
+  --use_v7 --v7_outer --K 8 $ABS --abs_prefix_max 8 \
+  --max_iterations 4
+
+wait
+
+echo ""
+echo "All done. 15 batches, 44 experiments total."
+
+
+# Fair comparison between "deep supervision" with "max_iter = 4" & "effective batch size 8" & "epoch 1"
+# - when we optimize() every inner-step, we get 4x epochs (SFT gives 45% acc at 4 epochs)
+# - when we optimize once each outer-step, we get 4x effective batch size (32 -> SFT gives horrible performance at 32)
+# 
