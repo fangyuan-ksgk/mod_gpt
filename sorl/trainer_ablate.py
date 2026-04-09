@@ -72,6 +72,7 @@ class SoRLConfig:
     prefix_abs: bool = False         # Prefix-first ABS: contiguous [Q][ABS×N][CoT][#### ans] (requires abs_prefix_max)
     free_form_eval: bool = False     # Eval with free_form=True (no forced ABS positions, Option 1)
     v7_accumulate_iters: bool = False  # v7 outer-loop: accumulate grads across iterations, step once at end
+    answer_token_id: int = 820          # v8: token id of answer delimiter (e.g. #### = 820 for GSM8K)
 
     # Loss weights
     alpha_info_gain: float = 10.0
@@ -120,6 +121,7 @@ class SoRLConfig:
 
     # Trajectory loss weight (v2/v3/v4): weights -log p(s|a) directly
     alpha_traj: float = 1.0
+    alpha_kd: float = 1.0            # v8: hidden-state distillation weight
 
     # Contrastive corruption (v3)
     corrupt_method: str = 'shuffle'   # 'shuffle' or 'noise'
