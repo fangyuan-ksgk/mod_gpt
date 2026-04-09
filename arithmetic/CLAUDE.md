@@ -1,5 +1,8 @@
 # Arithmetic Experiment Notes
 
+**Start here:** Read [`MEMORY.md`](MEMORY.md) first for current session state and what to do next.
+Also check [`TODO.md`](TODO.md) for the task backlog.
+
 Working notes from experiment iteration. Main results in [`log/arithmetic.md`](../log/arithmetic.md).
 
 ## Critical Findings

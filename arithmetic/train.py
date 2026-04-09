@@ -55,7 +55,7 @@ class Qwen3ArithmeticDataset(Dataset):
 
     def __getitem__(self, idx):
         tokens, _, _ = generate_batch(1, self.n_digits, ops=self.ops,
-                                      use_sum9_aug=True, device="cpu")
+                                      use_enrichment=True, device="cpu")
         token_ids = torch.tensor([QWEN3_TOKEN_MAP[t.item()] for t in tokens[0]], dtype=torch.long)
         return {
             "input_ids": token_ids,

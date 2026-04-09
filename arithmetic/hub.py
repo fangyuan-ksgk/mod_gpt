@@ -71,8 +71,9 @@ def load_model(subfolder: str, device: str = "cuda",
 
     Returns: (model, config, metrics)
     """
-    from transformers import Qwen3Config
+    from transformers import Qwen3ForCausalLM, Qwen3Config
     from sorl.sorl_wrapper import SorlModelWrapper
+    from safetensors.torch import load_file
 
     local_dir = snapshot_download(
         repo_id=repo_id,
@@ -84,26 +85,31 @@ def load_model(subfolder: str, device: str = "cuda",
     config = json.load(open(model_dir / "train_config.json"))
     metrics = json.load(open(model_dir / "metrics.json")) if (model_dir / "metrics.json").exists() else {}
 
-    # Reconstruct model
+    # Load directly from saved checkpoint — avoid vocab size mismatches
+    # from_scratch adds +1 placeholder which may not match old checkpoints
     abs_vocab = config.get("abs_vocab", 0)
     abs_vocab = abs_vocab if abs_vocab > 0 else 1
 
-    qwen_config = Qwen3Config(
-        hidden_size=config["n_embd"],
-        num_hidden_layers=config["n_layer"],
-        num_attention_heads=config["n_head"],
-        num_key_value_heads=config["n_head"],
-        intermediate_size=config["n_embd"] * 4,
-        vocab_size=config.get("base_vocab_size", 151936),
-        max_position_embeddings=128,
-    )
+    saved_config = Qwen3Config.from_pretrained(str(model_dir))
+    total_vocab = saved_config.vocab_size  # exact size from checkpoint
 
-    model = SorlModelWrapper.from_scratch(
-        qwen_config,
-        full_vocab_size_list=[qwen_config.vocab_size, abs_vocab],
-        pad_token_id=config.get("pad_token_id", 151643),
-    )
-    model.load_state_dict(torch.load(model_dir / "model.safetensors", map_location=device), strict=False)
+    # Build model with exact checkpoint vocab size
+    model = SorlModelWrapper(saved_config)
+    model.full_vocab_size_list = [total_vocab - abs_vocab, abs_vocab]
+    model._setup_vocabulary()
+    # Override total to match checkpoint (skip the +1 placeholder if needed)
+    weights = load_file(model_dir / "model.safetensors", device="cpu")
+    actual_size = weights["model.model.embed_tokens.weight"].shape[0]
+    if model.model.config.vocab_size != actual_size:
+        model.model.resize_token_embeddings(actual_size)
+        model.config.vocab_size = actual_size
+    # Re-register buffers to match checkpoint size, then load
+    buf_keys = [k for k in weights if k in ("l0_mask", "abs_mask", "vocab_sizes",
+                "level_starts", "level_ends", "total_vocab_size")]
+    for k in buf_keys:
+        if hasattr(model, k):
+            model.register_buffer(k, weights.pop(k))
+    model.load_state_dict(weights, strict=False)
     model = model.to(device)
 
     return model, config, metrics

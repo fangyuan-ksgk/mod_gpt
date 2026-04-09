@@ -158,6 +158,54 @@ def cascade_depth(tricase: List) -> int:
     return max_d
 
 
+def carry_chain_depth(x_digits: List[int], y_digits: List[int]) -> int:
+    """
+    Max consecutive carry propagation length (LSB first).
+    Unlike cascade_depth which only counts 1+U chains,
+    this counts ANY consecutive carry-out positions.
+    Captures 'hot chains' like 996+235 where every position overflows.
+    """
+    x_rev = list(reversed(x_digits))
+    y_rev = list(reversed(y_digits))
+    carry = 0
+    max_chain = 0
+    current_chain = 0
+    for i in range(len(x_rev)):
+        s = x_rev[i] + y_rev[i] + carry
+        if s >= 10:
+            carry = 1
+            current_chain += 1
+            max_chain = max(max_chain, current_chain)
+        else:
+            carry = 0
+            current_chain = 0
+    return max_chain
+
+
+def borrow_chain_depth(x_digits: List[int], y_digits: List[int]) -> int:
+    """
+    Max consecutive borrow propagation length (LSB first).
+    Unlike cascade_depth which only counts 1+U chains,
+    this counts ANY consecutive borrow-out positions.
+    Captures cases where borrows chain through varied digit differences.
+    """
+    x_rev = list(reversed(x_digits))
+    y_rev = list(reversed(y_digits))
+    borrow = 0
+    max_chain = 0
+    current_chain = 0
+    for i in range(len(x_rev)):
+        diff = x_rev[i] - y_rev[i] - borrow
+        if diff < 0:
+            borrow = 1
+            current_chain += 1
+            max_chain = max(max_chain, current_chain)
+        else:
+            borrow = 0
+            current_chain = 0
+    return max_chain
+
+
 # ── Per-digit outcome labels ──────────────────────────────────────
 
 def addition_labels(x_digits: List[int], y_digits: List[int], n_digits: int) -> Tuple[List[int], List[str]]:
@@ -356,38 +404,269 @@ def generate_batch(batch_size: int, n_digits: int = 6,
     return tokens, all_labels, answer_mask
 
 
+# ── Forced deep-cascade generators ─────────────────────────────────
+
+def forced_add_cascade(n_digits: int, target_depth: int) -> ArithmeticExample:
+    """
+    Force an addition example with exactly `target_depth` carry cascade.
+
+    Cascade = 1 (sum >= 10) followed by (depth-1) U's (sum == 9).
+    Non-cascade positions get varied sums (not just 0+0) so answers
+    aren't trivially all 0's.
+    """
+    max_start = n_digits - target_depth
+    start = random.randint(0, max_start)
+
+    # Work in LSB-first
+    x_rev = [0] * n_digits
+    y_rev = [0] * n_digits
+
+    for i in range(n_digits):
+        if i == start:
+            # Trigger: x + y >= 10 (varied: sum in [10, 18])
+            x_rev[i] = random.randint(1, 9)
+            y_rev[i] = random.randint(10 - x_rev[i], 9)
+        elif start < i < start + target_depth:
+            # Propagate: x + y == 9 (varied split)
+            x_rev[i] = random.randint(0, 9)
+            y_rev[i] = 9 - x_rev[i]
+        else:
+            # Non-cascade: x + y <= 8, but use VARIED sums (not just 0+0)
+            # This gives non-trivial answer digits
+            total = random.randint(0, 8)
+            x_rev[i] = random.randint(0, total)
+            y_rev[i] = total - x_rev[i]
+
+    x_digits = list(reversed(x_rev))
+    y_digits = list(reversed(y_rev))
+    return make_add_example(x_digits, y_digits, n_digits)
+
+
+def forced_sub_cascade(n_digits: int, target_depth: int) -> ArithmeticExample:
+    """
+    Force a subtraction example with exactly `target_depth` borrow cascade.
+
+    Cascade = 1 (x < y at trigger) followed by (depth-1) U's (x == y).
+    The cascade must NOT extend to the MSB — the MSB must have x > y
+    to guarantee x >= y overall.
+
+    Max achievable depth = n_digits - 1 (e.g., M5 for 6-digit).
+    M6 (= n_digits) is impossible: borrow propagates through all positions,
+    making x < y with no higher digit to absorb it.
+    """
+    if target_depth >= n_digits:
+        raise ValueError(
+            f"M{target_depth} is impossible for {n_digits}-digit subtraction "
+            f"(x >= y constraint). Max depth = {n_digits - 1}."
+        )
+
+    # Cascade must end below MSB: highest cascade position = start + depth - 1 < n_digits - 1
+    # So start <= n_digits - 1 - depth = n_digits - depth - 1
+    max_start = n_digits - target_depth - 1
+    start = random.randint(0, max_start)
+
+    # Work in LSB-first
+    x_rev = [0] * n_digits
+    y_rev = [0] * n_digits
+
+    for i in range(n_digits):
+        if i == start:
+            # Trigger: x_digit < y_digit (borrow)
+            # Vary the gap: diff in [1, 9] so answer digit isn't always 9
+            y_rev[i] = random.randint(1, 9)
+            x_rev[i] = random.randint(0, y_rev[i] - 1)
+        elif start < i < start + target_depth:
+            # Propagate: x_digit == y_digit (U)
+            # Full range 0-9 for variety in the equal-digit values
+            val = random.randint(0, 9)
+            x_rev[i] = val
+            y_rev[i] = val
+        elif i == n_digits - 1:
+            # MSB: MUST have x > y to guarantee x >= y overall
+            # Vary the gap for non-trivial answer digits
+            x_rev[i] = random.randint(1, 9)
+            y_rev[i] = random.randint(0, x_rev[i] - 1)
+        else:
+            # Other non-cascade: x > y (breaks chains)
+            # Varied gaps for non-trivial answer digits
+            x_rev[i] = random.randint(1, 9)
+            y_rev[i] = random.randint(0, x_rev[i] - 1)
+
+    x_digits = list(reversed(x_rev))
+    y_digits = list(reversed(y_rev))
+    return make_sub_example(x_digits, y_digits, n_digits)
+
+
+def forced_add_hot_chain(n_digits: int, target_depth: int) -> ArithmeticExample:
+    """
+    Force an addition example with a carry chain of length `target_depth`
+    where answer digits are NOT all 0's.
+
+    Each chain position has x+y >= 9 (with carry in, sum >= 10).
+    Digit sums are varied (9-18), giving answer digits 0-9.
+    At least half the chain positions have x+y > 9.
+    """
+    max_start = n_digits - target_depth
+    start = random.randint(0, max_start)
+
+    x_rev = [0] * n_digits
+    y_rev = [0] * n_digits
+
+    for i in range(n_digits):
+        if i == start:
+            # Trigger: x+y >= 10 (no carry-in needed)
+            x_rev[i] = random.randint(2, 9)
+            y_rev[i] = random.randint(10 - x_rev[i], 9)
+        elif start < i < start + target_depth:
+            # Chain: x+y >= 9 (carry-in makes it >= 10)
+            # Force at least half to have x+y > 9 for varied digits
+            if random.random() < 0.5:
+                # Hot: x+y in [10, 18] → digit = (x+y+1) mod 10 (non-zero)
+                x_rev[i] = random.randint(1, 9)
+                y_rev[i] = random.randint(max(0, 10 - x_rev[i]), 9)
+            else:
+                # Warm: x+y = 9 → digit = 0 with carry
+                x_rev[i] = random.randint(0, 9)
+                y_rev[i] = 9 - x_rev[i]
+        else:
+            # Non-chain: x+y <= 7 (no carry even with carry-in=1)
+            total = random.randint(0, 7)
+            x_rev[i] = random.randint(0, total)
+            y_rev[i] = total - x_rev[i]
+
+    x_digits = list(reversed(x_rev))
+    y_digits = list(reversed(y_rev))
+    return make_add_example(x_digits, y_digits, n_digits)
+
+
+def forced_sub_hot_chain(n_digits: int, target_depth: int) -> ArithmeticExample:
+    """
+    Force a subtraction example with a borrow chain of length `target_depth`
+    where answer digits are NOT all 9's.
+
+    Each chain position has x-y-borrow < 0, producing varied digits.
+    At least half the chain positions have x != y.
+    """
+    if target_depth >= n_digits:
+        raise ValueError(f"Borrow chain {target_depth} impossible for {n_digits}-digit (x >= y).")
+
+    max_start = n_digits - target_depth - 1
+    start = random.randint(0, max_start)
+
+    x_rev = [0] * n_digits
+    y_rev = [0] * n_digits
+
+    for i in range(n_digits):
+        if i == start:
+            # Trigger: x < y (borrow, no borrow-in needed)
+            y_rev[i] = random.randint(1, 9)
+            x_rev[i] = random.randint(0, y_rev[i] - 1)
+        elif start < i < start + target_depth:
+            # Chain: x-y-1 < 0, i.e. x <= y (borrow-in makes it negative)
+            # Force at least half to have x < y (not just x == y) for varied digits
+            if random.random() < 0.5:
+                # Hot: x < y → digit = x-y-1+10 (not 9)
+                y_rev[i] = random.randint(1, 9)
+                x_rev[i] = random.randint(0, y_rev[i] - 1)
+            else:
+                # Warm: x == y → digit = 9
+                val = random.randint(0, 9)
+                x_rev[i] = val
+                y_rev[i] = val
+        elif i == n_digits - 1:
+            # MSB: x > y to ensure x >= y overall
+            x_rev[i] = random.randint(1, 9)
+            y_rev[i] = random.randint(0, x_rev[i] - 1)
+        else:
+            # Non-chain: x > y (breaks chain)
+            x_rev[i] = random.randint(1, 9)
+            y_rev[i] = random.randint(0, x_rev[i] - 1)
+
+    x_digits = list(reversed(x_rev))
+    y_digits = list(reversed(y_rev))
+    return make_sub_example(x_digits, y_digits, n_digits)
+
+
 # ── Structured eval sets ────────────────────────────────────────────
 
-def make_eval_set(n_digits: int = 6, ops: str = "add"):
+def make_eval_set(n_digits: int = 6, ops: str = "add", N: int = 50):
     categories = {}
-    N = 50
 
     for target_s in range(n_digits + 1):
         examples = []
         attempts = 0
-        while len(examples) < N and attempts < N * 200:
-            ex = random_add_example(n_digits, use_sum9_aug=(target_s > 1))
-            if ex.cascade_depth == target_s:
-                examples.append(ex)
-            attempts += 1
+
+        if target_s >= n_digits - 1:
+            # S5, S6 (or equivalent): use forced generator
+            while len(examples) < N and attempts < N * 500:
+                ex = forced_add_cascade(n_digits, target_s)
+                if ex.cascade_depth == target_s:
+                    examples.append(ex)
+                attempts += 1
+        else:
+            while len(examples) < N and attempts < N * 200:
+                ex = random_add_example(n_digits, use_sum9_aug=(target_s > 1))
+                if ex.cascade_depth == target_s:
+                    examples.append(ex)
+                attempts += 1
+
         if examples:
             categories[f"add_S{target_s}"] = examples
 
     categories["add_random"] = [random_add_example(n_digits) for _ in range(200)]
 
+    # Hot carry chains (varied answer digits, not just 0's)
+    for chain_len in range(3, n_digits + 1):
+        examples = []
+        attempts = 0
+        while len(examples) < N and attempts < N * 500:
+            ex = forced_add_hot_chain(n_digits, chain_len)
+            cd = carry_chain_depth(ex.x_digits, ex.y_digits)
+            if cd == chain_len:
+                examples.append(ex)
+            attempts += 1
+        if examples:
+            categories[f"add_C{chain_len}"] = examples
+
     if ops == "add_sub":
-        for target_m in range(n_digits + 1):
+        # Max borrow cascade = n_digits - 1 (M6 impossible for 6-digit: x >= y constraint)
+        max_sub_depth = n_digits - 1
+        for target_m in range(max_sub_depth + 1):
             examples = []
             attempts = 0
-            while len(examples) < N and attempts < N * 200:
-                ex = random_sub_example(n_digits)
-                if ex.cascade_depth == target_m:
-                    examples.append(ex)
-                attempts += 1
+
+            if target_m >= max_sub_depth - 1:
+                # M4, M5 (deep cascades): use forced generator
+                while len(examples) < N and attempts < N * 500:
+                    ex = forced_sub_cascade(n_digits, target_m)
+                    if ex.cascade_depth == target_m:
+                        examples.append(ex)
+                    attempts += 1
+            else:
+                while len(examples) < N and attempts < N * 200:
+                    ex = random_sub_example(n_digits, use_borrow_aug=(target_m > 1))
+                    if ex.cascade_depth == target_m:
+                        examples.append(ex)
+                    attempts += 1
+
             if examples:
                 categories[f"sub_M{target_m}"] = examples
 
         categories["sub_random"] = [random_sub_example(n_digits) for _ in range(200)]
+
+        # Hot borrow chains (varied answer digits, not just 9's)
+        max_chain = n_digits - 1
+        for chain_len in range(3, max_chain + 1):
+            examples = []
+            attempts = 0
+            while len(examples) < N and attempts < N * 500:
+                ex = forced_sub_hot_chain(n_digits, chain_len)
+                bd = borrow_chain_depth(ex.x_digits, ex.y_digits)
+                if bd == chain_len:
+                    examples.append(ex)
+                attempts += 1
+            if examples:
+                categories[f"sub_B{chain_len}"] = examples
 
     return categories
 
