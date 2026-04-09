@@ -63,16 +63,16 @@ def find_best_vocabs():
         if v not in vocab_best or acc > vocab_best[v]:
             vocab_best[v] = acc
 
-    # Sort vocabs by best accuracy, take top 2
+    # Sort vocabs by best accuracy, take top 4
     sorted_vocabs = sorted(vocab_best.items(), key=lambda x: x[1], reverse=True)
-    best_2 = [v for v, acc in sorted_vocabs[:2]]
+    best_4 = [v for v, acc in sorted_vocabs[:4]]
 
     print(f"Vocab performance (enriched SoRL add_sub 500K):")
     for v, acc in sorted_vocabs:
-        marker = " <-- SELECTED" if v in best_2 else ""
+        marker = " <-- SELECTED" if v in best_4 else ""
         print(f"  vocab={v}: {acc:.1%}{marker}")
 
-    return best_2
+    return best_4
 
 
 def generate_zipf_jobs(best_vocabs):
