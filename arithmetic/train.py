@@ -352,15 +352,40 @@ def main():
         history = trainer.history
         final_acc = eval_with_recursion(model, val_ds, args.device, K=args.K, num_samples=200)
 
-    print(f"Final accuracy: {final_acc:.3f}")
+    print(f"Final accuracy (random): {final_acc:.3f}")
+
+    # Full per-split eval with ArithmeticEvaluator
+    from arithmetic.evaluate import ArithmeticEvaluator
+    evaluator = ArithmeticEvaluator(model, tokenizer, device=args.device, n_digits=args.n_digits)
+    K_eval = args.K if args.mode == "sorl" else None
+    eval_results_sft = evaluator.run(ops=args.ops, K=None, n_per_split=50)
+    print(f"\nSFT eval (no abs):")
+    evaluator.print_table(eval_results_sft)
+    if args.mode == "sorl":
+        eval_results_sorl = evaluator.run(ops=args.ops, K=args.K, n_per_split=50)
+        print(f"\nSoRL eval (K={args.K}):")
+        evaluator.print_table(eval_results_sorl)
+    else:
+        eval_results_sorl = None
+
     if wandb.run is not None:
         wandb.log({"eval/final_accuracy": final_acc})
         wandb.finish()
 
     if args.push_to_hub:
         from arithmetic.hub import save_model
-        manifest["final_accuracy"] = final_acc
-        metrics = {"history": history, "final_accuracy": final_acc}
+        manifest["final_accuracy"] = eval_results_sorl["summary"]["overall_accuracy"] if eval_results_sorl else eval_results_sft["summary"]["overall_accuracy"]
+        manifest["sft_accuracy"] = eval_results_sft["summary"]["overall_accuracy"]
+        manifest["eval_method"] = "ArithmeticEvaluator"
+        metrics = {
+            "history": history,
+            "final_accuracy": manifest["final_accuracy"],
+            "sft_eval": eval_results_sft,
+        }
+        if eval_results_sorl:
+            metrics["sorl_eval"] = eval_results_sorl
+            metrics["sorl_overall_accuracy"] = eval_results_sorl["summary"]["overall_accuracy"]
+            metrics["sft_overall_accuracy"] = eval_results_sft["summary"]["overall_accuracy"]
         save_model(model, manifest, metrics, subfolder=run_name)
         import shutil
         shutil.rmtree(args.output_dir, ignore_errors=True)
