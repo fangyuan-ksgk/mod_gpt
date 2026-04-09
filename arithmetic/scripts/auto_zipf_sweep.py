@@ -107,6 +107,18 @@ def main():
     print("\nMain sweep finished!")
     time.sleep(5)  # let last writes flush
 
+    # First: re-run baselines at 10 epochs (overwrites 5-epoch versions)
+    print("\n=== Running 10-epoch baselines (apples-to-apples with SoRL) ===")
+    BASELINE_JOBS = "/workspace/codes/mod_gpt/arithmetic/scripts/sweep_baselines_10ep.txt"
+    BASELINE_LOG = "/workspace/sorl_logs/sweep_baselines_10ep.log"
+    subprocess.run(
+        ["python", "-m", "arithmetic.scripts.gpu_queue",
+         BASELINE_JOBS, "3", "2"],  # 2 per GPU — baselines are light
+        stdout=open(BASELINE_LOG, "w"),
+        stderr=subprocess.STDOUT,
+    )
+    print(f"10-epoch baselines done. Log: {BASELINE_LOG}")
+
     # Find best vocabs
     best_vocabs = find_best_vocabs()
     print(f"\nBest 2 vocab sizes: {best_vocabs}")
