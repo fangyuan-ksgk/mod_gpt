@@ -138,7 +138,7 @@ def parse_args():
                    help="Log sample generations every N optimizer steps")
     p.add_argument("--num_log_samples", type=int, default=3,
                    help="Number of sample generations to log")
-    p.add_argument("--max_new_tokens", type=int, default=128,
+    p.add_argument("--max_new_tokens", type=int, default=256,
                    help="Max new tokens for sample generation")
     p.add_argument("--eval_batch_size", type=int, default=16,
                    help="Batch size for evaluation generation")
