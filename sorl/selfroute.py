@@ -163,7 +163,7 @@ class SoRLTrainerv6(SoRLTrainerv3):
             ep = pl  # unchanged — ABS block is response prefix
         else:
             use_prompt_len = pl  if cfg.cot_only_abs else None
-            use_answer_tok = 820 if cfg.cot_only_abs else None
+            use_answer_tok = cfg.answer_token_id if cfg.cot_only_abs else None
             im = infer_insert_mask(ids, cfg.K, attn,
                                    prompt_len=use_prompt_len,
                                    answer_token_id=use_answer_tok,
@@ -235,7 +235,7 @@ class SoRLTrainerv7(SoRLTrainerv6):
             ep = pl
         else:
             use_prompt_len = pl if cfg.cot_only_abs else None
-            use_answer_tok = 820 if cfg.cot_only_abs else None
+            use_answer_tok = cfg.answer_token_id if cfg.cot_only_abs else None
             im = infer_insert_mask(ids, cfg.K, attn,
                                    prompt_len=use_prompt_len,
                                    answer_token_id=use_answer_tok,

@@ -175,6 +175,12 @@ def parse_args():
     p.add_argument("--vq_abs_pretrain_target_vectors", type=int, default=20000,
                    help="Number of hidden vectors to collect for VQ fitting")
 
+    # Abstract routing mode (v6/v7)
+    p.add_argument("--abs_routing_mode", type=str, default="self_route",
+                   choices=["self_route", "similar_magnitude"],
+                   help="Abstract routing mode: 'self_route' = diagonal lm_head (v6 default), "
+                        "'similar_magnitude' = select V hidden dims with most uniform lm_head importance")
+
     # Embedding warm-up (freeze non-abstract params for first N steps)
     p.add_argument("--emb_warmup_steps", type=int, default=0,
                    help="Phase-1 steps: train only abstract emb/lm_head rows, freeze everything else")
@@ -568,6 +574,7 @@ def main():
         vq_abs_pretrain_batch_size=args.vq_abs_pretrain_batch_size,
         vq_abs_pretrain_target_vectors=args.vq_abs_pretrain_target_vectors,
         emb_warmup_steps=args.emb_warmup_steps,
+        abs_routing_mode=args.abs_routing_mode,
     )
     log(f"Config: eval_K={config.eval_K}, aux weights={'nonzero' if config.alpha_traj or config.alpha_info_gain or config.alpha_abs or config.alpha_soft_zipf or config.alpha_ortho else '0 (SFT-equivalent)'}")
 
