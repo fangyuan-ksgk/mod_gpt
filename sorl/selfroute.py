@@ -8,6 +8,39 @@ from sorl.trainer_ablate import SoRLTrainerv3, _DDPForwardProxy, _drop_nl_prefix
 from sorl.sorl_trainer import infer_insert_mask, expand_prompt_len, insert_tokens_with_padding, insert_prefix_abs
 
 
+def _find_similar_magnitude_dims(lm_weight, V):
+    """Find V hidden dims whose lm_head column importance is most uniform.
+
+    Importance of dim j = ||lm_head.weight[:, j]||₂ (L2 norm of column j).
+    We sort dims by importance (descending), slide a V-wide window, and
+    pick the window with minimal coefficient of variation (CV = std / mean).
+    This selects dims with the most *relatively* uniform importance, so that
+    each abstract token's routing dimension competes on a level playing field.
+
+    Returns: (selected_dim_indices, importances)
+    """
+    with torch.no_grad():
+        dim_importance = lm_weight.float().norm(dim=0)  # (d,)
+        sorted_vals, sorted_idxs = dim_importance.sort(descending=True)
+
+        best_cv = float('inf')
+        best_start = 0
+        for i in range(len(sorted_vals) - V + 1):
+            window = sorted_vals[i : i + V]
+            w_mean = window.mean().item()
+            if w_mean < 1e-9:
+                continue
+            w_std = window.std().item()
+            cv = w_std / w_mean
+            if cv < best_cv:
+                best_cv = cv
+                best_start = i
+
+        dims = sorted_idxs[best_start : best_start + V]
+        importances = sorted_vals[best_start : best_start + V]
+        return dims, importances, best_cv
+
+
 class SoRLTrainerv6(SoRLTrainerv3):
     """Self-routing SoRL: fixed diagonal lm_head for abstractions, traj_loss only."""
     _info_log_label = "hinge"
@@ -17,6 +50,14 @@ class SoRLTrainerv6(SoRLTrainerv3):
         self._setup_self_routing()
 
     def _setup_self_routing(self):
+        mode = getattr(self.config, 'abs_routing_mode', 'self_route')
+        if mode == 'similar_magnitude':
+            self._setup_similar_magnitude_routing()
+        else:
+            self._setup_diagonal_routing()
+
+    def _setup_diagonal_routing(self):
+        """Original v6 self-routing: diagonal lm_head for abstract tokens."""
         m = self.raw_model
         nl_v = m.vocab_sizes[0]
         abs_v = m.vocab_sizes[1]
@@ -29,7 +70,51 @@ class SoRLTrainerv6(SoRLTrainerv3):
         def _hook(grad):
             g = grad.clone(); g[nv:, :] = 0.0; return g
         self._lm_head_hook = w.register_hook(_hook)
-        self._log(f"Self-routing: lm_head[{nv}:] = diagonal & frozen")
+        self._log(f"Self-routing [diagonal]: lm_head[{nv}:] = diagonal & frozen")
+
+    def _setup_similar_magnitude_routing(self):
+        """Similar-magnitude routing: select V hidden dims with most uniform
+        lm_head column importance, then wire each abstract token to exactly
+        one of those dims via lm_head.
+
+        This produces a permutation-style projection where abstract token k
+        reads hidden dim selected_dims[k]. The lm_head rows for abstract tokens
+        are set to one-hot vectors pointing at the selected dims, then frozen.
+        """
+        m = self.raw_model
+        nl_v = m.vocab_sizes[0]
+        abs_v = m.vocab_sizes[1]
+        nv = int(nl_v.item())
+        n_abs = int(abs_v.item())  # includes placeholder at index 0
+
+        with torch.no_grad():
+            w = m.model.lm_head.weight
+            base_weight = w[:nv].float()  # (nv, d)
+
+            # Find the V-1 dims with most uniform importance (exclude placeholder)
+            # n_abs includes placeholder token at position 0, so we need n_abs-1 real dims
+            selected_dims, importances, cv = _find_similar_magnitude_dims(
+                base_weight, n_abs - 1)
+
+            self._log(f"Similar-magnitude routing: selected {n_abs-1} dims, "
+                      f"importance range=[{importances.min():.4f}, {importances.max():.4f}], "
+                      f"CV={cv:.6f}")
+
+            # Zero out all abstract rows
+            w.data[nv:] = 0
+
+            # For each abstract token k (1..n_abs-1), set lm_head row to one-hot
+            # pointing at selected_dims[k-1]
+            for k in range(1, n_abs):
+                dim_idx = selected_dims[k - 1].item()
+                w.data[nv + k, dim_idx] = 1.0
+
+        # Freeze abstract rows of lm_head
+        def _hook(grad):
+            g = grad.clone(); g[nv:, :] = 0.0; return g
+        self._lm_head_hook = w.register_hook(_hook)
+        self._log(f"Self-routing [similar_magnitude]: lm_head[{nv}:] = "
+                  f"one-hot permutation & frozen")
 
     @staticmethod
     def _traj_loss_from_logits(logits, data, attn_mask, prompt_len, base_vocab):

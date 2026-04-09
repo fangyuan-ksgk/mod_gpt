@@ -135,6 +135,10 @@ class SoRLConfig:
     mask_nl_mode: str = "fixed"       # "random" = uniform random NL tokens, "fixed" = single rare token
     mask_nl_fixed_id: int = 0         # token ID used when mask_nl_mode="fixed"
 
+    # Abstract routing mode (v6/v7)
+    abs_routing_mode: str = "self_route"  # "self_route" = diagonal lm_head (v6 default)
+                                          # "similar_magnitude" = select V hidden dims with most uniform lm_head importance
+
     # STE (v5)
     use_ste: bool = True  # True = differentiable recursion (STE), False = hard recursion (ablation)
 
