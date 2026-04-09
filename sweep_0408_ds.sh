@@ -376,6 +376,8 @@ echo "All done. 15 batches, 44 experiments total."
 
 
 # Fair comparison between "deep supervision" with "max_iter = 4" & "effective batch size 8" & "epoch 1"
-# - when we optimize() every inner-step, we get 4x epochs (SFT gives 45% acc at 4 epochs)
+# - when we optimize() every inner-step, we get 4x epochs (SFT gives 45% acc at 4 epochs, here we have 2% advantage only)
+#      ** it's critical to understand the effect of "max_iter" on performance of "deep supervision"
+#      ** tuning "emb_lr_mult" can further enlarge the benefits
 # - when we optimize once each outer-step, we get 4x effective batch size (32 -> SFT gives horrible performance at 32)
 # 
