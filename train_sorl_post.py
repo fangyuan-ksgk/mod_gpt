@@ -209,6 +209,26 @@ def parse_args():
 # Load SoRLWrapper Checkpoint
 # ---------------------------
 
+def _resolve_ckpt_dir(ckpt_dir: str) -> str:
+    """Return a local directory for ckpt_dir.
+
+    If ckpt_dir is already a local path, return it unchanged.
+    If it looks like a HuggingFace repo ID (``owner/repo``), download via
+    ``huggingface_hub.snapshot_download`` and return the cached local path.
+    """
+    import re
+    if os.path.isdir(ckpt_dir):
+        return ckpt_dir
+    if re.match(r'^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$', ckpt_dir):
+        from huggingface_hub import snapshot_download
+        print(f"Downloading HF checkpoint: {ckpt_dir}")
+        return snapshot_download(repo_id=ckpt_dir)
+    raise ValueError(
+        f"ckpt_dir '{ckpt_dir}' is neither a local directory nor a valid HF repo ID "
+        f"(expected 'owner/repo-name')."
+    )
+
+
 def load_checkpoint(model_name, abstract_vocab_size, ckpt_dir, device, untie_embeddings=False):
     """Load SorlModelWrapper + checkpoint weights (model.safetensors + abs_embeddings.pt + LoRA).
 
@@ -218,6 +238,7 @@ def load_checkpoint(model_name, abstract_vocab_size, ckpt_dir, device, untie_emb
     loading a checkpoint that has diverged embed/lm_head abstract rows will silently discard
     the embed_tokens values (last write into the shared tensor wins).
     """
+    ckpt_dir = _resolve_ckpt_dir(ckpt_dir)
     print(f"Loading base model: {model_name}")
     wrapper = SorlModelWrapper.from_pretrained(
         model_name,
