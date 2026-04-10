@@ -255,8 +255,19 @@ def load_checkpoint(model_name, abstract_vocab_size, ckpt_dir, device, untie_emb
         state = load_safetensors(safetensors_path, device="cpu")
         missing, unexpected = wrapper.load_state_dict(state, strict=False)
         print(f"  Loaded {len(state)} tensors (missing={len(missing)}, unexpected={len(unexpected)})")
+        lmhead_missing = any("lm_head" in k for k in missing)
         if missing:
             print(f"  Missing keys (first 5): {missing[:5]}")
+        # lm_head.weight is absent from safetensors when the checkpoint was saved
+        # with weight tying (only embed_tokens is written). If we are loading into
+        # an untied model (separate lm_head parameter), the NL rows of lm_head would
+        # stay at base-model init. Fix: copy from embed_tokens after loading.
+        if untie_embeddings and lmhead_missing:
+            hf = wrapper.model
+            embed_w_  = hf.model.embed_tokens.weight if hasattr(hf, "model") else hf.transformer.wte.weight
+            lmhead_w_ = hf.lm_head.weight
+            lmhead_w_.data[:base_vocab] = embed_w_.data[:base_vocab].clone()
+            print("  Copied NL rows embed_tokens → lm_head (tied ckpt loaded into untied model)")
     else:
         print(f"No model.safetensors found in {ckpt_dir}")
 
