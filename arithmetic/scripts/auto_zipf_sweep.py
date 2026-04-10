@@ -131,6 +131,18 @@ def main():
     )
     print(f"Low-data SoRL done. Log: {LOW_DATA_LOG}")
 
+    # Low-data vocab sweep — tests H1: vocab size × K interaction
+    print("\n=== Running low-data vocab sweep (K={1,4} × vocab={5,10,30,50} × data={25K,50K,100K}) ===")
+    LOW_VOCAB_JOBS = "/workspace/codes/mod_gpt/arithmetic/scripts/sweep_low_data_vocab.txt"
+    LOW_VOCAB_LOG = "/workspace/sorl_logs/sweep_low_data_vocab.log"
+    subprocess.run(
+        ["python", "-m", "arithmetic.scripts.gpu_queue",
+         LOW_VOCAB_JOBS, "3", "1"],
+        stdout=open(LOW_VOCAB_LOG, "w"),
+        stderr=subprocess.STDOUT,
+    )
+    print(f"Low-data vocab sweep done. Log: {LOW_VOCAB_LOG}")
+
     # Undersized model experiments: does SoRL converge when baseline fails?
     print("\n=== Running undersized model experiments ===")
     UNDERSIZE_JOBS = "/workspace/codes/mod_gpt/arithmetic/scripts/sweep_undersize.txt"

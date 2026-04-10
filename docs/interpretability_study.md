@@ -168,9 +168,9 @@ one per mechanism.
 
 ### Phase 1: Train Models
 
-- Tiny Qwen3 (3L/4H/512d), trained from scratch on 6-digit arithmetic
+- Tiny Qwen3 (2L/3H/510d, ~162M total, ~7.8M transformer), trained from scratch on 6-digit arithmetic
 - Baseline: standard SFT (no abstraction tokens)
-- SoRL v6: same model + abstraction tokens (vocab sweep: 1,2,4,5,8,10,16,20,24)
+- SoRL v1: same model + abstraction tokens (vocab sweep: 1,2,5,10,16,20,25,30,40,50,70,100)
 - Tasks: addition only, mixed addition+subtraction
 - Track: loss, accuracy (overall + per complexity S0-S6 / M0-M6 + per subtask)
 - Data efficiency: vary dataset size (10K, 50K, 100K, 250K, 500K)

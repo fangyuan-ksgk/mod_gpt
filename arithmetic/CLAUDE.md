@@ -1,5 +1,7 @@
 # Arithmetic Experiment Notes
 
+Results placeholders in `log/arithmetic.md` use `<!-- PLACEHOLDER: description -->`. Fill these in when results become available.
+
 **Start here:** Read [`MEMORY.md`](MEMORY.md) first for current session state and what to do next.
 Also check [`TODO.md`](TODO.md) for the task backlog.
 

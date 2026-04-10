@@ -23,22 +23,33 @@ Detailed interpretability plan: [`docs/interpretability_study.md`](../docs/inter
 ```
 arithmetic/
 ├── datasets/
-│   └── addition.py              # data gen, Quirke labels, complexity, eval sets
+│   └── addition.py              # data gen, Quirke labels, enrichment, eval sets
 ├── interp_utils/
 │   ├── interventions.py         # token-level interventions (SoRL analog of mech interp)
 │   ├── test_interventions.py    # 20 tests, all passing
 │   └── sae_trainer.py           # SAE via EleutherAI sparsify
+├── evaluate.py                  # ArithmeticEvaluator class
+├── catalog.py                   # ModelCatalog — index HF models
 ├── hub.py                       # HuggingFace save/load
-├── train.py                     # Qwen3 + SorlModelWrapper + v6
+├── train.py                     # unified training: baseline SFT + SoRL v1
+├── eval_sets/                   # cached deterministic eval sets (seed=42)
 └── scripts/
-    └── sweep.sh                 # full ablation sweep across 3 GPUs
+    ├── gpu_queue.py             # GPU job scheduler
+    ├── sweep_enriched.txt       # main 30-job sweep
+    ├── sweep_baselines_10ep.txt # 10-epoch baseline re-runs
+    ├── sweep_low_data_sorl.txt  # low-data SoRL K=1 experiments
+    ├── sweep_undersize.txt      # undersized model sweep
+    ├── auto_zipf_sweep.py       # autonomous zipf diversity pipeline
+    └── reeval_hf_models.py      # re-evaluate uploaded models
 ```
 
 Key links:
 [`train.py`](../arithmetic/train.py) |
 [`addition.py`](../arithmetic/datasets/addition.py) |
 [`interventions.py`](../arithmetic/interp_utils/interventions.py) |
-[`hub.py`](../arithmetic/hub.py)
+[`hub.py`](../arithmetic/hub.py) |
+[`evaluate.py`](../arithmetic/evaluate.py) |
+[`catalog.py`](../arithmetic/catalog.py)
 
 ---
 
@@ -53,12 +64,11 @@ Tiny Qwen3 from scratch (random init), wrapped in `SorlModelWrapper` for clean S
   │ Parameter          │ Value      │
   ├────────────────────┼────────────┤
   │ Architecture       │ Qwen3      │
-  │ Layers             │ 3          │
-  │ Attention heads    │ 4          │
-  │ Hidden dim         │ 512        │
-  │ MLP dim            │ 2048       │
-  │ Total params       │ ~168M      │
-  │ Active params      │ ~3M        │
+  │ Layers             │ 2          │
+  │ Attention heads    │ 3          │
+  │ Hidden dim         │ 510        │
+  │ Total params       │ ~162M      │
+  │ Transformer params │ ~7.8M      │
   │ Pretrained weights │ None       │
   │ Tokenizer          │ Qwen3-0.6B │
   └────────────────────┴────────────┘
@@ -66,11 +76,11 @@ Tiny Qwen3 from scratch (random init), wrapped in `SorlModelWrapper` for clean S
 
 Qwen3 tokenizer maps each digit/operator to exactly 1 token (uniform 21-token sequences).
 
-### SoRL: Trainer v6 (self-routing)
+### SoRL: Trainer v1 (info-gain)
 
-`SoRLTrainerv6` (`sorl/selfroute.py`): fixed diagonal lm_head for abstract tokens + grad
-hook freeze + traj-only loss. Cleanest SoRL variant. See [`docs/interpretability_study.md`](../docs/interpretability_study.md)
-for the full comparison of classical mech interp vs SoRL interp.
+`SoRLTrainer` (v1): info_gain loss + abs loss. Forces abstractions to actually reduce
+prediction uncertainty via `alpha_info_gain`. v6 (self-routing, traj-only loss) was tried
+but produces 0% accuracy from scratch — switched to v1.
 
 Baseline = same Qwen3 model, standard SFT, no abstraction tokens.
 
@@ -85,6 +95,10 @@ Baseline = same Qwen3 model, standard SFT, no abstraction tokens.
   Subtraction: D5 D4 D3 D2 D1 D0  -  D'5 D'4 D'3 D'2 D'1 D'0  =  A6 A5 A4 A3 A2 A1 A0
                ──── prompt (14 tokens) ────                         ── answer (7 tokens) ──
 ```
+
+**Enrichment:** 40% of positions forced to equal digits (creates borrow cascades),
+40% forced to sum-to-9 (creates carry cascades). Without enrichment, M3+ borrows
+are extremely rare (<1%).
 
 ### Quirke's algorithmic sub-tasks (paper sections 3.2-3.4)
 
@@ -159,9 +173,16 @@ carry from D0 cascades through 5 consecutive sum-9 positions.
   ├─────┼─────────────────────────────────┼──────────┤
   │ M0-M6 same structure for subtraction borrows     │
   └─────┴─────────────────────────────────┴──────────┘
+  Note: M6 is impossible for 6-digit subtraction (x >= y constraint). Max is M5.
 ```
 
-Data enrichment (Quirke): 60% of batches, 40% of positions forced to sum-to-9.
+### Eval sets
+
+Fixed eval set (seed=42, cached in `eval_sets/`). Includes:
+- S0-S6: carry cascade complexity (addition)
+- M0-M5: borrow cascade complexity (subtraction)
+- C3-C6: hot carry chains (consecutive carry positions)
+- B3-B5: hot borrow chains (consecutive borrow positions)
 
 ### Datasets on HuggingFace
 
@@ -180,171 +201,63 @@ Columns: `tokens, labels, op, complexity, cascade_depth, x_digits, y_digits, z_d
 
 ---
 
-## Ablation Sweep (36 unique runs)
-
-All models: tiny Qwen3 3L/4H/512d, trained from scratch, 3 epochs.
-All eval: random (256) + stratified (S0-S6, M0-M6) + Quirke handcrafted.
-
-### Ablation 1+2: Baseline vs SoRL x Data efficiency
-
-```
-  ┌──────────┬────────────┬──────────────────────────────────────────┐
-  │ Task     │ Mode       │ Dataset sizes                            │
-  ├──────────┼────────────┼──────────────────────────────────────────┤
-  │ add      │ baseline   │ 10K, 50K, 100K, 250K, 500K              │  5 runs
-  │ add      │ SoRL v6/16 │ 10K, 50K, 100K, 250K, 500K              │  5 runs
-  │ add_sub  │ baseline   │ 10K, 50K, 100K, 250K, 500K              │  5 runs
-  │ add_sub  │ SoRL v6/16 │ 10K, 50K, 100K, 250K, 500K              │  5 runs
-  └──────────┴────────────┴──────────────────────────────────────────┘  = 20 runs
-```
-
-Questions: does SoRL match baseline accuracy? Does it need less data for S4-S6?
-
-### Ablation 3: Vocab size sweep (all at 500K)
-
-```
-  ┌──────────┬────────────────────────────────────────────────────────┐
-  │ Task     │ abs_vocab (0=baseline, rest=SoRL v6)                   │
-  ├──────────┼────────────────────────────────────────────────────────┤
-  │ add      │ 1, 2, 4, 5*, 8, 10, 20, 24                           │  8 runs
-  │ add_sub  │ 1, 2, 4, 5, 8, 10*, 20, 24                           │  8 runs
-  └──────────┴────────────────────────────────────────────────────────┘  = 16 runs
-  (vocab=0 and vocab=16 already covered by ablation 1+2 at 500K)
-  * = matches sub-task count (5 add / 10 total)
-```
-
-Questions: does vocab=5 give 1-to-1 token-mechanism mapping? What happens at vocab=1?
-
-### Ablation 4: K sweep (abstraction insertion frequency, at 500K)
-
-K = every K trajectory tokens, insert one abstraction token.
-
-```
-  ┌──────────┬────────────────────────────────────────────────────────┐
-  │ Task     │ K values (at vocab=5, 10, 16)                         │
-  ├──────────┼────────────────────────────────────────────────────────┤
-  │ add      │ K=2, 3, 4* (each x vocab 5, 10, 16)                  │  9 runs
-  │ add_sub  │ K=2, 3, 4* (each x vocab 5, 10, 16)                  │  9 runs
-  └──────────┴────────────────────────────────────────────────────────┘  = 18 runs
-  * K=4 already in vocab sweep
-```
-
-K=2: ~7 abs tokens per sequence (dense reasoning). K=4: ~3-4 abs tokens (sparse).
-
-### Ablation 5: Undersized model (2L/3H/510d, add_sub at 500K)
-
-```
-  abs_vocab: 0 (baseline), 1, 2, 5, 8, 10, 16                      = 7 runs
-```
-
-Does SoRL help when the model is undersized for mixed add+sub?
-
-### Total: ~69 runs + 10 SAE training runs
-
-```
-  Ablation 1+2 (data eff.):    20 runs
-  Ablation 3 (vocab sweep):    16 runs
-  Ablation 4 (K sweep):        12 runs (K=2,3 only; K=4 in ablation 3)
-  Ablation 5 (undersized):      7 runs
-  Extra vocab gap-fills:         4 runs
-  SAEs (key models):            10 runs (3 layers, k={32} or {8,16,32,64})
-  ──────────────────────────────────────────
-  Total:                        69 jobs
-```
-
----
-
-## Interpretability
-
-Plan and methodology: [`docs/interpretability_study.md`](../docs/interpretability_study.md)
-Token-level intervention utils: [`interventions.py`](../arithmetic/interp_utils/interventions.py)
-(tested: [`test_interventions.py`](../arithmetic/interp_utils/test_interventions.py), 20/20 passing)
-
----
-
 ## Results
 
-All models: 2L/3H/510d Qwen3 from scratch on 6-digit add+sub.
+All models: 2L/3H/510d Qwen3 from scratch on 6-digit add+sub with enrichment.
 SoRL: v1 trainer (alpha_info_gain=10, alpha_abs=0.1, alpha_zipf=1.0).
 Eval: recursion + teacher-forced (matches training procedure).
-Note: v6 trainer produces 0% accuracy from scratch — v1 required.
 
-### 1. SoRL accuracy across vocab size and K
-
-All at 500K data, 5 epochs. Accuracy = full-sequence match on 100 random examples.
+### 1. Baselines (SFT, 5 epochs, add_sub)
 
 ```
-  ┌───────────┬──────────────────────────────────────────────────────────┐
-  │ abs_vocab  │ K=1         K=2         K=3         K=4                │
-  ├───────────┼──────────────────────────────────────────────────────────┤
-  │ baseline   │                                     100%               │
-  │  1         │                                     100%               │
-  │  2         │                                     100%               │
-  │  5         │                                     100%               │
-  │ 10         │ 100%        100%        100%        100%               │
-  │ 16         │             100%         99%        100%               │
-  │ 20         │                                     100%               │
-  └───────────┴──────────────────────────────────────────────────────────┘
-  (blank = not yet trained)
+  ┌─────────┬─────────┬────────┬────────┬────────┬────────┬────────┐
+  │ Data    │ Overall │  S5    │  S6    │  C6    │  M5    │  B5    │
+  ├─────────┼─────────┼────────┼────────┼────────┼────────┼────────┤
+  │  10K    │   10%   │  18%   │  60%   │   2%   │   2%   │   0%   │
+  │  25K    │   55%   │  20%   │  34%   │  26%   │  10%   │  34%   │
+  │  50K    │   84%   │  42%   │  72%   │  70%   │   8%   │  74%   │
+  │ 250K    │  100%   │ 100%   │ 100%   │ 100%   │ 100%   │ 100%   │
+  │ 500K    │  100%   │ 100%   │ 100%   │ 100%   │ 100%   │ 100%   │
+  └─────────┴─────────┴────────┴────────┴────────┴────────┴────────┘
+  Hard cases fail at 10K-50K. 250K+ saturates.
 ```
 
-SoRL v1 matches baseline accuracy at 100% across all tested vocab sizes (1-20)
-and K values (1-4). Abstraction tokens do not degrade performance.
+<!-- PLACEHOLDER: 10-epoch baseline results (12 jobs queued) — apples-to-apples with SoRL -->
 
+### 2. SoRL v1 K=1 (10 epochs, 500K add_sub)
 
-### 2. Hard cases: accuracy by Quirke complexity
+All vocab sizes tested (2, 16, 20, 30, 50, 70, 100): 100% on ALL splits including
+hard ones (S5, S6, C6, M5, B5). K=1 is universally robust.
 
-Cascade carries (S3-S6) and borrows (M3-M4) are the hardest cases.
-At 500K data both baseline and SoRL get 100% everywhere.
-The interesting regime is **low data** where baselines struggle.
+### 3. SoRL v1 K=4 (10 epochs, 500K add_sub)
 
-**Baseline SFT on add_sub at different dataset sizes:**
+Most vocab sizes reach 100%. Known fragile spot: abs30 K=4 is broken (S5=54%, M5=34%).
+abs16 K=4: M5=96%. K=4 is less robust than K=1 at certain vocab sizes.
 
-```
-  ┌─────────┬────────┬────────┬────────┬────────┬────────┬────────┬────────┬────────┐
-  │ Data    │  S0    │  S1    │  S2    │  S3    │  S4    │  S5    │  S6    │ random │
-  ├─────────┼────────┼────────┼────────┼────────┼────────┼────────┼────────┼────────┤
-  │  10K    │   0%   │   0%   │   0%   │   0%   │   0%   │   4%   │  10%   │   0%   │
-  │  25K    │  98%   │  98%   │  96%   │  48%   │  66%   │  44%   │  22%   │  97%   │
-  │  50K    │ 100%   │ 100%   │ 100%   │  94%   │  82%   │  72%   │   *    │  99%   │
-  │ 100K    │ 100%   │ 100%   │ 100%   │ 100%   │ 100%   │ 100%   │ 100%   │ 100%   │
-  │ 500K    │ 100%   │ 100%   │ 100%   │ 100%   │ 100%   │ 100%   │ 100%   │ 100%   │
-  └─────────┴────────┴────────┴────────┴────────┴────────┴────────┴────────┴────────┘
-  * S6 not evaluated at 50K (insufficient stratified examples)
+<!-- PLACEHOLDER: full K=4 results table across all vocab sizes and hard splits -->
 
-  Subtraction (same data sizes):
-  ┌─────────┬────────┬────────┬────────┬────────┬────────┐
-  │ Data    │  M0    │  M1    │  M2    │  M3    │  M4    │
-  ├─────────┼────────┼────────┼────────┼────────┼────────┤
-  │  25K    │  98%   │  98%   │ 100%   │  64%   │  44%   │
-  │  50K    │ 100%   │ 100%   │ 100%   │  80%   │  89%   │
-  │ 100K+   │ 100%   │ 100%   │ 100%   │ 100%   │ 100%   │
-  └─────────┴────────┴────────┴────────┴────────┴────────┘
-```
+### 4. Data efficiency: SoRL vs baseline at low data
 
-**SoRL v1 (abs=10, K=4) vs baseline at 25K data:**
+At 500K, both baseline and SoRL saturate at 100%. The differentiation story is at
+low data (10K-50K) where baselines fail on cascades.
 
-```
-  ┌─────────┬────────────┬────────────┬─────────┐
-  │ Case    │  Baseline  │  SoRL v1   │  Delta   │
-  ├─────────┼────────────┼────────────┼─────────┤
-  │ S0-S2   │   ~99%     │   ~97%     │  ~even   │
-  │ S3      │    62%     │    68%     │   +6%    │
-  │ S4      │    60%     │    58%     │   -2%    │
-  │ S5      │    60%     │    64%     │   +4%    │
-  │ S6      │    34%     │    26%     │   -8%    │
-  │ M0-M2   │   ~99%     │   ~98%     │  ~even   │
-  │ M3      │    68%     │    26%     │  -42%    │
-  │ M4      │    25%     │     0%     │  -25%    │
-  └─────────┴────────────┴────────────┴─────────┘
-```
+<!-- PLACEHOLDER: SoRL K=1 vocab=10 at 10K, 25K, 50K, 100K, 250K (5 jobs queued) -->
 
-SoRL does NOT help at low data. Addition cascades are roughly even.
-Subtraction borrows are significantly worse with SoRL (M3: 68%→26%, M4: 25%→0%).
-The abstraction tokens may consume model capacity needed for the core task.
+### 5. Undersized models
 
+Three architectures (1L/3H/510d, 1L/2H/256d, 2L/1H/128d) tested across
+5 data sizes, baseline + SoRL = 30 jobs total.
 
-### 3. Vocabulary utilization
+<!-- PLACEHOLDER: undersized model results (30 jobs queued) -->
+
+### 6. Zipf diversity sweep
+
+3 zipf values x 2 K x 4 best vocabs = 24 jobs. Testing whether higher
+alpha_soft_zipf produces genuine vocabulary diversity vs uncertainty noise.
+
+<!-- PLACEHOLDER: zipf sweep results (24 jobs queued) -->
+
+### 7. Vocabulary utilization
 
 How many abstraction tokens does the model actually use?
 
@@ -364,7 +277,7 @@ How many abstraction tokens does the model actually use?
 ```
 
 Pattern: ~70% of vocab is used. Top-3 concentration decreases with larger vocab
-(100% at vocab=5 → 51% at vocab=20). Distribution is Zipf-like, not uniform.
+(100% at vocab=5 to 51% at vocab=20). Distribution is Zipf-like, not uniform.
 
 **Vocab utilization across K (abs_vocab=10, add_sub, 500K):**
 
@@ -382,4 +295,12 @@ Pattern: ~70% of vocab is used. Top-3 concentration decreases with larger vocab
 K does NOT affect utilization count (always 7/10). But K=2,3 concentrate more
 on fewer tokens (87% top-3) vs K=1,4 (~68% top-3).
 
-Pending: vocab 25-100 utilization results (running).
+<!-- PLACEHOLDER: vocab 25-100 utilization results -->
+
+---
+
+## Interpretability
+
+Plan and methodology: [`docs/interpretability_study.md`](../docs/interpretability_study.md)
+Token-level intervention utils: [`interventions.py`](../arithmetic/interp_utils/interventions.py)
+(tested: [`test_interventions.py`](../arithmetic/interp_utils/test_interventions.py), 20/20 passing)
