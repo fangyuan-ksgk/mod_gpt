@@ -154,32 +154,35 @@ run_bg() {
 # SFT sensitivity sweep — 2 GPUs, 2 runs/batch
 #
 # All 5 models × 3 axes, done one axis at a time:
-#   A. Effective batch size: {8, 32}  × ALL models × GSM8K, ep=1
-#   B. Num epochs:           {1, 4}   × ALL models × GSM8K, bs=8
-#   C. Dataset breadth:      ARC, MMLU, CSQA, BoolQ, OpenBookQA, AQuA, HotpotQA
+#   A. Batch size: bs=8            × ALL models × GSM8K, ep=1
+#   B. Num epochs: {1, 4}          × ALL models × GSM8K, bs=8
+#   C. Dataset breadth: GSM8K, SciQA, ARC, MMLU, CSQA, BoolQ, OpenBookQA, AQuA, HotpotQA
 #                             × ALL models, bs=8, ep=1
-#                             (skip GSM8K & ScienceQA — already have results)
 #
 # Models: Qwen 0.6B, 1.7B, 4B, Llama 1B, Llama 3B
-# All runs use LoRA (r=16, α=32).
+# No LoRA — full fine-tune.
 # ============================================================================================
 
 ALL_MODELS=("$M06" "$M16" "$ML1" "$ML3" "$M4")
 ALL_TAGS=("06b" "17b" "l1b" "l3b" "4b")
 
 # ═══════════════════════════════════════════════════════════════════════════
-# A. Batch size sweep: bs={8, 32} × ALL models (GSM8K, ep=1)
-#    10 runs = 5 models × 2 bs values
+# A. Batch size: bs=8 × ALL models (GSM8K, ep=1)
+#    5 runs = 5 models × 1 bs value
 # ═══════════════════════════════════════════════════════════════════════════
 echo ""
-echo "A: batch size sweep — all models × bs={8,32} on GSM8K"
+echo "A: batch size sweep — all models × bs=8 on GSM8K"
 
 for i in "${!ALL_MODELS[@]}"; do
   m="${ALL_MODELS[$i]}"
   t="${ALL_TAGS[$i]}"
   run_bg "${t}_gsm_bs8"  $m $DS_GSM  # default: bs=2 × ga=4 = 8
-  wait
+
+  if (( (i + 1) % N_GPUS == 0 )); then
+    wait
+  fi
 done
+wait
 
 # ═══════════════════════════════════════════════════════════════════════════
 # B. Epoch sweep: ep={1, 4} × ALL models (GSM8K, bs=8)
@@ -202,14 +205,14 @@ done
 wait
 
 # ═══════════════════════════════════════════════════════════════════════════
-# C. Dataset breadth: 7 datasets × ALL models (bs=8, ep=1)
-#    Skip GSM8K (covered in A) and ScienceQA (already have results).
-#    35 runs = 5 models × 7 datasets
+# C. Dataset breadth: 9 datasets × ALL models (bs=8, ep=1)
+#    GSM8K + SciQA included for full-FT SFT baseline (no LoRA).
+#    45 runs = 5 models × 9 datasets
 # ═══════════════════════════════════════════════════════════════════════════
 SWEEP_DS=("$DS_GSM" "$DS_SCI" "$DS_ARC" "$DS_MMLU" "$DS_CSQA" "$DS_BOOLQ" "$DS_OBQA" "$DS_AQUA" "$DS_HPQA")
 
 echo ""
-echo "C: dataset breadth — all models × 7 datasets"
+echo "C: dataset breadth — all models × 9 datasets"
 
 for ds in "${SWEEP_DS[@]}"; do
   echo "  --- dataset: $ds ---"
@@ -228,9 +231,9 @@ done
 echo ""
 echo "============================================================"
 echo "All done."
-echo "  A (batch size):   10 runs  (5 models × {8,32})"
+echo "  A (batch size):    5 runs  (5 models × bs=8)"
 echo "  B (epochs):        5 runs  (5 models × ep=4; ep=1 from A)"
-echo "  C (datasets):     35 runs  (5 models × 7 datasets)"
-echo "  Total:            50 experiments"
+echo "  C (datasets):     45 runs  (5 models × 9 datasets)"
+echo "  Total:            55 experiments"
 echo "  Results in ./ckpt/sweep_${TIMESTAMP}/"
 echo "============================================================"
