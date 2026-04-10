@@ -97,6 +97,77 @@ def generate_zipf_jobs(best_vocabs):
     return jobs
 
 
+def check_baseline_convergence():
+    """
+    Check if 10-epoch baselines are still improving. If the last 3 eval points
+    show >1% improvement, queue 30-epoch runs for those data sizes.
+    """
+    from huggingface_hub import hf_hub_download
+    import json
+
+    KEY_BASELINES = [
+        ("add_sub_baseline_25K", 25000),
+        ("add_sub_baseline_50K", 50000),
+        ("add_sub_baseline_100K", 100000),
+    ]
+
+    still_improving = []
+    for name, ds_size in KEY_BASELINES:
+        try:
+            path = hf_hub_download(
+                "thoughtworks/arithmetic-sorl", f"{name}/metrics.json",
+                local_dir="/tmp/hf_cache/arithmetic-sorl",
+            )
+            m = json.load(open(path))
+            h = m.get("history", {})
+            evals = h.get("eval_accuracy", [])
+            if len(evals) < 6:
+                print(f"  {name}: only {len(evals)} eval points, skipping convergence check")
+                continue
+
+            # Compare last 3 eval points vs 3 before that
+            recent = sum(evals[-3:]) / 3
+            earlier = sum(evals[-6:-3]) / 3
+            delta = recent - earlier
+            print(f"  {name}: last3={recent:.3f} prev3={earlier:.3f} delta={delta:+.3f}")
+
+            if delta > 0.01:  # >1% improvement in second half
+                still_improving.append((name, ds_size))
+        except Exception as e:
+            print(f"  {name}: couldn't check — {e}")
+
+    if not still_improving:
+        print("\nBaselines converged at 10 epochs. No extended runs needed.")
+        return
+
+    print(f"\n{len(still_improving)} baselines still improving — queuing 30-epoch runs:")
+    jobs = []
+    for name, ds_size in still_improving:
+        ds_k = ds_size // 1000
+        cmd = (
+            f"python -m arithmetic.train --mode baseline --ops add_sub "
+            f"--dataset_size {ds_size} --num_epochs 30 --push_to_hub --no_wandb "
+            f"--output_dir ckpt/sweep/add_sub_baseline_{ds_k}K_30ep"
+        )
+        jobs.append(cmd)
+        print(f"  {cmd[:80]}...")
+
+    # Write and run
+    jobs_file = "/workspace/codes/mod_gpt/arithmetic/scripts/sweep_baselines_30ep.txt"
+    with open(jobs_file, "w") as f:
+        f.write("# Auto-generated: baselines still improving at 10 epochs\n")
+        for j in jobs:
+            f.write(j + "\n")
+
+    log_file = "/workspace/sorl_logs/sweep_baselines_30ep.log"
+    subprocess.run(
+        ["python", "-m", "arithmetic.scripts.gpu_queue", jobs_file, "3", "2"],
+        stdout=open(log_file, "w"),
+        stderr=subprocess.STDOUT,
+    )
+    print(f"30-epoch baselines done. Log: {log_file}")
+
+
 def main():
     print(f"Waiting for main sweep to finish ({TOTAL_MAIN_JOBS} jobs)...")
     print(f"Watching: {SWEEP_LOG}")
@@ -118,6 +189,9 @@ def main():
         stderr=subprocess.STDOUT,
     )
     print(f"10-epoch baselines done. Log: {BASELINE_LOG}")
+
+    # Check if baselines are still improving at epoch 10 — if so, queue longer runs
+    check_baseline_convergence()
 
     # SoRL at low data sizes — the data efficiency comparison
     print("\n=== Running SoRL at low data sizes (K=1 vocab=10) ===")
