@@ -253,12 +253,43 @@ Check whether:
 Expected: SoRL with vocab >= 10 (matching sub-task count) should have less
 polysemanticity than baseline hidden nodes. Vocab < 5 should force polysemanticity.
 
-### Phase 8: Auto-Interpretability
+### Phase 8: Auto-Interpretability (Juang et al. 2024)
 
-- Collect top-k highest logit-margin abstraction token usages
-- Run auto-interpretability (LLM-as-judge) to describe what each token does
-- Compare SoRL token descriptions to SAE feature descriptions
-- Are SoRL tokens more interpretable than SAE features?
+Adapt Eleuther's automated interpretability pipeline (arxiv:2410.13928) to SoRL tokens.
+Their pipeline was designed for SAE latents (continuous activations); SoRL tokens are
+discrete assignments, which simplifies the pipeline and removes thresholding ambiguity.
+
+**Key advantage**: we have ground-truth subtask labels (Quirke's SA/SC/SS/UC/US etc.)
+to validate autointerp explanations against. SAE autointerp has no such ground truth.
+
+**Pipeline**:
+
+1. **Collect activations** (§3.1 adapted): for each abs token ID, gather top-N examples
+   ranked by logit confidence. Include the full arithmetic problem, the position where
+   the token was placed, and the ground-truth subtask label.
+
+2. **Generate interpretations** (§3.2): feed top activating examples to LLM explainer.
+   Ask: "What do these arithmetic problems have in common at the marked position?"
+   Also explore **intervention-based explanations** (§3.2.1): describe what changes in
+   the model's output when this token is swapped or removed.
+
+3. **Score interpretations** (§3.3) — 5 metrics, adapted:
+   - **Detection** (§3.3.1): can scorer identify which sequences use this token?
+   - **Fuzzing** (§3.3.2): can scorer identify which *position* the token appears at?
+   - **Embedding** (§3.3.4): does explanation retrieve correct examples? (cheapest: $50/100K)
+   - **Surprisal** (§3.3.3): less relevant for discrete tokens, but could measure
+     whether explanation predicts token placement better than chance.
+   - **Intervention** (§3.3.5): does explanation predict the effect of token swap/removal?
+
+4. **Validate against ground truth**: compute precision/recall of autointerp explanation
+   vs actual Quirke subtask labels. E.g., if autointerp says "this token marks carry
+   propagation positions", check P(UC|token) and P(token|UC).
+
+5. **Compare SoRL vs SAE**: run same pipeline on SAE features from baseline model.
+   Are SoRL tokens more interpretable (higher scores) than SAE features?
+
+**Refs**: Juang et al. 2024 "Autointerp" (arxiv:2410.13928); Bills et al. 2023
+"Language models can explain neurons in language models"
 
 ---
 

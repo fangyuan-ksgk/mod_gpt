@@ -19,7 +19,16 @@
 
 ## High Priority
 
-- [ ] **Autointerp of SoRL tokens (Bills et al. style)** — For each abs token ID: (1) collect top-N examples ranked by logit confidence for that token, (2) characterize what they share (digit position, subtask, complexity), (3) optionally use LLM to generate natural language explanation, score on held-out. SoRL tokens are cleaner than neurons — discrete assignments, no thresholding. Validate against ground-truth subtask labels. Ref: Bills et al. 2023 "Language models can explain neurons in language models".
+- [ ] **Autointerp of SoRL tokens** — Adapt Eleuther's automated interpretability pipeline (Juang et al. 2024, arxiv:2410.13928) to SoRL tokens. Their pipeline scores SAE latent interpretations via 5 methods; ours is simpler since SoRL tokens are discrete assignments, not continuous activations. Steps:
+  1. **Collect activations**: for each abs token ID, gather top-N examples ranked by logit confidence (analogous to their §3.1 activation collection)
+  2. **Generate interpretations**: feed top activating examples to LLM explainer (§3.2). Each example has the full arithmetic problem + which position the token was placed + subtask label. Ask for natural language explanation of what this token represents.
+  3. **Score interpretations** using their 5 metrics adapted to our setting:
+     - **Detection**: can an LLM identify which sequences use this token given the explanation?
+     - **Fuzzing**: can it identify which *position* the token was placed at?
+     - **Embedding**: does the explanation retrieve the right examples via embedding similarity?
+     - (Surprisal and Intervention scoring less relevant for discrete tokens)
+  4. **Validate against ground truth**: we have Quirke subtask labels (SA/SC/SS/UC/US etc.) — compute precision/recall of the autointerp explanation vs actual subtask assignments. This is a unique advantage over SAE autointerp where no ground truth exists.
+  - Ref: Juang et al. 2024 "Autointerp"; Bills et al. 2023 "Language models can explain neurons"
 - [ ] **Token-subtask correlation analysis** — for each abs token ID, compute P(token | subtask_label). Do tokens map to SA/SC/SS/UC/US? (feeds into autointerp)
 - [ ] **Per-complexity vocab utilization** — do specific tokens appear only for S3+ cascades?
 - [ ] **Fill placeholders in arithmetic.md** — update `<!-- PLACEHOLDER: ... -->` markers as results come in.
