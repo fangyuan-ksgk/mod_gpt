@@ -38,7 +38,8 @@ EXP_IDX=0
 # REINFORCE hyperparams
 K=4
 N=4
-MAX_ITER=2
+MAX_ITER=4
+EVAL_ABS_PREFIX_MAX=8    # abs_prefix_max used when the SoRL ckpt was trained
 LR=1e-5
 BATCH_SIZE=2
 MAX_STEPS=1000
@@ -67,7 +68,7 @@ run_bg() {
     --abstract_vocab_size $ABS_VOCAB \
     --ckpt_dir      $ckpt \
     --dataset       $dataset \
-    --K $K --N $N --max_iterations $MAX_ITER \
+    --K $K --N $N --max_iterations $MAX_ITER --eval_abs_prefix_max $EVAL_ABS_PREFIX_MAX \
     --lr $LR \
     --batch_size $BATCH_SIZE \
     --max_steps $MAX_STEPS \

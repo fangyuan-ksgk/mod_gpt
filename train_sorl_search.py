@@ -10,8 +10,9 @@ using REINFORCE with leave-one-out baseline.
   Train  : full model; NL lm_head rows frozen via hook (abstract rows trainable)
 
 Usage:
-    # Single GPU
-    python train_sorl_search.py --ckpt_dir ckpt/06b-128v
+    # Single GPU  (06b-128v was trained with pfx=8, V=128, iter=4)
+    python train_sorl_search.py --ckpt_dir ckpt/06b-128v \
+        --abstract_vocab_size 128 --max_iterations 4 --eval_abs_prefix_max 8
 
     # DDP (4 GPUs)
     torchrun --nproc_per_node=4 train_sorl_search.py --ckpt_dir ckpt/06b-128v
@@ -74,14 +75,17 @@ def parse_args():
 
     # Logging / Eval / Checkpoint
     p.add_argument("--log_every",       type=int, default=10)
-    p.add_argument("--eval_every",      type=int, default=200)
-    p.add_argument("--save_every",      type=int, default=500)
-    p.add_argument("--eval_samples",    type=int, default=200)
-    p.add_argument("--eval_batch_size", type=int, default=8)
+    p.add_argument("--eval_every",      type=int, default=99999)
+    p.add_argument("--save_every",      type=int, default=99999)
+    p.add_argument("--eval_samples",    type=int, default=1300)
+    p.add_argument("--eval_batch_size", type=int, default=32)
     p.add_argument("--max_new_tokens",  type=int, default=256)
     p.add_argument("--num_log_samples",         type=int, default=3)
-    p.add_argument("--baseline_eval_samples",  type=int, default=100,
+    p.add_argument("--baseline_eval_samples",  type=int, default=1300,
                    help="Samples for the one-time pre-training baseline eval (faster than full eval_samples)")
+    p.add_argument("--eval_abs_prefix_max",     type=int, default=None,
+                   help="abs_prefix_max passed to model.generate for K-eval. Defaults to K. "
+                        "Use prefix mode (exactly N abstract tokens) instead of periodic mode (1 every K NL tokens).")
     p.add_argument("--output_dir",      type=str, default="./ckpt/reinforce_search")
     p.add_argument("--untie_embeddings", action="store_true",
                    help="Must match the flag used when training the checkpoint")
@@ -123,7 +127,7 @@ def _save_checkpoint(raw_model, step, epoch, out_dir):
 # Training loop
 # ---------------------------------------------------------------------------
 def train_reinforce(model, tokenizer, train_ds, val_ds, args,
-                    compute_accuracy, log, is_master, device, ddp, rank):
+                    compute_accuracy, log, is_master, device, ddp, rank, eval_pfx=None):
 
     pad_id     = tokenizer.pad_token_id if tokenizer.pad_token_id is not None else 0
     raw_model  = model.module if ddp else model
@@ -262,7 +266,8 @@ def train_reinforce(model, tokenizer, train_ds, val_ds, args,
                 res_nl = compute_accuracy(raw_model, tokenizer, val_ds, device,
                                           args.eval_samples, eval_K=None)
                 res_k  = compute_accuracy(raw_model, tokenizer, val_ds, device,
-                                          args.eval_samples, eval_K=args.K)
+                                          args.eval_samples, eval_K=args.K,
+                                          abs_prefix_max=eval_pfx)
                 log(f"  Acc[K=None]={res_nl['accuracy']*100:.1f}%  "
                     f"Acc[K={args.K}]={res_k['accuracy']*100:.1f}%  "
                     f"(gap={res_k['accuracy']*100 - res_nl['accuracy']*100:+.1f}pp)")
@@ -344,11 +349,13 @@ def main():
 
     # ── Baseline eval (before training) ─────────────────────────────────────
     raw_model = model.module if ddp else model
+    eval_pfx = args.eval_abs_prefix_max if args.eval_abs_prefix_max is not None else args.K
     if is_master:
         n_base = args.baseline_eval_samples
-        log(f"--- Baseline evaluation (before REINFORCE, n={n_base}) ---")
+        log(f"--- Baseline evaluation (before REINFORCE, n={n_base}, abs_prefix_max={eval_pfx}) ---")
         res_nl = compute_accuracy(raw_model, tokenizer, val_ds, device, n_base, eval_K=None)
-        res_k  = compute_accuracy(raw_model, tokenizer, val_ds, device, n_base, eval_K=args.K)
+        res_k  = compute_accuracy(raw_model, tokenizer, val_ds, device, n_base,
+                                  eval_K=args.K, abs_prefix_max=eval_pfx)
         log(f"  Baseline Acc[K=None]={res_nl['accuracy']*100:.1f}%  "
             f"Acc[K={args.K}]={res_k['accuracy']*100:.1f}%")
         model.train()
@@ -356,14 +363,15 @@ def main():
     # ── Train ────────────────────────────────────────────────────────────────
     history = train_reinforce(
         model, tokenizer, train_ds, val_ds, args,
-        compute_accuracy, log, is_master, device, ddp, rank,
+        compute_accuracy, log, is_master, device, ddp, rank, eval_pfx,
     )
 
     # ── Final eval + save ────────────────────────────────────────────────────
     if is_master:
         log("--- Final evaluation ---")
         res_nl = compute_accuracy(raw_model, tokenizer, val_ds, device, args.eval_samples, eval_K=None)
-        res_k  = compute_accuracy(raw_model, tokenizer, val_ds, device, args.eval_samples, eval_K=args.K)
+        res_k  = compute_accuracy(raw_model, tokenizer, val_ds, device, args.eval_samples,
+                                  eval_K=args.K, abs_prefix_max=eval_pfx)
         log(f"Final Acc[K=None]={res_nl['accuracy']*100:.1f}%  "
             f"Acc[K={args.K}]={res_k['accuracy']*100:.1f}%  "
             f"(gap={res_k['accuracy']*100 - res_nl['accuracy']*100:+.1f}pp)")
