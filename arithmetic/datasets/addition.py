@@ -32,6 +32,7 @@ Token IDs: 0-9 = digits, 10 = '+', 11 = '=', 12 = '-'
 """
 import torch
 import random
+from pathlib import Path
 from dataclasses import dataclass, field
 from typing import List, Tuple, Optional, Union
 
@@ -588,6 +589,58 @@ def forced_sub_hot_chain(n_digits: int, target_depth: int) -> ArithmeticExample:
 
 
 # ── Structured eval sets ────────────────────────────────────────────
+
+EVAL_CACHE_DIR = Path("/workspace/codes/mod_gpt/arithmetic/eval_sets")
+
+
+def get_eval_set(n_digits: int = 6, ops: str = "add", N: int = 50,
+                 seed: int = 42) -> dict:
+    """
+    Get a fixed eval set. Generates once with a fixed seed, caches to disk.
+    All models are evaluated on the exact same examples.
+    """
+    cache_file = EVAL_CACHE_DIR / f"eval_{ops}_{n_digits}d_N{N}_seed{seed}.json"
+
+    if cache_file.exists():
+        import json
+        with open(cache_file) as f:
+            data = json.load(f)
+        # Reconstruct ArithmeticExample objects
+        categories = {}
+        for split_name, examples_data in data.items():
+            examples = []
+            for ed in examples_data:
+                examples.append(ArithmeticExample(**ed))
+            categories[split_name] = examples
+        return categories
+
+    # Generate with fixed seed
+    old_state = random.getstate()
+    random.seed(seed)
+    categories = make_eval_set(n_digits=n_digits, ops=ops, N=N)
+    random.setstate(old_state)
+
+    # Cache to disk
+    import json
+    cache_file.parent.mkdir(parents=True, exist_ok=True)
+    data = {}
+    for split_name, examples in categories.items():
+        data[split_name] = [
+            {
+                "tokens": e.tokens, "x_digits": e.x_digits,
+                "y_digits": e.y_digits, "z_digits": e.z_digits,
+                "labels": e.labels, "op": e.op,
+                "complexity": e.complexity, "cascade_depth": e.cascade_depth,
+                "sa": e.sa, "st": e.st, "sv": e.sv,
+            }
+            for e in examples
+        ]
+    with open(cache_file, "w") as f:
+        json.dump(data, f)
+
+    print(f"Cached eval set to {cache_file} ({sum(len(v) for v in categories.values())} examples)")
+    return categories
+
 
 def make_eval_set(n_digits: int = 6, ops: str = "add", N: int = 50):
     categories = {}

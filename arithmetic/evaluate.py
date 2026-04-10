@@ -19,7 +19,7 @@ import torch
 from pathlib import Path
 from typing import Optional, List
 
-from arithmetic.datasets.addition import make_eval_set, ALL_LABELS
+from arithmetic.datasets.addition import get_eval_set, ALL_LABELS
 from arithmetic.train import QWEN3_TOKEN_MAP, QWEN3_INV_MAP
 
 
@@ -123,7 +123,7 @@ class ArithmeticEvaluator:
             dict with per-split results + summary.
         """
         self.model.eval()
-        categories = make_eval_set(self.n_digits, ops)
+        categories = get_eval_set(self.n_digits, ops, N=n_per_split)
 
         results = {
             "config": {
