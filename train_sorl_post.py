@@ -199,6 +199,8 @@ def parse_args():
     # Embedding warm-up (freeze non-abstract params for first N steps)
     p.add_argument("--emb_warmup_steps", type=int, default=0,
                    help="Phase-1 steps: train only abstract emb/lm_head rows, freeze everything else")
+    p.add_argument("--untie_embeddings", action="store_true",
+                   help="Untie lm_head from embed_tokens so abstract rows train independently (Qwen3 default: tied)")
 
     return p.parse_args()
 
@@ -207,12 +209,20 @@ def parse_args():
 # Load SoRLWrapper Checkpoint
 # ---------------------------
 
-def load_checkpoint(model_name, abstract_vocab_size, ckpt_dir, device):
-    """Load SorlModelWrapper + checkpoint weights (model.safetensors + abs_embeddings.pt + LoRA)."""
+def load_checkpoint(model_name, abstract_vocab_size, ckpt_dir, device, untie_embeddings=False):
+    """Load SorlModelWrapper + checkpoint weights (model.safetensors + abs_embeddings.pt + LoRA).
+
+    untie_embeddings must match the flag used during training: if the checkpoint was saved
+    with --untie_embeddings, pass True here so that embed_tokens and lm_head abstract rows
+    are restored as independent parameters.  With untie_embeddings=False (default / tied),
+    loading a checkpoint that has diverged embed/lm_head abstract rows will silently discard
+    the embed_tokens values (last write into the shared tensor wins).
+    """
     print(f"Loading base model: {model_name}")
     wrapper = SorlModelWrapper.from_pretrained(
         model_name,
         abstract_vocab_size_list=[abstract_vocab_size],
+        untie_embeddings=untie_embeddings,
     )
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     base_vocab = wrapper.vocab_sizes[0].item()
@@ -237,9 +247,19 @@ def load_checkpoint(model_name, abstract_vocab_size, ckpt_dir, device):
         hf = wrapper.model
         embed_w = hf.model.embed_tokens.weight if hasattr(hf, "model") else hf.transformer.wte.weight
         lm_head_w = hf.lm_head.weight
+
+        # Consistency check: detect mismatch between flag and checkpoint state.
+        ckpt_is_tied = torch.allclose(
+            ckpt["embed_tokens"].float(), ckpt["lm_head"].float(), atol=1e-6
+        )
+        if not(untie_embeddings or ckpt_is_tied): 
+            raise AssertionError("[Conflict] Checkpoint is not tied but attempt to train in tied fashion, conflict!")
+    
+
         embed_w.data[base_vocab:] = ckpt["embed_tokens"]
         lm_head_w.data[base_vocab:] = ckpt["lm_head"]
         print(f"  Restored abstract rows: embed={ckpt['embed_tokens'].shape}, lm_head={ckpt['lm_head'].shape}")
+        print(f"  Tied ckpt: {ckpt_is_tied} | untie_embeddings={untie_embeddings}")
         print(f"  Step: {ckpt.get('step', '?')}, Epoch: {ckpt.get('epoch', '?')}")
 
     # 3. Load LoRA adapter if present
@@ -492,6 +512,7 @@ def main():
     model = SorlModelWrapper.from_pretrained(
         args.model_name,
         abstract_vocab_size_list=[args.abstract_vocab_size],
+        untie_embeddings=args.untie_embeddings,
     )
     tokenizer = AutoTokenizer.from_pretrained(args.model_name)
     if tokenizer.pad_token_id is None:

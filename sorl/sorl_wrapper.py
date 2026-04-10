@@ -70,7 +70,7 @@ class SorlModelWrapper(PreTrainedModel, GenerationMixin):
         self.use_memory_compression = False  # set True to enable bottleneck block mask
     
     @classmethod
-    def from_pretrained(cls, model_name_or_path: str, abstract_vocab_size_list: List[int], **kwargs) -> "SorlModelWrapper":
+    def from_pretrained(cls, model_name_or_path: str, abstract_vocab_size_list: List[int], untie_embeddings: bool = False, **kwargs) -> "SorlModelWrapper":
         config = AutoConfig.from_pretrained(model_name_or_path, **kwargs)
         
         wrapper = cls(config)
@@ -89,6 +89,15 @@ class SorlModelWrapper(PreTrainedModel, GenerationMixin):
             wrapper.model.resize_token_embeddings(new_total_vocab_size)
             wrapper.model.config.vocab_size = new_total_vocab_size
             wrapper.config.vocab_size = new_total_vocab_size
+            # Optionally untie lm_head from embed_tokens so abstract rows are independent
+            # parameters. Qwen3 has tie_word_embeddings=True; resize_token_embeddings
+            # re-ties them, making lm_head.weight IS embed_tokens.weight (same storage).
+            # This prevents abstract embed rows from being trained separately.
+            if untie_embeddings and getattr(wrapper.model.config, "tie_word_embeddings", False):
+                wrapper.model.lm_head.weight = nn.Parameter(
+                    wrapper.model.model.embed_tokens.weight.detach().clone()
+                )
+                wrapper.model.config.tie_word_embeddings = False
             wrapper._init_abstract_embeddings_orthogonal()
 
         return wrapper
