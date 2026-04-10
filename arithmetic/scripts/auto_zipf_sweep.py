@@ -119,6 +119,18 @@ def main():
     )
     print(f"10-epoch baselines done. Log: {BASELINE_LOG}")
 
+    # Undersized model experiments: does SoRL converge when baseline fails?
+    print("\n=== Running undersized model experiments ===")
+    UNDERSIZE_JOBS = "/workspace/codes/mod_gpt/arithmetic/scripts/sweep_undersize.txt"
+    UNDERSIZE_LOG = "/workspace/sorl_logs/sweep_undersize.log"
+    subprocess.run(
+        ["python", "-m", "arithmetic.scripts.gpu_queue",
+         UNDERSIZE_JOBS, "3", "1"],
+        stdout=open(UNDERSIZE_LOG, "w"),
+        stderr=subprocess.STDOUT,
+    )
+    print(f"Undersized experiments done. Log: {UNDERSIZE_LOG}")
+
     # Find best vocabs
     best_vocabs = find_best_vocabs()
     print(f"\nBest 2 vocab sizes: {best_vocabs}")
