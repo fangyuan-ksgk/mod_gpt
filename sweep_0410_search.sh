@@ -48,9 +48,9 @@ EXP_IDX=0
 V7_FLAGS="--use_v7 --abs_routing_mode similar_magnitude \
   --alpha_traj 1.0 --alpha_contrastive 1.0 --gamma_contrastive 0.5 --n_inner 4"
 P1_ABS="--abstract_vocab_size $ABS_VOCAB --prefix_abs --abs_prefix_max 8 --K 8 \
-  --max_iterations 4 --eval_K 4"
+  --max_iterations 2 --eval_K 4"
 P1_TRAIN="--lr 1e-5 --warmup_steps 50 --batch_size 2 --gradient_accumulation_steps 4 \
-  --num_epochs 3 --max_length 512"
+  --num_epochs 1 --max_length 512"
 P1_EVAL="--eval_every 99999 --save_every 99999 \
   --eval_samples 1300 --eval_batch_size 8 --max_new_tokens 256"
 
