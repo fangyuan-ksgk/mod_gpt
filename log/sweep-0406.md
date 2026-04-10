@@ -1,6 +1,5 @@
 
-Combined SFT Sweep | LoRA r=16 α=32 | lr=1e-5 | 1 epoch | eff_bs=8                                                                                                       
-                                                                                                                                                                                    
+Combined SFT Sweep | LoRA r=16 α=32 | lr=1e-5 | 1 epoch | eff_bs=8                                                                                                                                                                                                                                                                               
 ┌─────────────────┬────────┬────────┬────────┬────────┬────────┬────────┬────────┐                                                                                                     
 │ Model           │  gsm8k │  sciQA │  math  │   arc  │  mmlu  │  csqa  │  code  │                                                                                                     
 ├─────────────────┼────────┼────────┼────────┼────────┼────────┼────────┼────────┤                                                                                                     
