@@ -1,17 +1,27 @@
-# Undersized model experiments: does SoRL converge when baseline fails?
-# Three architectures below the current 2L/3H/510d:
-#   1L/3H/510d (3.91M transformer) — half the depth
-#   1L/2H/256d (1.05M transformer) — shallow + narrow
-#   2L/1H/128d (0.53M transformer) — deeper but very narrow
+# Undersized model experiments
+# For each architecture: baseline + SoRL at multiple data sizes
+# SoRL: K=1 vocab=10 (best config from main sweep)
 
-# ── 1L/3H/510d ──
+# ── 1L/3H/510d (3.91M transformer — half depth) ──
+python -m arithmetic.train --mode baseline --ops add_sub --dataset_size 25000 --num_epochs 10 --n_layer 1 --n_head 3 --n_embd 510 --push_to_hub --no_wandb --output_dir ckpt/sweep/as_baseline_25K_1L3H510d
+python -m arithmetic.train --mode baseline --ops add_sub --dataset_size 100000 --num_epochs 10 --n_layer 1 --n_head 3 --n_embd 510 --push_to_hub --no_wandb --output_dir ckpt/sweep/as_baseline_100K_1L3H510d
 python -m arithmetic.train --mode baseline --ops add_sub --dataset_size 500000 --num_epochs 10 --n_layer 1 --n_head 3 --n_embd 510 --push_to_hub --no_wandb --output_dir ckpt/sweep/as_baseline_500K_1L3H510d
+python -m arithmetic.train --mode sorl --ops add_sub --dataset_size 25000 --abs_vocab 10 --K 1 --num_epochs 10 --n_layer 1 --n_head 3 --n_embd 510 --push_to_hub --no_wandb --output_dir ckpt/sweep/as_sorl_abs10_K1_25K_1L3H510d
+python -m arithmetic.train --mode sorl --ops add_sub --dataset_size 100000 --abs_vocab 10 --K 1 --num_epochs 10 --n_layer 1 --n_head 3 --n_embd 510 --push_to_hub --no_wandb --output_dir ckpt/sweep/as_sorl_abs10_K1_100K_1L3H510d
 python -m arithmetic.train --mode sorl --ops add_sub --dataset_size 500000 --abs_vocab 10 --K 1 --num_epochs 10 --n_layer 1 --n_head 3 --n_embd 510 --push_to_hub --no_wandb --output_dir ckpt/sweep/as_sorl_abs10_K1_500K_1L3H510d
 
-# ── 1L/2H/256d ──
+# ── 1L/2H/256d (1.05M transformer — shallow + narrow) ──
+python -m arithmetic.train --mode baseline --ops add_sub --dataset_size 25000 --num_epochs 10 --n_layer 1 --n_head 2 --n_embd 256 --push_to_hub --no_wandb --output_dir ckpt/sweep/as_baseline_25K_1L2H256d
+python -m arithmetic.train --mode baseline --ops add_sub --dataset_size 100000 --num_epochs 10 --n_layer 1 --n_head 2 --n_embd 256 --push_to_hub --no_wandb --output_dir ckpt/sweep/as_baseline_100K_1L2H256d
 python -m arithmetic.train --mode baseline --ops add_sub --dataset_size 500000 --num_epochs 10 --n_layer 1 --n_head 2 --n_embd 256 --push_to_hub --no_wandb --output_dir ckpt/sweep/as_baseline_500K_1L2H256d
+python -m arithmetic.train --mode sorl --ops add_sub --dataset_size 25000 --abs_vocab 10 --K 1 --num_epochs 10 --n_layer 1 --n_head 2 --n_embd 256 --push_to_hub --no_wandb --output_dir ckpt/sweep/as_sorl_abs10_K1_25K_1L2H256d
+python -m arithmetic.train --mode sorl --ops add_sub --dataset_size 100000 --abs_vocab 10 --K 1 --num_epochs 10 --n_layer 1 --n_head 2 --n_embd 256 --push_to_hub --no_wandb --output_dir ckpt/sweep/as_sorl_abs10_K1_100K_1L2H256d
 python -m arithmetic.train --mode sorl --ops add_sub --dataset_size 500000 --abs_vocab 10 --K 1 --num_epochs 10 --n_layer 1 --n_head 2 --n_embd 256 --push_to_hub --no_wandb --output_dir ckpt/sweep/as_sorl_abs10_K1_500K_1L2H256d
 
-# ── 2L/1H/128d ──
+# ── 2L/1H/128d (0.53M transformer — deeper but very narrow) ──
+python -m arithmetic.train --mode baseline --ops add_sub --dataset_size 25000 --num_epochs 10 --n_layer 2 --n_head 1 --n_embd 128 --push_to_hub --no_wandb --output_dir ckpt/sweep/as_baseline_25K_2L1H128d
+python -m arithmetic.train --mode baseline --ops add_sub --dataset_size 100000 --num_epochs 10 --n_layer 2 --n_head 1 --n_embd 128 --push_to_hub --no_wandb --output_dir ckpt/sweep/as_baseline_100K_2L1H128d
 python -m arithmetic.train --mode baseline --ops add_sub --dataset_size 500000 --num_epochs 10 --n_layer 2 --n_head 1 --n_embd 128 --push_to_hub --no_wandb --output_dir ckpt/sweep/as_baseline_500K_2L1H128d
+python -m arithmetic.train --mode sorl --ops add_sub --dataset_size 25000 --abs_vocab 10 --K 1 --num_epochs 10 --n_layer 2 --n_head 1 --n_embd 128 --push_to_hub --no_wandb --output_dir ckpt/sweep/as_sorl_abs10_K1_25K_2L1H128d
+python -m arithmetic.train --mode sorl --ops add_sub --dataset_size 100000 --abs_vocab 10 --K 1 --num_epochs 10 --n_layer 2 --n_head 1 --n_embd 128 --push_to_hub --no_wandb --output_dir ckpt/sweep/as_sorl_abs10_K1_100K_2L1H128d
 python -m arithmetic.train --mode sorl --ops add_sub --dataset_size 500000 --abs_vocab 10 --K 1 --num_epochs 10 --n_layer 2 --n_head 1 --n_embd 128 --push_to_hub --no_wandb --output_dir ckpt/sweep/as_sorl_abs10_K1_500K_2L1H128d
