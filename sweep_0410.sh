@@ -21,7 +21,8 @@ export TORCH_NCCL_HEARTBEAT_TIMEOUT_SEC=3600
 # ============================================================================
 MASTER_ADDR=127.0.0.1
 BASE_PORT=29501
-N_GPUS=4
+N_GPUS=1
+GPU_OFFSET=1   # physical GPU index to start from (cuda:1)
 
 MODEL_NAME="Qwen/Qwen3-0.6B"
 DATASET="gsm8k"
@@ -76,7 +77,7 @@ ABS="--abstract_vocab_size 32 --prefix_abs --alpha_traj 1.0"
 run_bg() {
   EXP_IDX=$((EXP_IDX + 1))
   local idx=$EXP_IDX
-  local gpu=$(( (idx - 1) % N_GPUS ))
+  local gpu=$(( (idx - 1) % N_GPUS + GPU_OFFSET ))
   local port=$((BASE_PORT + idx))
   local tag=$1; shift
   local model=$1; shift
@@ -142,45 +143,37 @@ sweep_model() {
 
   echo ""
   echo "── ${tag}: batch-1/2  [i1,i2,i4 | v32,v64,v128 | p2,p4] ──"
-  EVAL_SAMPLES=1319
-  run_bg "${tag}_i1"   $model $DS_GSM $V7 \
+  EVAL_SAMPLES=2224
+  run_bg "${tag}_i1"   $model $DS_SCI $V7 \
     $(pfx_flags $opt_pfx) --abstract_vocab_size $opt_V  --max_iterations 1          "$@"
-  run_bg "${tag}_i2"   $model $DS_GSM $V7 \
+  run_bg "${tag}_i2"   $model $DS_SCI $V7 \
     $(pfx_flags $opt_pfx) --abstract_vocab_size $opt_V  --max_iterations 2          "$@"
-  run_bg "${tag}_i4"   $model $DS_GSM $V7 \
+  wait
+  run_bg "${tag}_i4"   $model $DS_SCI $V7 \
     $(pfx_flags $opt_pfx) --abstract_vocab_size $opt_V  --max_iterations 4          "$@"
-  run_bg "${tag}_v32"  $model $DS_GSM $V7 \
+  run_bg "${tag}_v32"  $model $DS_SCI $V7 \
     $(pfx_flags $opt_pfx) --abstract_vocab_size 32      --max_iterations $opt_iter  "$@"
-  run_bg "${tag}_v64"  $model $DS_GSM $V7 \
+  wait
+  run_bg "${tag}_v64"  $model $DS_SCI $V7 \
     $(pfx_flags $opt_pfx) --abstract_vocab_size 64      --max_iterations $opt_iter  "$@"
-  run_bg "${tag}_v128" $model $DS_GSM $V7 \
+  run_bg "${tag}_v128" $model $DS_SCI $V7 \
     $(pfx_flags $opt_pfx) --abstract_vocab_size 128     --max_iterations $opt_iter  "$@"
-  run_bg "${tag}_p2"   $model $DS_GSM $V7 \
+  wait
+  run_bg "${tag}_p2"   $model $DS_SCI $V7 \
     $(pfx_flags 2)        --abstract_vocab_size $opt_V  --max_iterations $opt_iter  "$@"
-  run_bg "${tag}_p4"   $model $DS_GSM $V7 \
+  run_bg "${tag}_p4"   $model $DS_SCI $V7 \
     $(pfx_flags 4)        --abstract_vocab_size $opt_V  --max_iterations $opt_iter  "$@"
   wait
 
-  echo "── ${tag}: batch-2/2  [p8 | sci_opt] ──"
-  run_bg "${tag}_p8"      $model $DS_GSM $V7 \
-    $(pfx_flags 8)        --abstract_vocab_size $opt_V  --max_iterations $opt_iter  "$@"
-  EVAL_SAMPLES=2224
-  run_bg "${tag}_sci_opt" $model $DS_SCI $V7 \
-    $(pfx_flags $opt_pfx) --abstract_vocab_size $opt_V  --max_iterations $opt_iter  "$@"
-  wait
 }
 
 # ═══════════════════════════════════════════════════════════════════════════
 # 1. Qwen3-0.6B — reference only (axes already swept on 0.6B previously)
 # ═══════════════════════════════════════════════════════════════════════════
 echo ""
-echo "1: 0.6B — reference (iter=2, pfx=4, V=128) on GSM8K & SciQA"
+echo "1: 0.6B — reference (iter=2, pfx=4, V=128) on SciQA"
 
-EVAL_SAMPLES=1319
-run_bg "06b_gsm_opt" $M06 $DS_GSM $V7 $(pfx_flags 4) --abstract_vocab_size 128 --max_iterations 2
-EVAL_SAMPLES=2224
-run_bg "06b_sci_opt" $M06 $DS_SCI $V7 $(pfx_flags 4) --abstract_vocab_size 128 --max_iterations 2
-wait
+sweep_model "06b" $M17 2 128 4
 
 # ═══════════════════════════════════════════════════════════════════════════
 # 2. Qwen3-1.7B — full sweep: opt=(iter=2, V=128, pfx=4)
