@@ -1,0 +1,9 @@
+# SoRL at low data sizes — the data efficiency comparison
+# K=1 vocab=10 (best config) at same sizes and epochs as baselines
+# Direct comparison: does SoRL help when baseline struggles?
+
+python -m arithmetic.train --mode sorl --ops add_sub --dataset_size 10000 --abs_vocab 10 --K 1 --num_epochs 10 --push_to_hub --no_wandb --output_dir ckpt/sweep/as_sorl_abs10_K1_10K
+python -m arithmetic.train --mode sorl --ops add_sub --dataset_size 25000 --abs_vocab 10 --K 1 --num_epochs 10 --push_to_hub --no_wandb --output_dir ckpt/sweep/as_sorl_abs10_K1_25K
+python -m arithmetic.train --mode sorl --ops add_sub --dataset_size 50000 --abs_vocab 10 --K 1 --num_epochs 10 --push_to_hub --no_wandb --output_dir ckpt/sweep/as_sorl_abs10_K1_50K
+python -m arithmetic.train --mode sorl --ops add_sub --dataset_size 100000 --abs_vocab 10 --K 1 --num_epochs 10 --push_to_hub --no_wandb --output_dir ckpt/sweep/as_sorl_abs10_K1_100K
+python -m arithmetic.train --mode sorl --ops add_sub --dataset_size 250000 --abs_vocab 10 --K 1 --num_epochs 10 --push_to_hub --no_wandb --output_dir ckpt/sweep/as_sorl_abs10_K1_250K

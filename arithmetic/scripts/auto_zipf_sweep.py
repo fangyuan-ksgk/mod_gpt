@@ -119,6 +119,18 @@ def main():
     )
     print(f"10-epoch baselines done. Log: {BASELINE_LOG}")
 
+    # SoRL at low data sizes — the data efficiency comparison
+    print("\n=== Running SoRL at low data sizes (K=1 vocab=10) ===")
+    LOW_DATA_JOBS = "/workspace/codes/mod_gpt/arithmetic/scripts/sweep_low_data_sorl.txt"
+    LOW_DATA_LOG = "/workspace/sorl_logs/sweep_low_data_sorl.log"
+    subprocess.run(
+        ["python", "-m", "arithmetic.scripts.gpu_queue",
+         LOW_DATA_JOBS, "3", "1"],
+        stdout=open(LOW_DATA_LOG, "w"),
+        stderr=subprocess.STDOUT,
+    )
+    print(f"Low-data SoRL done. Log: {LOW_DATA_LOG}")
+
     # Undersized model experiments: does SoRL converge when baseline fails?
     print("\n=== Running undersized model experiments ===")
     UNDERSIZE_JOBS = "/workspace/codes/mod_gpt/arithmetic/scripts/sweep_undersize.txt"
