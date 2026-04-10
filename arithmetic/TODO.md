@@ -19,7 +19,8 @@
 
 ## High Priority
 
-- [ ] **Token-subtask correlation analysis** — for each abs token ID, compute P(token | subtask_label). Do tokens map to SA/SC/SS/UC/US?
+- [ ] **Autointerp of SoRL tokens (Bills et al. style)** — For each abs token ID: (1) collect top-N examples ranked by logit confidence for that token, (2) characterize what they share (digit position, subtask, complexity), (3) optionally use LLM to generate natural language explanation, score on held-out. SoRL tokens are cleaner than neurons — discrete assignments, no thresholding. Validate against ground-truth subtask labels. Ref: Bills et al. 2023 "Language models can explain neurons in language models".
+- [ ] **Token-subtask correlation analysis** — for each abs token ID, compute P(token | subtask_label). Do tokens map to SA/SC/SS/UC/US? (feeds into autointerp)
 - [ ] **Per-complexity vocab utilization** — do specific tokens appear only for S3+ cascades?
 - [ ] **Fill placeholders in arithmetic.md** — update `<!-- PLACEHOLDER: ... -->` markers as results come in.
 
