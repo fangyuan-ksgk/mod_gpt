@@ -79,7 +79,9 @@ def parse_args():
     p.add_argument("--eval_samples",    type=int, default=200)
     p.add_argument("--eval_batch_size", type=int, default=8)
     p.add_argument("--max_new_tokens",  type=int, default=256)
-    p.add_argument("--num_log_samples", type=int, default=3)
+    p.add_argument("--num_log_samples",         type=int, default=3)
+    p.add_argument("--baseline_eval_samples",  type=int, default=100,
+                   help="Samples for the one-time pre-training baseline eval (faster than full eval_samples)")
     p.add_argument("--output_dir",      type=str, default="./ckpt/reinforce_search")
     p.add_argument("--untie_embeddings", action="store_true",
                    help="Must match the flag used when training the checkpoint")
@@ -343,9 +345,10 @@ def main():
     # ── Baseline eval (before training) ─────────────────────────────────────
     raw_model = model.module if ddp else model
     if is_master:
-        log("--- Baseline evaluation (before REINFORCE) ---")
-        res_nl = compute_accuracy(raw_model, tokenizer, val_ds, device, args.eval_samples, eval_K=None)
-        res_k  = compute_accuracy(raw_model, tokenizer, val_ds, device, args.eval_samples, eval_K=args.K)
+        n_base = args.baseline_eval_samples
+        log(f"--- Baseline evaluation (before REINFORCE, n={n_base}) ---")
+        res_nl = compute_accuracy(raw_model, tokenizer, val_ds, device, n_base, eval_K=None)
+        res_k  = compute_accuracy(raw_model, tokenizer, val_ds, device, n_base, eval_K=args.K)
         log(f"  Baseline Acc[K=None]={res_nl['accuracy']*100:.1f}%  "
             f"Acc[K={args.K}]={res_k['accuracy']*100:.1f}%")
         model.train()

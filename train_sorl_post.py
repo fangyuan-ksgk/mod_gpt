@@ -326,6 +326,7 @@ def compute_accuracy_fn_factory(tokenizer, max_new_tokens, num_log_samples, log_
         from collections import Counter
         from concurrent.futures import ThreadPoolExecutor
         from data.pt_dataset import HumanEvalDataset, check_code_correctness
+        from tqdm import tqdm
 
         base_vocab = model.vocab_sizes[0].item()
         extract_fn = getattr(dataset, "extract_answer", None)
@@ -343,7 +344,15 @@ def compute_accuracy_fn_factory(tokenizer, max_new_tokens, num_log_samples, log_
         all_golds = [None] * n
         all_new_ids_list = [None] * n  # for inner-monologue stats
 
-        for bs_start in range(0, n, eval_batch_size):
+        _running_correct = 0
+        _pbar = tqdm(
+            range(0, n, eval_batch_size),
+            desc=f"eval K={K_value}",
+            unit="batch",
+            disable=(log_fn is None),
+            dynamic_ncols=True,
+        )
+        for bs_start in _pbar:
             bs_end = min(bs_start + eval_batch_size, n)
             batch_indices = range(bs_start, bs_end)
 
@@ -396,9 +405,11 @@ def compute_accuracy_fn_factory(tokenizer, max_new_tokens, num_log_samples, log_
                 all_prompt_texts[i] = prompt_text
                 all_preds[i] = extract_fn(full_text)
                 all_golds[i] = extract_fn(ref_texts[j])
+                if all_preds[i] is not None and all_golds[i] is not None:
+                    if all_preds[i].strip() == all_golds[i].strip():
+                        _running_correct += 1
 
-            if log_fn and bs_end % 100 == 0:
-                log_fn(f"  [K={K_value}] [{bs_end}/{n}] generated...")
+            _pbar.set_postfix(acc=f"{_running_correct}/{bs_end}={_running_correct/bs_end:.1%}")
 
         # ---- Evaluate: execution-based for code, string matching otherwise ----
         is_correct_list = [False] * n
