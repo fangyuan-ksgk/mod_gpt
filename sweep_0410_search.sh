@@ -20,6 +20,7 @@ export TORCH_NCCL_HEARTBEAT_TIMEOUT_SEC=3600
 export OPENBLAS_NUM_THREADS=4
 export MKL_NUM_THREADS=4
 export OMP_NUM_THREADS=4
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 
 # ── Shared config ─────────────────────────────────────────────────────────────
 MASTER_ADDR=127.0.0.1
@@ -47,7 +48,7 @@ EVAL_EVERY=200
 SAVE_EVERY=500
 EVAL_SAMPLES=500
 BASELINE_EVAL_SAMPLES=100
-EVAL_BATCH_SIZE=32
+EVAL_BATCH_SIZE=8   # generate is no-KV-cache; batch>8 OOMs with 256 new tokens
 MAX_NEW_TOKENS=256
 
 # ── run_bg: launch one train_sorl_search.py job on a single GPU ───────────────
