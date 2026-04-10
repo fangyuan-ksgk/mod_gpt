@@ -1,10 +1,18 @@
 #!/bin/bash
-# Continuously train from SoRL-trained ckpt via REINFORCE abstract routing search.
+# Two-phase sweep:
 #
-# Setup (run once before this script):
-#   huggingface-cli upload fangyuan-ksgk/sorl-06b-128v ckpt/06b-128v --repo-type model
+#   Phase 1 — v7 SoRL training (similar_magnitude, tied weights)
+#             Models × Datasets:  {0.6B, 1.7B} × {gsm8k, scienceqa}  → 4 runs
 #
-# Then launch this script.
+#   Phase 2 — REINFORCE abstract-routing search on phase-1 checkpoints
+#             Conditions × Checkpoints:  {tied, untied} × 4  → 8 runs
+#
+#   GPU layout (adjust N_GPUS):
+#     N_GPUS=4  → Phase 1: all 4 in parallel (one per GPU)
+#                 Phase 2: 2 batches of 4
+#     N_GPUS=2  → Phase 1: 2 batches of 2
+#                 Phase 2: 4 batches of 2
+#
 set -e
 
 # ── Pod env (same as sweep_0410.sh) ──────────────────────────────────────────
@@ -25,91 +33,139 @@ export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 # ── Shared config ─────────────────────────────────────────────────────────────
 MASTER_ADDR=127.0.0.1
 BASE_PORT=29700
-N_GPUS=2
+N_GPUS=2          # set to 2 if only 2 GPUs available
 
-MODEL_NAME="Qwen/Qwen3-0.6B"
+M06="Qwen/Qwen3-0.6B"
+M17="Qwen/Qwen3-1.7B"
 ABS_VOCAB=128
 
-# HF checkpoint (downloaded automatically by train_sorl_search.py)
-HF_CKPT_06B="Ksgk-fy/sorl-06b-128v"
-
 TIMESTAMP=$(date +%Y%m%d_%H%M)
+P1_ROOT="./ckpt/v7_${TIMESTAMP}"     # phase-1 output dirs
+P2_ROOT="./ckpt/search_${TIMESTAMP}" # phase-2 output dirs
 EXP_IDX=0
 
-# REINFORCE hyperparams
-K=4
+# ── Phase 1 hyperparams (v7, similar_magnitude, prefix_abs) ──────────────────
+V7_FLAGS="--use_v7 --abs_routing_mode similar_magnitude \
+  --alpha_traj 1.0 --alpha_contrastive 1.0 --gamma_contrastive 0.5 --n_inner 4"
+P1_ABS="--abstract_vocab_size $ABS_VOCAB --prefix_abs --abs_prefix_max 8 --K 8 \
+  --max_iterations 4 --eval_K 4"
+P1_TRAIN="--lr 1e-5 --warmup_steps 50 --batch_size 2 --gradient_accumulation_steps 4 \
+  --num_epochs 3 --max_length 512"
+P1_EVAL="--eval_every 99999 --save_every 99999 \
+  --eval_samples 1300 --eval_batch_size 8 --max_new_tokens 256"
+
+# ── Phase 2 hyperparams (REINFORCE search) ────────────────────────────────────
+K=8               # match phase-1 training (abs_prefix_max=8)
 N=4
 MAX_ITER=4
-EVAL_ABS_PREFIX_MAX=8    # abs_prefix_max used when the SoRL ckpt was trained
-LR=1e-5
-BATCH_SIZE=2
-MAX_STEPS=1000
-EVAL_EVERY=200
-SAVE_EVERY=500
-EVAL_SAMPLES=500
-BASELINE_EVAL_SAMPLES=100
-EVAL_BATCH_SIZE=8   # generate is no-KV-cache; batch>8 OOMs with 256 new tokens
-MAX_NEW_TOKENS=256
+EVAL_ABS_PREFIX_MAX=8
+P2_TRAIN="--lr 1e-5 --batch_size 2 --gradient_accumulation_steps 4 --max_steps 1000"
+P2_EVAL="--eval_every 99999 --save_every 99999 \
+  --eval_samples 1300 --baseline_eval_samples 200 \
+  --eval_batch_size 8 --max_new_tokens 256"
 
-# ── run_bg: launch one train_sorl_search.py job on a single GPU ───────────────
-run_bg() {
+# ─────────────────────────────────────────────────────────────────────────────
+# run_p1 <tag> <model> <dataset>  — mirrors sweep_0410.sh run_bg
+#   Saves to $P1_ROOT/exp{N}_{tag}/;  trainer writes final ckpt to .../final/
+# ─────────────────────────────────────────────────────────────────────────────
+run_p1() {
   EXP_IDX=$((EXP_IDX + 1))
   local idx=$EXP_IDX
   local gpu=$(( (idx - 1) % N_GPUS ))
   local port=$((BASE_PORT + idx))
-  local tag=$1; shift
-  local ckpt=$1; shift
-  local dataset=$1; shift
-  local output_dir="./ckpt/search_${TIMESTAMP}/exp${idx}_${tag}"
+  local tag=$1  model=$2  dataset=$3; shift 3
+  local out="${P1_ROOT}/exp${idx}_${tag}"
 
-  echo "  Exp ${idx}: ${tag}  ckpt=${ckpt}  dataset=${dataset}  [GPU=${gpu}]"
+  echo "  P1-Exp ${idx}: ${tag}  model=$(basename $model)  dataset=${dataset}  [GPU=${gpu}]"
 
-  CUDA_VISIBLE_DEVICES=$gpu python train_sorl_search.py \
-    --model_name    $MODEL_NAME \
-    --abstract_vocab_size $ABS_VOCAB \
-    --ckpt_dir      $ckpt \
-    --dataset       $dataset \
-    --K $K --N $N --max_iterations $MAX_ITER --eval_abs_prefix_max $EVAL_ABS_PREFIX_MAX \
-    --lr $LR \
-    --batch_size $BATCH_SIZE \
-    --max_steps $MAX_STEPS \
-    --eval_every $EVAL_EVERY \
-    --save_every $SAVE_EVERY \
-    --eval_samples $EVAL_SAMPLES \
-    --baseline_eval_samples $BASELINE_EVAL_SAMPLES \
-    --eval_batch_size $EVAL_BATCH_SIZE \
-    --max_new_tokens $MAX_NEW_TOKENS \
-    --output_dir $output_dir \
+  CUDA_VISIBLE_DEVICES=$gpu torchrun \
+    --nproc_per_node=1 \
+    --master_addr=$MASTER_ADDR \
+    --master_port=$port \
+    train_sorl_post.py \
+    --model_name $model \
+    --dataset    $dataset \
+    $V7_FLAGS $P1_ABS $P1_TRAIN $P1_EVAL \
+    --output_dir $out \
     "$@" &
 }
 
-echo "=== REINFORCE Search Sweep === $(date)"
+# ─────────────────────────────────────────────────────────────────────────────
+# run_p2 <tag> <ckpt_dir> <model> <dataset> [extra_flags...]
+#   Runs train_sorl_search.py for REINFORCE fine-tuning of abstract routing.
+# ─────────────────────────────────────────────────────────────────────────────
+run_p2() {
+  EXP_IDX=$((EXP_IDX + 1))
+  local idx=$EXP_IDX
+  local gpu=$(( (idx - 1) % N_GPUS ))
+  local tag=$1  ckpt=$2  model=$3  dataset=$4; shift 4
+  local out="${P2_ROOT}/exp${idx}_${tag}"
+
+  echo "  P2-Exp ${idx}: ${tag}  ckpt=$(basename $ckpt)  dataset=${dataset}  [GPU=${gpu}]"
+
+  CUDA_VISIBLE_DEVICES=$gpu python train_sorl_search.py \
+    --model_name          $model \
+    --abstract_vocab_size $ABS_VOCAB \
+    --ckpt_dir            $ckpt \
+    --dataset             $dataset \
+    --K $K --N $N --max_iterations $MAX_ITER \
+    --eval_abs_prefix_max $EVAL_ABS_PREFIX_MAX \
+    $P2_TRAIN $P2_EVAL \
+    --output_dir $out \
+    "$@" &
+}
+
+# =============================================================================
+echo "=== Two-Phase REINFORCE Search Sweep === $(date)"
 echo ""
 
-# ── Phase 1: tied vs untied  ×  GSM8K + SciQA  (0.6B)  ──────────────────────
-# Tests whether untying embed_tokens / lm_head for abstract rows helps REINFORCE.
-#
-#   tied   : embed_tokens.weight IS lm_head.weight (Qwen3 default)
-#   untied : lm_head abstract rows train independently from embed_tokens rows
+# ── Phase 1: v7 SoRL training ─────────────────────────────────────────────────
+echo "Phase 1: v7 SoRL training (similar_magnitude, tied, V=$ABS_VOCAB, pfx=8, iter=4)"
+echo "  {0.6B, 1.7B} × {gsm8k, scienceqa}  — 4 runs"
 
-echo "Phase 1: tied vs untied — GSM8K"
-run_bg "tied_gsm"   $HF_CKPT_06B gsm8k
-run_bg "untied_gsm" $HF_CKPT_06B gsm8k --untie_embeddings
+run_p1 "06b_gsm" $M06 gsm8k
+run_p1 "06b_sci" $M06 scienceqa
+run_p1 "17b_gsm" $M17 gsm8k
+run_p1 "17b_sci" $M17 scienceqa
+wait
+echo "Phase 1 complete."
+echo ""
+
+# Resolve phase-1 checkpoint dirs (trainer saves to {output_dir}/final/)
+P1_06B_GSM="${P1_ROOT}/exp1_06b_gsm/final"
+P1_06B_SCI="${P1_ROOT}/exp2_06b_sci/final"
+P1_17B_GSM="${P1_ROOT}/exp3_17b_gsm/final"
+P1_17B_SCI="${P1_ROOT}/exp4_17b_sci/final"
+
+# ── Phase 2: REINFORCE search (tied vs untied) ────────────────────────────────
+echo "Phase 2: REINFORCE search — {tied, untied} × 4 checkpoints — 8 runs"
+echo "  (1) tied   : embed_tokens abstract rows = lm_head abstract rows (Qwen3 default)"
+echo "  (2) untied : embed_tokens and lm_head abstract rows train independently"
+echo ""
+
+# Batch 2a: 0.6B checkpoints
+echo "  Batch 2a: 0.6B × {gsm8k, scienceqa} × {tied, untied}"
+run_p2 "06b_gsm_tied"   $P1_06B_GSM $M06 gsm8k
+run_p2 "06b_gsm_untied" $P1_06B_GSM $M06 gsm8k    --untie_embeddings
+run_p2 "06b_sci_tied"   $P1_06B_SCI $M06 scienceqa
+run_p2 "06b_sci_untied" $P1_06B_SCI $M06 scienceqa --untie_embeddings
 wait
 
-# - the loaded ckpt is trained on GSM8K with SoRL, not trained on SciQA
-# echo "Phase 1: tied vs untied — ScienceQA"
-# run_bg "tied_sci"   $HF_CKPT_06B scienceqa
-# run_bg "untied_sci" $HF_CKPT_06B scienceqa --untie_embeddings
-# wait
-
-echo "Phase 2: N rollouts ablation (GSM8K, untied)"
-run_bg "untied_gsm_N2" $HF_CKPT_06B gsm8k --untie_embeddings --N 2
-run_bg "untied_gsm_N8" $HF_CKPT_06B gsm8k --untie_embeddings --N 8
+# Batch 2b: 1.7B checkpoints
+echo "  Batch 2b: 1.7B × {gsm8k, scienceqa} × {tied, untied}"
+run_p2 "17b_gsm_tied"   $P1_17B_GSM $M17 gsm8k
+run_p2 "17b_gsm_untied" $P1_17B_GSM $M17 gsm8k    --untie_embeddings
+run_p2 "17b_sci_tied"   $P1_17B_SCI $M17 scienceqa
+run_p2 "17b_sci_untied" $P1_17B_SCI $M17 scienceqa --untie_embeddings
 wait
 
 echo ""
-echo "All runs launched and finished."
-echo "  Phase 1: 4 runs  (tied/untied × gsm8k/scienceqa)"
-echo "  Phase 2: 2 runs  (N=2,8 on gsm8k, untied)"
-echo "  Total  : 6 experiments"
+echo "=== All phases complete. $(date) ==="
+echo ""
+echo "  Phase 1 checkpoints:"
+echo "    0.6B gsm8k : ${P1_06B_GSM}"
+echo "    0.6B sciQA : ${P1_06B_SCI}"
+echo "    1.7B gsm8k : ${P1_17B_GSM}"
+echo "    1.7B sciQA : ${P1_17B_SCI}"
+echo ""
+echo "  Phase 2 results: ${P2_ROOT}/"

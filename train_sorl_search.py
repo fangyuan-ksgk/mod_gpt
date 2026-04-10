@@ -261,7 +261,8 @@ def train_reinforce(model, tokenizer, train_ds, val_ds, args,
                 history["skip"].append(skip_count)
 
             # ── Eval ─────────────────────────────────────────────────────────
-            if global_step % args.eval_every == 0 and is_master:
+            if global_step > 0 and global_step % args.eval_every == 0 and is_master:
+                torch.cuda.empty_cache()
                 log(f"\n--- Eval @ step {global_step} ---")
                 res_nl = compute_accuracy(raw_model, tokenizer, val_ds, device,
                                           args.eval_samples, eval_K=None)
@@ -353,7 +354,9 @@ def main():
     if is_master:
         n_base = args.baseline_eval_samples
         log(f"--- Baseline evaluation (before REINFORCE, n={n_base}, abs_prefix_max={eval_pfx}) ---")
+        torch.cuda.empty_cache()
         res_nl = compute_accuracy(raw_model, tokenizer, val_ds, device, n_base, eval_K=None)
+        torch.cuda.empty_cache()
         res_k  = compute_accuracy(raw_model, tokenizer, val_ds, device, n_base,
                                   eval_K=args.K, abs_prefix_max=eval_pfx)
         log(f"  Baseline Acc[K=None]={res_nl['accuracy']*100:.1f}%  "
@@ -369,6 +372,7 @@ def main():
     # ── Final eval + save ────────────────────────────────────────────────────
     if is_master:
         log("--- Final evaluation ---")
+        torch.cuda.empty_cache()
         res_nl = compute_accuracy(raw_model, tokenizer, val_ds, device, args.eval_samples, eval_K=None)
         res_k  = compute_accuracy(raw_model, tokenizer, val_ds, device, args.eval_samples,
                                   eval_K=args.K, abs_prefix_max=eval_pfx)

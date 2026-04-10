@@ -149,21 +149,21 @@ sweep_model() {
   run_bg "${tag}_i2"   $model $DS_SCI $V7 \
     $(pfx_flags $opt_pfx) --abstract_vocab_size $opt_V  --max_iterations 2          "$@"
   wait
-  run_bg "${tag}_i4"   $model $DS_SCI $V7 \
-    $(pfx_flags $opt_pfx) --abstract_vocab_size $opt_V  --max_iterations 4          "$@"
-  run_bg "${tag}_v32"  $model $DS_SCI $V7 \
-    $(pfx_flags $opt_pfx) --abstract_vocab_size 32      --max_iterations $opt_iter  "$@"
-  wait
-  run_bg "${tag}_v64"  $model $DS_SCI $V7 \
-    $(pfx_flags $opt_pfx) --abstract_vocab_size 64      --max_iterations $opt_iter  "$@"
-  run_bg "${tag}_v128" $model $DS_SCI $V7 \
-    $(pfx_flags $opt_pfx) --abstract_vocab_size 128     --max_iterations $opt_iter  "$@"
-  wait
-  run_bg "${tag}_p2"   $model $DS_SCI $V7 \
-    $(pfx_flags 2)        --abstract_vocab_size $opt_V  --max_iterations $opt_iter  "$@"
-  run_bg "${tag}_p4"   $model $DS_SCI $V7 \
-    $(pfx_flags 4)        --abstract_vocab_size $opt_V  --max_iterations $opt_iter  "$@"
-  wait
+  # run_bg "${tag}_i4"   $model $DS_SCI $V7 \
+  #   $(pfx_flags $opt_pfx) --abstract_vocab_size $opt_V  --max_iterations 4          "$@"
+  # run_bg "${tag}_v32"  $model $DS_SCI $V7 \
+  #   $(pfx_flags $opt_pfx) --abstract_vocab_size 32      --max_iterations $opt_iter  "$@"
+  # wait
+  # run_bg "${tag}_v64"  $model $DS_SCI $V7 \
+  #   $(pfx_flags $opt_pfx) --abstract_vocab_size 64      --max_iterations $opt_iter  "$@"
+  # run_bg "${tag}_v128" $model $DS_SCI $V7 \
+  #   $(pfx_flags $opt_pfx) --abstract_vocab_size 128     --max_iterations $opt_iter  "$@"
+  # wait
+  # run_bg "${tag}_p2"   $model $DS_SCI $V7 \
+  #   $(pfx_flags 2)        --abstract_vocab_size $opt_V  --max_iterations $opt_iter  "$@"
+  # run_bg "${tag}_p4"   $model $DS_SCI $V7 \
+  #   $(pfx_flags 4)        --abstract_vocab_size $opt_V  --max_iterations $opt_iter  "$@"
+  # wait
 
 }
 
