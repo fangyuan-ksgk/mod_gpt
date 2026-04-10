@@ -141,11 +141,12 @@ run_bg() {
     --eval_batch_size $EVAL_BATCH_SIZE \
     --max_new_tokens $max_new \
     --output_dir $output_dir \
-    --use_lora \
-    --lora_r 16 \
-    --lora_alpha 32 \
     "$@" &
 }
+
+# --use_lora \
+# --lora_r 16 \
+# --lora_alpha 32 \
 
 
 
@@ -177,7 +178,6 @@ for i in "${!ALL_MODELS[@]}"; do
   m="${ALL_MODELS[$i]}"
   t="${ALL_TAGS[$i]}"
   run_bg "${t}_gsm_bs8"  $m $DS_GSM  # default: bs=2 × ga=4 = 8
-  run_bg "${t}_gsm_bs32" $m $DS_GSM --batch_size 2 --gradient_accumulation_steps 16
   wait
 done
 
@@ -206,7 +206,7 @@ wait
 #    Skip GSM8K (covered in A) and ScienceQA (already have results).
 #    35 runs = 5 models × 7 datasets
 # ═══════════════════════════════════════════════════════════════════════════
-SWEEP_DS=("$DS_ARC" "$DS_MMLU" "$DS_CSQA" "$DS_BOOLQ" "$DS_OBQA" "$DS_AQUA" "$DS_HPQA")
+SWEEP_DS=("$DS_GSM" "$DS_SCI" "$DS_ARC" "$DS_MMLU" "$DS_CSQA" "$DS_BOOLQ" "$DS_OBQA" "$DS_AQUA" "$DS_HPQA")
 
 echo ""
 echo "C: dataset breadth — all models × 7 datasets"
