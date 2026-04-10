@@ -24,8 +24,7 @@ export OMP_NUM_THREADS=4
 # ── Shared config ─────────────────────────────────────────────────────────────
 MASTER_ADDR=127.0.0.1
 BASE_PORT=29700
-N_GPUS=4
-GPU_OFFSET=0
+N_GPUS=2
 
 MODEL_NAME="Qwen/Qwen3-0.6B"
 ABS_VOCAB=128
@@ -46,6 +45,7 @@ MAX_STEPS=1000
 EVAL_EVERY=200
 SAVE_EVERY=500
 EVAL_SAMPLES=500
+BASELINE_EVAL_SAMPLES=100
 EVAL_BATCH_SIZE=32
 MAX_NEW_TOKENS=256
 
@@ -53,7 +53,7 @@ MAX_NEW_TOKENS=256
 run_bg() {
   EXP_IDX=$((EXP_IDX + 1))
   local idx=$EXP_IDX
-  local gpu=$(( (idx - 1) % N_GPUS + GPU_OFFSET ))
+  local gpu=$(( (idx - 1) % N_GPUS ))
   local port=$((BASE_PORT + idx))
   local tag=$1; shift
   local ckpt=$1; shift
@@ -74,6 +74,7 @@ run_bg() {
     --eval_every $EVAL_EVERY \
     --save_every $SAVE_EVERY \
     --eval_samples $EVAL_SAMPLES \
+    --baseline_eval_samples $BASELINE_EVAL_SAMPLES \
     --eval_batch_size $EVAL_BATCH_SIZE \
     --max_new_tokens $MAX_NEW_TOKENS \
     --output_dir $output_dir \
