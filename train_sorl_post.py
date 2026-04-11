@@ -63,7 +63,8 @@ def parse_args():
         "aqua": 768, "scienceqa": 256, "hotpotqa": 64,
         "humaneval": 256, "mbpp": 256, "livecodebench": 256, "codecontests": 512, "deepmind_code_contests": 1024,
     }
-    p.add_argument("--max_length", type=int, default=max_length_dict["gsm8k"])
+    p.add_argument("--max_length", type=int, default=None,
+                   help="Input context length (default: auto from dataset)")
 
     # Optimizer
     p.add_argument("--emb_lr_mult", type=float, default=1.0,
@@ -85,7 +86,8 @@ def parse_args():
     p.add_argument("--save_every", type=int, default=500)
     p.add_argument("--eval_samples", type=int, default=50)
     p.add_argument("--eval_batch_size", type=int, default=8)
-    p.add_argument("--max_new_tokens", type=int, default=256)
+    p.add_argument("--max_new_tokens", type=int, default=None,
+                   help="Max generation tokens (default: auto from dataset)")
     p.add_argument("--num_log_samples", type=int, default=3)
     p.add_argument("--output_dir", type=str, default="./ckpt/ablate_sanity")
 
@@ -202,7 +204,12 @@ def parse_args():
     p.add_argument("--untie_embeddings", action="store_true",
                    help="Untie lm_head from embed_tokens so abstract rows train independently (Qwen3 default: tied)")
 
-    return p.parse_args()
+    args = p.parse_args()
+    if args.max_length is None:
+        args.max_length = max_length_dict[args.dataset]
+    if args.max_new_tokens is None:
+        args.max_new_tokens = max_new_tokens_dict[args.dataset]
+    return args
 
 
 # ---------------------------

@@ -36,8 +36,7 @@ LOG_EVERY=10
 EVAL_EVERY=99999
 SAVE_EVERY=99999
 EVAL_SAMPLES=1300
-EVAL_BATCH_SIZE=128
-MAX_NEW_TOKENS=256
+EVAL_BATCH_SIZE=256
 
 # ============================================================================================
 # similar_magnitude routing + v7 deep supervision sweep
@@ -103,7 +102,6 @@ run_bg() {
     train_sorl_post.py \
     --model_name $model \
     --dataset $dataset \
-    --max_length $MAX_LENGTH \
     --lr $LR \
     --warmup_steps $WARMUP_STEPS \
     --batch_size $BATCH_SIZE \
@@ -114,7 +112,6 @@ run_bg() {
     --save_every $SAVE_EVERY \
     --eval_samples $EVAL_SAMPLES \
     --eval_batch_size $EVAL_BATCH_SIZE \
-    --max_new_tokens $MAX_NEW_TOKENS \
     --output_dir $output_dir \
     --untie_embedding \
     "$@" &
