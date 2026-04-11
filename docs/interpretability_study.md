@@ -293,6 +293,49 @@ to validate autointerp explanations against. SAE autointerp has no such ground t
 
 ---
 
+## Circuit Discovery (main body candidate)
+
+SoRL tokens act as **circuit anchors** — known intermediate nodes in the computational
+graph that pre-label which mechanism is active. This reduces circuit discovery from an
+unsupervised search to a supervised one.
+
+### Standard circuit discovery (baseline)
+Methods like EAP (Syed et al. 2023) score O(H²L²) edges by patching activations. The
+result is a flat list of important edges; you must post-hoc determine which edges
+implement carry vs borrow vs base addition. Circuits for different subtasks are
+superimposed in the same heads (superposition).
+
+### SoRL-assisted circuit discovery
+Abstraction token positions are guaranteed circuit nodes. This enables:
+
+1. **Constrained EAP**: start from known abstraction positions instead of searching
+   all positions. Score only edges into/out of these nodes → O(HL) instead of O(H²L²).
+
+2. **Factored attribution**: run EAP separately for upstream (what produces the token)
+   and downstream (what uses the token). Splits the graph into producer and consumer
+   circuits.
+
+3. **Token-conditioned EAP**: partition examples by which token was assigned. Run EAP
+   per partition → get the carry circuit and borrow circuit separately without
+   interference. In baseline, these are entangled.
+
+4. **Circuit validation**: swap abstraction tokens between examples and verify the
+   downstream circuit follows the token, not the input. This is a causal test that
+   baseline can't do (no discrete intermediate to swap).
+
+### Baseline comparison
+Run standard EAP on baseline model, then SoRL-constrained EAP on SoRL model.
+Compare: (a) number of edges needed to explain performance, (b) circuit specificity
+(do discovered circuits map cleanly to subtasks?), (c) compute cost of discovery.
+
+**Key claim**: SoRL converts circuit discovery from O(H²L²) unsupervised search
+to O(HL × vocab_size) supervised lookup.
+
+Refs: Syed et al. 2023 "Attribution Patching"; Conmy et al. 2023 "ACDC";
+Wang et al. 2022 "IOI circuit"
+
+---
+
 ## Appendix Plans
 
 ### Appendix A: Autointerp Methodology
