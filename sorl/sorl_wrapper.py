@@ -725,13 +725,20 @@ class SorlModelWrapperV2(SorlModelWrapper):
         wrapper.full_vocab_size_list = [base_vocab_size] + abstract_vocab_size_list
         wrapper._setup_vocabulary()
 
+        # HF from_pretrained may load both embed_tokens.weight and lm_head.weight
+        # from the checkpoint, breaking the tie even when config says tied.
+        # Re-tie explicitly so NL params share storage.
+        if getattr(wrapper.model.config, "tie_word_embeddings", False):
+            wrapper.model.lm_head.weight = wrapper.model.model.embed_tokens.weight
+
         # Abstract token count (including placeholder at index 0)
         abs_total = int(wrapper.total_vocab_size.item()) - base_vocab_size
         hidden_size = config.hidden_size
 
-        # Create separate abstract parameters
-        abs_embed = nn.Embedding(abs_total, hidden_size)
-        abs_proj = nn.Linear(hidden_size, abs_total, bias=False)
+        # Create separate abstract parameters in the same dtype as the base model
+        dtype = wrapper.model.model.embed_tokens.weight.dtype
+        abs_embed = nn.Embedding(abs_total, hidden_size, dtype=dtype)
+        abs_proj = nn.Linear(hidden_size, abs_total, bias=False, dtype=dtype)
 
         # Replace embed_tokens and lm_head with split versions
         orig_embed = wrapper.model.model.embed_tokens
@@ -786,12 +793,12 @@ class SorlModelWrapperV2(SorlModelWrapper):
         nl_embed_w = self.model.model.embed_tokens.nl_embed.weight
         base_norm = nl_embed_w[:base_vocab].norm(dim=1).mean().item()
 
-        # Orthogonal init for abs_embed
+        # Orthogonal init for abs_embed (compute in fp32, cast to param dtype)
         ortho_e = torch.empty(max(n_abs, hidden), hidden, device=abs_embed_w.device)
         nn.init.orthogonal_(ortho_e)
-        abs_embed_w.copy_(ortho_e[:n_abs] * base_norm)
+        abs_embed_w.copy_((ortho_e[:n_abs] * base_norm).to(abs_embed_w.dtype))
 
         # Orthogonal init for abs_proj (independent from abs_embed)
         ortho_p = torch.empty(max(n_abs, hidden), hidden, device=abs_proj_w.device)
         nn.init.orthogonal_(ortho_p)
-        abs_proj_w.copy_(ortho_p[:n_abs] * base_norm)
+        abs_proj_w.copy_((ortho_p[:n_abs] * base_norm).to(abs_proj_w.dtype))

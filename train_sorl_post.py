@@ -238,7 +238,8 @@ def _resolve_ckpt_dir(ckpt_dir: str) -> str:
     )
 
 
-def load_checkpoint(model_name, abstract_vocab_size, ckpt_dir, device, untie_embeddings=False):
+def load_checkpoint(model_name, abstract_vocab_size, ckpt_dir, device,
+                    untie_embeddings=False, separate_abs_params=False):
     """Load SorlModelWrapper + checkpoint weights (model.safetensors + abs_embeddings.pt + LoRA).
 
     untie_embeddings must match the flag used during training: if the checkpoint was saved
@@ -246,10 +247,13 @@ def load_checkpoint(model_name, abstract_vocab_size, ckpt_dir, device, untie_emb
     are restored as independent parameters.  With untie_embeddings=False (default / tied),
     loading a checkpoint that has diverged embed/lm_head abstract rows will silently discard
     the embed_tokens values (last write into the shared tensor wins).
+
+    separate_abs_params: if True, use SorlModelWrapperV2 (separate abs_embed / abs_proj).
     """
     ckpt_dir = _resolve_ckpt_dir(ckpt_dir)
     print(f"Loading base model: {model_name}")
-    wrapper = SorlModelWrapper.from_pretrained(
+    WrapperCls = SorlModelWrapperV2 if separate_abs_params else SorlModelWrapper
+    wrapper = WrapperCls.from_pretrained(
         model_name,
         abstract_vocab_size_list=[abstract_vocab_size],
         untie_embeddings=untie_embeddings,
@@ -271,7 +275,7 @@ def load_checkpoint(model_name, abstract_vocab_size, ckpt_dir, device, untie_emb
         # with weight tying (only embed_tokens is written). If we are loading into
         # an untied model (separate lm_head parameter), the NL rows of lm_head would
         # stay at base-model init. Fix: copy from embed_tokens after loading.
-        if untie_embeddings and lmhead_missing:
+        if untie_embeddings and lmhead_missing and not separate_abs_params:
             hf = wrapper.model
             embed_w_  = hf.model.embed_tokens.weight if hasattr(hf, "model") else hf.transformer.wte.weight
             lmhead_w_ = hf.lm_head.weight
@@ -285,22 +289,30 @@ def load_checkpoint(model_name, abstract_vocab_size, ckpt_dir, device, untie_emb
     if os.path.exists(abs_path):
         print(f"Loading abstract embeddings from: {abs_path}")
         ckpt = torch.load(abs_path, map_location="cpu")
-        hf = wrapper.model
-        embed_w = hf.model.embed_tokens.weight if hasattr(hf, "model") else hf.transformer.wte.weight
-        lm_head_w = hf.lm_head.weight
 
-        # Consistency check: detect mismatch between flag and checkpoint state.
-        ckpt_is_tied = torch.allclose(
-            ckpt["embed_tokens"].float(), ckpt["lm_head"].float(), atol=1e-6
-        )
-        if not(untie_embeddings or ckpt_is_tied): 
-            raise AssertionError("[Conflict] Checkpoint is not tied but attempt to train in tied fashion, conflict!")
-    
+        if separate_abs_params or ckpt.get("separate_abs_params", False):
+            # V2: write directly to abs_embed / abs_proj
+            wrapper.abs_embed.weight.data.copy_(ckpt["embed_tokens"])
+            wrapper.abs_proj.weight.data.copy_(ckpt["lm_head"])
+            print(f"  Restored V2 abs_embed={ckpt['embed_tokens'].shape}, "
+                  f"abs_proj={ckpt['lm_head'].shape}")
+        else:
+            # V1: write to expanded rows
+            hf = wrapper.model
+            embed_w = hf.model.embed_tokens.weight if hasattr(hf, "model") else hf.transformer.wte.weight
+            lm_head_w = hf.lm_head.weight
 
-        embed_w.data[base_vocab:] = ckpt["embed_tokens"]
-        lm_head_w.data[base_vocab:] = ckpt["lm_head"]
-        print(f"  Restored abstract rows: embed={ckpt['embed_tokens'].shape}, lm_head={ckpt['lm_head'].shape}")
-        print(f"  Tied ckpt: {ckpt_is_tied} | untie_embeddings={untie_embeddings}")
+            # Consistency check: detect mismatch between flag and checkpoint state.
+            ckpt_is_tied = torch.allclose(
+                ckpt["embed_tokens"].float(), ckpt["lm_head"].float(), atol=1e-6
+            )
+            if not(untie_embeddings or ckpt_is_tied): 
+                raise AssertionError("[Conflict] Checkpoint is not tied but attempt to train in tied fashion, conflict!")
+
+            embed_w.data[base_vocab:] = ckpt["embed_tokens"]
+            lm_head_w.data[base_vocab:] = ckpt["lm_head"]
+            print(f"  Restored abstract rows: embed={ckpt['embed_tokens'].shape}, lm_head={ckpt['lm_head'].shape}")
+            print(f"  Tied ckpt: {ckpt_is_tied} | untie_embeddings={untie_embeddings}")
         print(f"  Step: {ckpt.get('step', '?')}, Epoch: {ckpt.get('epoch', '?')}")
 
     # 3. Load LoRA adapter if present

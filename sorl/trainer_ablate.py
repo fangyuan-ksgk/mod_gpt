@@ -689,23 +689,35 @@ class SoRLTrainer:
         self._log(f"[vq_pretrain] Training complete | final vocab_util={final_util:.3f} "
                   f"({int(final_util * abs_vocab_size)}/{abs_vocab_size} codes used)")
 
-        # -- 3. Copy centroids → abstract lm_head rows --
+        # -- 3. Copy centroids → abstract projection rows --
         # lm_head[k] · h = base_norm * ||h|| * cos(θ_{k,h}), so argmax = nearest centroid.
         # embed_tokens is left at its default initialisation.
-        lm_head_w = self.raw_model.model.lm_head.weight
-        base_norm = lm_head_w[:base_vocab].norm(dim=1).mean().item()
-        with torch.no_grad():
-            centroids = vq.codebook.weight.data.to(lm_head_w.device)  # (V, D)
-            centroids = F.normalize(centroids, dim=-1) * base_norm
-            lm_head_w[base_vocab + 1 : base_vocab + 1 + abs_vocab_size] = centroids
-
-        if self.ddp:
-            dist.broadcast(lm_head_w.data, src=0)
-
-        self._log(
-            f"[vq_pretrain] Copied VQ centroids → lm_head "
-            f"rows [{base_vocab+1}:{base_vocab+1+abs_vocab_size}]. embed_tokens unchanged."
-        )
+        if self.raw_model.has_separate_abs_params:
+            # V2: write to standalone abs_proj (row 0 = placeholder, 1..V = real)
+            abs_proj_w = self.raw_model.abs_proj.weight
+            nl_head_w = self.raw_model.model.lm_head.nl_head.weight
+            base_norm = nl_head_w[:base_vocab].norm(dim=1).mean().item()
+            with torch.no_grad():
+                centroids = vq.codebook.weight.data.to(abs_proj_w.device)
+                centroids = F.normalize(centroids, dim=-1) * base_norm
+                abs_proj_w.data[1 : 1 + abs_vocab_size] = centroids
+            if self.ddp:
+                dist.broadcast(abs_proj_w.data, src=0)
+            self._log(f"[vq_pretrain] Copied VQ centroids → abs_proj rows [1:{1+abs_vocab_size}].")
+        else:
+            # V1: write to expanded lm_head rows
+            lm_head_w = self.raw_model.model.lm_head.weight
+            base_norm = lm_head_w[:base_vocab].norm(dim=1).mean().item()
+            with torch.no_grad():
+                centroids = vq.codebook.weight.data.to(lm_head_w.device)  # (V, D)
+                centroids = F.normalize(centroids, dim=-1) * base_norm
+                lm_head_w[base_vocab + 1 : base_vocab + 1 + abs_vocab_size] = centroids
+            if self.ddp:
+                dist.broadcast(lm_head_w.data, src=0)
+            self._log(
+                f"[vq_pretrain] Copied VQ centroids → lm_head "
+                f"rows [{base_vocab+1}:{base_vocab+1+abs_vocab_size}]. embed_tokens unchanged."
+            )
         del vq, vq_opt, data, all_h
         torch.cuda.empty_cache()
 
@@ -717,17 +729,27 @@ class SoRLTrainer:
         self._saved_requires_grad = {}
         self._warmup_hooks = []
 
-        for name, p in self.model.named_parameters():
-            self._saved_requires_grad[name] = p.requires_grad
-            if "embed_tokens" in name or "lm_head" in name:
-                p.requires_grad = True
-                def _zero_nl(grad, bv=base_vocab):
-                    grad[:bv] = 0
-                    return grad
-                handle = p.register_hook(_zero_nl)
-                self._warmup_hooks.append(handle)
-            else:
-                p.requires_grad = False
+        if self.raw_model.has_separate_abs_params:
+            # V2: abs_embed is a standalone module — freeze everything except it
+            for name, p in self.model.named_parameters():
+                self._saved_requires_grad[name] = p.requires_grad
+                if "abs_embed" in name:
+                    p.requires_grad = True   # keep abstract embeddings trainable
+                else:
+                    p.requires_grad = False  # freeze NL embed, NL head, abs_proj, backbone
+        else:
+            # V1: embed_tokens/lm_head contain both NL and abstract rows
+            for name, p in self.model.named_parameters():
+                self._saved_requires_grad[name] = p.requires_grad
+                if "embed_tokens" in name or "lm_head" in name:
+                    p.requires_grad = True
+                    def _zero_nl(grad, bv=base_vocab):
+                        grad[:bv] = 0
+                        return grad
+                    handle = p.register_hook(_zero_nl)
+                    self._warmup_hooks.append(handle)
+                else:
+                    p.requires_grad = False
 
         n_abs = sum(self.raw_model.vocab_sizes[1:]).item()
         d = self.raw_model.model.config.hidden_size
