@@ -17,11 +17,14 @@ Also check [`TODO.md`](TODO.md) for the task backlog.
 ## Code Quality Process
 
 For new modules and substantial changes:
-1. **Write tests** — unit + E2E before committing
-2. **Run tests** — all must pass
-3. **Send to GPT-4/5 for review** via OpenAI API (`OPENAI_API_KEY` in env). Give full context. Focus on concurrency, error handling, resource leaks, race conditions.
-4. **Incorporate fixes**, note low-priority items
-5. **Then commit**
+1. **Check available APIs/tools first** — don't build what already exists (e.g., OpenAI Responses API has server-side state — don't build manual history management)
+2. **Write tests** — unit + E2E before committing
+3. **Run tests** — all must pass
+4. **Send to GPT-4/5 for review** via `Reviewer` class (`arithmetic.job_manager.llm_reviewer`). Uses OpenAI Responses API with server-side conversation memory. State at `/workspace/sorl_logs/reviewer_state.json`. Ask for TWO types of review:
+   - **Implementation review**: concurrency, error handling, resource leaks, race conditions
+   - **Architecture review**: highlight all design decisions made, ask if there are better approaches for accuracy, scalability, cost, maintainability. Ask "what would you do differently?"
+5. **Incorporate fixes**, note low-priority items
+6. **Then commit**
 
 Not needed for small edits — use for new modules and complex logic.
 

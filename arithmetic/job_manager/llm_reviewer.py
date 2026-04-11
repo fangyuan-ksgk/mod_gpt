@@ -55,12 +55,34 @@ class Reviewer:
         with open(self.state_path, "w") as f:
             json.dump(self.state, f, indent=2)
 
-    def review(self, files: dict = None, prompt: str = "", max_tokens: int = 3000) -> str:
+    def review(self, files: dict = None, prompt: str = "",
+               review_type: str = "both", max_tokens: int = 3000) -> str:
         """
         Send code for review. Returns feedback string.
         Chains with prior conversation via previous_response_id.
+
+        review_type:
+            "implementation" — bugs, concurrency, error handling, resource leaks
+            "architecture" — design decisions, better approaches, cost, scalability
+            "both" — both (default)
         """
         parts = []
+
+        if review_type in ("architecture", "both"):
+            parts.append(
+                "ARCHITECTURE REVIEW: For each design decision in this code, "
+                "state the decision explicitly, then evaluate: is there a better "
+                "approach for accuracy, scalability, cost, or maintainability? "
+                "What existing APIs/tools/patterns could replace custom code? "
+                "What would you do differently?"
+            )
+        if review_type in ("implementation", "both"):
+            parts.append(
+                "IMPLEMENTATION REVIEW: Check for bugs, concurrency issues, "
+                "error handling gaps, resource leaks, race conditions, and "
+                "anything that could produce incorrect results."
+            )
+
         if prompt:
             parts.append(prompt)
         if files:
