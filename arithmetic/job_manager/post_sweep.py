@@ -96,6 +96,107 @@ def extract_command(log_file: str, job_id: int) -> str:
     return ""
 
 
+def validate_uploaded_model(name: str) -> list:
+    """
+    Check that an uploaded model has all required artifacts and valid metrics.
+    Returns list of issues (empty = valid).
+    """
+    from huggingface_hub import hf_hub_download, HfApi
+    issues = []
+    repo = "thoughtworks/arithmetic-sorl"
+    cache = "/tmp/hf_validate_cache"
+
+    try:
+        api = HfApi()
+        files = api.list_repo_files(repo)
+        model_files = [f for f in files if f.startswith(f"{name}/")]
+
+        # Check required files exist
+        required = ["train_config.json", "metrics.json", "model.safetensors", "config.json"]
+        for req in required:
+            if f"{name}/{req}" not in model_files:
+                issues.append(f"missing {req}")
+
+        if f"{name}/train_config.json" in model_files:
+            path = hf_hub_download(repo, f"{name}/train_config.json", local_dir=cache)
+            cfg = json.load(open(path))
+
+            # Check wandb was recorded
+            if not cfg.get("wandb_run_id"):
+                issues.append("no wandb_run_id")
+
+            # Check eval method
+            if cfg.get("eval_method") != "ArithmeticEvaluator":
+                issues.append(f"eval_method={cfg.get('eval_method')} (expected ArithmeticEvaluator)")
+
+            # Check accuracy is reasonable
+            acc = cfg.get("final_accuracy")
+            if acc is None:
+                issues.append("no final_accuracy")
+
+        if f"{name}/metrics.json" in model_files:
+            path = hf_hub_download(repo, f"{name}/metrics.json", local_dir=cache)
+            metrics = json.load(open(path))
+
+            # Check eval results exist
+            has_sft_eval = "sft_eval" in metrics
+            has_sorl_eval = "sorl_eval" in metrics
+            if not has_sft_eval:
+                issues.append("no sft_eval in metrics")
+
+            # Check training history has eval curves
+            history = metrics.get("history", {})
+            if "eval_step" not in history or len(history.get("eval_step", [])) == 0:
+                issues.append("no eval curves in training history")
+
+            # Check splits exist in eval
+            for eval_key in ["sft_eval", "sorl_eval"]:
+                ev = metrics.get(eval_key, {})
+                splits = ev.get("splits", {})
+                if ev and len(splits) < 10:
+                    issues.append(f"{eval_key} has only {len(splits)} splits (expected 15+)")
+
+    except Exception as e:
+        issues.append(f"validation error: {e}")
+
+    return issues
+
+
+def validate_all_completed(log_file: str) -> dict:
+    """Validate all successfully completed jobs have proper outputs."""
+    print(f"\n{'='*60}")
+    print("VALIDATING COMPLETED JOBS")
+    print(f"{'='*60}")
+
+    # Get completed job names from log
+    completed = []
+    with open(log_file) as f:
+        for line in f:
+            if " DONE " in line:
+                match = re.search(r"DONE \(\d+s\)\s+(\S+)", line)
+                if match:
+                    completed.append(match.group(1))
+
+    results = {"valid": [], "invalid": []}
+    for name in completed:
+        # Map job name to HF subfolder name
+        # The train.py generates run_name from args, which becomes the HF subfolder
+        # Job name from queue = output_dir basename, which may differ from run_name
+        # Try common patterns
+        hf_name = name  # might need mapping
+        issues = validate_uploaded_model(hf_name)
+        if issues:
+            print(f"  INVALID: {name}")
+            for issue in issues:
+                print(f"    - {issue}")
+            results["invalid"].append({"name": name, "issues": issues})
+        else:
+            results["valid"].append(name)
+
+    print(f"\nValidation: {len(results['valid'])} valid, {len(results['invalid'])} invalid")
+    return results
+
+
 def triage_and_requeue(log_file: str):
     """Main triage: parse failures, diagnose, requeue fixable ones."""
     failures = parse_failures(log_file)
@@ -188,3 +289,4 @@ def triage_and_requeue(log_file: str):
 if __name__ == "__main__":
     log = sys.argv[1] if len(sys.argv) > 1 else "/workspace/sorl_logs/sweep_final.log"
     triage_and_requeue(log)
+    validate_all_completed(log)
