@@ -141,11 +141,11 @@ def build_comparison_table(models, arch_filter="All", enriched_only=True):
             row = {
                 "Ops": ops, "Data": ds_label, "Arch": arch,
                 "Baseline": fmt_pct(base_acc),
-                "SoRL": "—", "Config": "—",
+                "SoRL": "pending", "Config": "pending",
             }
             for s in HARD_SPLITS:
                 row[f"B_{s}"] = fmt_pct(base_hard.get(s))
-                row[f"S_{s}"] = "—"
+                row[f"S_{s}"] = "pending"
             rows.append(row)
         else:
             for (K, vocab), sorl_m in sorted(matching_sorl.items()):
@@ -194,7 +194,7 @@ def build_detailed_splits(models, model_name):
 
 # ── App ───────────────────────────────────────────────────────────
 
-with gr.Blocks(title="SoRL Arithmetic Dashboard", theme=gr.themes.Soft()) as app:
+with gr.Blocks(title="SoRL Arithmetic Dashboard") as app:
     gr.Markdown("# SoRL Arithmetic Dashboard")
     gr.Markdown("Baseline vs SoRL side-by-side. **Bold** = winner. "
                 "Source: [`thoughtworks/arithmetic-sorl`](https://huggingface.co/thoughtworks/arithmetic-sorl)")
@@ -331,4 +331,4 @@ with gr.Blocks(title="SoRL Arithmetic Dashboard", theme=gr.themes.Soft()) as app
 
 
 if __name__ == "__main__":
-    app.launch(server_name="0.0.0.0", server_port=7860)
+    app.launch(server_name="0.0.0.0", server_port=7860, ssr_mode=False)
