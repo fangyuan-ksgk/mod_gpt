@@ -1,77 +1,134 @@
 #!/usr/bin/env python3
 """
-GPU job queue: submits shell commands to the least-loaded GPU.
+GPU job queue with monitoring, callbacks, failure detection, and auto-retry.
 
 Usage:
-    # From a job file (one command per line, {GPU} is replaced with GPU id):
-    python gpu_queue.py jobs.txt
+    # From a job file:
+    python gpu_queue.py jobs.txt [n_gpus] [max_per_gpu]
 
     # Programmatic:
-    from gpu_queue import GPUQueue
+    from gpu_queue import GPUQueue, JobConfig
     q = GPUQueue(n_gpus=3, max_per_gpu=1)
-    q.submit("CUDA_VISIBLE_DEVICES={GPU} python train.py --config a")
-    q.submit("CUDA_VISIBLE_DEVICES={GPU} python train.py --config b")
+    q.submit("python train.py --config a", name="baseline_25K")
+    q.submit("python train.py --config b", name="sorl_25K",
+             on_complete=lambda j: print(f"done: {j.name}"),
+             on_fail=lambda j: print(f"FAILED: {j.name}"))
     q.wait()
+    q.print_summary()
 
 Features:
-    - Picks GPU with fewest running jobs (ties broken by lowest GPU id)
-    - Waits if all GPUs are at max_per_gpu capacity
-    - Logs start/finish/fail for each job
-    - Returns summary of all jobs when done
+    - Real-time status polling (configurable interval)
+    - Per-job callbacks: on_complete, on_fail
+    - Stale job detection (no output for N seconds → killed + requeued)
+    - Failure auto-retry (configurable max_retries)
+    - JSON status file updated every poll (machine-readable progress)
+    - Heartbeat file per job (last output timestamp)
 """
 import subprocess
 import threading
 import time
 import sys
 import os
+import json
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import List, Optional, Callable
 from collections import defaultdict
+from pathlib import Path
 
 
 @dataclass
 class Job:
     job_id: int
     cmd: str
+    name: str = ""
     gpu: int = -1
-    status: str = "pending"  # pending, running, done, failed
+    status: str = "pending"  # pending, running, done, failed, stale, retrying
     proc: Optional[subprocess.Popen] = field(default=None, repr=False)
     start_time: float = 0
     end_time: float = 0
     exit_code: int = -1
     log_file: str = ""
+    last_output_time: float = 0
+    retries: int = 0
+    max_retries: int = 1
+    on_complete: Optional[Callable] = field(default=None, repr=False)
+    on_fail: Optional[Callable] = field(default=None, repr=False)
+    stale_timeout: float = 1800  # 30 min no output → stale
+
+    @property
+    def elapsed(self) -> float:
+        if self.end_time:
+            return self.end_time - self.start_time
+        elif self.start_time:
+            return time.time() - self.start_time
+        return 0
+
+    @property
+    def idle_time(self) -> float:
+        """Seconds since last output."""
+        if self.last_output_time:
+            return time.time() - self.last_output_time
+        elif self.start_time:
+            return time.time() - self.start_time
+        return 0
+
+    def to_dict(self) -> dict:
+        return {
+            "job_id": self.job_id, "name": self.name, "cmd": self.cmd[:100],
+            "gpu": self.gpu, "status": self.status,
+            "elapsed": round(self.elapsed), "idle_time": round(self.idle_time),
+            "exit_code": self.exit_code, "retries": self.retries,
+            "log_file": self.log_file,
+        }
 
 
 class GPUQueue:
     def __init__(self, n_gpus: int = 3, max_per_gpu: int = 1,
-                 poll_interval: float = 5.0, log_dir: str = "/tmp/gpu_queue"):
+                 poll_interval: float = 5.0, log_dir: str = "/tmp/gpu_queue",
+                 status_file: str = None, stale_timeout: float = 1800,
+                 max_retries: int = 1):
         self.n_gpus = n_gpus
         self.max_per_gpu = max_per_gpu
         self.poll_interval = poll_interval
         self.log_dir = log_dir
+        self.status_file = status_file or os.path.join(log_dir, "queue_status.json")
+        self.stale_timeout = stale_timeout
+        self.max_retries = max_retries
         os.makedirs(log_dir, exist_ok=True)
 
         self.jobs: List[Job] = []
-        self.gpu_running: defaultdict = defaultdict(int)  # gpu_id -> count
+        self.gpu_running: defaultdict = defaultdict(int)
         self.lock = threading.Lock()
         self._job_counter = 0
         self._threads: List[threading.Thread] = []
+        self._monitor_thread = None
+        self._stop_monitor = threading.Event()
 
-    def submit(self, cmd: str) -> int:
-        """Submit a command. {GPU} in cmd will be replaced with the assigned GPU id."""
+    def submit(self, cmd: str, name: str = "", on_complete: Callable = None,
+               on_fail: Callable = None) -> int:
+        """Submit a command. Returns job ID."""
         with self.lock:
             job_id = self._job_counter
             self._job_counter += 1
-            job = Job(job_id=job_id, cmd=cmd)
+            job = Job(
+                job_id=job_id, cmd=cmd, name=name or f"job_{job_id}",
+                max_retries=self.max_retries, stale_timeout=self.stale_timeout,
+                on_complete=on_complete, on_fail=on_fail,
+            )
             self.jobs.append(job)
 
         t = threading.Thread(target=self._run_job, args=(job,), daemon=True)
         self._threads.append(t)
         t.start()
+
+        # Start monitor if not running
+        if self._monitor_thread is None:
+            self._monitor_thread = threading.Thread(target=self._monitor_loop, daemon=True)
+            self._monitor_thread.start()
+
         return job_id
 
     def _pick_gpu(self) -> Optional[int]:
-        """Return GPU with fewest running jobs, or None if all at capacity."""
         with self.lock:
             best_gpu = None
             best_count = self.max_per_gpu + 1
@@ -96,19 +153,27 @@ class GPUQueue:
             job.gpu = gpu
             job.status = "running"
             job.start_time = time.time()
-            job.log_file = os.path.join(self.log_dir, f"job_{job.job_id:03d}_gpu{gpu}.log")
+            job.last_output_time = time.time()
+            job.log_file = os.path.join(self.log_dir, f"job_{job.job_id:03d}_{job.name[:30]}_gpu{gpu}.log")
 
         cmd = job.cmd.replace("{GPU}", str(gpu))
         ts = time.strftime("%H:%M:%S")
-        print(f"[{ts}] JOB {job.job_id:3d} GPU {gpu} START: {cmd[:80]}...")
+        print(f"[{ts}] JOB {job.job_id:3d} GPU {gpu} START: {job.name} ({cmd[:60]}...)")
 
         try:
             with open(job.log_file, "w") as logf:
                 proc = subprocess.Popen(
-                    cmd, shell=True, stdout=logf, stderr=subprocess.STDOUT,
+                    cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                     env={**os.environ, "CUDA_VISIBLE_DEVICES": str(gpu)},
                 )
                 job.proc = proc
+
+                # Stream output to log file and track last output time
+                for line in iter(proc.stdout.readline, b""):
+                    logf.write(line.decode("utf-8", errors="replace"))
+                    logf.flush()
+                    job.last_output_time = time.time()
+
                 proc.wait()
                 job.exit_code = proc.returncode
         except Exception as e:
@@ -120,57 +185,193 @@ class GPUQueue:
         with self.lock:
             self.gpu_running[gpu] -= 1
             job.end_time = time.time()
-            job.status = "done" if job.exit_code == 0 else "failed"
 
         elapsed = job.end_time - job.start_time
         ts = time.strftime("%H:%M:%S")
-        tag = "DONE" if job.exit_code == 0 else f"FAIL(exit={job.exit_code})"
-        print(f"[{ts}] JOB {job.job_id:3d} GPU {gpu} {tag} ({elapsed:.0f}s)")
+
+        if job.exit_code == 0:
+            job.status = "done"
+            print(f"[{ts}] JOB {job.job_id:3d} GPU {gpu} DONE ({elapsed:.0f}s) {job.name}")
+            if job.on_complete:
+                try:
+                    job.on_complete(job)
+                except Exception as e:
+                    print(f"  on_complete callback error: {e}")
+        else:
+            job.status = "failed"
+            print(f"[{ts}] JOB {job.job_id:3d} GPU {gpu} FAIL(exit={job.exit_code}) ({elapsed:.0f}s) {job.name}")
+
+            # Check last few lines of log for error message
+            try:
+                with open(job.log_file) as f:
+                    lines = f.readlines()
+                    error_lines = [l.strip() for l in lines[-5:] if l.strip()]
+                    if error_lines:
+                        print(f"  Last output: {error_lines[-1][:100]}")
+            except Exception:
+                pass
+
+            # Auto-retry
+            if job.retries < job.max_retries:
+                job.retries += 1
+                job.status = "retrying"
+                print(f"  Retrying ({job.retries}/{job.max_retries})...")
+                job.exit_code = -1
+                job.start_time = 0
+                job.end_time = 0
+                t = threading.Thread(target=self._run_job, args=(job,), daemon=True)
+                self._threads.append(t)
+                t.start()
+            else:
+                if job.on_fail:
+                    try:
+                        job.on_fail(job)
+                    except Exception as e:
+                        print(f"  on_fail callback error: {e}")
+
+        self._write_status()
+
+    def _monitor_loop(self):
+        """Periodic monitoring: detect stale jobs, write status."""
+        while not self._stop_monitor.is_set():
+            time.sleep(30)
+            self._check_stale_jobs()
+            self._write_status()
+
+    def _check_stale_jobs(self):
+        """Kill and requeue jobs that have gone silent."""
+        with self.lock:
+            for job in self.jobs:
+                if job.status != "running":
+                    continue
+                if job.idle_time > job.stale_timeout:
+                    ts = time.strftime("%H:%M:%S")
+                    print(f"[{ts}] JOB {job.job_id:3d} STALE ({job.idle_time:.0f}s no output) — killing")
+                    if job.proc:
+                        try:
+                            job.proc.kill()
+                        except Exception:
+                            pass
+                    job.status = "stale"
+                    self.gpu_running[job.gpu] -= 1
+                    job.end_time = time.time()
+
+                    # Retry if possible
+                    if job.retries < job.max_retries:
+                        job.retries += 1
+                        job.status = "retrying"
+                        print(f"  Retrying ({job.retries}/{job.max_retries})...")
+                        job.exit_code = -1
+                        job.start_time = 0
+                        job.end_time = 0
+                        t = threading.Thread(target=self._run_job, args=(job,), daemon=True)
+                        self._threads.append(t)
+                        t.start()
+
+    def _write_status(self):
+        """Write machine-readable status JSON."""
+        status = {
+            "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "total": len(self.jobs),
+            "pending": sum(1 for j in self.jobs if j.status == "pending"),
+            "running": sum(1 for j in self.jobs if j.status == "running"),
+            "done": sum(1 for j in self.jobs if j.status == "done"),
+            "failed": sum(1 for j in self.jobs if j.status == "failed"),
+            "stale": sum(1 for j in self.jobs if j.status == "stale"),
+            "retrying": sum(1 for j in self.jobs if j.status == "retrying"),
+            "jobs": [j.to_dict() for j in self.jobs],
+        }
+        try:
+            with open(self.status_file, "w") as f:
+                json.dump(status, f, indent=2)
+        except Exception:
+            pass
 
     def wait(self):
         """Block until all submitted jobs finish."""
         for t in self._threads:
             t.join()
+        self._stop_monitor.set()
+        self._write_status()
 
-    def summary(self) -> str:
-        lines = []
-        n_done = sum(1 for j in self.jobs if j.status == "done")
-        n_fail = sum(1 for j in self.jobs if j.status == "failed")
-        lines.append(f"Total: {len(self.jobs)} jobs | Done: {n_done} | Failed: {n_fail}")
-        lines.append("")
+    def get_status(self) -> dict:
+        """Get current queue status."""
+        return {
+            "total": len(self.jobs),
+            "done": sum(1 for j in self.jobs if j.status == "done"),
+            "failed": sum(1 for j in self.jobs if j.status in ("failed", "stale")),
+            "running": sum(1 for j in self.jobs if j.status == "running"),
+            "pending": sum(1 for j in self.jobs if j.status == "pending"),
+        }
+
+    def print_summary(self):
+        """Print human-readable summary."""
+        s = self.get_status()
+        print(f"\n{'='*60}")
+        print(f"Queue: {s['total']} total | {s['done']} done | {s['failed']} failed | {s['running']} running | {s['pending']} pending")
+        print(f"{'='*60}")
         for j in self.jobs:
-            elapsed = j.end_time - j.start_time if j.end_time else 0
-            status = f"{'DONE' if j.status == 'done' else 'FAIL':4s}"
-            lines.append(f"  {j.job_id:3d} GPU {j.gpu} {status} {elapsed:6.0f}s  {j.cmd[:70]}")
-        return "\n".join(lines)
+            status = f"{'DONE' if j.status == 'done' else j.status.upper():8s}"
+            elapsed = f"{j.elapsed:6.0f}s" if j.elapsed else "     -"
+            retry = f" (retry {j.retries})" if j.retries else ""
+            print(f"  {j.job_id:3d} GPU {j.gpu:1d} {status} {elapsed}  {j.name}{retry}")
+
+        failed = [j for j in self.jobs if j.status in ("failed", "stale")]
+        if failed:
+            print(f"\n  FAILURES ({len(failed)}):")
+            for j in failed:
+                print(f"    {j.name}: exit={j.exit_code}, log={j.log_file}")
+                try:
+                    with open(j.log_file) as f:
+                        lines = f.readlines()
+                        last = [l.strip() for l in lines[-3:] if l.strip()]
+                        for l in last:
+                            print(f"      {l[:100]}")
+                except Exception:
+                    pass
 
 
 def main():
-    """Read jobs from a file (one command per line) and run them."""
+    """Read jobs from a file and run them."""
     if len(sys.argv) < 2:
-        print("Usage: python gpu_queue.py jobs.txt [n_gpus] [max_per_gpu]")
-        print("")
-        print("jobs.txt: one shell command per line. {GPU} replaced with GPU id.")
-        print("Lines starting with # are skipped.")
+        print("Usage: python gpu_queue.py jobs.txt [n_gpus] [max_per_gpu] [--stale-timeout N] [--max-retries N]")
         sys.exit(1)
 
     jobs_file = sys.argv[1]
     n_gpus = int(sys.argv[2]) if len(sys.argv) > 2 else 3
     max_per_gpu = int(sys.argv[3]) if len(sys.argv) > 3 else 1
 
+    # Parse optional flags
+    stale_timeout = 1800
+    max_retries = 1
+    for i, arg in enumerate(sys.argv):
+        if arg == "--stale-timeout" and i + 1 < len(sys.argv):
+            stale_timeout = float(sys.argv[i + 1])
+        if arg == "--max-retries" and i + 1 < len(sys.argv):
+            max_retries = int(sys.argv[i + 1])
+
     with open(jobs_file) as f:
         commands = [line.strip() for line in f if line.strip() and not line.startswith("#")]
 
-    print(f"GPU Queue: {len(commands)} jobs, {n_gpus} GPUs, max {max_per_gpu} per GPU")
-    print("")
+    # Extract job names from output_dir or run_name
+    def extract_name(cmd):
+        for part in cmd.split():
+            if part.startswith("ckpt/sweep/"):
+                return part.split("/")[-1]
+        return cmd.split("--mode")[-1].strip().split()[0] if "--mode" in cmd else "job"
 
-    q = GPUQueue(n_gpus=n_gpus, max_per_gpu=max_per_gpu)
+    print(f"GPU Queue: {len(commands)} jobs, {n_gpus} GPUs, max {max_per_gpu}/GPU")
+    print(f"  stale_timeout={stale_timeout}s, max_retries={max_retries}")
+    print()
+
+    q = GPUQueue(
+        n_gpus=n_gpus, max_per_gpu=max_per_gpu,
+        stale_timeout=stale_timeout, max_retries=max_retries,
+    )
     for cmd in commands:
-        q.submit(cmd)
+        q.submit(cmd, name=extract_name(cmd))
     q.wait()
-
-    print("")
-    print(q.summary())
+    q.print_summary()
 
 
 if __name__ == "__main__":
