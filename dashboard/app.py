@@ -204,7 +204,6 @@ with gr.Blocks(title="SoRL Arithmetic Dashboard", theme=gr.themes.Soft()) as app
     with gr.Row():
         arch_filter = gr.Dropdown(["All", "2L/3H/510d", "1L/3H/510d", "1L/2H/256d", "2L/1H/128d"],
                                   value="All", label="Architecture")
-        enriched_toggle = gr.Checkbox(value=True, label="Enriched only")
         refresh_btn = gr.Button("Refresh from HF", variant="primary")
 
     summary_text = gr.Markdown("Click Refresh to load.")
@@ -230,9 +229,9 @@ with gr.Blocks(title="SoRL Arithmetic Dashboard", theme=gr.themes.Soft()) as app
         detail_btn = gr.Button("Show splits")
         detail_table = gr.Dataframe(headers=["Split", "Accuracy", "N"], interactive=False)
 
-    def on_refresh(arch, enriched):
+    def on_refresh(arch):
         models = fetch_all_models()
-        df = build_comparison_table(models, arch_filter=arch, enriched_only=enriched)
+        df = build_comparison_table(models, arch_filter=arch, enriched_only=False)
 
         n_models = len(models)
         n_enriched = sum(1 for m in models if m["enriched"])
@@ -252,20 +251,19 @@ with gr.Blocks(title="SoRL Arithmetic Dashboard", theme=gr.themes.Soft()) as app
 
     refresh_btn.click(
         on_refresh,
-        inputs=[arch_filter, enriched_toggle],
+        inputs=[arch_filter],
         outputs=[models_state, summary_text, main_table, hard_table],
     )
 
-    for filt in [arch_filter, enriched_toggle]:
-        filt.change(
-            on_refresh,
-            inputs=[arch_filter, enriched_toggle],
-            outputs=[models_state, summary_text, main_table, hard_table],
-        )
+    arch_filter.change(
+        on_refresh,
+        inputs=[arch_filter],
+        outputs=[models_state, summary_text, main_table, hard_table],
+    )
 
     detail_btn.click(on_detail, inputs=[models_state, model_selector], outputs=[detail_table])
 
-    app.load(on_refresh, inputs=[arch_filter, enriched_toggle],
+    app.load(on_refresh, inputs=[arch_filter],
              outputs=[models_state, summary_text, main_table, hard_table])
 
 
