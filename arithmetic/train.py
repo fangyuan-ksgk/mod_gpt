@@ -218,13 +218,29 @@ def train_sft(model, train_ds, val_ds, args, run_name):
             steps_per_epoch = max(1, len(train_ds) // args.batch_size)
             if global_step % steps_per_epoch == 0:
                 current_epoch = global_step // steps_per_epoch
-                acc = eval_sft(model, val_ds, device, 100)
+
+                # Full per-split eval every epoch
+                from arithmetic.evaluate import ArithmeticEvaluator
+                evaluator = ArithmeticEvaluator(model, tokenizer, device=device, n_digits=args.n_digits)
+                epoch_eval = evaluator.run(ops=args.ops, K=None, n_per_split=50)
+                acc = epoch_eval["summary"]["overall_accuracy"]
+
                 print(f"  --- Epoch {current_epoch}/{args.num_epochs}: accuracy={acc:.3f} ---")
+                # Log key hard splits
+                splits = epoch_eval.get("splits", {})
+                for s in ["add_S5", "add_S6", "add_C6", "sub_M5", "sub_B5"]:
+                    if s in splits:
+                        print(f"      {s}: {splits[s]['full_accuracy']:.0%}")
+
                 history.setdefault("eval_step", []).append(global_step)
                 history.setdefault("eval_epoch", []).append(current_epoch)
                 history.setdefault("eval_accuracy", []).append(acc)
+
                 if wandb.run is not None:
-                    wandb.log({"eval/accuracy": acc, "eval/epoch": current_epoch}, step=global_step)
+                    log_dict = {"eval/accuracy": acc, "eval/epoch": current_epoch}
+                    for split_name, split_data in splits.items():
+                        log_dict[f"eval/sft/{split_name}"] = split_data["full_accuracy"]
+                    wandb.log(log_dict, step=global_step)
 
     return history
 
@@ -247,11 +263,24 @@ class WandbSoRLTrainer(SoRLTrainer):
     def evaluate(self, eval_K=None):
         result = super().evaluate(eval_K=eval_K)
         if result and self.is_master:
-            self.history.setdefault("eval_step", []).append(
-                self.history["step"][-1] if self.history["step"] else 0)
+            step = self.history["step"][-1] if self.history["step"] else 0
+            self.history.setdefault("eval_step", []).append(step)
             self.history.setdefault("eval_accuracy", []).append(result["accuracy"])
+
+            # Full per-split eval
+            from arithmetic.evaluate import ArithmeticEvaluator
+            K = eval_K or self.config.K
+            evaluator = ArithmeticEvaluator(
+                self.model, self.tokenizer, device=str(self.device),
+                n_digits=6,
+            )
+            epoch_eval = evaluator.run(ops="add_sub", K=K, n_per_split=50)
+
             if wandb.run is not None:
-                wandb.log({"eval/accuracy": result["accuracy"]})
+                log_dict = {"eval/accuracy": epoch_eval["summary"]["overall_accuracy"]}
+                for split_name, split_data in epoch_eval.get("splits", {}).items():
+                    log_dict[f"eval/sorl/{split_name}"] = split_data["full_accuracy"]
+                wandb.log(log_dict, step=step)
         return result
 
 
