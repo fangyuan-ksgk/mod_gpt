@@ -523,8 +523,15 @@ class SoRLTrainer:
         save_dir = path.replace(".pt", "")
         os.makedirs(save_dir, exist_ok=True)
         base_vocab = self.raw_model.vocab_sizes[0].item()
-        # Save LoRA adapter if present
-        if hasattr(self.raw_model, "save_pretrained"):
+        # Save model weights / LoRA adapter
+        if self.raw_model.has_separate_abs_params:
+            # V2: wrapper's save_pretrained breaks HF tied-weight detection
+            # because _SplitEmbedding/_SplitLMHead rename the tied keys.
+            # Save LoRA adapter (if present) via the inner PeftModel instead.
+            inner = self.raw_model.model  # PeftModel or Qwen3ForCausalLM
+            if hasattr(inner, "save_pretrained") and hasattr(inner, "peft_config"):
+                inner.save_pretrained(save_dir)
+        elif hasattr(self.raw_model, "save_pretrained"):
             self.raw_model.save_pretrained(save_dir)
         # Save abstract embedding rows + loss_fn + optimizer (always small)
         if self.raw_model.has_separate_abs_params:
