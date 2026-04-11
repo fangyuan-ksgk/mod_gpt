@@ -5,9 +5,14 @@ Results placeholders in `log/arithmetic.md` use `<!-- PLACEHOLDER: description -
 **Start here:** Read [`MEMORY.md`](MEMORY.md) first for current session state and what to do next.
 Also check [`TODO.md`](TODO.md) for the task backlog.
 
-## Job Safety Rule
+## Job Safety Rules
 
 **ALWAYS kill running training jobs before modifying code they depend on** (train.py, evaluate.py, datasets/addition.py, hub.py, sorl/). Running jobs load code at start time — edits during execution cause failures with stale imports or mismatched logic. Kill first, edit, then relaunch.
+
+**NEVER use pkill/kill to stop jobs.** Use the job manager system:
+- `python -m arithmetic.job_manager.job_state kill ALL` — kill all jobs
+- `python -m arithmetic.job_manager.job_state kill <name>` — kill specific job
+- `python -m arithmetic.job_manager.job_state` — check status
 
 ## Code Quality Process
 
