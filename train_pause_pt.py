@@ -98,19 +98,28 @@ def parse_args():
                    choices=["gsm8k", "math_qa", "arc", "hellaswag",
                             "winogrande", "boolq", "openbookqa",
                             "commonsenseqa", "mmlu",
-                            "aqua", "math", "scienceqa",
+                            "aqua", "math", "scienceqa", "hotpotqa",
                             "mbpp", "humaneval", "livecodebench",
                             "codecontests", "deepmind_code_contests",
                             "wildifeval", "xlam"])
     max_length_dict = {
-        "gsm8k": 512, "math_qa": 512, "math": 512, "arc": 256,
-        "hellaswag": 512, "winogrande": 256, "boolq": 512,
-        "openbookqa": 256, "commonsenseqa": 256, "mmlu": 256,
-        "mbpp": 1024, "humaneval": 1024, "livecodebench": 1024,
-        "codecontests": 1024, "deepmind_code_contests": 1024,
+        "gsm8k": 512, "math_qa": 512, "math": 512,
+        "arc": 256, "hellaswag": 512, "winogrande": 256,
+        "boolq": 1024, "openbookqa": 768, "commonsenseqa": 256, "mmlu": 256,
+        "aqua": 1024, "scienceqa": 512, "hotpotqa": 512,
+        "humaneval": 1024, "mbpp": 1024, "livecodebench": 1024, "codecontests": 1024, "deepmind_code_contests": 2048,
         "wildifeval": 2048, "xlam": 1024,
     }
-    p.add_argument("--max_length", type=int, default=max_length_dict["gsm8k"])
+    max_new_tokens_dict = {
+        "gsm8k": 256, "math_qa": 128, "math": 256,
+        "arc": 64, "hellaswag": 64, "winogrande": 64,
+        "boolq": 32, "openbookqa": 128, "commonsenseqa": 64, "mmlu": 64,
+        "aqua": 768, "scienceqa": 256, "hotpotqa": 64,
+        "humaneval": 256, "mbpp": 256, "livecodebench": 256, "codecontests": 512, "deepmind_code_contests": 1024,
+        "wildifeval": 256, "xlam": 256,
+    }
+    p.add_argument("--max_length", type=int, default=None,
+                   help="Input context length (default: auto from dataset)")
 
     # Optimizer
     p.add_argument("--lr", type=float, default=1e-5)
@@ -134,7 +143,8 @@ def parse_args():
     # Generation logging
     p.add_argument("--log_samples_every", type=int, default=100)
     p.add_argument("--num_log_samples", type=int, default=3)
-    p.add_argument("--max_new_tokens", type=int, default=128)
+    p.add_argument("--max_new_tokens", type=int, default=None,
+                   help="Max generation tokens (default: auto from dataset)")
     p.add_argument("--eval_batch_size", type=int, default=16)
 
     # Pause token
@@ -143,7 +153,12 @@ def parse_args():
     p.add_argument("--pause_token", type=str, default="<pause>",
                    help="String for the new special token")
 
-    return p.parse_args()
+    args = p.parse_args()
+    if args.max_length is None:
+        args.max_length = max_length_dict.get(args.dataset, 512)
+    if args.max_new_tokens is None:
+        args.max_new_tokens = max_new_tokens_dict.get(args.dataset, 128)
+    return args
 
 
 # ---------------------------------------------------------------------------
