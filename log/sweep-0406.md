@@ -11,6 +11,12 @@ Combined SFT Sweep | LoRA r=16 α=32 | lr=1e-5 | 1 epoch | eff_bs=8
 └─────────────────┴────────┴────────┴────────┴────────┴────────┴────────┴────────┘ 
 
 
+Combined SFT Sweep | lr=1e-5 | 1 epoch | eff_bs=8   
+
+
+
+
+
 ● Qwen3-4B | LoRA (r=16, α=32) | 1 epoch  |  ALL COMPLETED RESULTS                                                                                                                                                 
 v1: K=4, abs=128  |  v6: K=16, abs=32                                                                                                                                                                               
 ┌─────────┬────┬──────┬──────┬───────┬──────┬─────┬──────────┐

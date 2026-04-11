@@ -93,30 +93,30 @@ run_bg() {
 # Batch 1 — v8 loss weight ablation on Qwen3-0.6B × GSM8K
 #
 # Axes: alpha_traj (L_compress weight) × alpha_kd (KD weight)
-#   (a) traj=1.0 kd=1.0 — balanced default
-#   (b) traj=5.0 kd=1.0 — stronger compress signal
-#   (c) traj=1.0 kd=5.0 — stronger KD signal
-#   (d) traj=5.0 kd=5.0 — both amplified
+#   (a) traj=1.0 kd=0.0 — no KD, pure compress loss + base (compression only)
+#   (b) traj=1.0 kd=1.0 — balanced combo (default)
+#   (c) traj=1.0 kd=0.1 — light KD nudge
+#   (d) traj=0.0 kd=1.0 — KD only, no compress loss (KD alone sufficient?)
 # ===========================================================================
 echo ""
 echo "Batch 1: v8 loss weight ablation — Qwen3-0.6B × GSM8K"
 
-# (a) traj=1.0 kd=1.0 — balanced default
+# (a) traj=1.0 kd=0.0 — compress only (no KD), upper bound w/o distillation
 run_bg "v8_t1_k0" $M06 $DS_GSM \
   $V8_BASE \
   --alpha_traj 1.0 --alpha_kd 1.0
 
-# (b) traj=5.0 kd=1.0 — stronger compress signal
+# (b) traj=1.0 kd=1.0 — balanced default
 run_bg "v8_t1_k1" $M06 $DS_GSM \
   $V8_BASE \
   --alpha_traj 5.0 --alpha_kd 1.0
 
-# (c) traj=1.0 kd=5.0 — stronger KD signal
+# (c) traj=1.0 kd=0.1 — light KD
 run_bg "v8_t1_k01" $M06 $DS_GSM \
   $V8_BASE \
   --alpha_traj 1.0 --alpha_kd 5.0
 
-# (d) traj=5.0 kd=5.0 — both amplified
+# (d) traj=0.0 kd=1.0 — KD only (no compress signal)
 run_bg "v8_t0_k1" $M06 $DS_GSM \
   $V8_BASE \
   --alpha_traj 5.0 --alpha_kd 5.0

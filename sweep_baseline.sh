@@ -1,13 +1,46 @@
+#!/bin/bash
+set -e
 
 # =============================
-# Baseline Method: 
-# - pause token 
+# Baseline Method:
+# - pause token
 # - token assorted
 # =============================
+
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+export OPENBLAS_NUM_THREADS=4
+export MKL_NUM_THREADS=4
+export OMP_NUM_THREADS=4
+
 N_GPUS=4
 MASTER_ADDR=127.0.0.1
 BASE_PORT=29500
-EVAL_BATCH_SIZE=256
+
+LR=1e-5
+WARMUP_STEPS=50
+BATCH_SIZE=2
+LOG_EVERY=10
+EVAL_EVERY=99999
+SAVE_EVERY=99999
+EVAL_SAMPLES=1300
+EVAL_BATCH_SIZE=8
+
+eval_samples_for_dataset() {
+  local dataset=$1
+  case "$dataset" in
+    gsm8k)                  echo 1319 ;;
+    scienceqa)              echo 2224 ;;
+    arc)                    echo 1172 ;;
+    mmlu)                   echo 2000 ;;
+    commonsenseqa)          echo 1221 ;;
+    boolq)                  echo 3270 ;;
+    openbookqa)             echo 1000 ;;
+    aqua)                   echo 254  ;;
+    hotpotqa)               echo 4000 ;;
+    deepmind_code_contests) echo 282  ;;
+    *)                      echo 1000 ;;
+  esac
+}
 
 # ---- Baseline runners (separate scripts) ----
 run_pause_bg() {
@@ -20,6 +53,7 @@ run_pause_bg() {
   local dataset=$1; shift
   local grad_accum=$((8 / BATCH_SIZE))
   local output_dir="./ckpt/sweep_${TIMESTAMP}/exp${idx}_${tag}"
+  local eval_samples; eval_samples=$(eval_samples_for_dataset "$dataset")
 
   echo "  Exp ${idx}: ${tag}  model=$(basename $model)  dataset=${dataset}  [GPU=${gpu}] [pause]"
 
@@ -40,7 +74,7 @@ run_pause_bg() {
     --log_every $LOG_EVERY \
     --eval_every $EVAL_EVERY \
     --save_every $SAVE_EVERY \
-    --eval_samples $EVAL_SAMPLES \
+    --eval_samples $eval_samples \
     --eval_batch_size $EVAL_BATCH_SIZE \
     --max_new_tokens $MAX_NEW_TOKENS \
     --output_dir $output_dir \
@@ -57,6 +91,7 @@ run_ta_bg() {
   local dataset=$1; shift
   local grad_accum=$((8 / BATCH_SIZE))
   local output_dir="./ckpt/sweep_${TIMESTAMP}/exp${idx}_${tag}"
+  local eval_samples; eval_samples=$(eval_samples_for_dataset "$dataset")
 
   echo "  Exp ${idx}: ${tag}  model=$(basename $model)  dataset=${dataset}  [GPU=${gpu}] [ta]"
 
@@ -77,7 +112,7 @@ run_ta_bg() {
     --log_every $LOG_EVERY \
     --eval_every $EVAL_EVERY \
     --save_every $SAVE_EVERY \
-    --eval_samples $EVAL_SAMPLES \
+    --eval_samples $eval_samples \
     --eval_batch_size $EVAL_BATCH_SIZE \
     --max_new_tokens $MAX_NEW_TOKENS \
     --output_dir $output_dir \

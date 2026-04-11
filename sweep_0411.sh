@@ -82,6 +82,23 @@ OTHER_MODEL_TAGS=("17b" "l1b" "l3b" "q4b")
 ABS="--abstract_vocab_size 128 --prefix_abs --alpha_traj 1.0 --abs_routing_mode similar_magnitude"
 DEFAULT="--use_v7 $ABS --abs_prefix_max 4 --max_iterations 2"
 
+eval_samples_for_dataset() {
+  local dataset=$1
+  case "$dataset" in
+    gsm8k)                  echo 1319 ;;
+    scienceqa)              echo 2224 ;;
+    arc)                    echo 1172 ;;
+    mmlu)                   echo 2000 ;;
+    commonsenseqa)          echo 1221 ;;
+    boolq)                  echo 3270 ;;
+    openbookqa)             echo 1000 ;;
+    aqua)                   echo 254  ;;
+    hotpotqa)               echo 4000 ;;
+    deepmind_code_contests) echo 282  ;;
+    *)                      echo 1000 ;;
+  esac
+}
+
 run_bg() {
   EXP_IDX=$((EXP_IDX + 1))
   local idx=$EXP_IDX
@@ -92,6 +109,7 @@ run_bg() {
   local dataset=$1; shift
   local grad_accum=$((8 / BATCH_SIZE))
   local output_dir="./ckpt/sweep_${TIMESTAMP}/exp${idx}_${tag}"
+  local eval_samples; eval_samples=$(eval_samples_for_dataset "$dataset")
 
   echo "  Exp ${idx}: ${tag}  model=$(basename $model)  dataset=${dataset}  [GPU=${gpu}]"
 
@@ -110,7 +128,7 @@ run_bg() {
     --log_every $LOG_EVERY \
     --eval_every $EVAL_EVERY \
     --save_every $SAVE_EVERY \
-    --eval_samples $EVAL_SAMPLES \
+    --eval_samples $eval_samples \
     --eval_batch_size $EVAL_BATCH_SIZE \
     --output_dir $output_dir \
     --untie_embedding \
