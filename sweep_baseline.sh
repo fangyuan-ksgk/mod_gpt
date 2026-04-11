@@ -65,7 +65,6 @@ run_pause_bg() {
     --model_name $model \
     --dataset $dataset \
     --use_lora --lora_rank 16 --lora_alpha 32 \
-    --max_length $MAX_LENGTH \
     --lr $LR \
     --warmup_steps $WARMUP_STEPS \
     --batch_size $BATCH_SIZE \
@@ -76,7 +75,6 @@ run_pause_bg() {
     --save_every $SAVE_EVERY \
     --eval_samples $eval_samples \
     --eval_batch_size $EVAL_BATCH_SIZE \
-    --max_new_tokens $MAX_NEW_TOKENS \
     --output_dir $output_dir \
     "$@" &
 }
@@ -103,7 +101,6 @@ run_ta_bg() {
     --model_name $model \
     --dataset $dataset \
     --use_lora --lora_rank 16 --lora_alpha 32 \
-    --max_length $MAX_LENGTH \
     --lr $LR \
     --warmup_steps $WARMUP_STEPS \
     --batch_size $BATCH_SIZE \
@@ -114,7 +111,6 @@ run_ta_bg() {
     --save_every $SAVE_EVERY \
     --eval_samples $eval_samples \
     --eval_batch_size $EVAL_BATCH_SIZE \
-    --max_new_tokens $MAX_NEW_TOKENS \
     --output_dir $output_dir \
     "$@" &
 }
