@@ -327,7 +327,8 @@ with gr.Blocks(title="SoRL Arithmetic Dashboard") as app:
     detail_btn.click(on_detail, inputs=[models_state, model_selector], outputs=[detail_table])
 
     app.load(on_refresh, inputs=[arch_filter],
-             outputs=[models_state, summary_text, queue_status, main_table, hard_table])
+             outputs=[models_state, summary_text, queue_status, main_table, hard_table],
+             every=120)  # auto-refresh every 2 min
 
 
 if __name__ == "__main__":
