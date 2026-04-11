@@ -215,7 +215,8 @@ def train_sft(model, train_ds, val_ds, args, run_name):
                 if wandb.run is not None:
                     wandb.log({"loss": loss.item(), "lr": lr}, step=global_step)
 
-            if global_step % 500 == 0:
+            steps_per_epoch = max(1, len(train_ds) // args.batch_size)
+            if global_step % steps_per_epoch == 0:
                 acc = eval_sft(model, val_ds, device, 100)
                 print(f"  --- Eval step {global_step}: accuracy={acc:.3f} ---")
                 history.setdefault("eval_step", []).append(global_step)
@@ -346,7 +347,9 @@ def main():
             K=args.K, batch_size=args.batch_size,
             num_epochs=args.num_epochs, lr=args.lr,
             output_dir=args.output_dir,
-            log_every=50, eval_every=500, save_every=999999, eval_samples=100,
+            log_every=50,
+            eval_every=max(1, args.dataset_size // args.batch_size),  # every epoch
+            save_every=999999, eval_samples=100,
             alpha_info_gain=args.alpha_info_gain,
             alpha_abs=args.alpha_abs,
             alpha_soft_zipf=args.alpha_soft_zipf,
