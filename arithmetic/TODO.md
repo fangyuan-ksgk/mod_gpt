@@ -10,12 +10,9 @@
 - [ ] **Zipf diversity sweep** (24 jobs) — zipf={2,5,10} × K={1,4} × best 4 vocabs. Queued.
 - [ ] **Write results** to `log/arithmetic.md` — auto-runs after all sweeps complete.
 
-## Hypotheses to Test
+## Hypotheses
 
-- [ ] **H1: Vocab size matters more at K=4 than K=1** — at K=4, each abstraction token is sparser (1 per 4 positions), so it must encode more info → needs larger vocab. At K=1, each token carries less → small vocab suffices. Test: compare vocab sweep at K=1 vs K=4 at low data (25K-100K) where models don't saturate.
-- [ ] **H2: SoRL improves data efficiency on hard cases** — baseline fails at 25K-50K on M5/S5/S6. Does SoRL succeed? The low-data sweep will answer this.
-- [ ] **H3: SoRL compensates for reduced model capacity** — undersized models (1L/2H/256d, 2L/1H/128d) may fail at baseline SFT. Does SoRL recover performance? The undersize sweep tests this.
-- [ ] **H4: abs30 K=4 failure is a training artifact** — the nonmonotonic dip (vocab=30 K=4: M5=34%) may be bad luck or a loss landscape issue, not fundamental. Zipf sweep or re-run with different seed would clarify.
+See [`HYPOTHESES.md`](HYPOTHESES.md) for full descriptions. Training: H1-H4. Interpretability: H5-H9.
 
 ## High Priority
 
