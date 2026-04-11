@@ -21,7 +21,7 @@ export TORCH_NCCL_HEARTBEAT_TIMEOUT_SEC=3600
 # ============================================================================
 MASTER_ADDR=127.0.0.1
 BASE_PORT=29501
-N_GPUS=2
+N_GPUS=4
 
 MODEL_NAME="Qwen/Qwen3-0.6B"
 DATASET="gsm8k"
@@ -115,4 +115,65 @@ run_bg() {
     --untie_embedding \
     "$@" &
 }
+
+
+# =============================================================================
+# Ablation: {Qwen3-4B, Qwen3-1.7B} × {GSM8K, SciQA}
+# Base:  v7, similar_magnitude, LoRA, prefix_K=4, max_iter=2, emb_lr_mult=1.0
+# Sweep (1): V ∈ {128 (ref), 256, 1024}          (emb_lr fixed at 1.0)
+# Sweep (2): emb_lr_mult ∈ {1.0 (ref), 5.0, 10.0} (V fixed at 128)
+# 5 run per (model × dataset)  ×  4 combos  =  20 total runs
+# 4 GPUs, 4 experiments per batch, 5 batches
+# =============================================================================
+
+LORA="--use_lora --lora_rank 16 --lora_alpha 32"
+BASE="--use_v7 --abs_routing_mode similar_magnitude \
+  --prefix_abs --abs_prefix_max 4 --K 4 \
+  --max_iterations 2 --eval_K 4 $LORA"
+
+echo "=== v7 LoRA Ablation === $(date)"
+
+# ── Batch 1: 4B × GSM8K ───────────────────────────────────────────────────────
+echo "Batch 1: Qwen3-4B × GSM8K  [ref | v256 | v1024 | emb5]"
+run_bg "q4b_gsm_ref"   $M4B $DS_GSM $BASE --abstract_vocab_size 128  --emb_lr_mult 1.0  --eval_batch_size 8
+run_bg "q4b_gsm_v256"  $M4B $DS_GSM $BASE --abstract_vocab_size 256  --emb_lr_mult 1.0  --eval_batch_size 8
+run_bg "q4b_gsm_v1024" $M4B $DS_GSM $BASE --abstract_vocab_size 1024 --emb_lr_mult 1.0  --eval_batch_size 8
+run_bg "q4b_gsm_emb5"  $M4B $DS_GSM $BASE --abstract_vocab_size 128  --emb_lr_mult 5.0  --eval_batch_size 8
+wait
+
+# ── Batch 2: 4B × GSM8K (emb10) + 4B × SciQA (ref, v256, v1024) ─────────────
+echo "Batch 2: 4B GSM emb10 + 4B SciQA [ref | v256 | v1024]"
+run_bg "q4b_gsm_emb10" $M4B $DS_GSM $BASE --abstract_vocab_size 128  --emb_lr_mult 10.0 --eval_batch_size 8
+run_bg "q4b_sci_ref"   $M4B $DS_SCI $BASE --abstract_vocab_size 128  --emb_lr_mult 1.0  --eval_batch_size 8
+run_bg "q4b_sci_v256"  $M4B $DS_SCI $BASE --abstract_vocab_size 256  --emb_lr_mult 1.0  --eval_batch_size 8
+run_bg "q4b_sci_v1024" $M4B $DS_SCI $BASE --abstract_vocab_size 1024 --emb_lr_mult 1.0  --eval_batch_size 8
+wait
+
+# ── Batch 3: 4B × SciQA (emb5, emb10) + 1.7B × GSM8K (ref, v256) ────────────
+echo "Batch 3: 4B SciQA [emb5 | emb10] + 1.7B GSM8K [ref | v256]"
+run_bg "q4b_sci_emb5"   $M4B $DS_SCI $BASE --abstract_vocab_size 128  --emb_lr_mult 5.0  --eval_batch_size 8
+run_bg "q4b_sci_emb10"  $M4B $DS_SCI $BASE --abstract_vocab_size 128  --emb_lr_mult 10.0 --eval_batch_size 8
+run_bg "q17b_gsm_ref"   $M17 $DS_GSM $BASE --abstract_vocab_size 128  --emb_lr_mult 1.0  --eval_batch_size 8
+run_bg "q17b_gsm_v256"  $M17 $DS_GSM $BASE --abstract_vocab_size 256  --emb_lr_mult 1.0  --eval_batch_size 8
+wait
+
+# ── Batch 4: 1.7B × GSM8K (v1024, emb5, emb10) + 1.7B × SciQA (ref) ─────────
+echo "Batch 4: 1.7B GSM8K [v1024 | emb5 | emb10] + 1.7B SciQA [ref]"
+run_bg "q17b_gsm_v1024" $M17 $DS_GSM $BASE --abstract_vocab_size 1024 --emb_lr_mult 1.0  --eval_batch_size 8
+run_bg "q17b_gsm_emb5"  $M17 $DS_GSM $BASE --abstract_vocab_size 128  --emb_lr_mult 5.0  --eval_batch_size 8
+run_bg "q17b_gsm_emb10" $M17 $DS_GSM $BASE --abstract_vocab_size 128  --emb_lr_mult 10.0 --eval_batch_size 8
+run_bg "q17b_sci_ref"   $M17 $DS_SCI $BASE --abstract_vocab_size 128  --emb_lr_mult 1.0  --eval_batch_size 8
+wait
+
+# ── Batch 5: 1.7B × SciQA (v256, v1024, emb5, emb10) ────────────────────────
+echo "Batch 5: 1.7B SciQA [v256 | v1024 | emb5 | emb10]"
+run_bg "q17b_sci_v256"  $M17 $DS_SCI $BASE --abstract_vocab_size 256  --emb_lr_mult 1.0  --eval_batch_size 8
+run_bg "q17b_sci_v1024" $M17 $DS_SCI $BASE --abstract_vocab_size 1024 --emb_lr_mult 1.0  --eval_batch_size 8
+run_bg "q17b_sci_emb5"  $M17 $DS_SCI $BASE --abstract_vocab_size 128  --emb_lr_mult 5.0  --eval_batch_size 8
+run_bg "q17b_sci_emb10" $M17 $DS_SCI $BASE --abstract_vocab_size 128  --emb_lr_mult 10.0 --eval_batch_size 8
+wait
+
+echo ""
+echo "=== All 20 experiments complete. $(date) ==="
+
 
