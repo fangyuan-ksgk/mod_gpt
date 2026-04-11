@@ -142,12 +142,12 @@ EXP_IDX=0
 echo "=== Baseline (pause + ta) Sweep === $(date)"
 
 # ── ScienceQA ─────────────────────────────────────────────────────────────────
-echo "SciQA: pause+ta × {q4b, q17b}"
-run_pause_bg "sci_pause_q4b"  $M4B $DS_SCI
-run_ta_bg    "sci_ta_q4b"     $M4B $DS_SCI
-run_pause_bg "sci_pause_q17b" $M17 $DS_SCI
-run_ta_bg    "sci_ta_q17b"    $M17 $DS_SCI
-wait
+# echo "SciQA: pause+ta × {q4b, q17b}"
+# run_pause_bg "sci_pause_q4b"  $M4B $DS_SCI
+# run_ta_bg    "sci_ta_q4b"     $M4B $DS_SCI
+# run_pause_bg "sci_pause_q17b" $M17 $DS_SCI
+# run_ta_bg    "sci_ta_q17b"    $M17 $DS_SCI
+# wait
 
 echo "SciQA: pause+ta × {l1b, l3b}"
 run_pause_bg "sci_pause_l1b" $ML1 $DS_SCI
@@ -157,12 +157,12 @@ run_ta_bg    "sci_ta_l3b"    $ML3 $DS_SCI
 wait
 
 # ── MMLU ──────────────────────────────────────────────────────────────────────
-echo "MMLU: pause+ta × {q06, q17b}"
-run_pause_bg "mmlu_pause_q06"  $M06 $DS_MMLU
-run_ta_bg    "mmlu_ta_q06"     $M06 $DS_MMLU
-run_pause_bg "mmlu_pause_q17b" $M17 $DS_MMLU
-run_ta_bg    "mmlu_ta_q17b"    $M17 $DS_MMLU
-wait
+# echo "MMLU: pause+ta × {q06, q17b}"
+# run_pause_bg "mmlu_pause_q06"  $M06 $DS_MMLU
+# run_ta_bg    "mmlu_ta_q06"     $M06 $DS_MMLU
+# run_pause_bg "mmlu_pause_q17b" $M17 $DS_MMLU
+# run_ta_bg    "mmlu_ta_q17b"    $M17 $DS_MMLU
+# wait
 
 echo "MMLU: pause+ta × {l1b, l3b}"
 run_pause_bg "mmlu_pause_l1b" $ML1 $DS_MMLU
@@ -172,12 +172,12 @@ run_ta_bg    "mmlu_ta_l3b"    $ML3 $DS_MMLU
 wait
 
 # ── HotpotQA ──────────────────────────────────────────────────────────────────
-echo "HotpotQA: pause+ta × {q06, q17b}"
-run_pause_bg "hpqa_pause_q06"  $M06 $DS_HPQA
-run_ta_bg    "hpqa_ta_q06"     $M06 $DS_HPQA
-run_pause_bg "hpqa_pause_q17b" $M17 $DS_HPQA
-run_ta_bg    "hpqa_ta_q17b"    $M17 $DS_HPQA
-wait
+# echo "HotpotQA: pause+ta × {q06, q17b}"
+# run_pause_bg "hpqa_pause_q06"  $M06 $DS_HPQA
+# run_ta_bg    "hpqa_ta_q06"     $M06 $DS_HPQA
+# run_pause_bg "hpqa_pause_q17b" $M17 $DS_HPQA
+# run_ta_bg    "hpqa_ta_q17b"    $M17 $DS_HPQA
+# wait
 
 echo "HotpotQA: pause+ta × {l1b, l3b}"
 run_pause_bg "hpqa_pause_l1b" $ML1 $DS_HPQA
@@ -186,20 +186,20 @@ run_pause_bg "hpqa_pause_l3b" $ML3 $DS_HPQA
 run_ta_bg    "hpqa_ta_l3b"    $ML3 $DS_HPQA
 wait
 
-# ── AQuA ──────────────────────────────────────────────────────────────────────
-echo "AQuA: pause+ta × {q06, q17b}"
-run_pause_bg "aqua_pause_q06"  $M06 $DS_AQUA
-run_ta_bg    "aqua_ta_q06"     $M06 $DS_AQUA
-run_pause_bg "aqua_pause_q17b" $M17 $DS_AQUA
-run_ta_bg    "aqua_ta_q17b"    $M17 $DS_AQUA
-wait
+# # ── AQuA ──────────────────────────────────────────────────────────────────────
+# echo "AQuA: pause+ta × {q06, q17b}"
+# run_pause_bg "aqua_pause_q06"  $M06 $DS_AQUA
+# run_ta_bg    "aqua_ta_q06"     $M06 $DS_AQUA
+# run_pause_bg "aqua_pause_q17b" $M17 $DS_AQUA
+# run_ta_bg    "aqua_ta_q17b"    $M17 $DS_AQUA
+# wait
 
-echo "AQuA: pause+ta × {l1b, l3b}"
-run_pause_bg "aqua_pause_l1b" $ML1 $DS_AQUA
-run_ta_bg    "aqua_ta_l1b"    $ML1 $DS_AQUA
-run_pause_bg "aqua_pause_l3b" $ML3 $DS_AQUA
-run_ta_bg    "aqua_ta_l3b"    $ML3 $DS_AQUA
-wait
+# echo "AQuA: pause+ta × {l1b, l3b}"
+# run_pause_bg "aqua_pause_l1b" $ML1 $DS_AQUA
+# run_ta_bg    "aqua_ta_l1b"    $ML1 $DS_AQUA
+# run_pause_bg "aqua_pause_l3b" $ML3 $DS_AQUA
+# run_ta_bg    "aqua_ta_l3b"    $ML3 $DS_AQUA
+# wait
 
 # ── OpenBookQA ────────────────────────────────────────────────────────────────
 echo "ObookQA: pause+ta × {q06, q17b}"
