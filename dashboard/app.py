@@ -208,6 +208,8 @@ with gr.Blocks(title="SoRL Arithmetic Dashboard", theme=gr.themes.Soft()) as app
 
     summary_text = gr.Markdown("Click Refresh to load.")
 
+    queue_status = gr.Markdown("")
+
     gr.Markdown("### Overall Accuracy (Baseline vs SoRL)")
     main_table = gr.Dataframe(
         headers=["Ops", "Data", "Arch", "Baseline", "SoRL", "Config"],
@@ -229,22 +231,36 @@ with gr.Blocks(title="SoRL Arithmetic Dashboard", theme=gr.themes.Soft()) as app
         detail_btn = gr.Button("Show splits")
         detail_table = gr.Dataframe(headers=["Split", "Accuracy", "N"], interactive=False)
 
+    def get_queue_status_text(n_models):
+        """Show progress vs expected total."""
+        EXPECTED = 90
+        pct = n_models / EXPECTED * 100
+        bar_len = 30
+        filled = int(bar_len * n_models / EXPECTED)
+        bar = "█" * filled + "░" * (bar_len - filled)
+        status = "COMPLETE" if n_models >= EXPECTED else "IN PROGRESS"
+
+        # Count by type
+        return (
+            f"### Queue Progress: {n_models}/{EXPECTED} models ({pct:.0f}%) — {status}\n"
+            f"`{bar}`"
+        )
+
     def on_refresh(arch):
         models = fetch_all_models()
         df = build_comparison_table(models, arch_filter=arch, enriched_only=False)
 
         n_models = len(models)
-        n_enriched = sum(1 for m in models if m["enriched"])
-        summary = f"**{n_models}** models ({n_enriched} enriched) | Arch filter: {arch}"
+        summary = f"**{n_models}** models | Arch filter: {arch}"
+        q_status = get_queue_status_text(n_models)
 
         main_cols = ["Ops", "Data", "Arch", "Baseline", "SoRL", "Config"]
-        hard_cols = ["Ops", "Data", "Config"] + [f"{p}_{s}" for s in HARD_SPLITS for p in ["B", "S"]]
 
         main_df = df[main_cols] if all(c in df.columns for c in main_cols) else pd.DataFrame()
         hard_df = df[["Ops", "Data", "Config"] +
                      [c for c in df.columns if c.startswith("B_") or c.startswith("S_")]] if len(df) > 0 else pd.DataFrame()
 
-        return models, summary, main_df, hard_df
+        return models, summary, q_status, main_df, hard_df
 
     def on_detail(models, name):
         return build_detailed_splits(models, name.strip())
@@ -252,19 +268,19 @@ with gr.Blocks(title="SoRL Arithmetic Dashboard", theme=gr.themes.Soft()) as app
     refresh_btn.click(
         on_refresh,
         inputs=[arch_filter],
-        outputs=[models_state, summary_text, main_table, hard_table],
+        outputs=[models_state, summary_text, queue_status, main_table, hard_table],
     )
 
     arch_filter.change(
         on_refresh,
         inputs=[arch_filter],
-        outputs=[models_state, summary_text, main_table, hard_table],
+        outputs=[models_state, summary_text, queue_status, main_table, hard_table],
     )
 
     detail_btn.click(on_detail, inputs=[models_state, model_selector], outputs=[detail_table])
 
     app.load(on_refresh, inputs=[arch_filter],
-             outputs=[models_state, summary_text, main_table, hard_table])
+             outputs=[models_state, summary_text, queue_status, main_table, hard_table])
 
 
 if __name__ == "__main__":
