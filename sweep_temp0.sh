@@ -1,8 +1,7 @@
 #!/bin/bash
 set -e
 
-# Temperature=0.0 ablation on q06/q17 + GSM8K/ScienceQA
-# Testing whether greedy training (t=0.0) vs stochastic training (t=1.0 default) matters
+# Temperature ablation: t=0.0 vs t=1.0 (control) on q06/q17 + GSM8K/ScienceQA
 
 # --- nvidia pod  specifics ------
 DUMMY_CONFIG_PATH="/workspace/mod_gpt/dummy_tuner_config.txt"
@@ -40,9 +39,9 @@ EVAL_SAMPLES=1300
 EVAL_BATCH_SIZE=256
 
 # ============================================================================================
-# Temperature=0.0 sweep on q06/q17 + GSM8K/ScienceQA
+# Temperature ablation: t=0.0 vs t=1.0 vs t=2.0 on q06/q17 + GSM8K/ScienceQA
 # Inherits all hyper-params from sweep_0411.sh (v7, LoRA, similar_magnitude, V=128, pfx=4, iter=2)
-# Only change: --temperature 0.0 (greedy training vs default t=1.0 stochastic)
+# 12 experiments total: 3 temps × 2 models × 2 datasets, 4 GPUs, 3 batches
 # ============================================================================================
 
 TIMESTAMP=$(date +%Y%m%d_%H%M)
@@ -106,30 +105,41 @@ run_bg() {
     --eval_batch_size $EVAL_BATCH_SIZE \
     --output_dir $output_dir \
     --untie_embedding \
-    --temperature 0.0 \
     "$@" &
 }
 
-echo "=== Temperature=0.0 Sweep === $(date)"
+echo "=== Temperature Ablation (t=0.0 vs t=1.0 vs t=2.0) === $(date)"
 
 # =============================================================================
-# Temperature=0.0 on q06/q17 + GSM8K/ScienceQA
-# 4 experiments total: 2 models × 2 datasets
-# All other params identical to sweep_0411.sh baseline
+# Batch 1: GSM8K — t=0.0 × {q06, q17} + t=1.0 × {q06, q17}
 # =============================================================================
-
-# ---- GSM8K ----
-echo "GSM8K: t=0.0 × {q06, q17}"
-run_bg "gsm_t0_q06"  $M06 $DS_GSM $SORL --eval_batch_size 8
-run_bg "gsm_t0_q17"  $M17 $DS_GSM $SORL --eval_batch_size 8
+echo "Batch 1: GSM8K × {q06, q17} × {t=0.0, t=1.0}"
+run_bg "gsm_t0_q06"  $M06 $DS_GSM $SORL --temperature 0.0 --eval_batch_size 8
+run_bg "gsm_t0_q17"  $M17 $DS_GSM $SORL --temperature 0.0 --eval_batch_size 8
+run_bg "gsm_t1_q06"  $M06 $DS_GSM $SORL --temperature 1.0 --eval_batch_size 8
+run_bg "gsm_t1_q17"  $M17 $DS_GSM $SORL --temperature 1.0 --eval_batch_size 8
 wait
 
-# ---- ScienceQA ----
-echo "ScienceQA: t=0.0 × {q06, q17}"
-run_bg "sci_t0_q06"  $M06 $DS_SCI $SORL --eval_batch_size 8
-run_bg "sci_t0_q17"  $M17 $DS_SCI $SORL --eval_batch_size 8
+# =============================================================================
+# Batch 2: GSM8K t=2.0 + ScienceQA t=0.0
+# =============================================================================
+echo "Batch 2: GSM8K t=2.0 × {q06, q17} + ScienceQA t=0.0 × {q06, q17}"
+run_bg "gsm_t2_q06"  $M06 $DS_GSM $SORL --temperature 2.0 --eval_batch_size 8
+run_bg "gsm_t2_q17"  $M17 $DS_GSM $SORL --temperature 2.0 --eval_batch_size 8
+run_bg "sci_t0_q06"  $M06 $DS_SCI $SORL --temperature 0.0 --eval_batch_size 8
+run_bg "sci_t0_q17"  $M17 $DS_SCI $SORL --temperature 0.0 --eval_batch_size 8
+wait
+
+# =============================================================================
+# Batch 3: ScienceQA t=1.0 + t=2.0
+# =============================================================================
+echo "Batch 3: ScienceQA × {q06, q17} × {t=1.0, t=2.0}"
+run_bg "sci_t1_q06"  $M06 $DS_SCI $SORL --temperature 1.0 --eval_batch_size 8
+run_bg "sci_t1_q17"  $M17 $DS_SCI $SORL --temperature 1.0 --eval_batch_size 8
+run_bg "sci_t2_q06"  $M06 $DS_SCI $SORL --temperature 2.0 --eval_batch_size 8
+run_bg "sci_t2_q17"  $M17 $DS_SCI $SORL --temperature 2.0 --eval_batch_size 8
 wait
 
 
 echo ""
-echo "=== Temperature=0.0 experiments complete. $(date) ==="
+echo "=== Temperature ablation complete. $(date) ==="
