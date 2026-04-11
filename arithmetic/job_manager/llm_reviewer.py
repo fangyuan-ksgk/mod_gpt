@@ -58,15 +58,38 @@ class Reviewer:
         return [{"role": "system", "content": SYSTEM_PROMPT}]
 
     def _save_history(self):
-        """Persist conversation history."""
+        """Persist conversation history. Compresses old reviews to summaries to save tokens."""
         Path(self.history_path).parent.mkdir(parents=True, exist_ok=True)
-        # Keep last 20 exchanges to avoid context overflow
-        # Always keep system prompt + last 40 messages (20 user + 20 assistant)
-        trimmed = [self.messages[0]]  # system prompt
-        trimmed.extend(self.messages[-40:] if len(self.messages) > 41 else self.messages[1:])
+
+        # Compress old exchanges: keep only the last 2 full exchanges,
+        # summarize everything older into a single context message
+        if len(self.messages) > 7:  # system + 3+ exchanges
+            old_exchanges = []
+            i = 1  # skip system
+            while i < len(self.messages) - 4:  # keep last 2 exchanges (4 messages)
+                if self.messages[i]["role"] == "user":
+                    # Extract just the review topic (first 100 chars) and key findings
+                    user_summary = self.messages[i]["content"][:150].split("\n")[0]
+                    asst_summary = self.messages[i+1]["content"][:300] if i+1 < len(self.messages) else ""
+                    old_exchanges.append(f"- Reviewed: {user_summary}\n  Findings: {asst_summary}")
+                    i += 2
+                else:
+                    i += 1
+
+            if old_exchanges:
+                summary_msg = {
+                    "role": "user",
+                    "content": "Summary of our prior reviews (compressed to save tokens):\n\n" + "\n\n".join(old_exchanges)
+                }
+                summary_ack = {
+                    "role": "assistant",
+                    "content": "Understood, I have context from these prior reviews."
+                }
+                trimmed = [self.messages[0], summary_msg, summary_ack] + self.messages[-4:]
+                self.messages = trimmed
+
         with open(self.history_path, "w") as f:
-            json.dump({"messages": trimmed, "n_reviews": self.n_reviews}, f, indent=2)
-        self.messages = trimmed
+            json.dump({"messages": self.messages, "n_reviews": self.n_reviews}, f, indent=2)
 
     @property
     def n_reviews(self) -> int:
