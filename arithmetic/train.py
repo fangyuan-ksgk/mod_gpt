@@ -381,13 +381,18 @@ def main():
         eval_results_sorl = None
 
     if wandb.run is not None:
-        wandb.log({"eval/final_accuracy": final_acc})
-        # Log per-split accuracy to wandb
+        # Log per-split accuracy to both history and summary
+        summary_metrics = {"eval/final_accuracy": final_acc}
         for eval_name, eval_result in [("sft", eval_results_sft), ("sorl", eval_results_sorl)]:
             if eval_result is None:
                 continue
+            summary_metrics[f"eval/{eval_name}/overall"] = eval_result["summary"]["overall_accuracy"]
             for split_name, split_data in eval_result.get("splits", {}).items():
-                wandb.log({f"eval/{eval_name}/{split_name}": split_data["full_accuracy"]})
+                summary_metrics[f"eval/{eval_name}/{split_name}"] = split_data["full_accuracy"]
+        wandb.log(summary_metrics)
+        # Also set as summary so it shows in the runs table
+        for k, v in summary_metrics.items():
+            wandb.run.summary[k] = v
         wandb.finish()
 
     if args.push_to_hub:
