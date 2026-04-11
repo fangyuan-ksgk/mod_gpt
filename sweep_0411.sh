@@ -137,8 +137,8 @@ echo "=== v7 LoRA Ablation === $(date)"
 # # ── Batch 1: 4B × GSM8K ───────────────────────────────────────────────────────
 # echo "Batch 1: Qwen3-4B × GSM8K  [ref | v256 | v1024 | emb5]"
 # run_bg "q4b_gsm_ref"   $M4B $DS_GSM $BASE --abstract_vocab_size 128  --emb_lr_mult 1.0  --eval_batch_size 8
-# run_bg "q4b_gsm_v256"  $M4B $DS_GSM $BASE --abstract_vocab_size 256  --emb_lr_mult 1.0  --eval_batch_size 8
-# run_bg "q4b_gsm_v1024" $M4B $DS_GSM $BASE --abstract_vocab_size 1024 --emb_lr_mult 1.0  --eval_batch_size 8
+# run_bg "q4b_gsm_v256"  $M4B $DS_GSM $BASE --abstract_vocab_size 128  --emb_lr_mult 20.0  --eval_batch_size 8
+# run_bg "q4b_gsm_v1024" $M4B $DS_GSM $BASE --abstract_vocab_size 128 --emb_lr_mult 100.0  --eval_batch_size 8
 # run_bg "q4b_gsm_emb5"  $M4B $DS_GSM $BASE --abstract_vocab_size 128  --emb_lr_mult 5.0  --eval_batch_size 8
 # wait
 
@@ -155,7 +155,7 @@ echo "=== v7 LoRA Ablation === $(date)"
 # run_bg "q4b_sci_emb5"   $M4B $DS_SCI $BASE --abstract_vocab_size 128  --emb_lr_mult 5.0  --eval_batch_size 8
 # run_bg "q4b_sci_emb10"  $M4B $DS_SCI $BASE --abstract_vocab_size 128  --emb_lr_mult 10.0 --eval_batch_size 8
 # run_bg "q17b_gsm_ref"   $M17 $DS_GSM $BASE --abstract_vocab_size 128  --emb_lr_mult 1.0  --eval_batch_size 8
-# run_bg "q17b_gsm_v256"  $M17 $DS_GSM $BASE --abstract_vocab_size 256  --emb_lr_mult 1.0  --eval_batch_size 8
+# run_bg "q17b_gsm_v256"  $M17 $DS_GSM $BASE --abstract_vocab_size 128  --emb_lr_mult 50.0  --eval_batch_size 8
 # wait
 
 # # ── Batch 4: 1.7B × GSM8K (v1024, emb5, emb10) + 1.7B × SciQA (ref) ─────────
@@ -168,7 +168,7 @@ echo "=== v7 LoRA Ablation === $(date)"
 
 # # ── Batch 5: 1.7B × SciQA (v256, v1024, emb5, emb10) ────────────────────────
 # echo "Batch 5: 1.7B SciQA [v256 | v1024 | emb5 | emb10]"
-# run_bg "q17b_sci_v256"  $M17 $DS_SCI $BASE --abstract_vocab_size 256  --emb_lr_mult 1.0  --eval_batch_size 8
+# run_bg "q17b_sci_v256"  $M17 $DS_SCI $BASE --abstract_vocab_size 128  --emb_lr_mult 50.0  --eval_batch_size 8
 # run_bg "q17b_sci_v1024" $M17 $DS_SCI $BASE --abstract_vocab_size 1024 --emb_lr_mult 1.0  --eval_batch_size 8
 # run_bg "q17b_sci_emb5"  $M17 $DS_SCI $BASE --abstract_vocab_size 128  --emb_lr_mult 5.0  --eval_batch_size 8
 # run_bg "q17b_sci_emb10" $M17 $DS_SCI $BASE --abstract_vocab_size 128  --emb_lr_mult 10.0 --eval_batch_size 8
