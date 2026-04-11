@@ -84,7 +84,7 @@ def check_baseline_convergence():
 
     log = f"{LOG_DIR}/sweep_baselines_30ep.log"
     subprocess.run(
-        ["python", "-m", "arithmetic.scripts.gpu_queue", jobs_file, "3", "2"],
+        ["python", "-m", "arithmetic.job_manager.gpu_queue", jobs_file, "3", "2"],
         stdout=open(log, "w"), stderr=subprocess.STDOUT,
     )
     print(f"30-epoch baselines done. Log: {log}")
@@ -94,7 +94,7 @@ def run_queue(name, jobs_file, n_gpus=3, max_per_gpu=1):
     log = f"{LOG_DIR}/sweep_{name}.log"
     print(f"\n=== {name} ===")
     subprocess.run(
-        ["python", "-m", "arithmetic.scripts.gpu_queue", jobs_file, str(n_gpus), str(max_per_gpu)],
+        ["python", "-m", "arithmetic.job_manager.gpu_queue", jobs_file, str(n_gpus), str(max_per_gpu)],
         stdout=open(log, "w"), stderr=subprocess.STDOUT,
     )
     print(f"Done. Log: {log}")

@@ -161,7 +161,7 @@ def check_baseline_convergence():
 
     log_file = "/workspace/sorl_logs/sweep_baselines_30ep.log"
     subprocess.run(
-        ["python", "-m", "arithmetic.scripts.gpu_queue", jobs_file, "3", "2"],
+        ["python", "-m", "arithmetic.job_manager.gpu_queue", jobs_file, "3", "2"],
         stdout=open(log_file, "w"),
         stderr=subprocess.STDOUT,
     )
@@ -183,7 +183,7 @@ def main():
     BASELINE_JOBS = "/workspace/codes/mod_gpt/arithmetic/scripts/sweep_baselines_10ep.txt"
     BASELINE_LOG = "/workspace/sorl_logs/sweep_baselines_10ep.log"
     subprocess.run(
-        ["python", "-m", "arithmetic.scripts.gpu_queue",
+        ["python", "-m", "arithmetic.job_manager.gpu_queue",
          BASELINE_JOBS, "3", "2"],  # 2 per GPU — baselines are light
         stdout=open(BASELINE_LOG, "w"),
         stderr=subprocess.STDOUT,
@@ -198,7 +198,7 @@ def main():
     LOW_DATA_JOBS = "/workspace/codes/mod_gpt/arithmetic/scripts/sweep_low_data_sorl.txt"
     LOW_DATA_LOG = "/workspace/sorl_logs/sweep_low_data_sorl.log"
     subprocess.run(
-        ["python", "-m", "arithmetic.scripts.gpu_queue",
+        ["python", "-m", "arithmetic.job_manager.gpu_queue",
          LOW_DATA_JOBS, "3", "1"],
         stdout=open(LOW_DATA_LOG, "w"),
         stderr=subprocess.STDOUT,
@@ -210,7 +210,7 @@ def main():
     LOW_VOCAB_JOBS = "/workspace/codes/mod_gpt/arithmetic/scripts/sweep_low_data_vocab.txt"
     LOW_VOCAB_LOG = "/workspace/sorl_logs/sweep_low_data_vocab.log"
     subprocess.run(
-        ["python", "-m", "arithmetic.scripts.gpu_queue",
+        ["python", "-m", "arithmetic.job_manager.gpu_queue",
          LOW_VOCAB_JOBS, "3", "1"],
         stdout=open(LOW_VOCAB_LOG, "w"),
         stderr=subprocess.STDOUT,
@@ -222,7 +222,7 @@ def main():
     UNDERSIZE_JOBS = "/workspace/codes/mod_gpt/arithmetic/scripts/sweep_undersize.txt"
     UNDERSIZE_LOG = "/workspace/sorl_logs/sweep_undersize.log"
     subprocess.run(
-        ["python", "-m", "arithmetic.scripts.gpu_queue",
+        ["python", "-m", "arithmetic.job_manager.gpu_queue",
          UNDERSIZE_JOBS, "3", "1"],
         stdout=open(UNDERSIZE_LOG, "w"),
         stderr=subprocess.STDOUT,
@@ -250,7 +250,7 @@ def main():
     # Launch via gpu_queue
     print(f"\nLaunching zipf sweep ({len(jobs)} jobs, 3 GPUs)...")
     subprocess.run(
-        ["python", "-m", "arithmetic.scripts.gpu_queue",
+        ["python", "-m", "arithmetic.job_manager.gpu_queue",
          ZIPF_JOBS, "3", "1"],
         stdout=open(ZIPF_LOG, "w"),
         stderr=subprocess.STDOUT,
