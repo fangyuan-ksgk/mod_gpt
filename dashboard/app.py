@@ -232,19 +232,66 @@ with gr.Blocks(title="SoRL Arithmetic Dashboard", theme=gr.themes.Soft()) as app
         detail_table = gr.Dataframe(headers=["Split", "Accuracy", "N"], interactive=False)
 
     def get_queue_status_text(n_models):
-        """Show progress vs expected total."""
+        """Show live queue status from HF-uploaded queue_status.json."""
         EXPECTED = 90
-        pct = n_models / EXPECTED * 100
-        bar_len = 30
-        filled = int(bar_len * n_models / EXPECTED)
-        bar = "█" * filled + "░" * (bar_len - filled)
-        status = "COMPLETE" if n_models >= EXPECTED else "IN PROGRESS"
 
-        # Count by type
-        return (
-            f"### Queue Progress: {n_models}/{EXPECTED} models ({pct:.0f}%) — {status}\n"
-            f"`{bar}`"
-        )
+        # Try to read live queue status
+        try:
+            path = hf_hub_download(MODEL_REPO, "queue_status.json",
+                                   local_dir="/tmp/hf_dash_cache")
+            with open(path) as f:
+                qs = json.load(f)
+
+            total = qs.get("total", EXPECTED)
+            done = qs.get("done", 0)
+            failed = qs.get("failed", 0)
+            running = qs.get("running", 0)
+            pending = qs.get("pending", 0)
+
+            pct = done / total * 100 if total else 0
+            bar_len = 30
+            filled = int(bar_len * done / total) if total else 0
+            bar = "█" * filled + "░" * (bar_len - filled)
+
+            status = "COMPLETE" if done >= total else "RUNNING"
+
+            lines = [
+                f"### Queue: {done}/{total} done ({pct:.0f}%) — {status}",
+                f"`{bar}`",
+                f"🟢 Running: {running} | ⏳ Pending: {pending} | ❌ Failed: {failed}",
+            ]
+
+            # Show running jobs
+            running_jobs = [j for j in qs.get("jobs", []) if j.get("status") == "running"]
+            if running_jobs:
+                lines.append("")
+                lines.append("**Currently running:**")
+                for j in running_jobs:
+                    elapsed = j.get("elapsed", 0)
+                    mins = elapsed // 60
+                    lines.append(f"- `{j['name']}` on GPU {j.get('gpu', '?')} ({mins}m)")
+
+            # Show recent failures
+            failed_jobs = [j for j in qs.get("jobs", []) if j.get("status") == "failed"]
+            if failed_jobs:
+                lines.append("")
+                lines.append(f"**Failed ({len(failed_jobs)}):**")
+                for j in failed_jobs[-3:]:
+                    lines.append(f"- `{j['name']}` (exit {j.get('exit_code', '?')})")
+
+            return "\n".join(lines)
+
+        except Exception:
+            # Fallback: just count models on HF
+            pct = n_models / EXPECTED * 100
+            bar_len = 30
+            filled = int(bar_len * n_models / EXPECTED)
+            bar = "█" * filled + "░" * (bar_len - filled)
+            status = "COMPLETE" if n_models >= EXPECTED else "IN PROGRESS"
+            return (
+                f"### Queue: {n_models}/{EXPECTED} uploaded ({pct:.0f}%) — {status}\n"
+                f"`{bar}`"
+            )
 
     def on_refresh(arch):
         models = fetch_all_models()
