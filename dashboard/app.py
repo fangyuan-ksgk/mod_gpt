@@ -135,6 +135,8 @@ def build_comparison_table(models, arch_filter="All", enriched_only=True):
 
         ds_label = f"{ds // 1000}K"
 
+        base_wandb = base["config"].get("wandb_url", "") if base else ""
+
         if not matching_sorl:
             # Baseline only
             base_hard = {s: get_split_acc(base["metrics"], "sft_eval", s) for s in HARD_SPLITS} if base else {}
@@ -142,6 +144,7 @@ def build_comparison_table(models, arch_filter="All", enriched_only=True):
                 "Ops": ops, "Data": ds_label, "Arch": arch,
                 "Baseline": fmt_pct(base_acc),
                 "SoRL": "pending", "Config": "pending",
+                "B_wandb": base_wandb, "S_wandb": "",
             }
             for s in HARD_SPLITS:
                 row[f"B_{s}"] = fmt_pct(base_hard.get(s))
@@ -151,6 +154,7 @@ def build_comparison_table(models, arch_filter="All", enriched_only=True):
             for (K, vocab), sorl_m in sorted(matching_sorl.items()):
                 sorl_cfg = sorl_m["config"]
                 sorl_acc = sorl_cfg.get("final_accuracy")
+                sorl_wandb = sorl_cfg.get("wandb_url", "")
                 eval_key = "sorl_eval"
 
                 b_str, s_str = bold_winner(base_acc, sorl_acc)
@@ -159,6 +163,7 @@ def build_comparison_table(models, arch_filter="All", enriched_only=True):
                     "Baseline": b_str,
                     "SoRL": s_str,
                     "Config": f"K={K} v={vocab}",
+                    "B_wandb": base_wandb, "S_wandb": sorl_wandb,
                 }
                 for s in HARD_SPLITS:
                     bv = get_split_acc(base["metrics"], "sft_eval", s) if base else None
@@ -212,8 +217,8 @@ with gr.Blocks(title="SoRL Arithmetic Dashboard") as app:
 
     gr.Markdown("### Overall Accuracy (Baseline vs SoRL)")
     main_table = gr.Dataframe(
-        headers=["Ops", "Data", "Arch", "Baseline", "SoRL", "Config"],
-        datatype=["str"] * 6,
+        headers=["Ops", "Data", "Arch", "Baseline", "SoRL", "Config", "B_wandb", "S_wandb"],
+        datatype=["str"] * 8,
         interactive=False,
     )
 
@@ -301,7 +306,7 @@ with gr.Blocks(title="SoRL Arithmetic Dashboard") as app:
         summary = f"**{n_models}** models | Arch filter: {arch}"
         q_status = get_queue_status_text(n_models)
 
-        main_cols = ["Ops", "Data", "Arch", "Baseline", "SoRL", "Config"]
+        main_cols = ["Ops", "Data", "Arch", "Baseline", "SoRL", "Config", "B_wandb", "S_wandb"]
 
         main_df = df[main_cols] if all(c in df.columns for c in main_cols) else pd.DataFrame()
         hard_df = df[["Ops", "Data", "Config"] +
@@ -326,9 +331,13 @@ with gr.Blocks(title="SoRL Arithmetic Dashboard") as app:
 
     detail_btn.click(on_detail, inputs=[models_state, model_selector], outputs=[detail_table])
 
+    # Auto-refresh every 2 min
+    timer = gr.Timer(120)
+    timer.tick(on_refresh, inputs=[arch_filter],
+               outputs=[models_state, summary_text, queue_status, main_table, hard_table])
+
     app.load(on_refresh, inputs=[arch_filter],
-             outputs=[models_state, summary_text, queue_status, main_table, hard_table],
-             every=120)  # auto-refresh every 2 min
+             outputs=[models_state, summary_text, queue_status, main_table, hard_table])
 
 
 if __name__ == "__main__":
