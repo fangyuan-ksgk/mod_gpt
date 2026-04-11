@@ -293,6 +293,42 @@ to validate autointerp explanations against. SAE autointerp has no such ground t
 
 ---
 
+## Appendix Plans
+
+### Appendix A: Autointerp Methodology
+Full Juang et al. pipeline adapted for SoRL tokens. All 5 scoring metrics, complete results.
+(Methodology detailed in Phase 8 above; main body shows highlights only.)
+
+### Appendix B: Polysemanticity Analysis
+- Token co-occurrence matrix (which tokens appear together in same sequence)
+- Embedding clustering (cosine similarity dendrogram of abstract token embeddings)
+- Substitution experiments (swap token A→B, measure accuracy delta → functional similarity)
+- Goal: determine if tokens map 1-to-1 or many-to-many with subtasks
+
+### Appendix C: Representation Analysis (Logit Lens / Future Lens / Linear Probing)
+Standard mech interp tools applied at SoRL abstraction positions vs baseline.
+
+**Logit lens**: project hidden states through LM head at abstraction token positions.
+Compare SoRL (explicit token carrying info) vs baseline (same positions, no explicit token).
+SoRL should show sharper next-token predictions.
+
+**Future lens** (Pal et al. 2023, Eleuther): project hidden states into future token
+predictions at abstraction positions. Do abstractions encode "lookahead" info about
+answer digits better than trajectory positions?
+
+**Linear probing**: train linear classifier on hidden states to predict Quirke subtask
+labels (SA/SC/SS/UC/US etc.).
+- SoRL: probe at abstraction token positions
+- Baseline: probe at ALL positions, take the best
+- Key comparison: linear probe on SoRL vs MLP probe on baseline. If SoRL linearizes
+  the representation, a linear probe on SoRL should match an MLP on baseline.
+
+**Baseline control is essential**: without comparing against baseline hidden states at
+the same positions, a reviewer can argue the baseline encodes the same info implicitly.
+The claim is: SoRL tokens are *better* probing targets than any position in baseline.
+
+---
+
 ## Final Goal
 
 Show that arithmetic sub-mechanisms (carry circuits, borrow circuits, cascades) that appear
