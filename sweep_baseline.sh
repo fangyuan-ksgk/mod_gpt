@@ -64,7 +64,7 @@ run_pause_bg() {
     train_pause_pt.py \
     --model_name $model \
     --dataset $dataset \
-    --use_lora --lora_rank 16 --lora_alpha 32 \
+    --use_lora --lora_r 16 --lora_alpha 32 \
     --lr $LR \
     --warmup_steps $WARMUP_STEPS \
     --batch_size $BATCH_SIZE \
@@ -100,7 +100,7 @@ run_ta_bg() {
     train_ta_pt.py \
     --model_name $model \
     --dataset $dataset \
-    --use_lora --lora_rank 16 --lora_alpha 32 \
+    --use_lora --lora_r 16 --lora_alpha 32 \
     --lr $LR \
     --warmup_steps $WARMUP_STEPS \
     --batch_size $BATCH_SIZE \
