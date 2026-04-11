@@ -24,6 +24,9 @@ runs analysis, saves figures/results to `arithmetic/analysis/results/`.
 ### Auto-Interpretability
 - `autointerp.py` — Juang et al. pipeline adapted for SoRL tokens, 5 scoring metrics
 
+### Token Interventions
+- `token_interventions.py` — systematic knockout/swap/shuffle/replace across splits and positions, cascade-targeted interventions, cross-complexity transfer tests. Builds on primitives in `interp_utils/interventions.py`.
+
 ### SAE ↔ SoRL Token Matching
 - `sae_token_matching.py` — Hungarian matching between SAE features and SoRL tokens, causal validation via matched ablations, cross-model patching
 
