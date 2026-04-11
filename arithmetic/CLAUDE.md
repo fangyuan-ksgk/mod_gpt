@@ -5,6 +5,10 @@ Results placeholders in `log/arithmetic.md` use `<!-- PLACEHOLDER: description -
 **Start here:** Read [`MEMORY.md`](MEMORY.md) first for current session state and what to do next.
 Also check [`TODO.md`](TODO.md) for the task backlog.
 
+## Code Review Policy
+
+When writing substantial new code (new modules, rewrites, infrastructure), send it to GPT-4/5 via the OpenAI API (`OPENAI_API_KEY` in env) for code review before committing. Give full context about what the code does and the environment. Focus on concurrency, error handling, resource leaks, race conditions. Incorporate fixes that make sense, note low-priority items. Not needed for small edits — use for new modules and complex logic.
+
 Working notes from experiment iteration. Main results in [`log/arithmetic.md`](../log/arithmetic.md).
 
 ## Critical Findings
