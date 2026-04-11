@@ -6,36 +6,42 @@ Also read `CLAUDE.md` (technical reference) and `TODO.md` (task list) in this di
 ## Current State (2026-04-09)
 
 - **Branch:** `amir/arithmetic`
-- **GPUs:** 3× RTX PRO 6000 Blackwell (96GB each) — all idle, no jobs running
-- **No models are currently training.** Last training was pre-enrichment.
+- **GPUs:** 3× RTX PRO 6000 Blackwell (96GB each)
+- **TRAINING IN PROGRESS:** 30-job enriched sweep via `gpu_queue.py`
+  - Log: `/workspace/sorl_logs/sweep_enriched.log`
+  - Jobs file: `arithmetic/scripts/sweep_enriched.txt`
+  - 12 baselines (add + add_sub × 6 data sizes) + 18 SoRL (K={1,4} × 9 vocab sizes)
+  - Each job uploads to HF and deletes local checkpoint automatically
 
 ## What Just Happened
 
-1. **Evaluator built** (`arithmetic/evaluate.py`) — `ArithmeticEvaluator` class with:
-   - SFT and SoRL (recursion) eval modes
-   - Per-complexity (S0-S6, M0-M6) and per-subtask (SA/SC/SS/UC/US, MD/MB/ME/UB/UD) breakdowns
-   - Box-drawing tables, bar charts, heatmaps, model comparison
-   - JSON save/load for result persistence
+1. **HF repo cleaned** — deleted all v6 models and 3L/4H baselines. 12 v1 SoRL models remain under `non_enriched/`.
 
-2. **Data enrichment done** — subtraction borrow cascades (40% equal digits) and addition carry cascades (40% sum-to-9). Dataset uploaded to `thoughtworks/arithmetic-sorl-data`.
+2. **Re-evaluated all 12 models** with `ArithmeticEvaluator` (per-split hard cases). Updated metrics on HF.
 
-3. **Old GAT references removed** from arithmetic/ — we use Qwen3 exclusively now.
+3. **Model catalog** (`arithmetic/catalog.py`) — scans HF repo, indexes train_config.json, filter/table/save/load.
 
-4. **Hub docstrings fixed** — `thoughtworks/arithmetic-sorl` (not amirali1985).
+4. **Hard eval splits added** to `arithmetic/datasets/addition.py`:
+   - Forced deep cascades: S5, S6 (addition), M4, M5 (subtraction, M6 impossible for 6-digit)
+   - Hot carry chains: C3-C6 (varied answer digits, not just 0's)
+   - Hot borrow chains: B3-B5 (varied answer digits, not just 9's)
+   - New metrics: `carry_chain_depth()`, `borrow_chain_depth()` beyond Quirke's U-chains
 
-5. **Pod persistence fixed** — repo lives at `/workspace/codes/mod_gpt`, symlinked from `~/codes/mod_gpt`.
+5. **hub.py fixed** — safetensors loading, vocab size mismatch handling.
+
+6. **GPU idle monitor** — cron job at `/workspace/scripts/gpu_idle_shutdown.sh`, auto-commits+pushes+stops pod after 3h idle.
 
 ## What Needs to Happen Next
 
-**Immediate (start training):**
-- All existing models were trained WITHOUT enriched subtraction data
-- Need to retrain baseline + SoRL across the sweep grid (see TODO.md)
-- Use `arithmetic/scripts/gpu_queue.py` for scheduling across 3 GPUs
+**In progress:**
+- Enriched sweep running (30 jobs). Check log: `tail -f /workspace/sorl_logs/sweep_enriched.log`
+- Models auto-upload to HF under `enriched/` (baselines) or root (SoRL)
 
-**Then:**
-- Run evaluator on all new models
-- Update `log/arithmetic.md` with results
-- 25K vs 50K data efficiency on hard cases (S3-S6)
+**When sweep finishes:**
+- Run `ArithmeticEvaluator` on all new models (reeval_hf_models.py)
+- Update catalog: `ModelCatalog().fetch().print_table()`
+- Update `log/arithmetic.md` with enriched results
+- Data efficiency sweep: best vocab at {10K, 25K, 50K, 100K, 250K}
 
 ## Key Decisions Made
 

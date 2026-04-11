@@ -134,36 +134,43 @@ Training script: `train_ablate_sanity.py` with trainers from `sorl/trainer_ablat
 
 ---
 
-## Arithmetic Interpretability Study (as of 2026-04-06)
+## Arithmetic Interpretability Study (as of 2026-04-09)
 
 ### Goal
 Show that SoRL externalizes arithmetic reasoning mechanisms (carry, borrow circuits) as explicit abstraction tokens — making them directly observable without activation-level tooling. Reference: Quirke et al. "Understanding Addition and Subtraction in Transformers" (2024).
 
-### Architecture Decision (in progress)
-Planning to use **tiny Qwen3 from-scratch** (custom config: 3L/4H/512d, ~168M params) instead of GAT. This allows clean import of all SoRL trainers (v1-v6) via `SorlModelWrapper` with zero adaptation. Verified that `Qwen3ForCausalLM(Qwen3Config(...))` works for custom tiny configs.
+### Architecture
+Tiny Qwen3 from-scratch (custom config: 2L/3H/510d, ~162M total, ~7.8M transformer params) wrapped in `SorlModelWrapper`. Tokenizer: Qwen3-0.6B (each digit/operator = 1 token, 21-token sequences).
+
+### Trainer
+SoRL v1 (info-gain loss). v6 (self-routing) was tried but produces 0% accuracy from scratch — not used.
 
 ### Arithmetic Sub-tasks Tracked
-- **Addition:** BA (base add), MC1 (make carry), MS9 (make sum-9), UC1 (use carry), US9 (use sum-9 / cascade)
-- **Subtraction:** BS (base sub), MB1 (make borrow), MD9 (make diff-9), UB1 (use borrow), UD9 (cascade borrow)
+- **Addition:** SA (base add), SC (make carry), SS (sum-9), UC (use carry), US (use sum-9 / cascade)
+- **Subtraction:** MD (base diff), MB (make borrow), ME (equal digits), UB (use borrow), UD (cascade borrow)
 
 ### Code Structure
 ```
 arithmetic/
 ├── datasets/
-│   ├── addition.py          # add + sub dataset, sub-task labels, eval sets
-│   └── multiplication.py    # from original gat_arithmatic.ipynb
-├── reference/
-│   └── addition_6digit.py   # paper reproduction (GAT-based, may switch to Qwen3)
+│   └── addition.py              # data gen, Quirke labels, enrichment, eval sets
 ├── interp_utils/
-│   └── sae_trainer.py       # SAE wrapper using EleutherAI sparsify (eai-sparsify)
-├── scripts/
-│   ├── sweep_baseline.sh    # 24 baseline configs across 3 GPUs
-│   ├── sweep_vocab.sh       # SoRL vocab size sweep (12 configs)
-│   └── run_all.sh           # full pipeline
-├── model.py                 # ArithmeticModel wrapper (GAT-based, may switch to Qwen3)
-├── train.py                 # unified training: baseline + SoRL, bf16+compile
-├── trainer.py               # BaselineTrainer / SoRLTrainer for multiplication
-└── multiply.py              # original multiplication experiment
+│   ├── interventions.py         # token-level interventions
+│   ├── test_interventions.py    # 20 tests, all passing
+│   └── sae_trainer.py           # SAE wrapper using EleutherAI sparsify (eai-sparsify)
+├── evaluate.py                  # ArithmeticEvaluator class
+├── catalog.py                   # ModelCatalog — index HF models
+├── hub.py                       # HuggingFace save/load
+├── train.py                     # unified training: baseline SFT + SoRL v1
+├── eval_sets/                   # cached deterministic eval sets (seed=42)
+└── scripts/
+    ├── gpu_queue.py             # GPU job scheduler
+    ├── sweep_enriched.txt       # main 30-job sweep
+    ├── sweep_baselines_10ep.txt # 10-epoch baseline re-runs
+    ├── sweep_low_data_sorl.txt  # low-data SoRL K=1 experiments
+    ├── sweep_undersize.txt      # undersized model sweep
+    ├── auto_zipf_sweep.py       # autonomous zipf diversity pipeline
+    └── reeval_hf_models.py      # re-evaluate uploaded models
 ```
 
 ### Documents
@@ -172,7 +179,7 @@ arithmetic/
 - `docs/interpretability_study.md` — experiment plan
 
 ### Compute
-- 3× NVIDIA RTX PRO 6000 Blackwell (96GB each)
+- 3x NVIDIA RTX PRO 6000 Blackwell (96GB each)
 - With bf16+compile+batch=512: ~14 it/s on baseline, 20K steps in ~25 min
 - Sweep runs 6 concurrent experiments (2 per GPU)
 
@@ -180,7 +187,6 @@ arithmetic/
 - **No TransformerLens** — use raw PyTorch hooks for interpretability
 - **SAE via EleutherAI sparsify** (eai-sparsify), not sae-lens — use SparseCoder directly
 - **Online data generation** (no fixed dataset) matching Quirke's approach
-- **BOS_TOKEN_ID note:** GAT uses BOS=50256 for doc boundaries. Our arithmetic sequences don't need BOS (single-sequence, no packing). Harmless for baseline; needs attention for SoRL if using GAT path.
 
 ---
 
