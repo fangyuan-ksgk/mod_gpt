@@ -162,7 +162,7 @@ def make_model(args, tokenizer):
 
 # ── SFT baseline trainer ──────────────────────────────────────────
 
-def train_sft(model, train_ds, val_ds, args, run_name):
+def train_sft(model, train_ds, val_ds, args, run_name, tokenizer=None):
     device = args.device
     model = model.to(device)
     model.train()
@@ -371,7 +371,7 @@ def main():
         json.dump(manifest, f, indent=2)
 
     if args.mode == "baseline":
-        history = train_sft(model, train_ds, val_ds, args, run_name)
+        history = train_sft(model, train_ds, val_ds, args, run_name, tokenizer=tokenizer)
         final_acc = eval_sft(model, val_ds, args.device, 200)
     else:
         cfg = SoRLConfig(
