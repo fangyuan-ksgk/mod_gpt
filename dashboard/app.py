@@ -6,6 +6,12 @@ Deployed as HF Space. Reads from thoughtworks/arithmetic-sorl model repo.
 import json
 import gradio as gr
 import pandas as pd
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+import io
+import numpy as np
+from PIL import Image
 from huggingface_hub import HfApi, hf_hub_download
 
 MODEL_REPO = "thoughtworks/arithmetic-sorl"

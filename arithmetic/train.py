@@ -330,6 +330,8 @@ def main():
         "dataset_config": "add_sub_6digit" if args.ops == "add_sub" else "add_6digit",
         "model_repo": "thoughtworks/arithmetic-sorl",
         "trainer_version": "sft" if args.mode == "baseline" else "v1",
+        "wandb_run_id": wandb.run.id if wandb.run is not None else None,
+        "wandb_url": wandb.run.url if wandb.run is not None else None,
     }
 
     os.makedirs(args.output_dir, exist_ok=True)
