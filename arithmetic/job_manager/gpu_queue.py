@@ -54,6 +54,7 @@ class Job:
     on_complete: Optional[Callable] = field(default=None, repr=False)
     on_fail: Optional[Callable] = field(default=None, repr=False)
     stale_timeout: float = 1800  # 30 min no output → stale
+    gpu_slot_released: bool = False  # prevents double-decrement
 
     @property
     def elapsed(self) -> float:
@@ -139,6 +140,14 @@ class GPUQueue:
                     best_gpu = gpu
             return best_gpu
 
+    def _release_gpu(self, job: Job):
+        """Release GPU slot exactly once (prevents double-decrement)."""
+        with self.lock:
+            if not job.gpu_slot_released and job.gpu >= 0:
+                self.gpu_running[job.gpu] -= 1
+                job.gpu_slot_released = True
+            job.end_time = time.time()
+
     def _run_job(self, job: Job):
         # Wait for a free GPU
         while True:
@@ -151,6 +160,7 @@ class GPUQueue:
         with self.lock:
             self.gpu_running[gpu] += 1
             job.gpu = gpu
+            job.gpu_slot_released = False
             job.status = "running"
             job.start_time = time.time()
             job.last_output_time = time.time()
@@ -169,28 +179,31 @@ class GPUQueue:
                 job.proc = proc
 
                 # Stream output to log file and track last output time
-                for line in iter(proc.stdout.readline, b""):
-                    logf.write(line.decode("utf-8", errors="replace"))
-                    logf.flush()
-                    job.last_output_time = time.time()
+                with proc.stdout:
+                    for line in iter(proc.stdout.readline, b""):
+                        logf.write(line.decode("utf-8", errors="replace"))
+                        logf.flush()
+                        job.last_output_time = time.time()
 
                 proc.wait()
                 job.exit_code = proc.returncode
         except Exception as e:
             job.exit_code = -1
-            with open(job.log_file, "a") as logf:
-                logf.write(f"\nEXCEPTION: {e}\n")
-
-        # Release GPU
-        with self.lock:
-            self.gpu_running[gpu] -= 1
-            job.end_time = time.time()
+            try:
+                with open(job.log_file, "a") as logf:
+                    logf.write(f"\nEXCEPTION: {e}\n")
+            except Exception:
+                pass
+        finally:
+            # Always release GPU slot, even on unexpected exceptions
+            self._release_gpu(job)
 
         elapsed = job.end_time - job.start_time
         ts = time.strftime("%H:%M:%S")
 
         if job.exit_code == 0:
-            job.status = "done"
+            with self.lock:
+                job.status = "done"
             print(f"[{ts}] JOB {job.job_id:3d} GPU {gpu} DONE ({elapsed:.0f}s) {job.name}")
             if job.on_complete:
                 try:
@@ -198,7 +211,8 @@ class GPUQueue:
                 except Exception as e:
                     print(f"  on_complete callback error: {e}")
         else:
-            job.status = "failed"
+            with self.lock:
+                job.status = "failed"
             print(f"[{ts}] JOB {job.job_id:3d} GPU {gpu} FAIL(exit={job.exit_code}) ({elapsed:.0f}s) {job.name}")
 
             # Check last few lines of log for error message
@@ -213,12 +227,14 @@ class GPUQueue:
 
             # Auto-retry
             if job.retries < job.max_retries:
-                job.retries += 1
-                job.status = "retrying"
+                with self.lock:
+                    job.retries += 1
+                    job.status = "retrying"
                 print(f"  Retrying ({job.retries}/{job.max_retries})...")
-                job.exit_code = -1
-                job.start_time = 0
-                job.end_time = 0
+                with self.lock:
+                    job.exit_code = -1
+                    job.start_time = 0
+                    job.end_time = 0
                 t = threading.Thread(target=self._run_job, args=(job,), daemon=True)
                 self._threads.append(t)
                 t.start()
@@ -250,10 +266,16 @@ class GPUQueue:
                     if job.proc:
                         try:
                             job.proc.kill()
+                            job.proc.wait(timeout=10)
+                        except subprocess.TimeoutExpired:
+                            print(f"  WARNING: Job {job.name} did not exit after kill")
                         except Exception:
                             pass
                     job.status = "stale"
-                    self.gpu_running[job.gpu] -= 1
+                    # Use _release_gpu to prevent double-decrement
+                    if not job.gpu_slot_released and job.gpu >= 0:
+                        self.gpu_running[job.gpu] -= 1
+                        job.gpu_slot_released = True
                     job.end_time = time.time()
 
                     # Retry if possible

@@ -61,7 +61,7 @@ class JobStateDB:
 
     def create_job(self, name: str, cmd: str = "", gpu: int = -1, **extra):
         key = f"job:{name}"
-        self.r.hset(key, mapping={
+        mapping = {
             "status": "pending",
             "cmd": cmd,
             "gpu": gpu,
@@ -75,8 +75,11 @@ class JobStateDB:
             "retries": 0,
             "metrics": "{}",
             **{k: json.dumps(v) if isinstance(v, (dict, list)) else str(v) for k, v in extra.items()},
-        })
-        self.r.sadd("jobs:index", name)
+        }
+        with self.r.pipeline() as pipe:
+            pipe.hset(key, mapping=mapping)
+            pipe.sadd("jobs:index", name)
+            pipe.execute()
         self._publish("created", name)
 
     def start_job(self, name: str, gpu: int = -1):
@@ -182,9 +185,12 @@ class JobStateDB:
         """Yields events as they happen. Blocking iterator."""
         pubsub = self.r.pubsub()
         pubsub.subscribe("job:events", "job:commands")
-        for message in pubsub.listen():
-            if message["type"] == "message":
-                yield json.loads(message["data"])
+        try:
+            for message in pubsub.listen():
+                if message["type"] == "message":
+                    yield json.loads(message["data"])
+        finally:
+            pubsub.close()
 
     # ── Queries ───────────────────────────────────────────────────
 
