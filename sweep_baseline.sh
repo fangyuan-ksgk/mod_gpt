@@ -1,209 +1,13 @@
 
-# ===========================================================================
-# Batch 1 — Prefix-first ABS: [Q][ABS×N][CoT][#### ans]
-#   Search & training operate on the SAME prefix layout → closed loop.
-#   --prefix_abs + --abs_prefix_max=N → insert_prefix_abs (contiguous block)
-#
-# V1: trainable abstract projection (alpha_abs > 0)
-# V6: frozen diagonal projection  (--use_v6, alpha_abs=0 by default)
-#
-# (a) v1 prefix-8  — trainable ABS prefix, constrained eval
-# (b) v6 prefix-8  — frozen diagonal ABS prefix, constrained eval
-# (c) v1 prefix-8 + NL drop — same as (a) + TA-style NL dropping
-# (d) v6 prefix-8 + NL drop — same as (b) + TA-style NL dropping
-# ===========================================================================
-
-
-# # (a) v1 prefix-8: trainable ABS, closed-loop
-# run_bg "v1_pfx8" $M06 $DS_GSM \
-#   --K 8 --abstract_vocab_size 32 \
-#   --prefix_abs --abs_prefix_max 8 \
-#   --alpha_abs 1.0
-
-# # (b) v6 prefix-8: frozen diagonal, closed-loop
-# run_bg "v6_pfx8" $M06 $DS_GSM \
-#   --use_v6 --K 8 --abstract_vocab_size 32 \
-#   --prefix_abs --abs_prefix_max 8
-
-# # (c) v1 prefix-8 + NL drop
-# run_bg "v1_pfx8_drop" $M06 $DS_GSM \
-#   --K 8 --abstract_vocab_size 32 \
-#   --prefix_abs --abs_prefix_max 8 \
-#   --alpha_abs 1.0 \
-#   --compress_m_set 0,8,16,24,32,64
-
-# wait
-
-# # (d) v6 prefix-8 + NL drop
-# run_bg "v6_pfx8_drop" $M06 $DS_GSM \
-#   --use_v6 --K 8 --abstract_vocab_size 32 \
-#   --prefix_abs --abs_prefix_max 8 \
-#   --compress_m_set 0,8,16,24,32,64
-
-# wait
-
-# ===========================================================================
-# Batch 2 — v6 prefix-8 scale-up: Qwen3-1.7B, sweep max_iterations
-#   v6 search refines abstract tokens via Jacobi iterations.
-#   max_iterations = abs_prefix_max → perfect train-inference alignment.
-#   Axes: max_iterations ∈ {1, 4, 8}, dataset ∈ {gsm8k, scienceqa}
-# ===========================================================================
-
-# # --- Batch 2a: GSM8K × max_iterations ---
-# echo ""
-# echo "Batch 2a: v6 prefix-8, Qwen1.7B, GSM8K, sweep max_iterations"
-
-# run_bg "v6_pfx8_gsm_i1" $M17 $DS_GSM \
-#   --use_v6 --K 8 --abstract_vocab_size 32 \
-#   --prefix_abs --abs_prefix_max 8 \
-#   --max_iterations 1
-
-# run_bg "v6_pfx8_gsm_i4" $M17 $DS_GSM \
-#   --use_v6 --K 8 --abstract_vocab_size 32 \
-#   --prefix_abs --abs_prefix_max 8 \
-#   --max_iterations 4
-
-# run_bg "v6_pfx8_gsm_i8" $M17 $DS_GSM \
-#   --use_v6 --K 8 --abstract_vocab_size 32 \
-#   --prefix_abs --abs_prefix_max 8 \
-#   --max_iterations 8
-
-# wait
-
-# # --- Batch 2b: ScienceQA × max_iterations ---
-# echo ""
-# echo "Batch 2b: v6 prefix-8, Qwen1.7B, ScienceQA, sweep max_iterations"
-
-# run_bg "v6_pfx8_sci_i1" $M17 $DS_SCI \
-#   --use_v6 --K 8 --abstract_vocab_size 32 \
-#   --prefix_abs --abs_prefix_max 8 \
-#   --max_iterations 1
-
-# run_bg "v6_pfx8_sci_i4" $M17 $DS_SCI \
-#   --use_v6 --K 8 --abstract_vocab_size 32 \
-#   --prefix_abs --abs_prefix_max 8 \
-#   --max_iterations 4
-
-# run_bg "v6_pfx8_sci_i8" $M17 $DS_SCI \
-#   --use_v6 --K 8 --abstract_vocab_size 32 \
-#   --prefix_abs --abs_prefix_max 8 \
-#   --max_iterations 8
-
-# wait
-
-# # --- Batch 2c: best iter (8) + NL compression ---
-# echo ""
-# echo "Batch 2c: v6 prefix-8 iter=8, Qwen1.7B, +compression"
-
-# run_bg "v6_pfx8_gsm_i8_drop" $M17 $DS_GSM \
-#   --use_v6 --K 8 --abstract_vocab_size 32 \
-#   --prefix_abs --abs_prefix_max 8 \
-#   --max_iterations 8 \
-#   --compress_m_set 0,8,16,24,32,64
-
-# run_bg "v6_pfx8_sci_i8_drop" $M17 $DS_SCI \
-#   --use_v6 --K 8 --abstract_vocab_size 32 \
-#   --prefix_abs --abs_prefix_max 8 \
-#   --max_iterations 8 \
-#   --compress_m_set 0,8,16,24,32,64
-
-# run_bg "v6_pfx16_gsm_i16" $M17 $DS_GSM \
-#   --use_v6 --K 16 --abstract_vocab_size 32 \
-#   --prefix_abs --abs_prefix_max 16 \
-#   --max_iterations 16
-
-# wait
-
-# ===========================================================================
-# Batches 3a–3e — v6 prefix deeper sweep (2 per batch, 10 total)
-#   All use --use_v6, iter=abs_prefix_max (perfect alignment) unless noted.
-#   Base: Qwen3-1.7B, GSM8K, abs_vocab=32, pfx8, iter=8, emb_lr=1x, 1ep
-# ===========================================================================
-
-# --- Batch 3a: prefix length (GSM8K, 1.7B) ---
-echo ""
-echo "Batch 3a: prefix length sweep — pfx4 vs pfx16"
-
-run_bg "v6_pfx4_gsm_i4" $M17 $DS_GSM \
-  --use_v6 --K 4 --abstract_vocab_size 32 \
-  --prefix_abs --abs_prefix_max 4 \
-  --max_iterations 4
-
-run_bg "v6_pfx16_sci_i16" $M17 $DS_SCI \
-  --use_v6 --K 16 --abstract_vocab_size 32 \
-  --prefix_abs --abs_prefix_max 16 \
-  --max_iterations 16
-
-wait
-
-# --- Batch 3b: emb_lr_mult fine-grained (GSM8K, 1.7B, pfx8, iter=8) ---
-echo ""
-echo "Batch 3b: emb_lr_mult — 3x vs 5x"
-
-run_bg "v6_pfx8_gsm_emb3" $M17 $DS_GSM \
-  --use_v6 --K 8 --abstract_vocab_size 32 \
-  --prefix_abs --abs_prefix_max 8 \
-  --max_iterations 8 \
-  --emb_lr_mult 3.0
-
-run_bg "v6_pfx8_gsm_emb5" $M17 $DS_GSM \
-  --use_v6 --K 8 --abstract_vocab_size 32 \
-  --prefix_abs --abs_prefix_max 8 \
-  --max_iterations 8 \
-  --emb_lr_mult 5.0
-
-wait
-
-# --- Batch 3c: emb_lr_mult continued (GSM8K, 1.7B, pfx8, iter=8) ---
-echo ""
-echo "Batch 3c: emb_lr_mult — 10x vs 20x"
-
-run_bg "v6_pfx8_gsm_emb10" $M17 $DS_GSM \
-  --use_v6 --K 8 --abstract_vocab_size 32 \
-  --prefix_abs --abs_prefix_max 8 \
-  --max_iterations 8 \
-  --emb_lr_mult 10.0
-
-run_bg "v6_pfx8_gsm_emb20" $M17 $DS_GSM \
-  --use_v6 --K 8 --abstract_vocab_size 32 \
-  --prefix_abs --abs_prefix_max 8 \
-  --max_iterations 8 \
-  --emb_lr_mult 20.0
-
-wait
-
-# --- Batch 3d: prefix length × dataset (1.7B, iter=match) ---
-echo ""
-echo "Batch 3d: prefix length — pfx4 GSM vs pfx16 GSM"
-
-run_bg "v6_pfx4_gsm" $M17 $DS_GSM \
-  --use_v6 --K 4 --abstract_vocab_size 32 \
-  --prefix_abs --abs_prefix_max 4 \
-  --max_iterations 4
-
-run_bg "v6_pfx16_gsm" $M17 $DS_GSM \
-  --use_v6 --K 16 --abstract_vocab_size 32 \
-  --prefix_abs --abs_prefix_max 16 \
-  --max_iterations 16
-
-wait
-
-# --- Batch 3e: best emb_lr on SciQA + prefix length on SciQA ---
-echo ""
-echo "Batch 3e: SciQA — pfx4 vs pfx16"
-
-run_bg "v6_pfx4_sci" $M17 $DS_SCI \
-  --use_v6 --K 4 --abstract_vocab_size 32 \
-  --prefix_abs --abs_prefix_max 4 \
-  --max_iterations 4
-
-run_bg "v6_pfx16_sci" $M17 $DS_SCI \
-  --use_v6 --K 16 --abstract_vocab_size 32 \
-  --prefix_abs --abs_prefix_max 16 \
-  --max_iterations 16
-
-wait
-
+# =============================
+# Baseline Method: 
+# - pause token 
+# - token assorted
+# =============================
+N_GPUS=4
+MASTER_ADDR=127.0.0.1
+BASE_PORT=29500
+EVAL_BATCH_SIZE=256
 
 # ---- Baseline runners (separate scripts) ----
 run_pause_bg() {
@@ -226,6 +30,7 @@ run_pause_bg() {
     train_pause_pt.py \
     --model_name $model \
     --dataset $dataset \
+    --use_lora --lora_rank 16 --lora_alpha 32 \
     --max_length $MAX_LENGTH \
     --lr $LR \
     --warmup_steps $WARMUP_STEPS \
@@ -262,6 +67,7 @@ run_ta_bg() {
     train_ta_pt.py \
     --model_name $model \
     --dataset $dataset \
+    --use_lora --lora_rank 16 --lora_alpha 32 \
     --max_length $MAX_LENGTH \
     --lr $LR \
     --warmup_steps $WARMUP_STEPS \
@@ -278,31 +84,158 @@ run_ta_bg() {
     "$@" &
 }
 
-# # ============================================================================
-# # Batch 4 — Baselines: pause token + token assorted
-# #           4 models × 5 datasets × 2 baselines = 40 experiments, 1 epoch each
-# #           Each (model, dataset) pair launches pause + ta in parallel (1 GPU each),
-# #           then waits before the next pair.
-# # ============================================================================
-# echo ""
-# echo "============================================================"
-# echo "Batch 4: Baselines (pause + TA) — 4 models × 5 datasets (${TIMESTAMP})"
-# echo "============================================================"
+# =============================================================================
+# Baseline sweep: pause-token & token-assorted  |  LoRA, ep=1
+# scienceQA : {q4b, q17b, l1b, l3b}
+# mmlu/hotpotqa/aqua/obookqa/boolq/csqa : all 5 models  {q06, q17b, l1b, l3b, q4b}
+# Each batch pairs pause+ta for the same model
+# =============================================================================
 
-# for mp in "17:$M17" "4b:$M4" "l1:$ML1" "l3:$ML3"; do
-#     mtag="${mp%%:*}"; model="${mp#*:}"
-#     for dp in "gsm:$DS_GSM" "sci:$DS_SCI" "arc:$DS_ARC" "mml:$DS_MMLU" "csqa:$DS_CSQA"; do
-#         dtag="${dp%%:*}"; ds="${dp#*:}"
-#         run_pause_bg "pause_${dtag}_${mtag}" "$model" "$ds"
-#         run_ta_bg    "ta_${dtag}_${mtag}"    "$model" "$ds"
-#         echo "  Waiting for pause_${dtag}_${mtag} + ta_${dtag}_${mtag}..."
-#         wait
-#     done
-# done
+M06="Qwen/Qwen3-0.6B"
+M17="Qwen/Qwen3-1.7B"
+ML1="meta-llama/Llama-3.2-1B"
+ML3="meta-llama/Llama-3.2-3B"
+M4B="Qwen/Qwen3-4B"
 
-# echo "  Batch 4 complete."
+DS_SCI="scienceqa"
+DS_MMLU="mmlu"
+DS_HPQA="hotpotqa"
+DS_AQUA="aqua"
+DS_OBQA="openbookqa"
+DS_BOOLQ="boolq"
+DS_CSQA="commonsenseqa"
 
-# # echo ""
-# # echo "============================================================"
-# # echo "All 16 experiments complete. Results in ./ckpt/sweep_${TIMESTAMP}/"
-# # echo "============================================================"
+TIMESTAMP=$(date +%Y%m%d_%H%M)
+EXP_IDX=0
+
+echo "=== Baseline (pause + ta) Sweep === $(date)"
+
+# ── ScienceQA ─────────────────────────────────────────────────────────────────
+echo "SciQA: pause+ta × {q4b, q17b}"
+run_pause_bg "sci_pause_q4b"  $M4B $DS_SCI
+run_ta_bg    "sci_ta_q4b"     $M4B $DS_SCI
+run_pause_bg "sci_pause_q17b" $M17 $DS_SCI
+run_ta_bg    "sci_ta_q17b"    $M17 $DS_SCI
+wait
+
+echo "SciQA: pause+ta × {l1b, l3b}"
+run_pause_bg "sci_pause_l1b" $ML1 $DS_SCI
+run_ta_bg    "sci_ta_l1b"    $ML1 $DS_SCI
+run_pause_bg "sci_pause_l3b" $ML3 $DS_SCI
+run_ta_bg    "sci_ta_l3b"    $ML3 $DS_SCI
+wait
+
+# ── MMLU ──────────────────────────────────────────────────────────────────────
+echo "MMLU: pause+ta × {q06, q17b}"
+run_pause_bg "mmlu_pause_q06"  $M06 $DS_MMLU
+run_ta_bg    "mmlu_ta_q06"     $M06 $DS_MMLU
+run_pause_bg "mmlu_pause_q17b" $M17 $DS_MMLU
+run_ta_bg    "mmlu_ta_q17b"    $M17 $DS_MMLU
+wait
+
+echo "MMLU: pause+ta × {l1b, l3b}"
+run_pause_bg "mmlu_pause_l1b" $ML1 $DS_MMLU
+run_ta_bg    "mmlu_ta_l1b"    $ML1 $DS_MMLU
+run_pause_bg "mmlu_pause_l3b" $ML3 $DS_MMLU
+run_ta_bg    "mmlu_ta_l3b"    $ML3 $DS_MMLU
+wait
+
+# ── HotpotQA ──────────────────────────────────────────────────────────────────
+echo "HotpotQA: pause+ta × {q06, q17b}"
+run_pause_bg "hpqa_pause_q06"  $M06 $DS_HPQA
+run_ta_bg    "hpqa_ta_q06"     $M06 $DS_HPQA
+run_pause_bg "hpqa_pause_q17b" $M17 $DS_HPQA
+run_ta_bg    "hpqa_ta_q17b"    $M17 $DS_HPQA
+wait
+
+echo "HotpotQA: pause+ta × {l1b, l3b}"
+run_pause_bg "hpqa_pause_l1b" $ML1 $DS_HPQA
+run_ta_bg    "hpqa_ta_l1b"    $ML1 $DS_HPQA
+run_pause_bg "hpqa_pause_l3b" $ML3 $DS_HPQA
+run_ta_bg    "hpqa_ta_l3b"    $ML3 $DS_HPQA
+wait
+
+# ── AQuA ──────────────────────────────────────────────────────────────────────
+echo "AQuA: pause+ta × {q06, q17b}"
+run_pause_bg "aqua_pause_q06"  $M06 $DS_AQUA
+run_ta_bg    "aqua_ta_q06"     $M06 $DS_AQUA
+run_pause_bg "aqua_pause_q17b" $M17 $DS_AQUA
+run_ta_bg    "aqua_ta_q17b"    $M17 $DS_AQUA
+wait
+
+echo "AQuA: pause+ta × {l1b, l3b}"
+run_pause_bg "aqua_pause_l1b" $ML1 $DS_AQUA
+run_ta_bg    "aqua_ta_l1b"    $ML1 $DS_AQUA
+run_pause_bg "aqua_pause_l3b" $ML3 $DS_AQUA
+run_ta_bg    "aqua_ta_l3b"    $ML3 $DS_AQUA
+wait
+
+# ── OpenBookQA ────────────────────────────────────────────────────────────────
+echo "ObookQA: pause+ta × {q06, q17b}"
+run_pause_bg "obqa_pause_q06"  $M06 $DS_OBQA
+run_ta_bg    "obqa_ta_q06"     $M06 $DS_OBQA
+run_pause_bg "obqa_pause_q17b" $M17 $DS_OBQA
+run_ta_bg    "obqa_ta_q17b"    $M17 $DS_OBQA
+wait
+
+echo "ObookQA: pause+ta × {l1b, l3b}"
+run_pause_bg "obqa_pause_l1b" $ML1 $DS_OBQA
+run_ta_bg    "obqa_ta_l1b"    $ML1 $DS_OBQA
+run_pause_bg "obqa_pause_l3b" $ML3 $DS_OBQA
+run_ta_bg    "obqa_ta_l3b"    $ML3 $DS_OBQA
+wait
+
+# ── BoolQ ─────────────────────────────────────────────────────────────────────
+echo "BoolQ: pause+ta × {q06, q17b}"
+run_pause_bg "boolq_pause_q06"  $M06 $DS_BOOLQ
+run_ta_bg    "boolq_ta_q06"     $M06 $DS_BOOLQ
+run_pause_bg "boolq_pause_q17b" $M17 $DS_BOOLQ
+run_ta_bg    "boolq_ta_q17b"    $M17 $DS_BOOLQ
+wait
+
+echo "BoolQ: pause+ta × {l1b, l3b}"
+run_pause_bg "boolq_pause_l1b" $ML1 $DS_BOOLQ
+run_ta_bg    "boolq_ta_l1b"    $ML1 $DS_BOOLQ
+run_pause_bg "boolq_pause_l3b" $ML3 $DS_BOOLQ
+run_ta_bg    "boolq_ta_l3b"    $ML3 $DS_BOOLQ
+wait
+
+# ── CommonsenseQA ─────────────────────────────────────────────────────────────
+echo "CSQA: pause+ta × {q06, q17b}"
+run_pause_bg "csqa_pause_q06"  $M06 $DS_CSQA
+run_ta_bg    "csqa_ta_q06"     $M06 $DS_CSQA
+run_pause_bg "csqa_pause_q17b" $M17 $DS_CSQA
+run_ta_bg    "csqa_ta_q17b"    $M17 $DS_CSQA
+wait
+
+echo "CSQA: pause+ta × {l1b, l3b}"
+run_pause_bg "csqa_pause_l1b" $ML1 $DS_CSQA
+run_ta_bg    "csqa_ta_l1b"    $ML1 $DS_CSQA
+run_pause_bg "csqa_pause_l3b" $ML3 $DS_CSQA
+run_ta_bg    "csqa_ta_l3b"    $ML3 $DS_CSQA
+wait
+
+# ── q4b: all 6 datasets × pause+ta  →  3 full batches of 4 ──────────────────
+echo "q4b overflow: pause+ta × {mmlu, hpqa}"
+run_pause_bg "mmlu_pause_q4b" $M4B $DS_MMLU
+run_ta_bg    "mmlu_ta_q4b"    $M4B $DS_MMLU
+run_pause_bg "hpqa_pause_q4b" $M4B $DS_HPQA
+run_ta_bg    "hpqa_ta_q4b"    $M4B $DS_HPQA
+wait
+
+echo "q4b overflow: pause+ta × {aqua, obqa}"
+run_pause_bg "aqua_pause_q4b" $M4B $DS_AQUA
+run_ta_bg    "aqua_ta_q4b"    $M4B $DS_AQUA
+run_pause_bg "obqa_pause_q4b" $M4B $DS_OBQA
+run_ta_bg    "obqa_ta_q4b"    $M4B $DS_OBQA
+wait
+
+echo "q4b overflow: pause+ta × {boolq, csqa}"
+run_pause_bg "boolq_pause_q4b" $M4B $DS_BOOLQ
+run_ta_bg    "boolq_ta_q4b"    $M4B $DS_BOOLQ
+run_pause_bg "csqa_pause_q4b"  $M4B $DS_CSQA
+run_ta_bg    "csqa_ta_q4b"     $M4B $DS_CSQA
+wait
+
+echo ""
+echo "=== All baseline experiments complete. $(date) ==="
