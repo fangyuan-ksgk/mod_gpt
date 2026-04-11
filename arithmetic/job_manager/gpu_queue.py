@@ -105,6 +105,15 @@ class GPUQueue:
         self._monitor_thread = None
         self._stop_monitor = threading.Event()
 
+        # Redis state DB integration
+        self.db = None
+        try:
+            from arithmetic.job_manager.job_state import JobStateDB
+            self.db = JobStateDB()
+            self.db.clear()  # fresh state for this queue run
+        except Exception:
+            pass  # Redis not available, run without it
+
     def submit(self, cmd: str, name: str = "", on_complete: Callable = None,
                on_fail: Callable = None) -> int:
         """Submit a command. Returns job ID."""
@@ -117,6 +126,8 @@ class GPUQueue:
                 on_complete=on_complete, on_fail=on_fail,
             )
             self.jobs.append(job)
+            if self.db:
+                self.db.create_job(name or f"job_{job_id}", cmd=cmd)
 
         t = threading.Thread(target=self._run_job, args=(job,), daemon=True)
         self._threads.append(t)
@@ -169,6 +180,8 @@ class GPUQueue:
         cmd = job.cmd.replace("{GPU}", str(gpu))
         ts = time.strftime("%H:%M:%S")
         print(f"[{ts}] JOB {job.job_id:3d} GPU {gpu} START: {job.name} ({cmd[:60]}...)")
+        if self.db:
+            self.db.start_job(job.name, gpu=gpu)
 
         try:
             with open(job.log_file, "w") as logf:
@@ -184,9 +197,20 @@ class GPUQueue:
                         logf.write(line.decode("utf-8", errors="replace"))
                         logf.flush()
                         job.last_output_time = time.time()
+                        if self.db:
+                            self.db.heartbeat(job.name)
 
-                proc.wait()
-                job.exit_code = proc.returncode
+                        # Check for kill command from Redis
+                        if self.db and self.db.pending_kill(job.name):
+                            print(f"  Kill command received for {job.name}")
+                            proc.kill()
+                            proc.wait(timeout=10)
+                            job.exit_code = -9
+                            break
+
+                if job.exit_code != -9:
+                    proc.wait()
+                    job.exit_code = proc.returncode
         except Exception as e:
             job.exit_code = -1
             try:
@@ -205,6 +229,8 @@ class GPUQueue:
             with self.lock:
                 job.status = "done"
             print(f"[{ts}] JOB {job.job_id:3d} GPU {gpu} DONE ({elapsed:.0f}s) {job.name}")
+            if self.db:
+                self.db.complete_job(job.name)
             if job.on_complete:
                 try:
                     job.on_complete(job)
@@ -214,6 +240,14 @@ class GPUQueue:
             with self.lock:
                 job.status = "failed"
             print(f"[{ts}] JOB {job.job_id:3d} GPU {gpu} FAIL(exit={job.exit_code}) ({elapsed:.0f}s) {job.name}")
+            if self.db:
+                error_msg = ""
+                try:
+                    with open(job.log_file) as f:
+                        error_msg = f.readlines()[-1].strip()[:200]
+                except Exception:
+                    pass
+                self.db.fail_job(job.name, error=error_msg)
 
             # Check last few lines of log for error message
             try:
@@ -248,11 +282,36 @@ class GPUQueue:
         self._write_status()
 
     def _monitor_loop(self):
-        """Periodic monitoring: detect stale jobs, write status."""
+        """Periodic monitoring: detect stale jobs, check kill commands, write status."""
         while not self._stop_monitor.is_set():
             time.sleep(30)
             self._check_stale_jobs()
+            self._check_kill_commands()
             self._write_status()
+
+    def _check_kill_commands(self):
+        """Check Redis for kill commands targeting QUEUE or ALL."""
+        if not self.db:
+            return
+        # Check for QUEUE-level kill
+        cmds = self.db.read_commands("QUEUE")
+        for cmd in cmds:
+            if cmd.get("command") == "kill":
+                ts = time.strftime("%H:%M:%S")
+                print(f"[{ts}] QUEUE KILL received — killing all running jobs")
+                with self.lock:
+                    for job in self.jobs:
+                        if job.status == "running" and job.proc:
+                            try:
+                                job.proc.kill()
+                                job.proc.wait(timeout=10)
+                            except Exception:
+                                pass
+                            job.status = "killed"
+                            self._release_gpu(job)
+                            if self.db:
+                                self.db.fail_job(job.name, error="killed by QUEUE command")
+                self._stop_monitor.set()  # stop the queue
 
     def _check_stale_jobs(self):
         """Kill and requeue jobs that have gone silent."""

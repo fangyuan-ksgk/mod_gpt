@@ -5,9 +5,20 @@ Results placeholders in `log/arithmetic.md` use `<!-- PLACEHOLDER: description -
 **Start here:** Read [`MEMORY.md`](MEMORY.md) first for current session state and what to do next.
 Also check [`TODO.md`](TODO.md) for the task backlog.
 
-## Code Review Policy
+## Job Safety Rule
 
-When writing substantial new code (new modules, rewrites, infrastructure), send it to GPT-4/5 via the OpenAI API (`OPENAI_API_KEY` in env) for code review before committing. Give full context about what the code does and the environment. Focus on concurrency, error handling, resource leaks, race conditions. Incorporate fixes that make sense, note low-priority items. Not needed for small edits — use for new modules and complex logic.
+**ALWAYS kill running training jobs before modifying code they depend on** (train.py, evaluate.py, datasets/addition.py, hub.py, sorl/). Running jobs load code at start time — edits during execution cause failures with stale imports or mismatched logic. Kill first, edit, then relaunch.
+
+## Code Quality Process
+
+For new modules and substantial changes:
+1. **Write tests** — unit + E2E before committing
+2. **Run tests** — all must pass
+3. **Send to GPT-4/5 for review** via OpenAI API (`OPENAI_API_KEY` in env). Give full context. Focus on concurrency, error handling, resource leaks, race conditions.
+4. **Incorporate fixes**, note low-priority items
+5. **Then commit**
+
+Not needed for small edits — use for new modules and complex logic.
 
 Working notes from experiment iteration. Main results in [`log/arithmetic.md`](../log/arithmetic.md).
 

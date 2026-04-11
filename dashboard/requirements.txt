@@ -1,3 +1,5 @@
 gradio
 huggingface_hub
 pandas
+matplotlib
+Pillow
