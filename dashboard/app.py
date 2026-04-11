@@ -135,7 +135,8 @@ def build_comparison_table(models, arch_filter="All", enriched_only=True):
 
         ds_label = f"{ds // 1000}K"
 
-        base_wandb = base["config"].get("wandb_url", "") if base else ""
+        raw_base_wandb = base["config"].get("wandb_url", "") if base else ""
+        base_wandb = f"[wandb]({raw_base_wandb})" if raw_base_wandb else ""
 
         if not matching_sorl:
             # Baseline only
@@ -144,7 +145,7 @@ def build_comparison_table(models, arch_filter="All", enriched_only=True):
                 "Ops": ops, "Data": ds_label, "Arch": arch,
                 "Baseline": fmt_pct(base_acc),
                 "SoRL": "pending", "Config": "pending",
-                "B_wandb": base_wandb, "S_wandb": "",
+                "B_wandb": base_wandb, "S_wandb": "pending",
             }
             for s in HARD_SPLITS:
                 row[f"B_{s}"] = fmt_pct(base_hard.get(s))
@@ -154,7 +155,8 @@ def build_comparison_table(models, arch_filter="All", enriched_only=True):
             for (K, vocab), sorl_m in sorted(matching_sorl.items()):
                 sorl_cfg = sorl_m["config"]
                 sorl_acc = sorl_cfg.get("final_accuracy")
-                sorl_wandb = sorl_cfg.get("wandb_url", "")
+                raw_sorl_wandb = sorl_cfg.get("wandb_url", "")
+                sorl_wandb = f"[wandb]({raw_sorl_wandb})" if raw_sorl_wandb else ""
                 eval_key = "sorl_eval"
 
                 b_str, s_str = bold_winner(base_acc, sorl_acc)
@@ -218,7 +220,7 @@ with gr.Blocks(title="SoRL Arithmetic Dashboard") as app:
     gr.Markdown("### Overall Accuracy (Baseline vs SoRL)")
     main_table = gr.Dataframe(
         headers=["Ops", "Data", "Arch", "Baseline", "SoRL", "Config", "B_wandb", "S_wandb"],
-        datatype=["str"] * 8,
+        datatype=["str", "str", "str", "str", "str", "str", "markdown", "markdown"],
         interactive=False,
     )
 
