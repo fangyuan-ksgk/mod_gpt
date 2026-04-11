@@ -86,6 +86,9 @@ class ArithmeticEvaluator:
                 else:
                     pred = self._predict_sft(qwen_ids)
 
+            assert len(pred) == len(target) == self.answer_len, \
+                f"Length mismatch: pred={len(pred)}, target={len(target)}, expected={self.answer_len}"
+
             correct_digits = (pred == target)
             if correct_digits.all():
                 n_correct += 1

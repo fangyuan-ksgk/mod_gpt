@@ -107,7 +107,8 @@ def eval_with_recursion(model, dataset, device, K=4, num_samples=200):
             # Extract trajectory predictions at answer positions
             is_traj = data[0, 1:] < base_v
             pred_logits = logits[0, :-1][is_traj][:, :base_v].argmax(dim=-1)
-            pred_answer = pred_logits[-7:]  # last 7 trajectory tokens = answer
+            answer_len = dataset.n_digits + 1  # n_digits + overflow digit
+            pred_answer = pred_logits[-answer_len:]
 
         if (pred_answer == true_answer).all():
             n_correct += 1
