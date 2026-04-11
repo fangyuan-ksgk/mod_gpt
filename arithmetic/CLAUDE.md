@@ -16,17 +16,21 @@ Also check [`TODO.md`](TODO.md) for the task backlog.
 
 ## Code Quality Process
 
-For new modules and substantial changes:
-1. **Check available APIs/tools first** — don't build what already exists (e.g., OpenAI Responses API has server-side state — don't build manual history management)
+**MANDATORY for ANY change to training code (train.py, evaluate.py, datasets/, hub.py):**
+1. **Smoke test**: run a tiny job end-to-end (`--dataset_size 1000 --num_epochs 1`) and verify it completes, uploads, and passes validation. This catches NameErrors, import issues, and broken pipelines BEFORE launching 90 jobs.
+2. **Send to GPT-4/5 for review** via `Reviewer` class (`arithmetic.job_manager.llm_reviewer`). State at `/workspace/sorl_logs/reviewer_state.json`.
+3. **Then commit and launch.**
+
+**For new modules and substantial changes, also:**
+1. **Check available APIs/tools first** — don't build what already exists
 2. **Write tests** — unit + E2E before committing
 3. **Run tests** — all must pass
-4. **Send to GPT-4/5 for review** via `Reviewer` class (`arithmetic.job_manager.llm_reviewer`). Uses OpenAI Responses API with server-side conversation memory. State at `/workspace/sorl_logs/reviewer_state.json`. Ask for TWO types of review:
+4. Ask GPT-4/5 for TWO types of review:
    - **Implementation review**: concurrency, error handling, resource leaks, race conditions
-   - **Architecture review**: highlight all design decisions made, ask if there are better approaches for accuracy, scalability, cost, maintainability. Ask "what would you do differently?"
+   - **Architecture review**: highlight all design decisions, ask for better approaches
 5. **Incorporate fixes**, note low-priority items
-6. **Then commit**
 
-Not needed for small edits — use for new modules and complex logic.
+**NEVER skip the smoke test for training code changes. The last 3 queue restarts were caused by untested changes.**
 
 Working notes from experiment iteration. Main results in [`log/arithmetic.md`](../log/arithmetic.md).
 

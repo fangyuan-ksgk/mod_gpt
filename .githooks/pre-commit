@@ -1,0 +1,45 @@
+#!/bin/bash
+# Pre-commit hook: smoke test when training code changes
+# Runs a tiny 1-epoch job to catch NameErrors, import issues, broken pipelines
+
+TRAINING_FILES="arithmetic/train.py arithmetic/evaluate.py arithmetic/datasets/addition.py arithmetic/hub.py"
+
+# Check if any training files are staged
+changed=false
+for f in $TRAINING_FILES; do
+    if git diff --cached --name-only | grep -q "$f"; then
+        changed=true
+        break
+    fi
+done
+
+if [ "$changed" = false ]; then
+    exit 0
+fi
+
+echo "Training code changed — running smoke test..."
+echo "(This takes ~30 seconds. Skip with --no-verify if you know what you're doing.)"
+
+# Run tiny baseline job
+output=$(timeout 120 python -m arithmetic.train \
+    --mode baseline --ops add_sub \
+    --dataset_size 500 --num_epochs 1 \
+    --output_dir /tmp/smoke_precommit \
+    --no_wandb 2>&1)
+exit_code=$?
+
+# Cleanup
+rm -rf /tmp/smoke_precommit
+
+if [ $exit_code -ne 0 ]; then
+    echo ""
+    echo "❌ SMOKE TEST FAILED (exit $exit_code)"
+    echo "Last 10 lines:"
+    echo "$output" | tail -10
+    echo ""
+    echo "Fix the error before committing. Use --no-verify to skip (not recommended)."
+    exit 1
+fi
+
+echo "✓ Smoke test passed"
+exit 0
