@@ -396,6 +396,19 @@ def main():
             metrics["sorl_overall_accuracy"] = eval_results_sorl["summary"]["overall_accuracy"]
             metrics["sft_overall_accuracy"] = eval_results_sft["summary"]["overall_accuracy"]
         save_model(model, manifest, metrics, subfolder=run_name)
+
+        # Per-job validation: verify upload is complete and correct
+        print(f"\nValidating upload: {run_name}")
+        from arithmetic.job_manager.post_sweep import validate_uploaded_model
+        issues = validate_uploaded_model(run_name)
+        if issues:
+            print(f"  VALIDATION FAILED:")
+            for issue in issues:
+                print(f"    - {issue}")
+            sys.exit(1)  # non-zero exit → queue will retry
+        else:
+            print(f"  Validation passed ✓")
+
         import shutil
         shutil.rmtree(args.output_dir, ignore_errors=True)
 
