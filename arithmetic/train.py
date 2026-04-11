@@ -379,6 +379,12 @@ def main():
 
     if wandb.run is not None:
         wandb.log({"eval/final_accuracy": final_acc})
+        # Log per-split accuracy to wandb
+        for eval_name, eval_result in [("sft", eval_results_sft), ("sorl", eval_results_sorl)]:
+            if eval_result is None:
+                continue
+            for split_name, split_data in eval_result.get("splits", {}).items():
+                wandb.log({f"eval/{eval_name}/{split_name}": split_data["full_accuracy"]})
         wandb.finish()
 
     if args.push_to_hub:

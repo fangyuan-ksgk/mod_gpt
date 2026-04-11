@@ -238,6 +238,27 @@ with gr.Blocks(title="SoRL Arithmetic Dashboard") as app:
         detail_btn = gr.Button("Show splits")
         detail_table = gr.Dataframe(headers=["Split", "Accuracy", "N"], interactive=False)
 
+    with gr.Accordion("Eval Datasets & Resources", open=False):
+        gr.Markdown("""
+**Fixed eval sets** (seed=42, cached, deterministic — all models evaluated on identical examples):
+
+| Split Type | Splits | Examples | Description |
+|-----------|--------|----------|-------------|
+| Quirke cascades (add) | S0–S6 | 50 each | Carry cascade depth 0–6 |
+| Quirke cascades (sub) | M0–M5 | 50 each | Borrow cascade depth 0–5 (M6 impossible for 6-digit) |
+| Hot carry chains | C3–C6 | 50 each | Varied answer digits (not just 0s) |
+| Hot borrow chains | B3–B5 | 50 each | Varied answer digits (not just 9s) |
+| Random | add_random, sub_random | 200 each | Uniform random |
+
+**Total**: 1400 examples (add_sub), 750 examples (add-only)
+
+**Links**:
+- Models: [`thoughtworks/arithmetic-sorl`](https://huggingface.co/thoughtworks/arithmetic-sorl)
+- Datasets: [`thoughtworks/arithmetic-sorl-data`](https://huggingface.co/datasets/thoughtworks/arithmetic-sorl-data)
+- WandB: [`nlp_and_interpretability/sorl-arithmetic`](https://wandb.ai/nlp_and_interpretability/sorl-arithmetic)
+- Code: [`fangyuan-ksgk/mod_gpt`](https://github.com/fangyuan-ksgk/mod_gpt) (branch: `amir/arithmetic`)
+""")
+
     def get_queue_status_text(n_models):
         """Show live queue status from HF-uploaded queue_status.json."""
         EXPECTED = 90
