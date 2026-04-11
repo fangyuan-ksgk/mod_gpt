@@ -144,6 +144,11 @@ class SorlModelWrapper(PreTrainedModel, GenerationMixin):
         embed_w[base_vocab:] = ortho
         lm_head_w[base_vocab:] = ortho
 
+    @property
+    def has_separate_abs_params(self) -> bool:
+        """Whether abstract embeddings/projections are separate from NL params."""
+        return False
+
     def forward(self, input_ids, attention_mask=None, memory_span_abs=1792, memory_span_traj=1792, **kwargs):
         sorl_attention_mask = self._create_sorl_attention_mask(
             input_ids, attention_mask, memory_span_abs, memory_span_traj
@@ -607,3 +612,186 @@ class SorlModelWrapper(PreTrainedModel, GenerationMixin):
         per_token_loss = per_token_loss.view(idx.shape[0], -1)  # [batch_size, seq_len-1]
                     
         return idx, per_token_loss, outputs.logits
+
+
+# ---------------------------------------------------------------------------
+# V2: separate abstract embedding / projection
+# ---------------------------------------------------------------------------
+
+class _SplitEmbedding(nn.Module):
+    """Drop-in ``nn.Embedding`` replacement that routes abstract token IDs
+    to a separate embedding table while keeping NL embeddings untouched.
+
+    NL tokens   (id < base_vocab) → ``nl_embed``
+    Abstract    (id ≥ base_vocab) → ``abs_embed`` (remapped to 0-indexed)
+    """
+
+    def __init__(self, nl_embed: nn.Embedding, abs_embed: nn.Embedding, base_vocab: int):
+        super().__init__()
+        self.nl_embed = nl_embed
+        self.abs_embed = abs_embed
+        self.base_vocab = base_vocab
+        self.embedding_dim = nl_embed.embedding_dim
+
+    @property
+    def weight(self):
+        """Concatenated view for code that reads ``.weight`` (e.g. norm stats)."""
+        return torch.cat([self.nl_embed.weight, self.abs_embed.weight], dim=0)
+
+    @property
+    def num_embeddings(self):
+        return self.nl_embed.num_embeddings + self.abs_embed.num_embeddings
+
+    def forward(self, input_ids):
+        abs_mask = (input_ids >= self.base_vocab)
+        safe_ids = input_ids.clone()
+        safe_ids[abs_mask] = 0  # placeholder — will be overwritten
+        embeds = self.nl_embed(safe_ids)
+        if abs_mask.any():
+            abs_ids = input_ids[abs_mask] - self.base_vocab
+            embeds = embeds.clone()  # avoid in-place on nl_embed output
+            embeds[abs_mask] = self.abs_embed(abs_ids)
+        return embeds
+
+
+class _SplitLMHead(nn.Module):
+    """Drop-in ``nn.Linear`` replacement that appends abstract logits
+    (from a separate projection) to the NL logits from the original head.
+    """
+
+    def __init__(self, nl_head: nn.Linear, abs_proj: nn.Linear):
+        super().__init__()
+        self.nl_head = nl_head
+        self.abs_proj = abs_proj
+
+    @property
+    def weight(self):
+        """Concatenated view for code that reads ``.weight``."""
+        return torch.cat([self.nl_head.weight, self.abs_proj.weight], dim=0)
+
+    @property
+    def in_features(self):
+        return self.nl_head.in_features
+
+    @property
+    def out_features(self):
+        return self.nl_head.out_features + self.abs_proj.out_features
+
+    def forward(self, hidden_states):
+        nl_logits = self.nl_head(hidden_states)
+        abs_logits = self.abs_proj(hidden_states)
+        return torch.cat([nl_logits, abs_logits], dim=-1)
+
+
+class SorlModelWrapperV2(SorlModelWrapper):
+    """SoRL wrapper with **separate** abstract embedding and projection.
+
+    The base ``SorlModelWrapper`` expands the HF model's ``embed_tokens``
+    and ``lm_head`` to include abstract token rows.  When the base model
+    ties weights (Qwen3), freezing abstract ``lm_head`` rows also freezes
+    abstract ``embed_tokens`` rows — making them untrainable.
+
+    V2 keeps ``embed_tokens`` and ``lm_head`` at the original NL vocab
+    size and introduces two independent parameter groups:
+
+        * ``abs_embed`` : ``nn.Embedding(V_abs+1, d)`` — abstract input embeddings
+        * ``abs_proj``  : ``nn.Linear(d, V_abs+1)``    — abstract output projection
+
+    These are transparently spliced in via ``_SplitEmbedding`` /
+    ``_SplitLMHead`` drop-in replacements so that **all** parent methods
+    (``forward``, ``generate``, ``recursion``, ``recursion_step``, etc.)
+    work without any changes.
+
+    The base model's ``embed_tokens ↔ lm_head`` tying is **preserved** for
+    NL tokens.
+    """
+
+    @classmethod
+    def from_pretrained(
+        cls,
+        model_name_or_path: str,
+        abstract_vocab_size_list: List[int],
+        untie_embeddings: bool = False,
+        **kwargs,
+    ) -> "SorlModelWrapperV2":
+        config = AutoConfig.from_pretrained(model_name_or_path, **kwargs)
+
+        wrapper = cls(config)
+        wrapper.model = AutoModelForCausalLM.from_pretrained(
+            model_name_or_path, attn_implementation="eager", **kwargs
+        )
+
+        base_vocab_size = config.vocab_size
+        wrapper.full_vocab_size_list = [base_vocab_size] + abstract_vocab_size_list
+        wrapper._setup_vocabulary()
+
+        # Abstract token count (including placeholder at index 0)
+        abs_total = int(wrapper.total_vocab_size.item()) - base_vocab_size
+        hidden_size = config.hidden_size
+
+        # Create separate abstract parameters
+        abs_embed = nn.Embedding(abs_total, hidden_size)
+        abs_proj = nn.Linear(hidden_size, abs_total, bias=False)
+
+        # Replace embed_tokens and lm_head with split versions
+        orig_embed = wrapper.model.model.embed_tokens
+        orig_head = wrapper.model.lm_head
+        wrapper.model.model.embed_tokens = _SplitEmbedding(orig_embed, abs_embed, base_vocab_size)
+        wrapper.model.lm_head = _SplitLMHead(orig_head, abs_proj)
+
+        # Update config vocab size to total (logit dim = V_nl + V_abs + 1)
+        wrapper.model.config.vocab_size = int(wrapper.total_vocab_size.item())
+        wrapper.config.vocab_size = int(wrapper.total_vocab_size.item())
+
+        # Initialise abstract params with orthogonal vectors
+        wrapper._init_abstract_embeddings_orthogonal()
+
+        return wrapper
+
+    # -- properties for convenient external access ----------------------------
+
+    @property
+    def abs_embed(self) -> nn.Embedding:
+        """The abstract embedding table (lives inside _SplitEmbedding)."""
+        embed_mod = self.model.model.embed_tokens
+        if isinstance(embed_mod, _SplitEmbedding):
+            return embed_mod.abs_embed
+        raise AttributeError("Model does not use _SplitEmbedding")
+
+    @property
+    def abs_proj(self) -> nn.Linear:
+        """The abstract projection head (lives inside _SplitLMHead)."""
+        head_mod = self.model.lm_head
+        if isinstance(head_mod, _SplitLMHead):
+            return head_mod.abs_proj
+        raise AttributeError("Model does not use _SplitLMHead")
+
+    @property
+    def has_separate_abs_params(self) -> bool:
+        return True
+
+    # -- init -----------------------------------------------------------------
+
+    @torch.no_grad()
+    def _init_abstract_embeddings_orthogonal(self):
+        """Initialise ``abs_embed`` and ``abs_proj`` with orthogonal vectors
+        scaled to match the norm of the base NL embeddings."""
+        base_vocab = int(self.vocab_sizes[0].item())
+        abs_embed_w = self.abs_embed.weight
+        abs_proj_w = self.abs_proj.weight
+        n_abs = abs_embed_w.shape[0]
+        hidden = abs_embed_w.shape[1]
+
+        # Measure scale from NL embeddings
+        nl_embed_w = self.model.model.embed_tokens.nl_embed.weight
+        base_norm = nl_embed_w[:base_vocab].norm(dim=1).mean().item()
+
+        # Orthogonal init for abs_embed
+        ortho_e = torch.empty(max(n_abs, hidden), hidden, device=abs_embed_w.device)
+        nn.init.orthogonal_(ortho_e)
+        abs_embed_w.copy_(ortho_e[:n_abs] * base_norm)
+
+        # Orthogonal init for abs_proj (independent from abs_embed)
+        ortho_p = torch.empty(max(n_abs, hidden), hidden, device=abs_proj_w.device)
+        nn.init.orthogonal_(ortho_p)
+        abs_proj_w.copy_(ortho_p[:n_abs] * base_norm)

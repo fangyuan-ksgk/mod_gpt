@@ -61,16 +61,27 @@ class SoRLTrainerv6(SoRLTrainerv3):
         m = self.raw_model
         nl_v = m.vocab_sizes[0]
         abs_v = m.vocab_sizes[1]
-        abs_proj = torch.diag(torch.cat([torch.tensor([0.0]), torch.ones(abs_v - 1)]))
-        with torch.no_grad():
-            w = m.model.lm_head.weight
-            w.data[nl_v:] = 0
-            w.data[nl_v:, -abs_v:] = abs_proj.to(w.device, w.dtype)
         nv = int(nl_v.item())
-        def _hook(grad):
-            g = grad.clone(); g[nv:, :] = 0.0; return g
-        self._lm_head_hook = w.register_hook(_hook)
-        self._log(f"Self-routing [diagonal]: lm_head[{nv}:] = diagonal & frozen")
+        diag = torch.diag(torch.cat([torch.tensor([0.0]), torch.ones(abs_v - 1)]))
+
+        if m.has_separate_abs_params:
+            # V2: write to the separate abs_proj, freeze it entirely
+            with torch.no_grad():
+                w = m.abs_proj.weight
+                w.data.zero_()
+                w.data[:, -int(abs_v.item()):] = diag.to(w.device, w.dtype)
+            self._lm_head_hook = w.register_hook(lambda g: torch.zeros_like(g))
+            self._log(f"Self-routing [diagonal, V2]: abs_proj frozen")
+        else:
+            # V1: write to expanded lm_head rows
+            with torch.no_grad():
+                w = m.model.lm_head.weight
+                w.data[nv:] = 0
+                w.data[nv:, -int(abs_v.item()):] = diag.to(w.device, w.dtype)
+            def _hook(grad):
+                g = grad.clone(); g[nv:, :] = 0.0; return g
+            self._lm_head_hook = w.register_hook(_hook)
+            self._log(f"Self-routing [diagonal]: lm_head[{nv}:] = diagonal & frozen")
 
     def _setup_similar_magnitude_routing(self):
         """Similar-magnitude routing: select V hidden dims with most uniform
@@ -87,12 +98,13 @@ class SoRLTrainerv6(SoRLTrainerv3):
         nv = int(nl_v.item())
         n_abs = int(abs_v.item())  # includes placeholder at index 0
 
-        with torch.no_grad():
-            w = m.model.lm_head.weight
-            base_weight = w[:nv].float()  # (nv, d)
+        # Get base NL weight for importance analysis
+        if m.has_separate_abs_params:
+            base_weight = m.model.lm_head.nl_head.weight[:nv].float()
+        else:
+            base_weight = m.model.lm_head.weight[:nv].float()
 
-            # Find the V-1 dims with most uniform importance (exclude placeholder)
-            # n_abs includes placeholder token at position 0, so we need n_abs-1 real dims
+        with torch.no_grad():
             selected_dims, importances, cv = _find_similar_magnitude_dims(
                 base_weight, n_abs - 1)
 
@@ -100,21 +112,32 @@ class SoRLTrainerv6(SoRLTrainerv3):
                       f"importance range=[{importances.min():.4f}, {importances.max():.4f}], "
                       f"CV={cv:.6f}")
 
-            # Zero out all abstract rows
-            w.data[nv:] = 0
+            if m.has_separate_abs_params:
+                # V2: write to the separate abs_proj
+                w = m.abs_proj.weight
+                w.data.zero_()
+                for k in range(1, n_abs):
+                    dim_idx = selected_dims[k - 1].item()
+                    w.data[k, dim_idx] = 1.0
+            else:
+                # V1: write to expanded lm_head rows
+                w = m.model.lm_head.weight
+                w.data[nv:] = 0
+                for k in range(1, n_abs):
+                    dim_idx = selected_dims[k - 1].item()
+                    w.data[nv + k, dim_idx] = 1.0
 
-            # For each abstract token k (1..n_abs-1), set lm_head row to one-hot
-            # pointing at selected_dims[k-1]
-            for k in range(1, n_abs):
-                dim_idx = selected_dims[k - 1].item()
-                w.data[nv + k, dim_idx] = 1.0
-
-        # Freeze abstract rows of lm_head
-        def _hook(grad):
-            g = grad.clone(); g[nv:, :] = 0.0; return g
-        self._lm_head_hook = w.register_hook(_hook)
-        self._log(f"Self-routing [similar_magnitude]: lm_head[{nv}:] = "
-                  f"one-hot permutation & frozen")
+        # Freeze abstract projection
+        if m.has_separate_abs_params:
+            self._lm_head_hook = w.register_hook(lambda g: torch.zeros_like(g))
+            self._log(f"Self-routing [similar_magnitude, V2]: abs_proj = "
+                      f"one-hot permutation & frozen")
+        else:
+            def _hook(grad):
+                g = grad.clone(); g[nv:, :] = 0.0; return g
+            self._lm_head_hook = w.register_hook(_hook)
+            self._log(f"Self-routing [similar_magnitude]: lm_head[{nv}:] = "
+                      f"one-hot permutation & frozen")
 
     @staticmethod
     def _traj_loss_from_logits(logits, data, attn_mask, prompt_len, base_vocab):

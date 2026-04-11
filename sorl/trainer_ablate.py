@@ -527,24 +527,37 @@ class SoRLTrainer:
         if hasattr(self.raw_model, "save_pretrained"):
             self.raw_model.save_pretrained(save_dir)
         # Save abstract embedding rows + loss_fn + optimizer (always small)
-        # Access embed_tokens / lm_head through the HF model inside SorlModelWrapper
-        hf = self.raw_model.model  # Qwen3ForCausalLM (or PeftModel wrapping it)
-        if hasattr(hf.model, "model"):  # LoRA: hf.model is Qwen3ForCausalLM
-            embed_w = hf.model.model.embed_tokens.weight
-            lm_head_w = hf.model.lm_head.weight
-        else:  # non-LoRA: hf is Qwen3ForCausalLM
-            embed_w = hf.model.embed_tokens.weight
-            lm_head_w = hf.lm_head.weight
-
-        torch.save({
-            "step": global_step,
-            "epoch": epoch,
-            "embed_tokens": embed_w.data[base_vocab:].cpu(),
-            "lm_head": lm_head_w.data[base_vocab:].cpu(),
-            "optimizer": optimizer.state_dict(),
-            "loss_fn": self.loss_fn.state_dict(),
-            "config": self.config.__dict__,
-        }, os.path.join(save_dir, "abs_embeddings.pt"))
+        if self.raw_model.has_separate_abs_params:
+            # V2: abs_embed and abs_proj are standalone nn.Module children
+            abs_data = {
+                "step": global_step,
+                "epoch": epoch,
+                "embed_tokens": self.raw_model.abs_embed.weight.data.cpu(),
+                "lm_head": self.raw_model.abs_proj.weight.data.cpu(),
+                "separate_abs_params": True,
+                "optimizer": optimizer.state_dict(),
+                "loss_fn": self.loss_fn.state_dict(),
+                "config": self.config.__dict__,
+            }
+        else:
+            # V1: abstract rows live inside expanded embed_tokens / lm_head
+            hf = self.raw_model.model  # Qwen3ForCausalLM (or PeftModel wrapping it)
+            if hasattr(hf.model, "model"):  # LoRA: hf.model is Qwen3ForCausalLM
+                embed_w = hf.model.model.embed_tokens.weight
+                lm_head_w = hf.model.lm_head.weight
+            else:  # non-LoRA: hf is Qwen3ForCausalLM
+                embed_w = hf.model.embed_tokens.weight
+                lm_head_w = hf.lm_head.weight
+            abs_data = {
+                "step": global_step,
+                "epoch": epoch,
+                "embed_tokens": embed_w.data[base_vocab:].cpu(),
+                "lm_head": lm_head_w.data[base_vocab:].cpu(),
+                "optimizer": optimizer.state_dict(),
+                "loss_fn": self.loss_fn.state_dict(),
+                "config": self.config.__dict__,
+            }
+        torch.save(abs_data, os.path.join(save_dir, "abs_embeddings.pt"))
         self._log(f"Saved: {save_dir}")
 
     # ------------------------------------------------------------------

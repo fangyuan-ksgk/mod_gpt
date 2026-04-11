@@ -23,7 +23,7 @@ import torch.nn.functional as F
 from safetensors.torch import load_file as load_safetensors
 from transformers import AutoTokenizer
 
-from sorl.sorl_wrapper import SorlModelWrapper, left_pad_and_mask
+from sorl.sorl_wrapper import SorlModelWrapper, SorlModelWrapperV2, left_pad_and_mask
 from sorl.trainer_ablate import (SoRLTrainer, SoRLTrainerv2, SoRLTrainerv3, SoRLTrainerv4, SoRLTrainerv5,
                                 SoRLConfig)
 from sorl.selfroute import SoRLTrainerv6, SoRLTrainerv7
@@ -203,6 +203,8 @@ def parse_args():
                    help="Phase-1 steps: train only abstract emb/lm_head rows, freeze everything else")
     p.add_argument("--untie_embeddings", action="store_true",
                    help="Untie lm_head from embed_tokens so abstract rows train independently (Qwen3 default: tied)")
+    p.add_argument("--separate_abs_params", action="store_true",
+                   help="Use SorlModelWrapperV2: separate abs_embed/abs_proj (decoupled from NL embed/lm_head tying)")
 
     args = p.parse_args()
     if args.max_length is None:
@@ -559,11 +561,14 @@ def main():
 
     # ---- Model ----
     log(f"Loading model: {args.model_name}")
-    model = SorlModelWrapper.from_pretrained(
+    WrapperCls = SorlModelWrapperV2 if args.separate_abs_params else SorlModelWrapper
+    model = WrapperCls.from_pretrained(
         args.model_name,
         abstract_vocab_size_list=[args.abstract_vocab_size],
         untie_embeddings=args.untie_embeddings,
     )
+    if args.separate_abs_params:
+        log(f"Using SorlModelWrapperV2 (separate abs_embed/abs_proj)")
     tokenizer = AutoTokenizer.from_pretrained(args.model_name)
     if tokenizer.pad_token_id is None:
         tokenizer.pad_token_id = tokenizer.eos_token_id
