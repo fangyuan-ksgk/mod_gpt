@@ -100,7 +100,9 @@ class SoRLTrainerv6(SoRLTrainerv3):
 
         # Get base NL weight for importance analysis
         if m.has_separate_abs_params:
-            base_weight = m.model.lm_head.nl_head.weight[:nv].float()
+            from sorl.sorl_wrapper import _SplitLMHead
+            split_head = next(mod for mod in m.modules() if isinstance(mod, _SplitLMHead))
+            base_weight = split_head.nl_head.weight[:nv].float()
         else:
             base_weight = m.model.lm_head.weight[:nv].float()
 

@@ -760,17 +760,17 @@ class SorlModelWrapperV2(SorlModelWrapper):
     @property
     def abs_embed(self) -> nn.Embedding:
         """The abstract embedding table (lives inside _SplitEmbedding)."""
-        embed_mod = self.model.model.embed_tokens
-        if isinstance(embed_mod, _SplitEmbedding):
-            return embed_mod.abs_embed
+        for mod in self.modules():
+            if isinstance(mod, _SplitEmbedding):
+                return mod.abs_embed
         raise AttributeError("Model does not use _SplitEmbedding")
 
     @property
     def abs_proj(self) -> nn.Linear:
         """The abstract projection head (lives inside _SplitLMHead)."""
-        head_mod = self.model.lm_head
-        if isinstance(head_mod, _SplitLMHead):
-            return head_mod.abs_proj
+        for mod in self.modules():
+            if isinstance(mod, _SplitLMHead):
+                return mod.abs_proj
         raise AttributeError("Model does not use _SplitLMHead")
 
     @property
@@ -790,7 +790,8 @@ class SorlModelWrapperV2(SorlModelWrapper):
         hidden = abs_embed_w.shape[1]
 
         # Measure scale from NL embeddings
-        nl_embed_w = self.model.model.embed_tokens.nl_embed.weight
+        split_embed = next(m for m in self.modules() if isinstance(m, _SplitEmbedding))
+        nl_embed_w = split_embed.nl_embed.weight
         base_norm = nl_embed_w[:base_vocab].norm(dim=1).mean().item()
 
         # Orthogonal init for abs_embed (compute in fp32, cast to param dtype)

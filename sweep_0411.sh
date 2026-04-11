@@ -137,181 +137,43 @@ run_bg() {
 
 
 # =============================================================================
-# Ablation: {Qwen3-4B, Qwen3-1.7B} × {GSM8K, SciQA}
-# Base:  v7, similar_magnitude, LoRA, prefix_K=4, max_iter=2, emb_lr_mult=1.0
-# Sweep (1): V ∈ {128 (ref), 256, 1024}          (emb_lr fixed at 1.0)
-# Sweep (2): emb_lr_mult ∈ {1.0 (ref), 5.0, 10.0} (V fixed at 128)
-# 5 run per (model × dataset)  ×  4 combos  =  20 total runs
-# 4 GPUs, 4 experiments per batch, 5 batches
+# Vocab sweep: V ∈ {32, 256, 1024}
+# Models: Qwen3-1.7B, Llama-1B, Llama-3B (no LoRA) | Qwen3-4B (LoRA r=16)
+# Datasets: gsm8k, scienceqa, arc, mmlu, commonsenseqa, openbookqa, hotpotqa, aqua, boolq
+# Config: v7, similar_magnitude, pfx=8, K=8, mi=2, emb_lr=1.0, ep=1
+# 4 models × 9 datasets × 3 V = 108 experiments, 27 batches of 4
 # =============================================================================
 
-LORA="--use_lora --lora_rank 16 --lora_alpha 32"
-BASE="--use_v7 --abs_routing_mode similar_magnitude \
-  --prefix_abs --abs_prefix_max 4 --K 4 \
-  --max_iterations 2 --eval_K 4 $LORA"
+LORA_4B="--use_lora --lora_rank 16 --lora_alpha 32"
+V7="--use_v7 --abs_routing_mode similar_magnitude \
+  --prefix_abs --abs_prefix_max 8 --K 8 \
+  --max_iterations 2 --eval_K 8 --emb_lr_mult 1.0"
 
-echo "=== v7 LoRA Ablation === $(date)"
+MODELS=("$M17" "$ML1" "$ML3" "$M4B")
+MTAGS=("q17b" "l1b" "l3b" "q4b")
+DATASETS=("$DS_GSM" "$DS_SCI" "$DS_ARC" "$DS_MMLU" "$DS_CSQA" "$DS_OBQA" "$DS_HPQA" "$DS_AQUA" "$DS_BOOLQ")
+DTAGS=("gsm" "sci" "arc" "mmlu" "csqa" "obqa" "hpqa" "aqua" "boolq")
+VOCABS=(32 256 1024)
 
-# # ── Batch 1: 4B × GSM8K ───────────────────────────────────────────────────────
-# echo "Batch 1: Qwen3-4B × GSM8K  [ref | v256 | v1024 | emb5]"
-# run_bg "q4b_gsm_ref"   $M4B $DS_GSM $BASE --abstract_vocab_size 128  --emb_lr_mult 1.0  --eval_batch_size 8
-# run_bg "q4b_gsm_v256"  $M4B $DS_GSM $BASE --abstract_vocab_size 128  --emb_lr_mult 20.0  --eval_batch_size 8
-# run_bg "q4b_gsm_v1024" $M4B $DS_GSM $BASE --abstract_vocab_size 128 --emb_lr_mult 100.0  --eval_batch_size 8
-# run_bg "q4b_gsm_emb5"  $M4B $DS_GSM $BASE --abstract_vocab_size 128  --emb_lr_mult 5.0  --eval_batch_size 8
-# wait
+echo "=== Vocab sweep: 4 models × 9 datasets × 3 V === $(date)"
 
-# # ── Batch 2: 4B × GSM8K (emb10) + 4B × SciQA (ref, v256, v1024) ─────────────
-# echo "Batch 2: 4B GSM emb10 + 4B SciQA [ref | v256 | v1024]"
-# run_bg "q4b_gsm_emb10" $M4B $DS_GSM $BASE --abstract_vocab_size 128  --emb_lr_mult 10.0 --eval_batch_size 8
-# run_bg "q4b_sci_ref"   $M4B $DS_SCI $BASE --abstract_vocab_size 128  --emb_lr_mult 1.0  --eval_batch_size 8
-# run_bg "q4b_sci_v256"  $M4B $DS_SCI $BASE --abstract_vocab_size 256  --emb_lr_mult 1.0  --eval_batch_size 8
-# run_bg "q4b_sci_v1024" $M4B $DS_SCI $BASE --abstract_vocab_size 1024 --emb_lr_mult 1.0  --eval_batch_size 8
-# wait
-
-# # ── Batch 3: 4B × SciQA (emb5, emb10) + 1.7B × GSM8K (ref, v256) ────────────
-# echo "Batch 3: 4B SciQA [emb5 | emb10] + 1.7B GSM8K [ref | v256]"
-# run_bg "q4b_sci_emb5"   $M4B $DS_SCI $BASE --abstract_vocab_size 128  --emb_lr_mult 5.0  --eval_batch_size 8
-# run_bg "q4b_sci_emb10"  $M4B $DS_SCI $BASE --abstract_vocab_size 128  --emb_lr_mult 10.0 --eval_batch_size 8
-# run_bg "q17b_gsm_ref"   $M17 $DS_GSM $BASE --abstract_vocab_size 128  --emb_lr_mult 1.0  --eval_batch_size 8
-# run_bg "q17b_gsm_v256"  $M17 $DS_GSM $BASE --abstract_vocab_size 128  --emb_lr_mult 50.0  --eval_batch_size 8
-# wait
-
-# # ── Batch 4: 1.7B × GSM8K (v1024, emb5, emb10) + 1.7B × SciQA (ref) ─────────
-# echo "Batch 4: 1.7B GSM8K [v1024 | emb5 | emb10] + 1.7B SciQA [ref]"
-# run_bg "q17b_gsm_v1024" $M17 $DS_GSM $BASE --abstract_vocab_size 1024 --emb_lr_mult 1.0  --eval_batch_size 8
-# run_bg "q17b_gsm_emb5"  $M17 $DS_GSM $BASE --abstract_vocab_size 128  --emb_lr_mult 5.0  --eval_batch_size 8
-# run_bg "q17b_gsm_emb10" $M17 $DS_GSM $BASE --abstract_vocab_size 128  --emb_lr_mult 10.0 --eval_batch_size 8
-# run_bg "q17b_sci_ref"   $M17 $DS_SCI $BASE --abstract_vocab_size 128  --emb_lr_mult 1.0  --eval_batch_size 8
-# wait
-
-# # ── Batch 5: 1.7B × SciQA (v256, v1024, emb5, emb10) ────────────────────────
-# echo "Batch 5: 1.7B SciQA [v256 | v1024 | emb5 | emb10]"
-# run_bg "q17b_sci_v256"  $M17 $DS_SCI $BASE --abstract_vocab_size 128  --emb_lr_mult 50.0  --eval_batch_size 8
-# run_bg "q17b_sci_v1024" $M17 $DS_SCI $BASE --abstract_vocab_size 1024 --emb_lr_mult 1.0  --eval_batch_size 8
-# run_bg "q17b_sci_emb5"  $M17 $DS_SCI $BASE --abstract_vocab_size 128  --emb_lr_mult 5.0  --eval_batch_size 8
-# run_bg "q17b_sci_emb10" $M17 $DS_SCI $BASE --abstract_vocab_size 128  --emb_lr_mult 10.0 --eval_batch_size 8
-# wait
-
-# # ── Batch A: 1.7B × {ARC, MMLU, HotpotQA} + 1B × ARC ────────────────────────
-# echo "Batch A: Qwen3-1.7B × {ARC, MMLU, HotpotQA}  +  Llama-1B × ARC"
-# run_bg "q17b_arc"  $M17 $DS_ARC  $BASE --abstract_vocab_size 128 --emb_lr_mult 1.0 --eval_batch_size 8
-# run_bg "q17b_mmlu" $M17 $DS_MMLU $BASE --abstract_vocab_size 128 --emb_lr_mult 1.0 --eval_batch_size 8
-# run_bg "q17b_hpqa" $M17 $DS_HPQA $BASE --abstract_vocab_size 128 --emb_lr_mult 1.0 --eval_batch_size 8
-# run_bg "l1b_arc"   $ML1 $DS_ARC  $BASE --abstract_vocab_size 128 --emb_lr_mult 1.0 --eval_batch_size 8
-# wait
-
-# echo "Batch A: Qwen3-1.7B × {ARC, MMLU, HotpotQA}  +  Llama-1B × ARC"
-# run_bg "q17b_arc"  $M17 $DS_ARC  $BASE --abstract_vocab_size 256 --emb_lr_mult 1.0 --eval_batch_size 8
-# run_bg "q17b_mmlu" $M17 $DS_MMLU $BASE --abstract_vocab_size 256 --emb_lr_mult 1.0 --eval_batch_size 8
-# run_bg "q17b_hpqa" $M17 $DS_HPQA $BASE --abstract_vocab_size 256 --emb_lr_mult 1.0 --eval_batch_size 8
-# run_bg "l1b_arc"   $ML1 $DS_ARC  $BASE --abstract_vocab_size 256 --emb_lr_mult 1.0 --eval_batch_size 8
-# wait
-
-# echo "Batch A: Qwen3-1.7B × {ARC, MMLU, HotpotQA}  +  Llama-1B × ARC"
-# run_bg "q17b_arc"  $M17 $DS_ARC  $BASE --abstract_vocab_size 256 --emb_lr_mult 10.0 --eval_batch_size 8
-# run_bg "q17b_mmlu" $M17 $DS_MMLU $BASE --abstract_vocab_size 256 --emb_lr_mult 10.0 --eval_batch_size 8
-# run_bg "q17b_hpqa" $M17 $DS_HPQA $BASE --abstract_vocab_size 256 --emb_lr_mult 10.0 --eval_batch_size 8
-# run_bg "l1b_arc"   $ML1 $DS_ARC  $BASE --abstract_vocab_size 256 --emb_lr_mult 10.0 --eval_batch_size 8
-# wait
-
-
-# # ── Batch B: 1B × {MMLU, HotpotQA} ──────────────────────────────────────────
-# echo "Batch B: Llama-1B × {MMLU, HotpotQA}"
-# run_bg "l1b_mmlu" $ML1 $DS_MMLU $BASE --abstract_vocab_size 128 --emb_lr_mult 1.0 --eval_batch_size 8
-# run_bg "l1b_hpqa" $ML1 $DS_HPQA $BASE --abstract_vocab_size 256 --emb_lr_mult 1.0 --eval_batch_size 8
-# run_bg "l1b_mmlu" $ML1 $DS_MMLU $BASE --abstract_vocab_size 256 --emb_lr_mult 1.0 --eval_batch_size 8
-# run_bg "l1b_hpqa" $ML1 $DS_HPQA $BASE --abstract_vocab_size 256 --emb_lr_mult 1.0 --eval_batch_size 8
-# wait
-
-# # ── Batch B: 1B × {MMLU, HotpotQA} ──────────────────────────────────────────
-# echo "Batch B: Llama-1B × {MMLU, HotpotQA}"
-# run_bg "l1b_mmlu" $ML1 $DS_MMLU $BASE --abstract_vocab_size 128 --emb_lr_mult 1.0 --eval_batch_size 8
-# run_bg "l1b_hpqa" $ML1 $DS_HPQA $BASE --abstract_vocab_size 256 --emb_lr_mult 1.0 --eval_batch_size 8
-# run_bg "l1b_mmlu" $ML1 $DS_MMLU $BASE --abstract_vocab_size 256 --emb_lr_mult 10.0 --eval_batch_size 8
-# run_bg "l1b_hpqa" $ML1 $DS_HPQA $BASE --abstract_vocab_size 256 --emb_lr_mult 10.0 --eval_batch_size 8
-# wait
-
-
-# =============================================================================
-# v7 SoRL sweep | LoRA, ep=1, baseline config (V=128, pfx=4, iter=2, emb_lr=1.0)
-# scienceQA : {q4b, q17b, l1b, l3b}
-# mmlu/hotpotqa/aqua/obookqa/boolq/csqa : all 5 models  {q06, q17b, l1b, l3b, q4b}
-# =============================================================================
-
-SORL="$BASE --abstract_vocab_size 128 --emb_lr_mult 1.0"
-
-echo "=== v7 SoRL Sweep === $(date)"
-
-# ── ScienceQA ─────────────────────────────────────────────────────────────────
-echo "SciQA SoRL × {q4b, q17b, l1b, l3b}"
-run_bg "sci_sorl_q4b"  $M4B $DS_SCI $SORL --eval_batch_size 8
-run_bg "sci_sorl_q17b" $M17 $DS_SCI $SORL --eval_batch_size 8
-run_bg "sci_sorl_l1b"  $ML1 $DS_SCI $SORL --eval_batch_size 8
-run_bg "sci_sorl_l3b"  $ML3 $DS_SCI $SORL --eval_batch_size 8
-wait
-
-# ── MMLU ──────────────────────────────────────────────────────────────────────
-echo "MMLU SoRL × {q06, q17b, l1b, l3b}"
-run_bg "mmlu_sorl_q06"  $M06 $DS_MMLU $SORL --eval_batch_size 8
-run_bg "mmlu_sorl_q17b" $M17 $DS_MMLU $SORL --eval_batch_size 8
-run_bg "mmlu_sorl_l1b"  $ML1 $DS_MMLU $SORL --eval_batch_size 8
-run_bg "mmlu_sorl_l3b"  $ML3 $DS_MMLU $SORL --eval_batch_size 8
-wait
-run_bg "mmlu_sorl_q4b"  $M4B $DS_MMLU $SORL --eval_batch_size 8
-wait
-
-# ── HotpotQA ──────────────────────────────────────────────────────────────────
-echo "HotpotQA SoRL × {q06, q17b, l1b, l3b}"
-run_bg "hpqa_sorl_q06"  $M06 $DS_HPQA $SORL --eval_batch_size 8
-run_bg "hpqa_sorl_q17b" $M17 $DS_HPQA $SORL --eval_batch_size 8
-run_bg "hpqa_sorl_l1b"  $ML1 $DS_HPQA $SORL --eval_batch_size 8
-run_bg "hpqa_sorl_l3b"  $ML3 $DS_HPQA $SORL --eval_batch_size 8
-wait
-run_bg "hpqa_sorl_q4b"  $M4B $DS_HPQA $SORL --eval_batch_size 8
-wait
-
-# ── AQuA ──────────────────────────────────────────────────────────────────────
-echo "AQuA SoRL × {q06, q17b, l1b, l3b}"
-run_bg "aqua_sorl_q06"  $M06 $DS_AQUA $SORL --eval_batch_size 8
-run_bg "aqua_sorl_q17b" $M17 $DS_AQUA $SORL --eval_batch_size 8
-run_bg "aqua_sorl_l1b"  $ML1 $DS_AQUA $SORL --eval_batch_size 8
-run_bg "aqua_sorl_l3b"  $ML3 $DS_AQUA $SORL --eval_batch_size 8
-wait
-run_bg "aqua_sorl_q4b"  $M4B $DS_AQUA $SORL --eval_batch_size 8
-wait
-
-# ── OpenBookQA ────────────────────────────────────────────────────────────────
-echo "ObookQA SoRL × {q06, q17b, l1b, l3b}"
-run_bg "obqa_sorl_q06"  $M06 $DS_OBQA $SORL --eval_batch_size 8
-run_bg "obqa_sorl_q17b" $M17 $DS_OBQA $SORL --eval_batch_size 8
-run_bg "obqa_sorl_l1b"  $ML1 $DS_OBQA $SORL --eval_batch_size 8
-run_bg "obqa_sorl_l3b"  $ML3 $DS_OBQA $SORL --eval_batch_size 8
-wait
-run_bg "obqa_sorl_q4b"  $M4B $DS_OBQA $SORL --eval_batch_size 8
-wait
-
-# ── BoolQ ─────────────────────────────────────────────────────────────────────
-echo "BoolQ SoRL × {q06, q17b, l1b, l3b}"
-run_bg "boolq_sorl_q06"  $M06 $DS_BOOLQ $SORL --eval_batch_size 8
-run_bg "boolq_sorl_q17b" $M17 $DS_BOOLQ $SORL --eval_batch_size 8
-run_bg "boolq_sorl_l1b"  $ML1 $DS_BOOLQ $SORL --eval_batch_size 8
-run_bg "boolq_sorl_l3b"  $ML3 $DS_BOOLQ $SORL --eval_batch_size 8
-wait
-run_bg "boolq_sorl_q4b"  $M4B $DS_BOOLQ $SORL --eval_batch_size 8
-wait
-
-# ── CommonsenseQA ─────────────────────────────────────────────────────────────
-echo "CSQA SoRL × {q06, q17b, l1b, l3b}"
-run_bg "csqa_sorl_q06"  $M06 $DS_CSQA $SORL --eval_batch_size 8
-run_bg "csqa_sorl_q17b" $M17 $DS_CSQA $SORL --eval_batch_size 8
-run_bg "csqa_sorl_l1b"  $ML1 $DS_CSQA $SORL --eval_batch_size 8
-run_bg "csqa_sorl_l3b"  $ML3 $DS_CSQA $SORL --eval_batch_size 8
-wait
-run_bg "csqa_sorl_q4b"  $M4B $DS_CSQA $SORL --eval_batch_size 8
-wait
-
+for v in "${VOCABS[@]}"; do
+  for di in "${!DATASETS[@]}"; do
+    ds=${DATASETS[$di]}
+    dt=${DTAGS[$di]}
+    echo "── V=$v × $dt ──"
+    for mi in "${!MODELS[@]}"; do
+      m=${MODELS[$mi]}
+      mt=${MTAGS[$mi]}
+      if [ "$mt" = "q4b" ]; then
+        run_bg "${mt}_${dt}_v${v}" "$m" "$ds" $V7 --abstract_vocab_size $v $LORA_4B --eval_batch_size 8
+      else
+        run_bg "${mt}_${dt}_v${v}" "$m" "$ds" $V7 --abstract_vocab_size $v --eval_batch_size 32
+      fi
+    done
+    wait
+  done
+done
 
 echo ""
-echo "=== All 20 experiments complete. $(date) ==="
-
-
+echo "=== All 108 experiments complete. $(date) ==="

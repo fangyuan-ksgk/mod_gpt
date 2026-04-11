@@ -702,7 +702,9 @@ class SoRLTrainer:
         if self.raw_model.has_separate_abs_params:
             # V2: write to standalone abs_proj (row 0 = placeholder, 1..V = real)
             abs_proj_w = self.raw_model.abs_proj.weight
-            nl_head_w = self.raw_model.model.lm_head.nl_head.weight
+            from sorl.sorl_wrapper import _SplitLMHead
+            split_head = next(m for m in self.raw_model.modules() if isinstance(m, _SplitLMHead))
+            nl_head_w = split_head.nl_head.weight
             base_norm = nl_head_w[:base_vocab].norm(dim=1).mean().item()
             with torch.no_grad():
                 centroids = vq.codebook.weight.data.to(abs_proj_w.device)
