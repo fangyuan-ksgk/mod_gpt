@@ -316,12 +316,29 @@ SoRL should show sharper next-token predictions.
 predictions at abstraction positions. Do abstractions encode "lookahead" info about
 answer digits better than trajectory positions?
 
-**Linear probing**: train linear classifier on hidden states to predict Quirke subtask
-labels (SA/SC/SS/UC/US etc.).
-- SoRL: probe at abstraction token positions
-- Baseline: probe at ALL positions, take the best
-- Key comparison: linear probe on SoRL vs MLP probe on baseline. If SoRL linearizes
-  the representation, a linear probe on SoRL should match an MLP on baseline.
+**Linear probing**: train linear classifier on hidden states at abstraction (SoRL) vs
+trajectory (baseline) positions. Key comparison: linear probe on SoRL vs MLP on baseline.
+
+**Probing targets** — subtask labels (SA/SC/SS etc.) are too easy; baseline likely has
+clean linear representations of these already. Use harder, more granular targets:
+
+1. **Resolved cascade state SV[n] / MV[n]** — the resolved carry/borrow at each position,
+   which depends on the full chain to the right. Baseline must compute this implicitly
+   through attention; SoRL may encode it directly. This is the hardest thing the model
+   computes and the best differentiator.
+
+2. **Future answer digits** — at position i, probe for answer digit at i+2, i+3. Tests
+   lookahead depth. SoRL's recursion may encode this earlier than baseline's attention.
+
+3. **Cascade length remaining** — at each position, how many more positions does the
+   current cascade extend? Non-local information that baseline must propagate step by step.
+
+4. **Operand identity after operator** — after seeing +/-, how well can you recover
+   specific input digits? Tests whether abstraction tokens compress operand info.
+
+Target (1) is the strongest — it's exactly what abstraction tokens should encode if
+they're useful, and it requires multi-position reasoning that baseline can only do
+through attention chains.
 
 **Baseline control is essential**: without comparing against baseline hidden states at
 the same positions, a reviewer can argue the baseline encodes the same info implicitly.
