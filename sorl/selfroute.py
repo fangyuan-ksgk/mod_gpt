@@ -4,7 +4,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.distributed as dist
-from sorl.trainer_ablate import SoRLTrainerv3, _DDPForwardProxy, _drop_nl_prefix_m_set, _get_lr
+from sorl.trainer_ablate import (SoRLTrainerv3, _DDPForwardProxy, _drop_nl_prefix_m_set, _get_lr,
+                                _build_param_groups, _update_lr_schedule)
 from sorl.sorl_trainer import infer_insert_mask, expand_prompt_len, insert_tokens_with_padding, insert_prefix_abs
 
 
@@ -292,17 +293,10 @@ class SoRLTrainerv7(SoRLTrainerv6):
         # total_steps counts data batches (not per-iteration sub-steps)
         total_steps = len(dataloader) * cfg.num_epochs
 
-        # Optimizer
-        emb_params, other_params = [], []
-        for name, p in self.model.named_parameters():
-            if "embed_tokens" in name or "lm_head" in name:
-                emb_params.append(p)
-            else:
-                other_params.append(p)
-        optimizer = torch.optim.AdamW([
-            {"params": other_params, "lr": cfg.lr},
-            {"params": emb_params, "lr": cfg.lr * cfg.emb_lr_mult},
-        ], weight_decay=cfg.weight_decay)
+        # Optimizer — V2-aware param groups (abstract-only boost)
+        param_groups, self._n_opt_groups = _build_param_groups(
+            self.model, cfg.lr, cfg.emb_lr_mult, cfg.weight_decay)
+        optimizer = torch.optim.AdamW(param_groups, weight_decay=cfg.weight_decay)
 
         start_epoch, start_step = 0, 0
         if resume_from and os.path.exists(resume_from):
@@ -351,8 +345,7 @@ class SoRLTrainerv7(SoRLTrainerv6):
                 iter_losses = []
                 accumulate = cfg.v7_accumulate_iters  # outer-loop mode
 
-                optimizer.param_groups[0]["lr"] = lr
-                optimizer.param_groups[1]["lr"] = lr * cfg.emb_lr_mult
+                _update_lr_schedule(optimizer, lr, cfg.emb_lr_mult, self._n_opt_groups)
                 if accumulate:
                     optimizer.zero_grad(set_to_none=True)
 

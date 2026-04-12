@@ -240,17 +240,21 @@ MIX_DS="gsm8k,scienceqa,arc,mmlu,commonsenseqa"
 # Stage 3: V1 vs V2 (separate_abs_params) — single-dataset fine-tuning
 #
 # Qwen3-0.6B, 7 datasets, V=128, mi=2, emb_lr=1.0, 1 ep
-# V1: abstract rows in expanded embed_tokens/lm_head (tied with NL)
-# V2: standalone abs_embed + abs_proj (decoupled from NL tying)
-# 7 datasets × 2 variants = 14 experiments, batches of 4
+# V1:  abstract rows in expanded embed_tokens/lm_head (tied with NL)
+# V2:  standalone abs_embed + abs_proj (decoupled from NL tying)
+# v7o: V1 + outer-loop (accumulate grads across iterations, step once)
+# 7 datasets × 3 variants = 21 experiments, batches of 2 on GPU 2,3
 # ============================================================================
 
 V2_DS=("gsm8k" "scienceqa" "arc" "mmlu" "commonsenseqa" "openbookqa" "boolq")
 V2_DT=("gsm" "sci" "arc" "mmlu" "csqa" "obqa" "boolq")
 
+# Variants: v1 = V1 wrapper, v2 = V2 wrapper, v7o = V1 + outer-loop grad accum
+VARIANTS=("v1" "v2" "v7o")
+
 echo ""
 echo "============================================================"
-echo "Stage 3: V1 vs V2 ablation — 7 ds × 2 = 14 exps"
+echo "Stage 3: V1 vs V2 vs v7o ablation — 7 ds × 3 = 21 exps"
 echo "============================================================"
 
 V2_IDX=0
@@ -258,7 +262,7 @@ for di in "${!V2_DS[@]}"; do
   ds=${V2_DS[$di]}
   dt=${V2_DT[$di]}
 
-  for variant in v1 v2; do
+  for variant in "${VARIANTS[@]}"; do
     V2_IDX=$((V2_IDX + 1))
     gpu=$(( (V2_IDX - 1) % 2 + 2 ))   # cycle through GPU 2,3 only
     port=$((BASE_PORT + 30 + V2_IDX))
@@ -267,6 +271,8 @@ for di in "${!V2_DS[@]}"; do
     EXTRA=""
     if [ "$variant" = "v2" ]; then
       EXTRA="--separate_abs_params"
+    elif [ "$variant" = "v7o" ]; then
+      EXTRA="--v7_outer"
     fi
 
     echo ">>> [GPU ${gpu}] q06/${dt}/${variant}"
@@ -306,5 +312,78 @@ wait
 
 echo ""
 echo "============================================================"
-echo "V1 vs V2 ablation complete."
+echo "V1 vs V2 vs v7o ablation complete."
+echo "============================================================"
+
+# ============================================================================
+# Stage 4: V2 hyperparameter sweep — emb_lr_mult × abs_vocab × prefix_K
+#
+# Now that V2 decouples abstract params from NL tying, emb_lr_mult only
+# boosts abs_embed/abs_proj. This may unlock higher multipliers.
+#
+# Qwen3-0.6B, GSM8K only (fast turnaround), 1 ep
+# emb_lr_mult ∈ {1.0, 5.0, 10.0}
+# abs_vocab   ∈ {64, 128, 256}
+# prefix_K    ∈ {4, 8}
+# = 3 × 3 × 2 = 18 experiments, batches of 2 on GPU 2,3
+# ============================================================================
+
+V2S_ELRS=(1.0 5.0 10.0)
+V2S_VS=(64 128 256)
+V2S_KS=(4 8)
+
+echo ""
+echo "============================================================"
+echo "Stage 4: V2 hyperparam sweep — 3 elr × 3 V × 2 K = 18 exps"
+echo "============================================================"
+
+V2S_IDX=0
+for elr in "${V2S_ELRS[@]}"; do
+  for v in "${V2S_VS[@]}"; do
+    for k in "${V2S_KS[@]}"; do
+      V2S_IDX=$((V2S_IDX + 1))
+      gpu=$(( (V2S_IDX - 1) % 2 + 2 ))
+      port=$((BASE_PORT + 50 + V2S_IDX))
+      tag="v2_gsm_elr${elr}_v${v}_k${k}"
+      out="./ckpt/cpt_${TIMESTAMP}/${tag}"
+
+      echo ">>> [GPU ${gpu}] ${tag}"
+
+      CUDA_VISIBLE_DEVICES=$gpu torchrun \
+        --nproc_per_node=1 \
+        --master_addr=$MASTER_ADDR \
+        --master_port=$port \
+        train_sorl_post.py \
+        --model_name $M06 \
+        --dataset gsm8k \
+        --num_epochs 1 \
+        --lr $LR \
+        --warmup_steps $WARMUP_STEPS \
+        --batch_size $BATCH_SIZE \
+        --gradient_accumulation_steps $GRAD_ACCUM \
+        --use_v7 \
+        --abs_routing_mode similar_magnitude \
+        --prefix_abs --abs_prefix_max $k \
+        --K $k --eval_K $k \
+        --max_iterations 2 \
+        --emb_lr_mult $elr \
+        --abstract_vocab_size $v \
+        --separate_abs_params \
+        --eval_every 99999 \
+        --save_every 99999 \
+        --eval_samples $EVAL_SAMPLES \
+        --eval_batch_size $EVAL_BATCH_SIZE \
+        --num_log_samples $NUM_LOG_SAMPLES \
+        --log_every 10 \
+        --output_dir $out &
+
+      if (( V2S_IDX % 2 == 0 )); then wait; fi
+    done
+  done
+done
+wait
+
+echo ""
+echo "============================================================"
+echo "V2 hyperparam sweep complete."
 echo "============================================================"

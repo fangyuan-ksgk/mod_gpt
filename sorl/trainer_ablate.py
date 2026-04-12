@@ -32,6 +32,68 @@ from data.pt_dataset import collate_fn as default_collate_fn
 
 
 # ---------------------------------------------------------------------------
+# Param-group builder (V1 vs V2 aware)
+# ---------------------------------------------------------------------------
+def _build_param_groups(model, lr, emb_lr_mult, weight_decay):
+    """Build optimizer param groups, handling V1 vs V2 abstract params.
+
+    V1: 2 groups — {other, lr} + {embed_tokens+lm_head, lr*emb_lr_mult}
+        emb_lr_mult boosts both NL and abstract rows (they share the matrix).
+
+    V2: 3 groups — {other, lr} + {NL embed/head, lr} + {abs_embed+abs_proj, lr*emb_lr_mult}
+        emb_lr_mult only boosts abstract params; NL embed/head stay at base lr.
+    """
+    has_v2 = getattr(model, 'has_separate_abs_params', False)
+    # Unwrap DDP / proxy if needed
+    raw = model.module if hasattr(model, 'module') else model
+    if hasattr(raw, 'has_separate_abs_params'):
+        has_v2 = raw.has_separate_abs_params
+
+    if has_v2:
+        abs_params, nl_emb_params, other_params = [], [], []
+        for name, p in model.named_parameters():
+            if not p.requires_grad:
+                continue
+            if "abs_embed" in name or "abs_proj" in name:
+                abs_params.append(p)
+            elif "embed_tokens" in name or "lm_head" in name:
+                nl_emb_params.append(p)
+            else:
+                other_params.append(p)
+        groups = [
+            {"params": other_params, "lr": lr},
+            {"params": nl_emb_params, "lr": lr},          # NL embed/head: base lr
+            {"params": abs_params, "lr": lr * emb_lr_mult},  # abstract: boosted lr
+        ]
+        n_groups = 3
+    else:
+        emb_params, other_params = [], []
+        for name, p in model.named_parameters():
+            if not p.requires_grad:
+                continue
+            if "embed_tokens" in name or "lm_head" in name:
+                emb_params.append(p)
+            else:
+                other_params.append(p)
+        groups = [
+            {"params": other_params, "lr": lr},
+            {"params": emb_params, "lr": lr * emb_lr_mult},
+        ]
+        n_groups = 2
+    return groups, n_groups
+
+
+def _update_lr_schedule(optimizer, lr, emb_lr_mult, n_groups):
+    """Update LR for all param groups, respecting V1 (2-group) vs V2 (3-group) layout."""
+    optimizer.param_groups[0]["lr"] = lr  # other params
+    if n_groups == 3:
+        optimizer.param_groups[1]["lr"] = lr              # NL embed/head
+        optimizer.param_groups[2]["lr"] = lr * emb_lr_mult  # abstract
+    else:
+        optimizer.param_groups[1]["lr"] = lr * emb_lr_mult  # V1: all embed/head
+
+
+# ---------------------------------------------------------------------------
 # DDP proxy (commented out - can be re-enabled for testing)
 # ---------------------------------------------------------------------------
 class _DDPForwardProxy:
@@ -786,17 +848,10 @@ class SoRLTrainer:
         dataloader = self._make_dataloader(self.train_dataset, shuffle=True)
         total_steps = len(dataloader) * cfg.num_epochs // cfg.gradient_accumulation_steps
 
-        # Optimizer — separate param group for embed/lm_head (higher LR)
-        emb_params, other_params = [], []
-        for name, p in self.model.named_parameters():
-            if "embed_tokens" in name or "lm_head" in name:
-                emb_params.append(p)
-            else:
-                other_params.append(p)
-        optimizer = torch.optim.AdamW([
-            {"params": other_params, "lr": cfg.lr},
-            {"params": emb_params, "lr": cfg.lr * cfg.emb_lr_mult},
-        ], weight_decay=cfg.weight_decay)
+        # Optimizer — V2-aware param groups (abstract-only boost)
+        param_groups, self._n_opt_groups = _build_param_groups(
+            self.model, cfg.lr, cfg.emb_lr_mult, cfg.weight_decay)
+        optimizer = torch.optim.AdamW(param_groups, weight_decay=cfg.weight_decay)
 
         start_epoch, start_step = 0, 0
         if resume_from and os.path.exists(resume_from):
@@ -830,10 +885,9 @@ class SoRLTrainer:
                 if effective_step < start_step * cfg.gradient_accumulation_steps:
                     continue
 
-                # LR schedule (respect emb_lr_mult for embed/lm_head group)
+                # LR schedule (V2-aware)
                 lr = _get_lr(global_step, total_steps, cfg.warmup_steps, cfg.cooldown_frac, cfg.lr)
-                optimizer.param_groups[0]["lr"] = lr
-                optimizer.param_groups[1]["lr"] = lr * cfg.emb_lr_mult
+                _update_lr_schedule(optimizer, lr, cfg.emb_lr_mult, self._n_opt_groups)
 
                 # Forward + loss
                 step_out = self._training_step(batch)
@@ -1018,16 +1072,10 @@ class SoRLTrainerv2(SoRLTrainer):
         dataloader = self._make_dataloader(self.train_dataset, shuffle=True)
         total_steps = len(dataloader) * cfg.num_epochs // cfg.gradient_accumulation_steps
 
-        emb_params, other_params = [], []
-        for name, p in self.model.named_parameters():
-            if "embed_tokens" in name or "lm_head" in name:
-                emb_params.append(p)
-            else:
-                other_params.append(p)
-        optimizer = torch.optim.AdamW([
-            {"params": other_params, "lr": cfg.lr},
-            {"params": emb_params, "lr": cfg.lr * cfg.emb_lr_mult},
-        ], weight_decay=cfg.weight_decay)
+        # Optimizer — V2-aware param groups (abstract-only boost)
+        param_groups, self._n_opt_groups = _build_param_groups(
+            self.model, cfg.lr, cfg.emb_lr_mult, cfg.weight_decay)
+        optimizer = torch.optim.AdamW(param_groups, weight_decay=cfg.weight_decay)
 
         start_epoch, start_step = 0, 0
         if resume_from and os.path.exists(resume_from):
@@ -1062,8 +1110,7 @@ class SoRLTrainerv2(SoRLTrainer):
                     continue
 
                 lr = _get_lr(global_step, total_steps, cfg.warmup_steps, cfg.cooldown_frac, cfg.lr)
-                optimizer.param_groups[0]["lr"] = lr
-                optimizer.param_groups[1]["lr"] = lr * cfg.emb_lr_mult
+                _update_lr_schedule(optimizer, lr, cfg.emb_lr_mult, self._n_opt_groups)
 
                 step_out = self._training_step(batch)
                 loss = step_out["loss"] / cfg.gradient_accumulation_steps
@@ -1423,17 +1470,10 @@ class SoRLTrainerv3(SoRLTrainer):
         dataloader = self._make_dataloader(self.train_dataset, shuffle=True)
         total_steps = len(dataloader) * cfg.num_epochs // cfg.gradient_accumulation_steps
 
-        # Optimizer — separate param group for embed/lm_head (higher LR)
-        emb_params, other_params = [], []
-        for name, p in self.model.named_parameters():
-            if "embed_tokens" in name or "lm_head" in name:
-                emb_params.append(p)
-            else:
-                other_params.append(p)
-        optimizer = torch.optim.AdamW([
-            {"params": other_params, "lr": cfg.lr},
-            {"params": emb_params, "lr": cfg.lr * cfg.emb_lr_mult},
-        ], weight_decay=cfg.weight_decay)
+        # Optimizer — V2-aware param groups (abstract-only boost)
+        param_groups, self._n_opt_groups = _build_param_groups(
+            self.model, cfg.lr, cfg.emb_lr_mult, cfg.weight_decay)
+        optimizer = torch.optim.AdamW(param_groups, weight_decay=cfg.weight_decay)
 
         start_epoch, start_step = 0, 0
         if resume_from and os.path.exists(resume_from):
@@ -1476,8 +1516,7 @@ class SoRLTrainerv3(SoRLTrainer):
                     continue
 
                 lr = _get_lr(global_step, total_steps, cfg.warmup_steps, cfg.cooldown_frac, cfg.lr)
-                optimizer.param_groups[0]["lr"] = lr
-                optimizer.param_groups[1]["lr"] = lr * cfg.emb_lr_mult
+                _update_lr_schedule(optimizer, lr, cfg.emb_lr_mult, self._n_opt_groups)
 
                 step_out = self._training_step(batch)
                 loss = step_out["loss"] / cfg.gradient_accumulation_steps
@@ -1614,17 +1653,10 @@ class SoRLTrainerv4(SoRLTrainerv3):
         # every gradient_accumulation_steps passes → 1 optimizer step
         total_steps = len(dataloader) * cfg.num_epochs * n_inner // cfg.gradient_accumulation_steps
 
-        # Optimizer — separate param group for embed/lm_head (higher LR)
-        emb_params, other_params = [], []
-        for name, p in self.model.named_parameters():
-            if "embed_tokens" in name or "lm_head" in name:
-                emb_params.append(p)
-            else:
-                other_params.append(p)
-        optimizer = torch.optim.AdamW([
-            {"params": other_params, "lr": cfg.lr},
-            {"params": emb_params, "lr": cfg.lr * cfg.emb_lr_mult},
-        ], weight_decay=cfg.weight_decay)
+        # Optimizer — V2-aware param groups (abstract-only boost)
+        param_groups, self._n_opt_groups = _build_param_groups(
+            self.model, cfg.lr, cfg.emb_lr_mult, cfg.weight_decay)
+        optimizer = torch.optim.AdamW(param_groups, weight_decay=cfg.weight_decay)
 
         start_epoch, start_step = 0, 0
         if resume_from and os.path.exists(resume_from):
@@ -1706,8 +1738,7 @@ class SoRLTrainerv4(SoRLTrainerv3):
                     # LR schedule
                     lr = _get_lr(global_step, total_steps, cfg.warmup_steps,
                                  cfg.cooldown_frac, cfg.lr)
-                    optimizer.param_groups[0]["lr"] = lr
-                    optimizer.param_groups[1]["lr"] = lr * cfg.emb_lr_mult
+                    _update_lr_schedule(optimizer, lr, cfg.emb_lr_mult, self._n_opt_groups)
 
                     # Dynamic corruption (fresh each inner step)
                     corrupted_data = corrupt_abstract_tokens(
@@ -2011,16 +2042,10 @@ class SoRLTrainerv5(SoRLTrainerv3):
         dataloader = self._make_dataloader(self.train_dataset, shuffle=True)
         total_steps = len(dataloader) * cfg.num_epochs // cfg.gradient_accumulation_steps
 
-        emb_params, other_params = [], []
-        for name, p in self.model.named_parameters():
-            if "embed_tokens" in name or "lm_head" in name:
-                emb_params.append(p)
-            else:
-                other_params.append(p)
-        optimizer = torch.optim.AdamW([
-            {"params": other_params, "lr": cfg.lr},
-            {"params": emb_params, "lr": cfg.lr * cfg.emb_lr_mult},
-        ], weight_decay=cfg.weight_decay)
+        # Optimizer — V2-aware param groups (abstract-only boost)
+        param_groups, self._n_opt_groups = _build_param_groups(
+            self.model, cfg.lr, cfg.emb_lr_mult, cfg.weight_decay)
+        optimizer = torch.optim.AdamW(param_groups, weight_decay=cfg.weight_decay)
 
         start_epoch, start_step = 0, 0
         if resume_from and os.path.exists(resume_from):
@@ -2055,8 +2080,7 @@ class SoRLTrainerv5(SoRLTrainerv3):
                     continue
 
                 lr = _get_lr(global_step, total_steps, cfg.warmup_steps, cfg.cooldown_frac, cfg.lr)
-                optimizer.param_groups[0]["lr"] = lr
-                optimizer.param_groups[1]["lr"] = lr * cfg.emb_lr_mult
+                _update_lr_schedule(optimizer, lr, cfg.emb_lr_mult, self._n_opt_groups)
 
                 step_out = self._training_step(batch)
                 loss = step_out["loss"] / cfg.gradient_accumulation_steps
@@ -2388,17 +2412,10 @@ class WarmupSFTTrainer:
         if self.centroids is None:
             self._cluster()
 
-        # Optimizer
-        emb_params, other_params = [], []
-        for name, p in self.model.named_parameters():
-            if "embed_tokens" in name or "lm_head" in name:
-                emb_params.append(p)
-            else:
-                other_params.append(p)
-        optimizer = torch.optim.AdamW([
-            {"params": other_params, "lr": cfg.lr},
-            {"params": emb_params, "lr": cfg.lr * cfg.emb_lr_mult},
-        ], weight_decay=cfg.weight_decay)
+        # Optimizer — V2-aware param groups (abstract-only boost)
+        param_groups, self._n_opt_groups = _build_param_groups(
+            self.model, cfg.lr, cfg.emb_lr_mult, cfg.weight_decay)
+        optimizer = torch.optim.AdamW(param_groups, weight_decay=cfg.weight_decay)
 
         dl = DataLoader(self.train_dataset, batch_size=cfg.batch_size,
                         shuffle=True, collate_fn=self.collate_fn, num_workers=0)
