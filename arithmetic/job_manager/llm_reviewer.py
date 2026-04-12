@@ -1,20 +1,33 @@
 """
 LLM code reviewer and multi-model debater with pluggable backends.
 
-Backends: OpenAI (Responses API), Gemini (Interactions API) — both stateful.
-Reviewer: stateful code review via any backend.
-Debater: multi-model debate with critique rounds.
+Backends (all stateful):
+  - OpenAI  (Responses API, server-side via previous_response_id)
+  - Gemini  (Interactions API, server-side via previousInteractionId)
+  - Claude  (Messages API, client-side history + prompt caching at 10% cost)
+
+Reviewer: stateful code review via any backend. Supports full file review,
+          diff review (CodeRabbit-style), and staged changes review.
+Debater:  multi-model debate with critique rounds across all 3 backends.
 
 Usage:
-    from arithmetic.job_manager.llm_reviewer import Reviewer, Debater, OpenAIBackend, GeminiBackend
+    from arithmetic.job_manager.llm_reviewer import (
+        Reviewer, Debater, OpenAIBackend, GeminiBackend, ClaudeBackend,
+    )
 
-    # Single-backend review
+    # Full file review
     reviewer = Reviewer(backend=OpenAIBackend())
-    feedback = reviewer.review(files={"train.py": code}, prompt="Check for bugs")
+    reviewer.review(files={"train.py": code}, review_type="all")
 
-    # Multi-model debate
-    debater = Debater()  # uses both OpenAI + Gemini by default
-    result = debater.debate("Is our fixed-length AR eval sound?", context="...")
+    # Diff review (CodeRabbit-style)
+    reviewer.review_diff(diff=git_diff, review_type="implementation")
+
+    # Auto-review staged git changes (pre-commit)
+    reviewer.review_staged()
+
+    # Multi-model debate (OpenAI + Gemini + Claude)
+    debater = Debater()
+    result = debater.debate("Is our eval sound?", context="...")
     print(result.summary)
 """
 import json
