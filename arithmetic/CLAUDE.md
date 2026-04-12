@@ -4,6 +4,7 @@ Results placeholders in `log/arithmetic.md` use `<!-- PLACEHOLDER: description -
 
 **Start here:** Read [`MEMORY.md`](MEMORY.md) first for current session state and what to do next.
 Also check [`TODO.md`](TODO.md) for the task backlog.
+**Before launching any sweep:** Run [`AUDIT.md`](AUDIT.md) checklist. Every past queue restart was caused by skipping this.
 
 ## Job Safety Rules
 

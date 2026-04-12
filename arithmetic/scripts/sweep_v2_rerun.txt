@@ -1,14 +1,30 @@
-# RERUN: underperformers with fixed LR + more epochs
-# 50K SoRL: was still climbing at epoch 10, now 20 epochs + 8e-5 LR
-# Undersized SoRL: was still climbing, now 20 epochs + abs30 K=1/K=4 variants
+# RERUN: fix LR mismatch + more epochs for underperformers
+# All standard model (510d) jobs rerun at 8e-5 (Fangyuan's default)
+# Baselines included to keep LR matched with SoRL at each data size
+# Undersized SoRL: 20 epochs (was still climbing at 10) + abs30 variants
 
 #PRIORITY:HIGH
 
+# ── Baselines at 8e-5 (match SoRL LR) ──
+python -m arithmetic.train --mode baseline --ops add_sub --dataset_size 10000 --num_epochs 20 --push_to_hub --output_dir ckpt/sweep/add_sub_baseline_10K
+python -m arithmetic.train --mode baseline --ops add_sub --dataset_size 25000 --num_epochs 20 --push_to_hub --output_dir ckpt/sweep/add_sub_baseline_25K
+python -m arithmetic.train --mode baseline --ops add_sub --dataset_size 50000 --num_epochs 20 --push_to_hub --output_dir ckpt/sweep/add_sub_baseline_50K
+
+# ── 1L3H510d baselines at 8e-5 ──
+python -m arithmetic.train --mode baseline --ops add_sub --dataset_size 25000 --num_epochs 20 --n_layer 1 --n_head 3 --n_embd 510 --push_to_hub --output_dir ckpt/sweep/as_baseline_25K_1L3H510d
+python -m arithmetic.train --mode baseline --ops add_sub --dataset_size 100000 --num_epochs 20 --n_layer 1 --n_head 3 --n_embd 510 --push_to_hub --output_dir ckpt/sweep/as_baseline_100K_1L3H510d
+
 # ── 50K SoRL reruns (8e-5, 20 epochs) ──
-python -m arithmetic.train --mode sorl --ops add_sub --dataset_size 50000 --abs_vocab 10 --K 1 --num_epochs 20 --lr 8e-5 --push_to_hub --output_dir ckpt/sweep/as_sorl_abs10_K1_50K
-python -m arithmetic.train --mode sorl --ops add_sub --dataset_size 50000 --abs_vocab 10 --K 4 --num_epochs 20 --lr 8e-5 --push_to_hub --output_dir ckpt/sweep/as_sorl_abs10_K4_50K
-python -m arithmetic.train --mode sorl --ops add_sub --dataset_size 50000 --abs_vocab 30 --K 1 --num_epochs 20 --lr 8e-5 --push_to_hub --output_dir ckpt/sweep/as_sorl_abs30_K1_50K
-python -m arithmetic.train --mode sorl --ops add_sub --dataset_size 50000 --abs_vocab 30 --K 4 --num_epochs 20 --lr 8e-5 --push_to_hub --output_dir ckpt/sweep/as_sorl_abs30_K4_50K
+python -m arithmetic.train --mode sorl --ops add_sub --dataset_size 50000 --abs_vocab 10 --K 1 --num_epochs 20 --push_to_hub --output_dir ckpt/sweep/as_sorl_abs10_K1_50K
+python -m arithmetic.train --mode sorl --ops add_sub --dataset_size 50000 --abs_vocab 10 --K 4 --num_epochs 20 --push_to_hub --output_dir ckpt/sweep/as_sorl_abs10_K4_50K
+python -m arithmetic.train --mode sorl --ops add_sub --dataset_size 50000 --abs_vocab 30 --K 1 --num_epochs 20 --push_to_hub --output_dir ckpt/sweep/as_sorl_abs30_K1_50K
+python -m arithmetic.train --mode sorl --ops add_sub --dataset_size 50000 --abs_vocab 30 --K 4 --num_epochs 20 --push_to_hub --output_dir ckpt/sweep/as_sorl_abs30_K4_50K
+
+# ── 10K/25K SoRL reruns (8e-5, keep 10 epochs — small data doesn't need 20) ──
+python -m arithmetic.train --mode sorl --ops add_sub --dataset_size 10000 --abs_vocab 10 --K 1 --num_epochs 10 --push_to_hub --output_dir ckpt/sweep/as_sorl_abs10_K1_10K
+python -m arithmetic.train --mode sorl --ops add_sub --dataset_size 10000 --abs_vocab 10 --K 4 --num_epochs 10 --push_to_hub --output_dir ckpt/sweep/as_sorl_abs10_K4_10K
+python -m arithmetic.train --mode sorl --ops add_sub --dataset_size 25000 --abs_vocab 10 --K 1 --num_epochs 10 --push_to_hub --output_dir ckpt/sweep/as_sorl_abs10_K1_25K
+python -m arithmetic.train --mode sorl --ops add_sub --dataset_size 25000 --abs_vocab 10 --K 4 --num_epochs 10 --push_to_hub --output_dir ckpt/sweep/as_sorl_abs10_K4_25K
 
 # ── Undersized SoRL reruns (20 epochs, abs10 K=1) ──
 python -m arithmetic.train --mode sorl --ops add_sub --dataset_size 100000 --abs_vocab 10 --K 1 --num_epochs 20 --n_layer 2 --n_head 1 --n_embd 128 --push_to_hub --output_dir ckpt/sweep/as_sorl_abs10_K1_100K_2L1H128d
