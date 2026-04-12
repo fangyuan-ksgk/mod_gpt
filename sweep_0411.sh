@@ -157,23 +157,63 @@ VOCABS=(32 256 1024)
 
 echo "=== Vocab sweep: 4 models × 9 datasets × 3 V === $(date)"
 
-for v in "${VOCABS[@]}"; do
-  for di in "${!DATASETS[@]}"; do
-    ds=${DATASETS[$di]}
-    dt=${DTAGS[$di]}
-    echo "── V=$v × $dt ──"
-    for mi in "${!MODELS[@]}"; do
-      m=${MODELS[$mi]}
-      mt=${MTAGS[$mi]}
-      if [ "$mt" = "q4b" ]; then
-        run_bg "${mt}_${dt}_v${v}" "$m" "$ds" $V7 --abstract_vocab_size $v $LORA_4B --eval_batch_size 8
-      else
-        run_bg "${mt}_${dt}_v${v}" "$m" "$ds" $V7 --abstract_vocab_size $v --eval_batch_size 32
-      fi
+# for v in "${VOCABS[@]}"; do
+#   for di in "${!DATASETS[@]}"; do
+#     ds=${DATASETS[$di]}
+#     dt=${DTAGS[$di]}
+#     echo "── V=$v × $dt ──"
+#     for mi in "${!MODELS[@]}"; do
+#       m=${MODELS[$mi]}
+#       mt=${MTAGS[$mi]}
+#       if [ "$mt" = "q4b" ]; then
+#         run_bg "${mt}_${dt}_v${v}" "$m" "$ds" $V7 --abstract_vocab_size $v $LORA_4B --eval_batch_size 8
+#       else
+#         run_bg "${mt}_${dt}_v${v}" "$m" "$ds" $V7 --abstract_vocab_size $v --eval_batch_size 32
+#       fi
+#     done
+#     wait
+#   done
+# done
+
+#     On Qwen3-0.6B, we can quickly test on these datasets: ScienceQA, ARC, MMLU, CSQA, ObQA, AQuA, BoolQ
+    #  - tune emb_lr_mult to 5.0 & 10.0 | tune V between (128 & 1024) | also try max_iter=1
+
+# =============================================================================
+# Qwen3-0.6B ablation: emb_lr_mult × V × max_iter across 7 datasets
+# emb_lr_mult ∈ {5.0, 10.0}, V ∈ {128, 1024}, max_iter ∈ {1, 2}
+# 7 datasets × 2 × 2 × 2 = 56 experiments, batches of 4
+# =============================================================================
+
+ABL_DS=("$DS_SCI" "$DS_ARC" "$DS_MMLU" "$DS_CSQA" "$DS_OBQA" "$DS_AQUA" "$DS_BOOLQ")
+ABL_DT=("sci" "arc" "mmlu" "csqa" "obqa" "aqua" "boolq")
+ABL_ELRS=(5.0 10.0)
+ABL_VS=(128 1024)
+ABL_MIS=(1 2)
+
+echo "=== 0.6B ablation: 2 emb_lr × 2 V × 2 mi × 7 ds = 56 exps === $(date)"
+
+cnt=0
+for elr in "${ABL_ELRS[@]}"; do
+  for v in "${ABL_VS[@]}"; do
+    for mi in "${ABL_MIS[@]}"; do
+      echo "── emb_lr=${elr} V=${v} mi=${mi} ──"
+      for di in "${!ABL_DS[@]}"; do
+        ds=${ABL_DS[$di]}
+        dt=${ABL_DT[$di]}
+        run_bg "q06_${dt}_elr${elr}_v${v}_mi${mi}" "$M06" "$ds" \
+          --use_v7 --abs_routing_mode similar_magnitude \
+          --prefix_abs --abs_prefix_max 8 --K 8 \
+          --max_iterations $mi --eval_K 8 \
+          --emb_lr_mult $elr \
+          --abstract_vocab_size $v \
+          --eval_batch_size 256
+        cnt=$((cnt + 1))
+        if (( cnt % N_GPUS == 0 )); then wait; fi
+      done
     done
-    wait
   done
 done
+wait
 
 echo ""
-echo "=== All 108 experiments complete. $(date) ==="
+echo "=== All 56 experiments complete. $(date) ==="
