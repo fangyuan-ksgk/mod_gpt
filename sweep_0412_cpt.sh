@@ -124,7 +124,111 @@ wait
 
 echo ""
 echo "============================================================"
-echo "Both runs complete. Results in ./ckpt/cpt_${TIMESTAMP}/"
+echo "Stage 1 (CPT) complete."
 echo "  SoRL: ${SORL_DIR}/train.log"
 echo "  SFT:  ${SFT_DIR}/train.log"
+echo "============================================================"
+
+# ============================================================================
+# Stage 2: Fine-tune SoRL on each single dataset from the CPT checkpoint
+#
+# The CPT SoRL checkpoint is at ${SORL_DIR}/final/
+# We fine-tune for 1 epoch on each dataset, evaluating on that dataset.
+# 4 GPUs => 4 datasets in parallel, then the 5th.
+# ============================================================================
+
+SORL_CPT_CKPT="${SORL_DIR}/final"
+FT_EPOCHS=1
+DATASETS=("gsm8k" "scienceqa" "arc" "mmlu" "commonsenseqa")
+
+echo ""
+echo "============================================================"
+echo "Stage 2: Fine-tune SoRL from CPT checkpoint on each dataset"
+echo "  Checkpoint: ${SORL_CPT_CKPT}"
+echo "  Datasets: ${DATASETS[*]}"
+echo "  Epochs: ${FT_EPOCHS}"
+echo "============================================================"
+
+# Batch 1: 4 datasets in parallel (GPU 0-3)
+for i in 0 1 2 3; do
+  DS=${DATASETS[$i]}
+  FT_DIR="./ckpt/cpt_${TIMESTAMP}/sorl_v7_q06_ft_${DS}"
+  echo ">>> [GPU ${i}] SoRL v7 fine-tune: ${DS}"
+
+  CUDA_VISIBLE_DEVICES=$i torchrun \
+    --nproc_per_node=1 \
+    --master_addr=$MASTER_ADDR \
+    --master_port=$((BASE_PORT + 10 + i)) \
+    train_sorl_post.py \
+    --model_name $M06 \
+    --resume_ckpt $SORL_CPT_CKPT \
+    --dataset $DS \
+    --num_epochs $FT_EPOCHS \
+    --lr $LR \
+    --warmup_steps 20 \
+    --batch_size $BATCH_SIZE \
+    --gradient_accumulation_steps $GRAD_ACCUM \
+    --use_v7 \
+    --abs_routing_mode similar_magnitude \
+    --prefix_abs --abs_prefix_max 8 \
+    --K 8 --eval_K 8 \
+    --max_iterations 2 \
+    --emb_lr_mult 10.0 \
+    --abstract_vocab_size 128 \
+    --eval_every 99999 \
+    --save_every 99999 \
+    --eval_samples $EVAL_SAMPLES \
+    --eval_batch_size $EVAL_BATCH_SIZE \
+    --num_log_samples $NUM_LOG_SAMPLES \
+    --log_every 10 \
+    --output_dir $FT_DIR &
+done
+
+wait
+
+# Batch 2: 5th dataset (GPU 0)
+DS=${DATASETS[4]}
+FT_DIR="./ckpt/cpt_${TIMESTAMP}/sorl_v7_q06_ft_${DS}"
+echo ">>> [GPU 0] SoRL v7 fine-tune: ${DS}"
+
+CUDA_VISIBLE_DEVICES=0 torchrun \
+  --nproc_per_node=1 \
+  --master_addr=$MASTER_ADDR \
+  --master_port=$((BASE_PORT + 20)) \
+  train_sorl_post.py \
+  --model_name $M06 \
+  --resume_ckpt $SORL_CPT_CKPT \
+  --dataset $DS \
+  --num_epochs $FT_EPOCHS \
+  --lr $LR \
+  --warmup_steps 20 \
+  --batch_size $BATCH_SIZE \
+  --gradient_accumulation_steps $GRAD_ACCUM \
+  --use_v7 \
+  --abs_routing_mode similar_magnitude \
+  --prefix_abs --abs_prefix_max 8 \
+  --K 8 --eval_K 8 \
+  --max_iterations 2 \
+  --emb_lr_mult 10.0 \
+  --abstract_vocab_size 128 \
+  --eval_every 99999 \
+  --save_every 99999 \
+  --eval_samples $EVAL_SAMPLES \
+  --eval_batch_size $EVAL_BATCH_SIZE \
+  --num_log_samples $NUM_LOG_SAMPLES \
+  --log_every 10 \
+  --output_dir $FT_DIR
+
+echo ""
+echo "============================================================"
+echo "All stages complete. Results in ./ckpt/cpt_${TIMESTAMP}/"
+echo ""
+echo "  Stage 1 (CPT):"
+echo "    SoRL: ${SORL_DIR}/train.log"
+echo "    SFT:  ${SFT_DIR}/train.log"
+echo ""
+echo "  Stage 2 (fine-tune from SoRL CPT):"
+for DS in "${DATASETS[@]}"; do
+  echo "    ${DS}: ./ckpt/cpt_${TIMESTAMP}/sorl_v7_q06_ft_${DS}/train.log"
+done
 echo "============================================================"

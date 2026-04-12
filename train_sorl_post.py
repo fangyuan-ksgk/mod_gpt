@@ -203,6 +203,9 @@ def parse_args():
                    help="Untie lm_head from embed_tokens so abstract rows train independently (Qwen3 default: tied)")
     p.add_argument("--separate_abs_params", action="store_true",
                    help="Use SorlModelWrapperV2: separate abs_embed/abs_proj (decoupled from NL embed/lm_head tying)")
+    p.add_argument("--resume_ckpt", type=str, default=None,
+                   help="Path to a SoRL checkpoint dir (from CPT phase) to resume from. "
+                        "Loads model.safetensors + abs_embeddings.pt + optional LoRA adapter.")
 
     args = p.parse_args()
     # Resolve dataset list and eval dataset
@@ -578,13 +581,22 @@ def main():
     log(f"DDP: {ddp} | World size: {os.environ.get('WORLD_SIZE', 1)}")
 
     # ---- Model ----
-    log(f"Loading model: {args.model_name}")
-    WrapperCls = SorlModelWrapperV2 if args.separate_abs_params else SorlModelWrapper
-    model = WrapperCls.from_pretrained(
-        args.model_name,
-        abstract_vocab_size_list=[args.abstract_vocab_size],
-        untie_embeddings=args.untie_embeddings,
-    )
+    if args.resume_ckpt:
+        log(f"Resuming from SoRL checkpoint: {args.resume_ckpt}")
+        model, tokenizer, _base_vocab = load_checkpoint(
+            args.model_name, args.abstract_vocab_size, args.resume_ckpt, device,
+            untie_embeddings=args.untie_embeddings,
+            separate_abs_params=args.separate_abs_params,
+        )
+        model.train()
+    else:
+        log(f"Loading model: {args.model_name}")
+        WrapperCls = SorlModelWrapperV2 if args.separate_abs_params else SorlModelWrapper
+        model = WrapperCls.from_pretrained(
+            args.model_name,
+            abstract_vocab_size_list=[args.abstract_vocab_size],
+            untie_embeddings=args.untie_embeddings,
+        )
     if args.separate_abs_params:
         log(f"Using SorlModelWrapperV2 (separate abs_embed/abs_proj)")
     tokenizer = AutoTokenizer.from_pretrained(args.model_name)
