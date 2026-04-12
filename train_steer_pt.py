@@ -117,13 +117,14 @@ def parse_args():
     p.add_argument("--scale", type=float, default=0.1, help="Steering vector scaling factor")
     p.add_argument("--inject_layers", type=str, default=None,
                    help="Comma-separated layer indices to inject steering (default: middle layer)")
-    p.add_argument("--per_layer_emb", action="store_true",
-                   help="Separate steering embeddings per inject layer (v7 only)")
     p.add_argument("--read_layer", type=int, default=None,
                    help="Layer index to read codes from (v7 only, default: last layer)")
     p.add_argument("--code_position", type=str, default="last",
                    choices=["first", "last"],
                    help="Which position in each chunk determines the code (v7 only)")
+    p.add_argument("--routing_mode", type=str, default="diagonal",
+                   choices=["diagonal", "similar_magnitude"],
+                   help="Routing mode for V7: diagonal (last C_SIZE dims) or similar_magnitude (select dims with uniform importance)")
 
     # VQ-VAE config (mode=vq only)
     p.add_argument("--vqvae_ckpt", type=str, default=None)
@@ -497,14 +498,14 @@ def main():
         wrapper = StackedAbstractionWrapperV7(
             model, C_SIZE=args.C_SIZE, D_MODEL=D_MODEL,
             inject_layers=inject_layers, scale=args.scale, L=args.L,
-            per_layer_emb=args.per_layer_emb,
             read_layer=args.read_layer, code_position=args.code_position,
+            routing_mode=args.routing_mode,
         )
 
     log(f"Steering: mode={args.mode} C_SIZE={args.C_SIZE} L={args.L} "
         f"scale={args.scale} layers={wrapper.inject_layers}"
-        + (f" read_layer={wrapper.read_layer} code_pos={args.code_position}"
-           f" per_layer_emb={args.per_layer_emb}" if args.mode == 'v7' else ''))
+        + (f" read_layer={wrapper.read_layer} code_pos={args.code_position} routing={args.routing_mode}"
+           if args.mode == 'v7' else ''))
 
     # ---- Freeze model if requested ----
     if args.freeze_model:

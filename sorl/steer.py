@@ -13,6 +13,40 @@ purely in representation space.
 import os
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
+
+
+def _find_similar_magnitude_dims(lm_weight, V):
+    """Find V hidden dims whose lm_head column importance is most uniform.
+
+    Importance of dim j = ||lm_head.weight[:, j]||_2 (L2 norm of column j).
+    We sort dims by importance (descending), slide a V-wide window, and
+    pick the window with minimal coefficient of variation (CV = std / mean).
+    This selects dims with the most *relatively* uniform importance, so that
+    each abstract token's routing dimension competes on a level playing field.
+
+    Returns: (selected_dim_indices, importances, cv)
+    """
+    with torch.no_grad():
+        dim_importance = lm_weight.float().norm(dim=0)  # (d,)
+        sorted_vals, sorted_idxs = dim_importance.sort(descending=True)
+
+        best_cv = float('inf')
+        best_start = 0
+        for i in range(len(sorted_vals) - V + 1):
+            window = sorted_vals[i : i + V]
+            w_mean = window.mean().item()
+            if w_mean < 1e-9:
+                continue
+            w_std = window.std().item()
+            cv = w_std / w_mean
+            if cv < best_cv:
+                best_cv = cv
+                best_start = i
+
+        dims = sorted_idxs[best_start : best_start + V]
+        importances = sorted_vals[best_start : best_start + V]
+        return dims, importances, best_cv
 
 
 # ---------------------------------------------------------------------------
@@ -309,22 +343,22 @@ class StackedAbstractionWrapperV7(nn.Module):
     inject_layers – layer indices where steering is applied (pass 2)
     scale         – steering vector magnitude multiplier
     L             – chunk size in tokens
-    per_layer_emb – separate steering embedding per inject layer
     read_layer    – which layer to read codes from (default: last)
     code_position – "first" or "last" position in chunk for routing
+    routing_mode  – "diagonal" (last C_SIZE dims) or "similar_magnitude" (select dims with uniform importance)
     """
 
     def __init__(self, model, C_SIZE, D_MODEL, inject_layers=None,
-                 scale=0.1, L=16, per_layer_emb=False,
-                 read_layer=None, code_position="last"):
+                 scale=0.1, L=16,
+                 read_layer=None, code_position="last", routing_mode="diagonal"):
         super().__init__()
         self.model = model
         self.L = L
         self.scale = scale
         self.C_SIZE = C_SIZE
         self.D_MODEL = D_MODEL
-        self.per_layer_emb = per_layer_emb
         self.code_position = code_position
+        self.routing_mode = routing_mode
 
         n_layers = model.config.num_hidden_layers
         self.read_layer = read_layer if read_layer is not None else n_layers - 1
@@ -333,17 +367,22 @@ class StackedAbstractionWrapperV7(nn.Module):
             inject_layers = [n_layers // 2]
         self.inject_layers = inject_layers
 
-        # Steering embeddings
-        if per_layer_emb:
-            self.steering_emb = nn.ModuleList([
-                nn.Embedding(C_SIZE, D_MODEL) for _ in inject_layers])
-        else:
-            self.steering_emb = nn.Embedding(C_SIZE, D_MODEL)
+        # Select routing dimensions based on mode
+        if routing_mode == "similar_magnitude":
+            lm_weight = model.lm_head.weight
+            self._routing_dims, self._routing_importances, self._routing_cv = \
+                _find_similar_magnitude_dims(lm_weight, C_SIZE)
+            print(f"V7 similar_magnitude routing: selected {C_SIZE} dims, "
+                  f"importance range=[{self._routing_importances.min():.4f}, {self._routing_importances.max():.4f}], "
+                  f"CV={self._routing_cv:.6f}")
+        else:  # diagonal
+            self._routing_dims = None  # use last C_SIZE dims
 
-        # Zero-init all embeddings
-        for p in self.parameters():
-            if p.dim() == 2:
-                nn.init.zeros_(p)
+        # Per-layer steering: one embedding per inject layer
+        self.steering_emb = nn.ModuleList([
+            nn.Embedding(C_SIZE, D_MODEL) for _ in inject_layers])
+        for emb in self.steering_emb:
+            nn.init.zeros_(emb.weight)
 
         # Two-pass state
         self._chunk_codes = None          # (B, S) from read pass
@@ -358,6 +397,15 @@ class StackedAbstractionWrapperV7(nn.Module):
         for hook in self._hooks:
             hook.remove()
         self._hooks = []
+
+        # Clear stale hooks from previous wrapper instances on the same layers
+        target_layers = set([self.read_layer] + list(self.inject_layers))
+        for li in target_layers:
+            layer = self.model.model.layers[li]
+            stale = [k for k, v in layer._forward_hooks.items()
+                     if 'StackedAbstractionWrapperV7' in repr(v)]
+            for k in stale:
+                del layer._forward_hooks[k]
 
         # Read hook — on read_layer (fires in pass 1 only)
         read_mod = self.model.model.layers[self.read_layer]
@@ -378,7 +426,15 @@ class StackedAbstractionWrapperV7(nn.Module):
         hidden = output[0] if isinstance(output, tuple) else output
         B, S, D = hidden.shape
 
-        pos_codes = hidden[..., -self.C_SIZE:].argmax(dim=-1)   # (B, S)
+        # Extract codes from routing dimensions
+        if self.routing_mode == "similar_magnitude":
+            # Use pre-selected dimensions with uniform importance
+            routing_hidden = hidden[..., self._routing_dims]  # (B, S, C_SIZE)
+        else:  # diagonal
+            # Use last C_SIZE dimensions
+            routing_hidden = hidden[..., -self.C_SIZE:]  # (B, S, C_SIZE)
+
+        pos_codes = routing_hidden.argmax(dim=-1)  # (B, S)
 
         n_chunks = S // self.L
         chunk_codes = torch.full((B, S), -1, dtype=torch.long,
@@ -397,15 +453,15 @@ class StackedAbstractionWrapperV7(nn.Module):
         """Inject steering vectors at inject_layers (pass 2 only)."""
         if self._pass != "steer" or self._chunk_codes is None:
             return
-        hidden = output[0] if isinstance(output, tuple) else output
-        rest = output[1:] if isinstance(output, tuple) else None
+        is_tuple = isinstance(output, tuple)
+        hidden = output[0] if is_tuple else output
 
         B, S, D = hidden.shape
         # Guard: skip if shape mismatch (e.g. generation beyond prompt)
         if S != self._chunk_codes.shape[1]:
-            return (hidden,) + rest if rest else hidden
+            return output
 
-        emb = self.steering_emb[hook_idx] if self.per_layer_emb else self.steering_emb
+        emb = self.steering_emb[hook_idx]
 
         mask = self._chunk_codes >= 0
         if mask.any():
@@ -413,7 +469,9 @@ class StackedAbstractionWrapperV7(nn.Module):
             sv = emb(safe) * mask.unsqueeze(-1).float() * self.scale
             hidden = hidden + sv.to(hidden.dtype)
 
-        return (hidden,) + rest if rest else hidden
+        if is_tuple:
+            return (hidden,) + output[1:]
+        return hidden
 
     # ---- forward / generate ----
 
@@ -487,9 +545,10 @@ class StackedAbstractionWrapperV7(nn.Module):
                 'C_SIZE': self.C_SIZE, 'D_MODEL': self.D_MODEL,
                 'inject_layers': self.inject_layers,
                 'scale': self.scale, 'L': self.L,
-                'per_layer_emb': self.per_layer_emb,
                 'read_layer': self.read_layer,
                 'code_position': self.code_position,
+                'routing_mode': self.routing_mode,
+                '_routing_dims': self._routing_dims,
             },
         }, os.path.join(path, 'steer_v7.pt'))
 
