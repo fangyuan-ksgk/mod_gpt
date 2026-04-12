@@ -515,11 +515,11 @@ def main():
     from arithmetic.evaluate import ArithmeticEvaluator
     evaluator = ArithmeticEvaluator(model, tokenizer, device=cfg.device, n_digits=cfg.n_digits)
     K_eval = cfg.K if cfg.mode == "sorl" else None
-    eval_results_sft = evaluator.run(ops=cfg.ops, K=None, n_per_split=50)
+    eval_results_sft = evaluator.run(ops=cfg.ops, K=None, n_per_split=100)
     print(f"\nSFT eval (no abs):")
     evaluator.print_table(eval_results_sft)
     if cfg.mode == "sorl":
-        eval_results_sorl = evaluator.run(ops=cfg.ops, K=cfg.K, n_per_split=50)
+        eval_results_sorl = evaluator.run(ops=cfg.ops, K=cfg.K, n_per_split=100)
         print(f"\nSoRL eval (K={cfg.K}):")
         evaluator.print_table(eval_results_sorl)
     else:
