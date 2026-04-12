@@ -335,6 +335,88 @@ class Reviewer:
 
         return self.backend.send("\n\n".join(parts), max_tokens=max_tokens)
 
+    def review_diff(self, diff: str = None, files_context: dict = None,
+                    prompt: str = "", review_type: str = "all",
+                    max_tokens: int = 3000) -> str:
+        """
+        Review a code diff (like CodeRabbit / Copilot PR review).
+        Focuses on the delta — cheaper and more targeted than full file review.
+
+        Args:
+            diff: git diff string. If None, auto-generates from staged changes.
+            files_context: optional {filename: content} for full files that the diff touches,
+                          so the reviewer can understand surrounding context.
+            prompt: additional instructions.
+            review_type: same as review().
+        """
+        import subprocess
+
+        if diff is None:
+            # Auto-generate from staged changes, fall back to unstaged
+            result = subprocess.run(["git", "diff", "--cached"], capture_output=True, text=True)
+            diff = result.stdout
+            if not diff.strip():
+                result = subprocess.run(["git", "diff"], capture_output=True, text=True)
+                diff = result.stdout
+            if not diff.strip():
+                return "No diff found (nothing staged or modified)."
+
+        parts = []
+        types = (["implementation", "architecture", "scientific"] if review_type == "all"
+                 else ["implementation", "architecture"] if review_type == "both"
+                 else [review_type])
+        for t in types:
+            if t in REVIEW_PROMPTS:
+                parts.append(REVIEW_PROMPTS[t])
+
+        parts.append(
+            "DIFF REVIEW: Focus on the CHANGES below. Flag bugs, logic errors, "
+            "or scientific issues introduced by this diff. Don't comment on "
+            "unchanged code unless a change breaks it. Be concise — one comment "
+            "per issue, reference the diff line."
+        )
+
+        if prompt:
+            parts.append(prompt)
+
+        if files_context:
+            parts.append("\n--- Full file context (for reference) ---")
+            for name, content in files_context.items():
+                parts.append(f"=== {name} ===\n{content}")
+
+        parts.append(f"\n--- Diff ---\n{diff}")
+
+        return self.backend.send("\n\n".join(parts), max_tokens=max_tokens)
+
+    def review_staged(self, prompt: str = "", review_type: str = "implementation",
+                      include_context: bool = True, max_tokens: int = 3000) -> str:
+        """
+        Convenience: review currently staged git changes with file context.
+        Meant to be called before committing.
+        """
+        import subprocess
+
+        result = subprocess.run(["git", "diff", "--cached"], capture_output=True, text=True)
+        diff = result.stdout
+        if not diff.strip():
+            return "Nothing staged."
+
+        files_context = {}
+        if include_context:
+            # Get list of changed files
+            result = subprocess.run(["git", "diff", "--cached", "--name-only"],
+                                    capture_output=True, text=True)
+            for fname in result.stdout.strip().split("\n"):
+                if fname and os.path.exists(fname):
+                    try:
+                        files_context[fname] = open(fname).read()
+                    except Exception:
+                        pass
+
+        return self.review_diff(diff=diff, files_context=files_context,
+                                prompt=prompt, review_type=review_type,
+                                max_tokens=max_tokens)
+
     def reset(self):
         self.backend.reset()
 
