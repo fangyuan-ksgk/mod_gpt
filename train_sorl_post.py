@@ -41,14 +41,12 @@ def parse_args():
     p.add_argument("--model_name", type=str, default="Qwen/Qwen3-0.6B")
     p.add_argument("--abstract_vocab_size", type=int, default=128)
 
-    # Data
+    # Data (comma-separated for mixed training, e.g. "gsm8k,scienceqa,arc")
     p.add_argument("--dataset", type=str, default="gsm8k",
-                   choices=["gsm8k", "math_qa", "arc", "hellaswag",
-                            "winogrande", "boolq", "openbookqa",
-                            "commonsenseqa", "mmlu",
-                            "aqua", "math", "scienceqa",
-                            "hotpotqa",
-                            "humaneval", "mbpp", "livecodebench", "codecontests", "deepmind_code_contests"])
+                   help="Dataset name(s). Comma-separated for mixed training.")
+    p.add_argument("--eval_dataset", type=str, default=None,
+                   help="Dataset(s) for evaluation. Comma-separated to eval on multiple. "
+                        "Default: all datasets in --dataset.")
     max_length_dict = {
         "gsm8k": 512, "math_qa": 512, "math": 512,
         "arc": 256, "hellaswag": 512, "winogrande": 256,
@@ -207,10 +205,18 @@ def parse_args():
                    help="Use SorlModelWrapperV2: separate abs_embed/abs_proj (decoupled from NL embed/lm_head tying)")
 
     args = p.parse_args()
+    # Resolve dataset list and eval dataset
+    args._ds_names = [d.strip() for d in args.dataset.split(',')]
+    if args.eval_dataset is None:
+        args._eval_ds_names = list(args._ds_names)
+    else:
+        args._eval_ds_names = [d.strip() for d in args.eval_dataset.split(',')]
+    args.eval_dataset = args._eval_ds_names[0]  # during-training eval uses first
     if args.max_length is None:
-        args.max_length = max_length_dict[args.dataset]
+        args.max_length = max(max_length_dict.get(d, 512) for d in args._ds_names)
     if args.max_new_tokens is None:
-        args.max_new_tokens = max_new_tokens_dict[args.dataset]
+        args.max_new_tokens = max_new_tokens_dict.get(args.eval_dataset, 256)
+    args._max_new_tokens_dict = max_new_tokens_dict
     return args
 
 
@@ -617,8 +623,13 @@ def main():
     # ---- Datasets ----
     log(f"Loading dataset: {args.dataset} (max_length={args.max_length})")
     train_ds = get_dataset(args.dataset, split="train", tokenizer=tokenizer, max_length=args.max_length)
-    val_ds = get_dataset(args.dataset, split="test", tokenizer=tokenizer, max_length=args.max_length)
-    log(f"Train: {len(train_ds)} | Val: {len(val_ds)}")
+    log(f"Train: {len(train_ds)} samples")
+    if len(args._ds_names) > 1:
+        for i, sub in enumerate(train_ds.sub_datasets):
+            log(f"  {train_ds.names[i]}: {len(sub)}")
+    log(f"Eval dataset: {args.eval_dataset}")
+    val_ds = get_dataset(args.eval_dataset, split="test", tokenizer=tokenizer, max_length=args.max_length)
+    log(f"Val: {len(val_ds)} samples")
 
     # ---- Config ----
     config = SoRLConfig(
@@ -719,10 +730,8 @@ def main():
     # ---- Train ----
     history = trainer.train()
 
-    # ---- Final eval ----
+    # ---- Final eval — evaluate on all eval datasets ----
     if is_master:
-        log("--- Final evaluation (K=None, NL-only) ---")
-        result = trainer.evaluate()
         def _log_result(res, label):
             if not res:
                 return
@@ -735,13 +744,42 @@ def main():
                 log(f"  Inner-monologue: effective_vocab={ms['effective_vocab_size']}, "
                     f"abs_ratio={ms['abs_ratio']:.1%}, top10={ms['top10']}")
 
-        if result:
-            _log_result(result, "K=None")
-        if has_aux or args.use_v6 or args.use_v7 or args.use_v8: # <- so that self-routing run also gets Acc[K] evaluation
-            log(f"--- Final evaluation (K={config.K}, with abstractions) ---")
-            result_k = trainer.evaluate(eval_K=config.K)
-            if result_k:
-                _log_result(result_k, f"K={config.K}")
+        final_results = {}
+        for eval_name in args._eval_ds_names:
+            log(f"\n--- Final evaluation on: {eval_name} ---")
+            eval_ds = get_dataset(eval_name, split="test", tokenizer=tokenizer, max_length=args.max_length)
+            mnt = args._max_new_tokens_dict.get(eval_name, 256)
+            eval_acc_fn = compute_accuracy_fn_factory(
+                tokenizer, mnt, args.num_log_samples, log,
+                eval_batch_size=args.eval_batch_size,
+            )
+            # Swap val_dataset temporarily for this eval
+            old_val = trainer.val_dataset
+            old_acc = trainer.compute_accuracy
+            trainer.val_dataset = eval_ds
+            trainer.compute_accuracy = eval_acc_fn
+
+            log(f"  (K=None, NL-only)")
+            result = trainer.evaluate()
+            if result:
+                _log_result(result, f"{eval_name}/K=None")
+                final_results[f"{eval_name}/NL"] = result['accuracy']
+            if has_aux or args.use_v6 or args.use_v7 or args.use_v8:
+                log(f"  (K={config.K}, with abstractions)")
+                result_k = trainer.evaluate(eval_K=config.K)
+                if result_k:
+                    _log_result(result_k, f"{eval_name}/K={config.K}")
+                    final_results[f"{eval_name}/K={config.K}"] = result_k['accuracy']
+
+            trainer.val_dataset = old_val
+            trainer.compute_accuracy = old_acc
+
+        if final_results:
+            log(f"\n{'='*60}")
+            log(f"  === Final Summary ===")
+            for name, acc in final_results.items():
+                log(f"    {name:30s}: {acc*100:.1f}%")
+            log(f"{'='*60}")
 
         # Save history
         hist_path = os.path.join(args.output_dir, "history.json")

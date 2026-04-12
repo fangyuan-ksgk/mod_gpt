@@ -1393,6 +1393,48 @@ class XLAMDataset(Dataset):
 # Registry
 # =====================================================================
 
+class MixedDataset(Dataset):
+    """Concatenates multiple registered datasets for mixed training.
+
+    Usage:
+        ds = MixedDataset(["gsm8k", "scienceqa", "arc"], split="train",
+                          tokenizer=tok, max_length=512)
+    Evaluation uses the *first* dataset's extract_answer by default.
+    """
+
+    def __init__(self, names, split="train", tokenizer=None, max_length=128):
+        self.sub_datasets = []
+        self.cumulative_sizes = []
+        total = 0
+        for name in names:
+            if name not in DATASET_REGISTRY:
+                raise ValueError(f"Unknown dataset: {name}")
+            ds = DATASET_REGISTRY[name](split=split, tokenizer=tokenizer, max_length=max_length)
+            self.sub_datasets.append(ds)
+            total += len(ds)
+            self.cumulative_sizes.append(total)
+        self.names = list(names)
+        self.tokenizer = tokenizer
+        self.max_length = max_length
+        self._total = total
+
+    def __len__(self):
+        return self._total
+
+    def __getitem__(self, idx):
+        if idx < 0 or idx >= self._total:
+            raise IndexError(idx)
+        for i, cum in enumerate(self.cumulative_sizes):
+            if idx < cum:
+                offset = self.cumulative_sizes[i - 1] if i > 0 else 0
+                return self.sub_datasets[i][idx - offset]
+        raise IndexError(idx)
+
+    @property
+    def extract_answer(self):
+        return self.sub_datasets[0].extract_answer
+
+
 DATASET_REGISTRY = {
     # Answer-only benchmarks
     "gsm8k": GSM8KDataset, # verified
@@ -1424,10 +1466,17 @@ DATASET_REGISTRY = {
 
 
 def get_dataset(name, split="train", tokenizer=None, max_length=128):
-    """Factory: instantiate a registered dataset by name."""
-    if name not in DATASET_REGISTRY:
-        raise ValueError(f"Unknown dataset: {name}. Available: {list(DATASET_REGISTRY.keys())}")
-    return DATASET_REGISTRY[name](split=split, tokenizer=tokenizer, max_length=max_length)
+    """Factory: instantiate a registered dataset by name.
+
+    Supports comma-separated names for mixed training, e.g. "gsm8k,scienceqa,arc".
+    Returns a MixedDataset in that case.
+    """
+    names = [n.strip() for n in name.split(',')]
+    if len(names) > 1:
+        return MixedDataset(names, split=split, tokenizer=tokenizer, max_length=max_length)
+    if names[0] not in DATASET_REGISTRY:
+        raise ValueError(f"Unknown dataset: {names[0]}. Available: {list(DATASET_REGISTRY.keys())}")
+    return DATASET_REGISTRY[names[0]](split=split, tokenizer=tokenizer, max_length=max_length)
 
 
 # =====================================================================

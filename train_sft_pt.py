@@ -95,15 +95,12 @@ def parse_args():
     p.add_argument("--lora_alpha", type=int, default=32, help="LoRA alpha")
     p.add_argument("--lora_dropout", type=float, default=0.05, help="LoRA dropout")
 
-    # Data
+    # Data (comma-separated for mixed training, e.g. "gsm8k,scienceqa,arc")
     p.add_argument("--dataset", type=str, default="gsm8k",
-                   choices=["gsm8k", "math_qa", "arc", "hellaswag",
-                            "winogrande", "boolq", "openbookqa",
-                            "commonsenseqa", "mmlu",
-                            "aqua", "math", "scienceqa",
-                            "hotpotqa",
-                            "mbpp", "humaneval", "livecodebench", "codecontests", "deepmind_code_contests",
-                            "wildifeval", "xlam"])
+                   help="Dataset name(s). Comma-separated for mixed training.")
+    p.add_argument("--eval_dataset", type=str, default=None,
+                   help="Dataset(s) for evaluation. Comma-separated to eval on multiple. "
+                        "Default: all datasets in --dataset.")
     max_length_dict = {"gsm8k": 512, "math_qa": 512, "math": 512, "arc": 256, "hellaswag": 512, "winogrande": 256,
                        "boolq": 1024, "openbookqa": 768, "commonsenseqa": 256, "mmlu": 256,
                        "aqua": 1024, "scienceqa": 512, "hotpotqa": 512,
@@ -112,7 +109,7 @@ def parse_args():
                            "boolq": 32, "openbookqa": 128, "commonsenseqa": 64, "mmlu": 64,
                            "aqua": 768, "scienceqa": 256, "hotpotqa": 64,
                            "mbpp": 256, "humaneval": 256, "livecodebench": 256, "codecontests": 512, "deepmind_code_contests": 1024, "wildifeval": 1024, "xlam": 256}
-    p.add_argument("--max_length", type=int, default=max_length_dict["gsm8k"])
+    p.add_argument("--max_length", type=int, default=None)
 
     # Optimizer
     p.add_argument("--lr", type=float, default=1e-5)
@@ -143,7 +140,19 @@ def parse_args():
     p.add_argument("--eval_batch_size", type=int, default=16,
                    help="Batch size for evaluation generation")
 
-    return p.parse_args()
+    args = p.parse_args()
+    # Parse comma-separated dataset lists
+    args._ds_names = [d.strip() for d in args.dataset.split(',')]
+    if args.eval_dataset is None:
+        args._eval_ds_names = list(args._ds_names)
+    else:
+        args._eval_ds_names = [d.strip() for d in args.eval_dataset.split(',')]
+    if args.max_length is None:
+        args.max_length = max(max_length_dict.get(d, 512) for d in args._ds_names)
+    if args.max_new_tokens == 256:  # default sentinel
+        args.max_new_tokens = max_new_tokens_dict.get(args._eval_ds_names[0], 256)
+    args._max_new_tokens_dict = max_new_tokens_dict
+    return args
 
 
 # ---------------------------------------------------------------------------
@@ -391,10 +400,16 @@ def main():
     train_ds = get_dataset(
         args.dataset, split="train", tokenizer=tokenizer, max_length=args.max_length
     )
+    log(f"Train: {len(train_ds)} samples")
+    if len(args._ds_names) > 1:
+        for i, sub in enumerate(train_ds.sub_datasets):
+            log(f"  {train_ds.names[i]}: {len(sub)}")
+    # During-training eval uses first eval dataset
+    log(f"Eval datasets: {args._eval_ds_names}")
     val_ds = get_dataset(
-        args.dataset, split="test", tokenizer=tokenizer, max_length=args.max_length
+        args._eval_ds_names[0], split="test", tokenizer=tokenizer, max_length=args.max_length
     )
-    log(f"Train: {len(train_ds)} | Val: {len(val_ds)}")
+    log(f"Val ({args._eval_ds_names[0]}): {len(val_ds)} samples")
 
     # ---- Config ----
     cfg = SFTConfig(
@@ -578,13 +593,30 @@ def main():
     final_path = os.path.join(cfg.output_dir, "final.pt")
     save_checkpoint(final_path, cfg.num_epochs, global_step)
 
-    # Final eval
+    # Final eval — evaluate on all eval datasets
     if is_master:
         log("--- Final evaluation ---")
-        result = evaluate()
-        if result is not None:
-            log(f"Final accuracy: {result['accuracy']*100:.1f}% "
-                f"({result['correct']}/{result['total']})")
+        final_results = {}
+        for eval_name in args._eval_ds_names:
+            log(f"\n  Evaluating on: {eval_name}")
+            eval_ds = get_dataset(eval_name, split="test", tokenizer=tokenizer, max_length=args.max_length)
+            mnt = args._max_new_tokens_dict.get(eval_name, 256)
+            result = evaluate_accuracy_sft(
+                raw_model, tokenizer, eval_ds, device,
+                num_samples=cfg.eval_samples,
+                max_new_tokens=mnt,
+                num_log_samples=args.num_log_samples,
+                log_fn=log,
+                eval_batch_size=args.eval_batch_size,
+            )
+            if result is not None:
+                final_results[eval_name] = result['accuracy']
+                log(f"  {eval_name}: {result['accuracy']*100:.1f}% "
+                    f"({result['correct']}/{result['total']})")
+        if final_results:
+            log(f"\n  === Summary ===")
+            for name, acc in final_results.items():
+                log(f"    {name:20s}: {acc*100:.1f}%")
 
     log("Training complete!")
 
