@@ -154,8 +154,10 @@ def eval_with_recursion(model, dataset, device, K=4, num_samples=200):
     pad_id = dataset.tokenizer.pad_token_id
     n_correct = 0
 
-    for _ in range(num_samples):
-        item = dataset[0]
+    for i in range(num_samples):
+        # Note: dataset[i] generates a fresh random example each call
+        # (idx is unused — Qwen3ArithmeticDataset generates on-the-fly)
+        item = dataset[i]
         ids = item["input_ids"].to(device)
         true_answer = ids[prompt_len:]
 
@@ -204,8 +206,8 @@ def eval_sft(model, dataset, device, num_samples=200):
     base_v = model.vocab_sizes[0].item()
     n_correct = 0
 
-    for _ in range(num_samples):
-        item = dataset[0]
+    for i in range(num_samples):
+        item = dataset[i]  # generates fresh random example each call
         ids = item["input_ids"].unsqueeze(0).to(device)
         target = ids[0, prompt_len:]
 
