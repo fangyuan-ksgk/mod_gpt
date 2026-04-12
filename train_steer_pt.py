@@ -39,7 +39,7 @@ from transformers import AutoTokenizer, AutoModelForCausalLM
 from concurrent.futures import ThreadPoolExecutor
 
 from data.pt_dataset import get_dataset, collate_fn, check_code_correctness, HumanEvalDataset
-from sorl.steer import StackedAbstractionWrapper, StackedAbstractionWrapperV6
+from sorl.steer import StackedAbstractionWrapper, StackedAbstractionWrapperV6, StackedAbstractionWrapperV7
 from sorl.tokenassort import TokenAssortedVQVAE, DEFAULT_L, DEFAULT_C_SIZE, DEFAULT_D_BOT, DEFAULT_BETA
 
 
@@ -65,8 +65,8 @@ def parse_args():
     p = argparse.ArgumentParser(description="Steering Abstraction Post-Training")
 
     # Mode
-    p.add_argument("--mode", type=str, default="v6", choices=["vq", "v6"],
-                   help="vq = VQ-coded steering; v6 = self-routed diagonal steering")
+    p.add_argument("--mode", type=str, default="v6", choices=["vq", "v6", "v7"],
+                   help="vq = VQ-coded; v6 = self-routed diagonal; v7 = v6 + direction/multi-layer")
 
     # Model
     p.add_argument("--model_name", type=str, default="Qwen/Qwen3-0.6B")
@@ -117,6 +117,13 @@ def parse_args():
     p.add_argument("--scale", type=float, default=0.1, help="Steering vector scaling factor")
     p.add_argument("--inject_layers", type=str, default=None,
                    help="Comma-separated layer indices to inject steering (default: middle layer)")
+    p.add_argument("--per_layer_emb", action="store_true",
+                   help="Separate steering embeddings per inject layer (v7 only)")
+    p.add_argument("--read_layer", type=int, default=None,
+                   help="Layer index to read codes from (v7 only, default: last layer)")
+    p.add_argument("--code_position", type=str, default="last",
+                   choices=["first", "last"],
+                   help="Which position in each chunk determines the code (v7 only)")
 
     # VQ-VAE config (mode=vq only)
     p.add_argument("--vqvae_ckpt", type=str, default=None)
@@ -483,8 +490,21 @@ def main():
             inject_layers=inject_layers, scale=args.scale, L=args.L,
         )
 
+    elif args.mode == "v7":
+        train_ds = base_train_ds
+        collate = collate_fn
+
+        wrapper = StackedAbstractionWrapperV7(
+            model, C_SIZE=args.C_SIZE, D_MODEL=D_MODEL,
+            inject_layers=inject_layers, scale=args.scale, L=args.L,
+            per_layer_emb=args.per_layer_emb,
+            read_layer=args.read_layer, code_position=args.code_position,
+        )
+
     log(f"Steering: mode={args.mode} C_SIZE={args.C_SIZE} L={args.L} "
-        f"scale={args.scale} layers={wrapper.inject_layers}")
+        f"scale={args.scale} layers={wrapper.inject_layers}"
+        + (f" read_layer={wrapper.read_layer} code_pos={args.code_position}"
+           f" per_layer_emb={args.per_layer_emb}" if args.mode == 'v7' else ''))
 
     # ---- Freeze model if requested ----
     if args.freeze_model:
@@ -493,13 +513,21 @@ def main():
         n_frozen = sum(p.numel() for p in model.parameters())
         log(f"Model frozen: {n_frozen/1e6:.1f}M params")
 
-    n_steer = sum(p.numel() for p in wrapper.steering_emb.parameters())
+    # Collect steering params (works for all modes including V7 bidirectional)
+    if hasattr(wrapper, 'get_steer_params'):
+        _steer_params = wrapper.get_steer_params()
+    else:
+        _steer_params = list(wrapper.steering_emb.parameters())
+    n_steer = sum(p.numel() for p in _steer_params)
     n_model_train = sum(p.numel() for p in model.parameters() if p.requires_grad)
     log(f"Trainable: model={n_model_train/1e6:.1f}M  steering={n_steer/1e6:.3f}M")
 
     # ---- Move to device ----
     raw_model = model.to(device)
-    wrapper.steering_emb = wrapper.steering_emb.to(device=device)
+    # Move all steering sub-modules to device
+    for name, mod in wrapper.named_modules():
+        if 'steering_emb' in name and hasattr(mod, 'to'):
+            mod.to(device=device)
 
     if ddp:
         ddp_model = DDP(raw_model, device_ids=[int(os.environ.get("LOCAL_RANK", 0))],
@@ -514,7 +542,7 @@ def main():
         model_params = [p for p in raw_model.parameters() if p.requires_grad]
         if model_params:
             param_groups.append({'params': model_params, 'lr': args.lr})
-    param_groups.append({'params': wrapper.steering_emb.parameters(), 'lr': args.steer_lr})
+    param_groups.append({'params': _steer_params, 'lr': args.steer_lr})
 
     optimizer = torch.optim.AdamW(param_groups, weight_decay=args.weight_decay)
 
@@ -617,25 +645,48 @@ def main():
             labels[si < prompt_len.unsqueeze(1)] = -100
 
             # Forward
-            if args.mode == "v6":
+            if args.mode == "v7":
+                # ---- Deep supervision: read → backward → steer → backward ----
+                ga = args.gradient_accumulation_steps
+
+                # Pass 1: read — extract codes at read_layer, compute CE loss
+                out_read = wrapper.read_pass(input_ids, attn, labels)
+                loss_read = out_read.loss / (2 * ga)   # weight: 0.5 each pass
+                loss_read.backward()                    # frees pass-1 activations
+                del out_read
+
+                # Pass 2: steer — inject steering vectors, compute CE loss
+                out_steer = wrapper.steer_pass(input_ids, attn, labels)
+                loss_steer = out_steer.loss / (2 * ga)
+                loss_steer.backward()                   # frees pass-2 activations
+                del out_steer
+
+                total_loss = (loss_read.item() + loss_steer.item()) * (2 * ga)
+                del loss_read, loss_steer
+
+            elif args.mode in ("v6",):
                 outputs = wrapper(input_ids, attn, labels)
+                loss = outputs.loss / args.gradient_accumulation_steps
+                loss.backward()
+                total_loss = loss.item() * args.gradient_accumulation_steps
+                del loss, outputs
+
             elif args.mode == "vq":
                 outputs = wrapper(input_ids, attn, labels,
                                   chunk_codes_list=batch['chunk_codes_list'],
                                   cot_starts=batch['cot_starts'])
-
-            loss = outputs.loss / args.gradient_accumulation_steps
-            loss.backward()
+                loss = outputs.loss / args.gradient_accumulation_steps
+                loss.backward()
+                total_loss = loss.item() * args.gradient_accumulation_steps
+                del loss, outputs
 
             if (batch_idx + 1) % args.gradient_accumulation_steps == 0:
                 if args.max_grad_norm > 0:
-                    params = list(raw_model.parameters()) + list(wrapper.steering_emb.parameters())
+                    params = list(raw_model.parameters()) + _steer_params
                     torch.nn.utils.clip_grad_norm_(params, args.max_grad_norm)
                 optimizer.step()
                 optimizer.zero_grad(set_to_none=True)
                 global_step += 1
-
-            total_loss = loss.item() * args.gradient_accumulation_steps
 
             # Logging
             if is_master and (batch_idx + 1) % args.log_every == 0:
@@ -650,7 +701,8 @@ def main():
 
                 # Steering embedding stats
                 with torch.no_grad():
-                    steer_norm = wrapper.steering_emb.weight.float().norm(dim=-1).mean().item()
+                    steer_norm = sum(p.float().norm(dim=-1).mean().item()
+                                     for p in _steer_params) / max(len(_steer_params), 1)
 
                 peak = (f"Mem:{torch.cuda.max_memory_allocated(device)/1024**3:.2f}GB"
                         if torch.cuda.is_available() else "")
@@ -661,7 +713,6 @@ def main():
                 history["loss"].append(total_loss)
                 history["lr"].append(lr)
 
-            del loss, outputs
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
 

@@ -163,8 +163,10 @@ run_bg() {
 # No LoRA — full fine-tune.
 # ============================================================================================
 
-ALL_MODELS=("$M06" "$M16" "$ML1" "$ML3" "$M4")
-ALL_TAGS=("06b" "17b" "l1b" "l3b" "4b")
+# ALL_MODELS=("$M06" "$M16" "$ML1" "$ML3" "$M4")
+# ALL_TAGS=("06b" "17b" "l1b" "l3b" "4b")
+ALL_MODELS=("$M4")
+ALL_TAGS=("4b")
 
 # ═══════════════════════════════════════════════════════════════════════════
 # SFT ep=2 sweep: 9 datasets × 5 models (bs=8, ep=2)
@@ -182,7 +184,7 @@ for ds in "${SWEEP_DS[@]}"; do
     m="${ALL_MODELS[$i]}"
     t="${ALL_TAGS[$i]}"
     if [ "$t" = "4b" ]; then
-      run_bg "${t}_${ds}_ep2" $m $ds --num_epochs 2 --use_lora --lora_rank 16 --lora_alpha 32
+      run_bg "${t}_${ds}_ep2" $m $ds --num_epochs 2 --use_lora --lora_r 16 --lora_alpha 32
     else
       run_bg "${t}_${ds}_ep2" $m $ds --num_epochs 2
     fi
