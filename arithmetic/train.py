@@ -73,14 +73,17 @@ class ArithmeticConfig(SoRLConfig):
     no_wandb: bool = False
 
     def auto_scale_lr(self):
-        """Set LR based on model size if not explicitly provided."""
+        """Set LR based on model size if not explicitly provided.
+        Standard model (510d) gets 8e-5 (Fangyuan's default).
+        Undersized models get lower LR for stability.
+        """
         if self.lr == 0:
             if self.n_embd <= 256:
                 self.lr = 2e-5
-            elif self.n_embd <= 512:
+            elif self.n_embd < 510:
                 self.lr = 4e-5
             else:
-                self.lr = 8e-5
+                self.lr = 8e-5  # 510d and above: Fangyuan's default
 
     def compute_warmup_steps(self):
         """Convert warmup_ratio to warmup_steps."""
