@@ -179,10 +179,10 @@ def build_comparison_table(models, arch_filter="All", enriched_only=True):
 
 
 def build_detailed_splits(models, model_name):
-    """Build full per-split table for a specific model."""
+    """Build full per-split table for a specific model. Fuzzy match on subfolder name."""
     for m in models:
         name = m["subfolder"].removeprefix("non_enriched/")
-        if name == model_name:
+        if model_name in name or name in model_name or name == model_name:
             cfg = m["config"]
             eval_key = "sorl_eval" if cfg.get("mode") == "sorl" else "sft_eval"
             ev = m["metrics"].get(eval_key, {})
@@ -284,7 +284,7 @@ activation-level probing or SAEs needed. This is what we test on
         )
 
     with gr.Accordion("Per-Split Detail (select model)", open=False):
-        model_selector = gr.Textbox(label="Model name (e.g. add_sub_sorl_abs10_K1_25K)", value="")
+        model_selector = gr.Dropdown(label="Model", choices=[], allow_custom_value=True)
         detail_btn = gr.Button("Show splits")
         detail_table = gr.Dataframe(headers=["Split", "Accuracy", "N"], interactive=False)
 
@@ -417,21 +417,25 @@ found via activation-level analysis as explicit, interpretable tokens.
         hard_base = ["Ops", "Data", "Arch", "Config"] if "Arch" in df.columns else ["Ops", "Data", "Config"]
         hard_df = df[hard_base + hard_cols] if len(df) > 0 else pd.DataFrame()
 
-        return models, summary, q_status, main_df, hard_df, eval_info
+        # Populate model dropdown
+        model_names = sorted([m["subfolder"].removeprefix("non_enriched/") for m in models])
+        model_dd = gr.Dropdown(choices=model_names, value=model_names[0] if model_names else "")
+
+        return models, summary, q_status, main_df, hard_df, eval_info, model_dd
 
     def on_detail(models, name):
-        return build_detailed_splits(models, name.strip())
+        return build_detailed_splits(models, name.strip() if name else "")
 
     refresh_btn.click(
         on_refresh,
         inputs=[arch_filter],
-        outputs=[models_state, summary_text, queue_status, main_table, hard_table, eval_info_md],
+        outputs=[models_state, summary_text, queue_status, main_table, hard_table, eval_info_md, model_selector],
     )
 
     arch_filter.change(
         on_refresh,
         inputs=[arch_filter],
-        outputs=[models_state, summary_text, queue_status, main_table, hard_table, eval_info_md],
+        outputs=[models_state, summary_text, queue_status, main_table, hard_table, eval_info_md, model_selector],
     )
 
     detail_btn.click(on_detail, inputs=[models_state, model_selector], outputs=[detail_table])

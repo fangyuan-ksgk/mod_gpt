@@ -189,7 +189,85 @@ class GeminiBackend(LLMBackend):
         self._save_state()
 
 
-# ═══��═══════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════════
+# Claude backend — Messages API with client-side state + prompt caching
+# ═══════════════════════════════════════════════════════════════════
+
+class ClaudeBackend(LLMBackend):
+    """Client-side stateful Claude backend.
+
+    Anthropic has no server-side session API (like OpenAI's previous_response_id).
+    We maintain the message history locally and send it each call. Uses prompt
+    caching (cache_control: ephemeral) on the system prompt and early messages
+    to reduce cost — cached tokens are 10% of input cost.
+    """
+
+    def __init__(self, model: str = "claude-sonnet-4-20250514",
+                 state_path: str = os.path.join(STATE_DIR, "backend_claude.json")):
+        super().__init__("claude", model, state_path)
+
+    def _default_state(self) -> dict:
+        return {"messages": [], "n_calls": 0}
+
+    @property
+    def _client(self):
+        if not hasattr(self, "_anthropic_client"):
+            import anthropic
+            api_key = os.environ.get("ANTHROPIC_API_KEY")
+            self._anthropic_client = anthropic.Anthropic(api_key=api_key)
+        return self._anthropic_client
+
+    def send(self, prompt: str, system: str = SYSTEM_PROMPT, max_tokens: int = 3000) -> str:
+        # Append user message to history
+        self.state["messages"].append({"role": "user", "content": prompt})
+
+        # Build system with cache_control for prompt caching
+        system_blocks = [
+            {"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}
+        ]
+
+        # Anthropic allows max 4 cache_control blocks total (including system).
+        # We use 1 on system, so 3 left for messages. Cache the earliest messages
+        # to maximize savings on repeated context.
+        messages = []
+        n_msgs = len(self.state["messages"])
+        cache_budget = 3  # max cacheable message blocks (4 total - 1 system)
+        cache_count = 0
+        for i, msg in enumerate(self.state["messages"]):
+            m = {"role": msg["role"], "content": msg["content"]}
+            # Cache early messages (not the last 2, and within budget)
+            if i < n_msgs - 2 and cache_count < cache_budget:
+                m["content"] = [{"type": "text", "text": msg["content"], "cache_control": {"type": "ephemeral"}}]
+                cache_count += 1
+            messages.append(m)
+
+        try:
+            response = self._client.messages.create(
+                model=self.model,
+                max_tokens=max_tokens,
+                system=system_blocks,
+                messages=messages,
+                temperature=0.3,
+            )
+            text = response.content[0].text
+
+            # Append assistant response to history
+            self.state["messages"].append({"role": "assistant", "content": text})
+            self.state["n_calls"] = self.state.get("n_calls", 0) + 1
+            self._save_state()
+            return text
+
+        except Exception as e:
+            # Remove the failed user message
+            self.state["messages"].pop()
+            return f"[Claude error: {e}]"
+
+    def reset(self):
+        self.state = self._default_state()
+        self._save_state()
+
+
+# ═══════════════════════════════════════════════════════════════════
 # Reviewer — stateful code review via any backend
 # ═══════════════════════════════════════════════════════════════════
 
@@ -301,7 +379,7 @@ class Debater:
     """Multi-model debate with critique rounds. Uses pluggable backends."""
 
     def __init__(self, backends: Optional[List[LLMBackend]] = None):
-        self.backends = backends or [OpenAIBackend(), GeminiBackend()]
+        self.backends = backends or [OpenAIBackend(), GeminiBackend(), ClaudeBackend()]
 
     def debate(self, question: str, context: str = "",
                rounds: int = 2, max_tokens: int = 3000,
@@ -365,19 +443,19 @@ if __name__ == "__main__":
     import sys
 
     if len(sys.argv) > 1 and sys.argv[1] == "reset":
-        for B in [OpenAIBackend, GeminiBackend]:
+        for B in [OpenAIBackend, GeminiBackend, ClaudeBackend]:
             B().reset()
         print("All backend sessions reset.")
 
     elif len(sys.argv) > 1 and sys.argv[1] == "status":
-        for B in [OpenAIBackend, GeminiBackend]:
+        for B in [OpenAIBackend, GeminiBackend, ClaudeBackend]:
             b = B()
             print(f"{b.name}: {b.n_calls} calls, state={b.state}")
 
     elif len(sys.argv) > 2 and sys.argv[1] == "review":
         prompt = " ".join(sys.argv[2:])
         # Review with all backends
-        for B in [OpenAIBackend, GeminiBackend]:
+        for B in [OpenAIBackend, GeminiBackend, ClaudeBackend]:
             r = Reviewer(backend=B())
             print(f"\n{'='*60}\n{B.__name__}\n{'='*60}")
             print(r.review(prompt=prompt))
