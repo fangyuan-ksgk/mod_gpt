@@ -7,24 +7,27 @@
 #   Pass 2: steer at inject_layers using those codes (per-layer embeddings)
 #
 # Axes:
+#   C_SIZE             ∈ {1, 4, 16, 32}                         (4)
 #   code_position       ∈ {first, last}                          (2)
-#   L                  ∈ {4, 8, 16}                             (3)
-#   layers             ∈ {mid, multi3}                          (2)
-#     mid    = [14]        (middle layer only)
-#     multi3 = [7,14,21]   (early + mid + late)
+#   L                  ∈ {8, 16, 32}                             (3)
+#   layers             ∈ {mid, early, late, mid3}               (4)
+#     mid    = [14]          (middle layer only)
+#     early  = [3]           (very early layer)
+#     late   = [24]          (very late layer)
+#     mid3   = [13,14,15]    (consecutive middle layers)
 #   steering_direction ∈ {forward, backward}                     (2)
 #     forward  = read from early layer, inject later
 #     backward = read from late layer, inject earlier (default)
-#   routing_mode       ∈ {diagonal, similar_magnitude}           (2)
-#   steer_lr           ∈ {1e-3, 1e-2}                           (2)
+#   routing_mode       ∈ {similar_magnitude}                     (1)
+#   steer_lr           ∈ {1e-1, 5e-2}                            (2)
 #   dataset            ∈ {gsm8k, scienceqa}                     (2)
 #
-# Total: 2 × 3 × 2 × 2 × 2 × 2 × 2 = 96 experiments
-# Split into 4 parts (24 each) by dataset × direction:
-#   Part 1: gsm8k    + forward   (24 runs, ~2 hours)
-#   Part 2: gsm8k    + backward  (24 runs, ~2 hours)
-#   Part 3: scienceqa + forward  (24 runs, ~2 hours)
-#   Part 4: scienceqa + backward (24 runs, ~2 hours)
+# Total: 4 × 2 × 3 × 4 × 1 × 2 = 192 experiments per part
+# Split into 4 parts by dataset × direction:
+#   Part 1: gsm8k    + forward   (192 runs, ~16 hours)
+#   Part 2: gsm8k    + backward  (192 runs, ~16 hours)
+#   Part 3: scienceqa + forward  (192 runs, ~16 hours)
+#   Part 4: scienceqa + backward (192 runs, ~16 hours)
 #
 # Usage: ./sweep_0412_steer.sh <PART>   (PART = 1|2|3|4|all)
 #
@@ -48,7 +51,7 @@ N_GPUS=4
 MODEL="Qwen/Qwen3-0.6B"
 LR=1e-5
 SCALE=0.5
-C_SIZE=32
+# C_SIZE is now a sweep axis (1, 4, 16, 32)
 EPOCHS=1
 BATCH_SIZE=2
 GRAD_ACCUM=4
@@ -62,17 +65,19 @@ OUT_ROOT="./ckpt/steer7_${TIMESTAMP}"
 mkdir -p "$OUT_ROOT"
 
 # ---- Sweep axes ----
+C_SIZES=(1 4 16 32)
 CODE_POSITIONS=("first" "last")
-LS=(4 8 16)
-ROUTING_MODES=("diagonal" "similar_magnitude")
-STEER_LRS=("1e-3" "1e-2")
+LS=(8 16 32)
+ROUTING_MODES=("similar_magnitude")
+STEER_LRS=("1e-1" "5e-2" "1e-2")
 
 # Layer configs: name -> inject_layers string
 declare -A LAYER_ARGS
 LAYER_ARGS[mid]="14"
-LAYER_ARGS[multi3]="7,14,21"
-
-LAYER_NAMES=("mid" "multi3")
+LAYER_ARGS[early]="3"
+LAYER_ARGS[late]="24"
+LAYER_ARGS[mid3]="13,14,15"
+LAYER_NAMES=("mid" "early" "late" "mid3")
 
 # ---- Part → (dataset, direction) mapping ----
 # Part 1: gsm8k + forward     Part 2: gsm8k + backward
@@ -98,59 +103,61 @@ for P in "${PARTS[@]}"; do
   echo ""
   echo "============================================================"
   echo "Part ${P}/4: ${dataset} + ${sdir} (read_layer=${read_layer})"
-  echo "24 experiments — ${TIMESTAMP}"
+  echo "192 experiments â ${TIMESTAMP}"
   echo "============================================================"
 
   JOB_IDX=0
 
-  for cpos in "${CODE_POSITIONS[@]}"; do
-    for L in "${LS[@]}"; do
-      for lname in "${LAYER_NAMES[@]}"; do
-        for routing in "${ROUTING_MODES[@]}"; do
-          for slr in "${STEER_LRS[@]}"; do
+  for C in "${C_SIZES[@]}"; do
+    for cpos in "${CODE_POSITIONS[@]}"; do
+      for L in "${LS[@]}"; do
+        for lname in "${LAYER_NAMES[@]}"; do
+          for routing in "${ROUTING_MODES[@]}"; do
+            for slr in "${STEER_LRS[@]}"; do
 
-            JOB_IDX=$((JOB_IDX + 1))
-            gpu=$(( (JOB_IDX - 1) % N_GPUS ))
-            port=$((BASE_PORT + P * 100 + JOB_IDX))
+              JOB_IDX=$((JOB_IDX + 1))
+              gpu=$(( (JOB_IDX - 1) % N_GPUS ))
+              port=$((BASE_PORT + P * 100 + JOB_IDX))
 
-            layers=${LAYER_ARGS[$lname]}
+              layers=${LAYER_ARGS[$lname]}
 
-            tag="${dtag}_${cpos}_L${L}_${lname}_${sdir}_${routing}_slr${slr}"
-            out="${OUT_ROOT}/${tag}"
+              tag="${dtag}_C${C}_${cpos}_L${L}_${lname}_${sdir}_${routing}_slr${slr}"
+              out="${OUT_ROOT}/${tag}"
 
-            echo "  [GPU ${gpu}] ${tag}"
+              echo "  [GPU ${gpu}] ${tag}"
 
-            CUDA_VISIBLE_DEVICES=$gpu torchrun \
-              --nproc_per_node=1 \
-              --master_addr=$MASTER_ADDR \
-              --master_port=$port \
-              train_steer_pt.py \
-              --mode v7 \
-              --model_name $MODEL \
-              --dataset $dataset \
-              --num_epochs $EPOCHS \
-              --lr $LR \
-              --steer_lr $slr \
-              --warmup_steps $WARMUP \
-              --batch_size $BATCH_SIZE \
-              --gradient_accumulation_steps $GRAD_ACCUM \
-              --C_SIZE $C_SIZE \
-              --L $L \
-              --scale $SCALE \
-              --inject_layers $layers \
-              --read_layer $read_layer \
-              --code_position $cpos \
-              --routing_mode $routing \
-              --eval_every 99999 \
-              --save_every 99999 \
-              --eval_samples $EVAL_SAMPLES \
-              --eval_batch_size $EVAL_BATCH \
-              --num_log_samples $NUM_LOG \
-              --log_every 10 \
-              --output_dir $out &
+              CUDA_VISIBLE_DEVICES=$gpu torchrun \
+                --nproc_per_node=1 \
+                --master_addr=$MASTER_ADDR \
+                --master_port=$port \
+                train_steer_pt.py \
+                --mode v7 \
+                --model_name $MODEL \
+                --dataset $dataset \
+                --num_epochs $EPOCHS \
+                --lr $LR \
+                --steer_lr $slr \
+                --warmup_steps $WARMUP \
+                --batch_size $BATCH_SIZE \
+                --gradient_accumulation_steps $GRAD_ACCUM \
+                --C_SIZE $C \
+                --L $L \
+                --scale $SCALE \
+                --inject_layers $layers \
+                --read_layer $read_layer \
+                --code_position $cpos \
+                --routing_mode $routing \
+                --eval_every 99999 \
+                --save_every 99999 \
+                --eval_samples $EVAL_SAMPLES \
+                --eval_batch_size $EVAL_BATCH \
+                --num_log_samples $NUM_LOG \
+                --log_every 10 \
+                --output_dir $out &
 
-            if (( JOB_IDX % N_GPUS == 0 )); then wait; fi
+              if (( JOB_IDX % N_GPUS == 0 )); then wait; fi
 
+            done
           done
         done
       done
