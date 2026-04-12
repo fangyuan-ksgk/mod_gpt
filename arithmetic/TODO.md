@@ -46,8 +46,17 @@ See [`HYPOTHESES.md`](HYPOTHESES.md) for full descriptions. Training: H1-H4. Int
 
 ## Queue Improvements (for next queue restart)
 
-- [ ] **Priority flags** — high/low priority on jobs. Queue sorts pending by priority before picking next. Use case: flag experiments we want results from sooner. Implementation: add `priority` field to Redis job state, `job_state.py modify <name> --priority high/low`, queue sorts pending list before dispatch.
+- [ ] **Priority flags** — high/low priority on jobs. Queue sorts pending by priority before picking next. Implementation: add `priority` field to Redis job state, `job_state.py modify <name> --priority high/low`, queue sorts pending list before dispatch.
+- [ ] **Kill pending jobs** — currently kill signals only work on running jobs. Add `_check_pending_kills()` in dispatcher loop before job dispatch. Pending kills just flash-fail (5s waste each).
 - [ ] **bf16 autocast** — ~2x speedup, currently float32
+
+## Training Fixes (for next queue restart)
+
+- [ ] **Undersized model LR** — 8e-5 is too high for 1L/128d models, causes 10-15% accuracy oscillation. Confirmed by all 3 review models (OpenAI/Gemini/Claude). Fix: scale LR with model size, use 2-4e-5 for undersized. Add `--lr` override per job in sweep file.
+- [ ] **Warmup ratio** — 20% is too aggressive (HF Trainer default is 0%). For 500K×20ep that's 31K warmup steps = 4 epochs of suboptimal LR. Fix: reduce to 3-5% or use fixed step count (500-1000 steps).
+- [ ] **Adam beta2** — 0.98 is more aggressive than HF default 0.999. For tiny models, 0.999 is more stable.
+- [ ] **Dropout** — currently 0. Add 0.1-0.2 for undersized models. Standard regularization missing.
+- [ ] **Consider HF Trainer for SFT** — custom loop works but HF Trainer has better defaults, logging, checkpointing. Keep custom loop only for SoRL (which needs it).
 
 ## Done
 

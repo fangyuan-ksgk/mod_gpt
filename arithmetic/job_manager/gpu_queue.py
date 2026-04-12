@@ -43,6 +43,7 @@ class Job:
     name: str = ""
     gpu: int = -1
     status: str = "pending"  # pending, running, done, failed, stale, retrying
+    priority: int = 1        # 0=high, 1=normal, 2=low (lower number = higher priority)
     proc: Optional[subprocess.Popen] = field(default=None, repr=False)
     start_time: float = 0
     end_time: float = 0
@@ -114,14 +115,15 @@ class GPUQueue:
         except Exception:
             pass  # Redis not available, run without it
 
-    def submit(self, cmd: str, name: str = "", on_complete: Callable = None,
-               on_fail: Callable = None) -> int:
-        """Submit a command. Returns job ID."""
+    def submit(self, cmd: str, name: str = "", priority: int = 1,
+               on_complete: Callable = None, on_fail: Callable = None) -> int:
+        """Submit a command. priority: 0=high, 1=normal, 2=low. Returns job ID."""
         with self.lock:
             job_id = self._job_counter
             self._job_counter += 1
             job = Job(
                 job_id=job_id, cmd=cmd, name=name or f"job_{job_id}",
+                priority=priority,
                 max_retries=self.max_retries, stale_timeout=self.stale_timeout,
                 on_complete=on_complete, on_fail=on_fail,
             )
@@ -160,11 +162,33 @@ class GPUQueue:
             job.end_time = time.time()
 
     def _run_job(self, job: Job):
-        # Wait for a free GPU
+        # Check for pending kill before even waiting for GPU
+        if self.db and self.db.pending_kill(job.name):
+            job.status = "failed"
+            job.exit_code = -9
+            if self.db:
+                self.db.fail_job(job.name, error="killed before dispatch")
+            return
+
+        # Wait for a free GPU, yielding to higher-priority pending jobs
         while True:
             gpu = self._pick_gpu()
             if gpu is not None:
+                # Yield if a higher-priority job is also waiting
+                with self.lock:
+                    higher = any(j.status == "pending" and j.priority < job.priority
+                                 for j in self.jobs)
+                if higher:
+                    time.sleep(self.poll_interval)
+                    continue
                 break
+            # Re-check kill while waiting
+            if self.db and self.db.pending_kill(job.name):
+                job.status = "failed"
+                job.exit_code = -9
+                if self.db:
+                    self.db.fail_job(job.name, error="killed while waiting")
+                return
             time.sleep(self.poll_interval)
 
         # Claim the GPU
@@ -484,17 +508,34 @@ def main():
         if arg == "--max-retries" and i + 1 < len(sys.argv):
             max_retries = int(sys.argv[i + 1])
 
+    # Parse jobs file with optional #PRIORITY: tags
+    PRIORITY_MAP = {"HIGH": 0, "NORMAL": 1, "LOW": 2}
+    jobs = []  # list of (cmd, priority)
+    current_priority = 1  # default: NORMAL
     with open(jobs_file) as f:
-        commands = [line.strip() for line in f if line.strip() and not line.startswith("#")]
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            if line.startswith("#PRIORITY:"):
+                tag = line.split(":", 1)[1].strip().upper()
+                current_priority = PRIORITY_MAP.get(tag, 1)
+                continue
+            if line.startswith("#"):
+                continue
+            jobs.append((line, current_priority))
 
-    # Extract job names from output_dir or run_name
+    # Extract job names from output_dir
     def extract_name(cmd):
         for part in cmd.split():
             if part.startswith("ckpt/sweep/"):
                 return part.split("/")[-1]
         return cmd.split("--mode")[-1].strip().split()[0] if "--mode" in cmd else "job"
 
-    print(f"GPU Queue: {len(commands)} jobs, {n_gpus} GPUs, max {max_per_gpu}/GPU")
+    n_high = sum(1 for _, p in jobs if p == 0)
+    n_low = sum(1 for _, p in jobs if p == 2)
+    print(f"GPU Queue: {len(jobs)} jobs, {n_gpus} GPUs, max {max_per_gpu}/GPU")
+    print(f"  priority: {n_high} high, {len(jobs) - n_high - n_low} normal, {n_low} low")
     print(f"  stale_timeout={stale_timeout}s, max_retries={max_retries}")
     print()
 
@@ -502,8 +543,8 @@ def main():
         n_gpus=n_gpus, max_per_gpu=max_per_gpu,
         stale_timeout=stale_timeout, max_retries=max_retries,
     )
-    for cmd in commands:
-        q.submit(cmd, name=extract_name(cmd))
+    for cmd, priority in jobs:
+        q.submit(cmd, name=extract_name(cmd), priority=priority)
     q.wait()
     q.print_summary()
 

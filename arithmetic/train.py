@@ -10,6 +10,7 @@ import json
 import argparse
 import time
 import math
+from dataclasses import dataclass
 import torch
 import torch.nn as nn
 import wandb
@@ -27,6 +28,65 @@ from arithmetic.datasets.addition import (
 
 torch.set_float32_matmul_precision('high')
 
+
+# ── Shared config for arithmetic experiments ─────────────────────
+# Inherits SoRLConfig so the same object drives both SFT and SoRL.
+# SFT only uses the optimizer/schedule fields; SoRL uses everything.
+
+@dataclass
+class ArithmeticConfig(SoRLConfig):
+    """Arithmetic-specific defaults, shared by SFT and SoRL."""
+    # Optimizer (overrides SoRLConfig defaults)
+    lr: float = 0              # 0 = auto-scale by n_embd
+    weight_decay: float = 0.01
+    warmup_ratio: float = 0.03  # converted to warmup_steps in main()
+    beta2: float = 0.999
+    max_grad_norm: float = 1.0
+
+    # Training
+    batch_size: int = 64
+    num_epochs: int = 5
+
+    # SoRL v1 defaults (Fangyuan's recommended)
+    alpha_info_gain: float = 10.0
+    alpha_abs: float = 0.1
+    alpha_soft_zipf: float = 1.0
+    alpha_traj: float = 0.0     # v1 uses info_gain, not traj
+
+    # Logging / Eval
+    log_every: int = 50
+    save_every: int = 999999
+    eval_samples: int = 100
+
+    # Arithmetic-specific (not in SoRLConfig)
+    seed: int = 42
+    n_digits: int = 6
+    n_layer: int = 2
+    n_head: int = 3
+    n_embd: int = 510
+    ops: str = "add"
+    abs_vocab: int = 0
+    dataset_size: int = 500_000
+    mode: str = "baseline"
+    device: str = "cuda"
+    push_to_hub: bool = False
+    no_wandb: bool = False
+
+    def auto_scale_lr(self):
+        """Set LR based on model size if not explicitly provided."""
+        if self.lr == 0:
+            if self.n_embd <= 256:
+                self.lr = 2e-5
+            elif self.n_embd <= 512:
+                self.lr = 4e-5
+            else:
+                self.lr = 8e-5
+
+    def compute_warmup_steps(self):
+        """Convert warmup_ratio to warmup_steps."""
+        total_steps = (self.dataset_size // self.batch_size) * self.num_epochs
+        self.warmup_steps = max(100, int(total_steps * self.warmup_ratio))
+
 TOKENIZER_NAME = "Qwen/Qwen3-0.6B"
 WANDB_PROJECT = "sorl-arithmetic"
 WANDB_ENTITY = "nlp_and_interpretability"
@@ -40,13 +100,18 @@ QWEN3_INV_MAP = {v: k for k, v in QWEN3_TOKEN_MAP.items()}
 
 
 class Qwen3ArithmeticDataset(Dataset):
-    """On-the-fly arithmetic dataset producing Qwen3 token IDs."""
-    def __init__(self, tokenizer, n_digits=6, ops="add", size=100_000):
+    """On-the-fly arithmetic dataset producing Qwen3 token IDs.
+
+    Each __getitem__ call generates a fresh random example (idx is used as
+    an RNG offset for reproducibility when a seed is set).
+    """
+    def __init__(self, tokenizer, n_digits=6, ops="add", size=100_000, seed=None):
         assert "qwen" in type(tokenizer).__module__.lower() or "qwen" in getattr(tokenizer, 'name_or_path', '').lower()
         self.tokenizer = tokenizer
         self.n_digits = n_digits
         self.ops = ops
         self.size = size
+        self.seed = seed
         self.prompt_len = 2 * n_digits + 2
         self.seq_len = 3 * n_digits + 3
 
@@ -183,24 +248,25 @@ def make_model(args, tokenizer):
 
 # ── SFT baseline trainer ──────────────────────────────────────────
 
-def train_sft(model, train_ds, val_ds, args, run_name, tokenizer=None):
-    device = args.device
+def train_sft(model, train_ds, val_ds, cfg: ArithmeticConfig, run_name, tokenizer=None):
+    device = cfg.device
     model = model.to(device)
     model.train()
 
     prompt_len = train_ds.prompt_len
-    loader = DataLoader(train_ds, batch_size=args.batch_size, shuffle=True,
+    loader = DataLoader(train_ds, batch_size=cfg.batch_size, shuffle=True,
                         collate_fn=collate_fn, num_workers=0)
 
-    optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=0.01, betas=(0.9, 0.98))
-    total_steps = len(loader) * args.num_epochs
-    warmup_steps = int(total_steps * 0.2)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=cfg.lr,
+                                   weight_decay=cfg.weight_decay, betas=(0.9, cfg.beta2))
+    total_steps = len(loader) * cfg.num_epochs
+    warmup_steps = cfg.warmup_steps
 
     history = {"step": [], "loss": [], "base_loss": [], "lr": []}
     global_step = 0
     t_start = time.time()
 
-    for epoch in range(args.num_epochs):
+    for epoch in range(cfg.num_epochs):
         for batch in loader:
             ids = batch["input_ids"].to(device)
             attn = batch["attention_mask"].to(device)
@@ -214,10 +280,10 @@ def train_sft(model, train_ds, val_ds, args, run_name, tokenizer=None):
                 shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1))
 
             if global_step < warmup_steps:
-                lr = args.lr * global_step / max(warmup_steps, 1)
+                lr = cfg.lr * global_step / max(warmup_steps, 1)
             else:
                 progress = (global_step - warmup_steps) / max(total_steps - warmup_steps, 1)
-                lr = args.lr * 0.5 * (1 + math.cos(math.pi * progress))
+                lr = cfg.lr * 0.5 * (1 + math.cos(math.pi * progress))
             for pg in optimizer.param_groups:
                 pg["lr"] = lr
 
@@ -236,17 +302,17 @@ def train_sft(model, train_ds, val_ds, args, run_name, tokenizer=None):
                 if wandb.run is not None:
                     wandb.log({"loss": loss.item(), "lr": lr, "epoch": epoch + 1}, step=global_step)
 
-            steps_per_epoch = max(1, len(train_ds) // args.batch_size)
+            steps_per_epoch = max(1, len(train_ds) // cfg.batch_size)
             if global_step % steps_per_epoch == 0:
                 current_epoch = global_step // steps_per_epoch
 
                 # Full per-split eval every epoch
                 from arithmetic.evaluate import ArithmeticEvaluator
-                evaluator = ArithmeticEvaluator(model, tokenizer, device=device, n_digits=args.n_digits)
-                epoch_eval = evaluator.run(ops=args.ops, K=None, n_per_split=50)
+                evaluator = ArithmeticEvaluator(model, tokenizer, device=device, n_digits=cfg.n_digits)
+                epoch_eval = evaluator.run(ops=cfg.ops, K=None, n_per_split=25)
                 acc = epoch_eval["summary"]["overall_accuracy"]
 
-                print(f"  --- Epoch {current_epoch}/{args.num_epochs}: accuracy={acc:.3f} ---")
+                print(f"  --- Epoch {current_epoch}/{cfg.num_epochs}: accuracy={acc:.3f} ---")
                 # Log key hard splits
                 splits = epoch_eval.get("splits", {})
                 for s in ["add_S5", "add_S6", "add_C6", "sub_M5", "sub_B5"]:
@@ -295,7 +361,7 @@ class WandbSoRLTrainer(SoRLTrainer):
                 self.model, self.tokenizer, device=str(self.device),
                 n_digits=6,
             )
-            epoch_eval = evaluator.run(ops="add_sub", K=K, n_per_split=50)
+            epoch_eval = evaluator.run(ops="add_sub", K=K, n_per_split=25)
 
             if wandb.run is not None:
                 log_dict = {"eval/accuracy": epoch_eval["summary"]["overall_accuracy"]}
@@ -307,8 +373,10 @@ class WandbSoRLTrainer(SoRLTrainer):
 
 # ── Main ────────────────────────────────────────────────────────────
 
-def main():
+def _parse_args():
+    """Parse CLI args into an ArithmeticConfig."""
     p = argparse.ArgumentParser()
+    # Architecture
     p.add_argument("--mode", choices=["baseline", "sorl"], default="baseline")
     p.add_argument("--ops", choices=["add", "add_sub"], default="add")
     p.add_argument("--n_digits", type=int, default=6)
@@ -317,14 +385,20 @@ def main():
     p.add_argument("--n_embd", type=int, default=510)
     p.add_argument("--abs_vocab", type=int, default=0)
     p.add_argument("--K", type=int, default=4)
-    # v1 SoRL hyperparams (Fangyuan's recommended defaults)
+    # SoRL loss weights (Fangyuan's recommended defaults)
     p.add_argument("--alpha_info_gain", type=float, default=10.0)
     p.add_argument("--alpha_abs", type=float, default=0.1)
     p.add_argument("--alpha_soft_zipf", type=float, default=1.0)
+    # Training (shared between SFT and SoRL)
     p.add_argument("--batch_size", type=int, default=64)
     p.add_argument("--num_epochs", type=int, default=5)
     p.add_argument("--dataset_size", type=int, default=500_000)
-    p.add_argument("--lr", type=float, default=8e-5)
+    p.add_argument("--lr", type=float, default=0, help="0 = auto-scale by model size")
+    p.add_argument("--warmup_ratio", type=float, default=0.03)
+    p.add_argument("--weight_decay", type=float, default=0.01)
+    p.add_argument("--beta2", type=float, default=0.999)
+    p.add_argument("--seed", type=int, default=42)
+    # Infrastructure
     p.add_argument("--output_dir", type=str, default="ckpt/arithmetic")
     p.add_argument("--device", type=str, default="cuda")
     p.add_argument("--push_to_hub", action="store_true")
@@ -334,34 +408,62 @@ def main():
     if args.mode == "baseline":
         args.abs_vocab = 0
 
-    run_name = f"{args.ops}_{args.mode}"
-    if args.mode == "sorl":
-        run_name += "_v1"
-    if args.abs_vocab > 0:
-        run_name += f"_abs{args.abs_vocab}"
-    if args.K != 4 and args.mode == "sorl":
-        run_name += f"_K{args.K}"
-    run_name += f"_{args.dataset_size // 1000}K"
-    if args.n_layer != 2 or args.n_head != 3 or args.n_embd != 510:
-        run_name += f"_{args.n_layer}L{args.n_head}H{args.n_embd}d"
+    cfg = ArithmeticConfig(**{k: v for k, v in vars(args).items() if hasattr(ArithmeticConfig, k)})
+    cfg.output_dir = args.output_dir
+    cfg.push_to_hub = args.push_to_hub
+    cfg.no_wandb = args.no_wandb
+    cfg.eval_every = max(1, cfg.dataset_size // cfg.batch_size)  # every epoch
 
-    if not args.no_wandb:
+    cfg.auto_scale_lr()
+    cfg.compute_warmup_steps()
+    return cfg
+
+
+def main():
+    cfg = _parse_args()
+
+    # Reproducibility
+    import random, numpy as np
+    torch.manual_seed(cfg.seed)
+    torch.cuda.manual_seed_all(cfg.seed)
+    random.seed(cfg.seed)
+    np.random.seed(cfg.seed)
+
+    run_name = f"{cfg.ops}_{cfg.mode}"
+    if cfg.mode == "sorl":
+        run_name += "_v1"
+    if cfg.abs_vocab > 0:
+        run_name += f"_abs{cfg.abs_vocab}"
+    if cfg.K != 4 and cfg.mode == "sorl":
+        run_name += f"_K{cfg.K}"
+    run_name += f"_{cfg.dataset_size // 1000}K"
+    if cfg.n_layer != 2 or cfg.n_head != 3 or cfg.n_embd != 510:
+        run_name += f"_{cfg.n_layer}L{cfg.n_head}H{cfg.n_embd}d"
+
+    if not cfg.no_wandb:
         wandb.init(
             project=WANDB_PROJECT, entity=WANDB_ENTITY,
-            name=run_name, config=vars(args),
-            tags=[args.ops, args.mode, f"abs{args.abs_vocab}", f"{args.dataset_size // 1000}K"],
+            name=run_name, config={k: v for k, v in cfg.__dict__.items() if not k.startswith('_')},
+            tags=[cfg.ops, cfg.mode, f"abs{cfg.abs_vocab}", f"{cfg.dataset_size // 1000}K"],
         )
 
     tokenizer = AutoTokenizer.from_pretrained(TOKENIZER_NAME)
-    model = make_model(args, tokenizer)
+
+    class _ModelArgs:
+        pass
+    model_args = _ModelArgs()
+    model_args.n_layer, model_args.n_head, model_args.n_embd = cfg.n_layer, cfg.n_head, cfg.n_embd
+    model_args.abs_vocab = cfg.abs_vocab
+    model = make_model(model_args, tokenizer)
     n_params = sum(p.numel() for p in model.parameters())
 
     print(f"{'═' * 60}")
     print(f"  {run_name}")
-    print(f"  arch: {args.n_layer}L/{args.n_head}H/{args.n_embd}d | params: {n_params:,}")
-    print(f"  train: {args.num_epochs} epochs x {args.dataset_size} samples, batch={args.batch_size}")
-    if args.mode == "sorl":
-        print(f"  SoRL v1: abs={args.abs_vocab} K={args.K} ig={args.alpha_info_gain} abs={args.alpha_abs} zipf={args.alpha_soft_zipf}")
+    print(f"  arch: {cfg.n_layer}L/{cfg.n_head}H/{cfg.n_embd}d | params: {n_params:,}")
+    print(f"  train: {cfg.num_epochs} epochs x {cfg.dataset_size} samples, batch={cfg.batch_size}")
+    print(f"  optim: lr={cfg.lr:.1e} warmup={cfg.warmup_ratio:.0%} wd={cfg.weight_decay} beta2={cfg.beta2}")
+    if cfg.mode == "sorl":
+        print(f"  SoRL v1: abs={cfg.abs_vocab} K={cfg.K} ig={cfg.alpha_info_gain} abs_w={cfg.alpha_abs} zipf={cfg.alpha_soft_zipf}")
     else:
         print(f"  pure SFT")
     print(f"{'═' * 60}")
@@ -369,67 +471,56 @@ def main():
     if wandb.run is not None:
         wandb.config.update({"n_params": n_params})
 
-    train_ds = Qwen3ArithmeticDataset(tokenizer, args.n_digits, args.ops, args.dataset_size)
-    val_ds = Qwen3ArithmeticDataset(tokenizer, args.n_digits, args.ops, 1000)
+    train_ds = Qwen3ArithmeticDataset(tokenizer, cfg.n_digits, cfg.ops, cfg.dataset_size)
+    val_ds = Qwen3ArithmeticDataset(tokenizer, cfg.n_digits, cfg.ops, 1000)
 
     import subprocess, datetime
     git_hash = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
     manifest = {
-        **vars(args),
+        **{k: v for k, v in cfg.__dict__.items() if not k.startswith('_')},
         "n_params": n_params,
         "run_name": run_name,
         "git_commit": git_hash,
         "timestamp": datetime.datetime.now(datetime.UTC).isoformat(),
         "tokenizer": TOKENIZER_NAME,
         "dataset_repo": "thoughtworks/arithmetic-sorl-data",
-        "dataset_config": "add_sub_6digit" if args.ops == "add_sub" else "add_6digit",
+        "dataset_config": "add_sub_6digit" if cfg.ops == "add_sub" else "add_6digit",
         "model_repo": "thoughtworks/arithmetic-sorl",
-        "trainer_version": "sft" if args.mode == "baseline" else "v1",
+        "trainer_version": "sft" if cfg.mode == "baseline" else "v1",
         "wandb_run_id": wandb.run.id if wandb.run is not None else None,
         "wandb_url": wandb.run.url if wandb.run is not None else None,
     }
 
-    os.makedirs(args.output_dir, exist_ok=True)
-    with open(os.path.join(args.output_dir, "config.json"), "w") as f:
+    os.makedirs(cfg.output_dir, exist_ok=True)
+    with open(os.path.join(cfg.output_dir, "config.json"), "w") as f:
         json.dump(manifest, f, indent=2)
 
-    if args.mode == "baseline":
-        history = train_sft(model, train_ds, val_ds, args, run_name, tokenizer=tokenizer)
-        final_acc = eval_sft(model, val_ds, args.device, 200)
+    if cfg.mode == "baseline":
+        history = train_sft(model, train_ds, val_ds, cfg, run_name, tokenizer=tokenizer)
+        final_acc = eval_sft(model, val_ds, cfg.device, 200)
     else:
-        cfg = SoRLConfig(
-            K=args.K, batch_size=args.batch_size,
-            num_epochs=args.num_epochs, lr=args.lr,
-            output_dir=args.output_dir,
-            log_every=50,
-            eval_every=max(1, args.dataset_size // args.batch_size),  # every epoch
-            save_every=999999, eval_samples=100,
-            alpha_info_gain=args.alpha_info_gain,
-            alpha_abs=args.alpha_abs,
-            alpha_soft_zipf=args.alpha_soft_zipf,
-            alpha_traj=0.0,  # v1 uses info_gain, not traj
-        )
+        # cfg is already an ArithmeticConfig (inherits SoRLConfig) — pass directly
         trainer = WandbSoRLTrainer(
             model, tokenizer, train_ds, val_ds,
             compute_accuracy=compute_accuracy_for_trainer,
-            collate_fn=collate_fn, config=cfg, device=args.device,
+            collate_fn=collate_fn, config=cfg, device=cfg.device,
         )
         trainer.train()
         history = trainer.history
-        final_acc = eval_with_recursion(model, val_ds, args.device, K=args.K, num_samples=200)
+        final_acc = eval_with_recursion(model, val_ds, cfg.device, K=cfg.K, num_samples=200)
 
     print(f"Final accuracy (random): {final_acc:.3f}")
 
     # Full per-split eval with ArithmeticEvaluator
     from arithmetic.evaluate import ArithmeticEvaluator
-    evaluator = ArithmeticEvaluator(model, tokenizer, device=args.device, n_digits=args.n_digits)
-    K_eval = args.K if args.mode == "sorl" else None
-    eval_results_sft = evaluator.run(ops=args.ops, K=None, n_per_split=50)
+    evaluator = ArithmeticEvaluator(model, tokenizer, device=cfg.device, n_digits=cfg.n_digits)
+    K_eval = cfg.K if cfg.mode == "sorl" else None
+    eval_results_sft = evaluator.run(ops=cfg.ops, K=None, n_per_split=50)
     print(f"\nSFT eval (no abs):")
     evaluator.print_table(eval_results_sft)
-    if args.mode == "sorl":
-        eval_results_sorl = evaluator.run(ops=args.ops, K=args.K, n_per_split=50)
-        print(f"\nSoRL eval (K={args.K}):")
+    if cfg.mode == "sorl":
+        eval_results_sorl = evaluator.run(ops=cfg.ops, K=cfg.K, n_per_split=50)
+        print(f"\nSoRL eval (K={cfg.K}):")
         evaluator.print_table(eval_results_sorl)
     else:
         eval_results_sorl = None
@@ -449,7 +540,7 @@ def main():
             wandb.run.summary[k] = v
         wandb.finish()
 
-    if args.push_to_hub:
+    if cfg.push_to_hub:
         from arithmetic.hub import save_model
         manifest["final_accuracy"] = eval_results_sorl["summary"]["overall_accuracy"] if eval_results_sorl else eval_results_sft["summary"]["overall_accuracy"]
         manifest["sft_accuracy"] = eval_results_sft["summary"]["overall_accuracy"]
@@ -478,7 +569,7 @@ def main():
             print(f"  Validation passed ✓")
 
         import shutil
-        shutil.rmtree(args.output_dir, ignore_errors=True)
+        shutil.rmtree(cfg.output_dir, ignore_errors=True)
 
 
 if __name__ == "__main__":
