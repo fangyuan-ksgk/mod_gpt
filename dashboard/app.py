@@ -419,9 +419,9 @@ found via activation-level analysis as explicit, interpretable tokens.
 
         # Populate model dropdown
         model_names = sorted([m["subfolder"].removeprefix("non_enriched/") for m in models])
-        model_dd = gr.Dropdown(choices=model_names, value=model_names[0] if model_names else "")
+        model_dd_update = gr.update(choices=model_names, value=model_names[0] if model_names else "")
 
-        return models, summary, q_status, main_df, hard_df, eval_info, model_dd
+        return models, summary, q_status, main_df, hard_df, eval_info, model_dd_update
 
     def on_detail(models, name):
         return build_detailed_splits(models, name.strip() if name else "")
@@ -443,10 +443,10 @@ found via activation-level analysis as explicit, interpretable tokens.
     # Auto-refresh every 2 min
     timer = gr.Timer(120)
     timer.tick(on_refresh, inputs=[arch_filter],
-               outputs=[models_state, summary_text, queue_status, main_table, hard_table])
+               outputs=[models_state, summary_text, queue_status, main_table, hard_table, eval_info_md, model_selector])
 
     app.load(on_refresh, inputs=[arch_filter],
-             outputs=[models_state, summary_text, queue_status, main_table, hard_table])
+             outputs=[models_state, summary_text, queue_status, main_table, hard_table, eval_info_md, model_selector])
 
 
 if __name__ == "__main__":
