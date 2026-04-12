@@ -37,7 +37,8 @@ LR=1e-5
 WARMUP_STEPS=50
 BATCH_SIZE=2
 GRAD_ACCUM=4          # EBS = 2 * 4 = 8
-NUM_EPOCHS=3
+SORL_EPOCHS=2         # SoRL: 2 ep × max_iter=2 ≈ 4 effective forward passes/sample
+SFT_EPOCHS=4          # SFT:  4 ep × 1 = 4 effective forward passes/sample (compute-matched)
 EVAL_SAMPLES=1000
 EVAL_BATCH_SIZE=128
 NUM_LOG_SAMPLES=3
@@ -53,7 +54,7 @@ MIX_DS="gsm8k,scienceqa,arc,mmlu,commonsenseqa"
 
 echo "============================================================"
 echo "Mixed-CPT experiment | ${TIMESTAMP}"
-echo "  Train: ${MIX_DS} | ep=${NUM_EPOCHS} | EBS=${BATCH_SIZE}x${GRAD_ACCUM}=8"
+echo "  Train: ${MIX_DS} | SoRL=${SORL_EPOCHS}ep×2iter, SFT=${SFT_EPOCHS}ep | EBS=${BATCH_SIZE}x${GRAD_ACCUM}=8"
 echo "  Eval:  all 5 datasets (auto)"
 echo "============================================================"
 
@@ -72,7 +73,7 @@ CUDA_VISIBLE_DEVICES=0 torchrun \
   train_sorl_post.py \
   --model_name $M06 \
   --dataset $MIX_DS \
-  --num_epochs $NUM_EPOCHS \
+  --num_epochs $SORL_EPOCHS \
   --lr $LR \
   --warmup_steps $WARMUP_STEPS \
   --batch_size $BATCH_SIZE \
@@ -82,7 +83,7 @@ CUDA_VISIBLE_DEVICES=0 torchrun \
   --prefix_abs --abs_prefix_max 8 \
   --K 8 --eval_K 8 \
   --max_iterations 2 \
-  --emb_lr_mult 10.0 \
+  --emb_lr_mult 1.0 \
   --abstract_vocab_size 128 \
   --eval_every 99999 \
   --save_every 99999 \
@@ -106,7 +107,7 @@ CUDA_VISIBLE_DEVICES=1 torchrun \
   train_sft_pt.py \
   --model_name $M06 \
   --dataset $MIX_DS \
-  --num_epochs $NUM_EPOCHS \
+  --num_epochs $SFT_EPOCHS \
   --lr $LR \
   --warmup_steps $WARMUP_STEPS \
   --batch_size $BATCH_SIZE \
