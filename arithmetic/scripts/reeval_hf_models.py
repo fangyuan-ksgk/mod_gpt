@@ -23,7 +23,7 @@ def get_tokenizer():
     return TOKENIZER
 
 
-def reeval_model(name: str, device: str = "cuda", n_per_split: int = 50):
+def reeval_model(name: str, device: str = "cuda", n_per_split: int = 250):
     """Load model from HF, eval with ArithmeticEvaluator, return results."""
     print(f"\n{'='*60}")
     print(f"Evaluating: {name}")

@@ -12,15 +12,32 @@ from sorl.info import hollow_sinkhorn_transform, get_zipf_prior
 
 # ----- infer insertion mask -----
 def infer_insert_mask(data, K, attention_mask, prompt_len=None):
+    """Insert one abstraction token after every K trajectory tokens.
+
+    Equivalent to Fangyuan's ``infer_rythmic_insert_mask`` (neo_utils.py)
+    on clean sequences (no pre-existing abstractions, single document).
+
+    Fangyuan's version uses 1-indexed ``within_doc_pos`` relative to the
+    last BOS/abstraction, with ``(within_doc_pos % K == 0) & (within_doc_pos > 0)``.
+    On a clean single-document sequence that simplifies to 1-indexed positions
+    K, 2K, 3K, … i.e. 0-indexed positions K-1, 2K-1, 3K-1, …
+
+    His ``no_fill`` flag prevents insertion after the last token (nothing
+    follows it), which we replicate with the ``not_last`` guard.
+    """
     batch_size, seq_len = data.shape
-    positions = torch.arange(seq_len, device=data.device).unsqueeze(0).expand(batch_size, -1)
+    # 1-indexed positions, matching Fangyuan's  ``positions = arange(1, seq_len+1)``
+    positions_1 = torch.arange(1, seq_len + 1, device=data.device).unsqueeze(0).expand(batch_size, -1)
+    # Don't insert after the last token (Fangyuan: no_fill[:, :-1] = is_bos[:, 1:])
+    not_last = positions_1 < seq_len
+
     if prompt_len is not None:
-        # Response-only mode: insert abstract tokens only in the response portion.
-        # Positions are relative to prompt_len, so first response token is position 0.
-        response_positions = (positions - prompt_len.unsqueeze(1)).clamp(min=-1)
-        insert_mask = (response_positions % K == 0) & (response_positions > 0) & attention_mask
+        # Response-only: offset so first response token is position 1
+        within_response = (positions_1 - prompt_len.unsqueeze(1)).clamp(min=0)
+        insert_mask = (within_response % K == 0) & (within_response > 0) & attention_mask & not_last
     else:
-        insert_mask = (positions % K == 0) & (positions > 0) & attention_mask
+        # Full sequence: (within_doc_pos % K == 0) & (within_doc_pos > 0)
+        insert_mask = (positions_1 % K == 0) & attention_mask & not_last
     return insert_mask
 
 # ----- expand prompt len ----- 

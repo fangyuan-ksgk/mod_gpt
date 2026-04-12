@@ -289,11 +289,27 @@ class GPUQueue:
             self._check_kill_commands()
             self._write_status()
 
+    def _dynamic_submit(self, cmd_str: str, name: str = ""):
+        """Submit a new job to the running queue dynamically."""
+        if not name:
+            # Extract name from output_dir
+            for part in cmd_str.split():
+                if part.startswith("ckpt/sweep/"):
+                    name = part.split("/")[-1]
+                    break
+            if not name:
+                name = f"dynamic_{self._job_counter}"
+
+        job_id = self.submit(cmd_str, name=name)
+        ts = time.strftime("%H:%M:%S")
+        print(f"[{ts}] DYNAMIC SUBMIT: {name} (job {job_id})")
+
     def _check_kill_commands(self):
-        """Check Redis for kill commands targeting QUEUE or ALL."""
+        """Check Redis for kill/modify/submit commands targeting QUEUE or ALL."""
         if not self.db:
             return
-        # Check for QUEUE-level kill
+
+        # Check for QUEUE-level commands
         cmds = self.db.read_commands("QUEUE")
         for cmd in cmds:
             if cmd.get("command") == "kill":
@@ -312,6 +328,43 @@ class GPUQueue:
                             if self.db:
                                 self.db.fail_job(job.name, error="killed by QUEUE command")
                 self._stop_monitor.set()  # stop the queue
+            elif cmd.get("command") == "modify":
+                self._handle_modify(cmd)
+            elif cmd.get("command") == "submit":
+                payload = cmd.get("payload", {})
+                self._dynamic_submit(payload.get("cmd", ""), name=payload.get("name", ""))
+
+        # Check per-job modify commands for ALL targets
+        all_cmds = self.db.read_commands("ALL")
+        for cmd in all_cmds:
+            if cmd.get("command") == "modify":
+                self._handle_modify(cmd, target_all=True)
+
+    def _handle_modify(self, cmd, target_all=False):
+        """Modify pending job commands by replacing flag values."""
+        payload = cmd.get("payload", {})
+        flag = payload.get("flag", "")
+        value = payload.get("value", "")
+        target = cmd.get("target", "")
+        if not flag:
+            return
+
+        ts = time.strftime("%H:%M:%S")
+        with self.lock:
+            for job in self.jobs:
+                if job.status != "pending":
+                    continue
+                if not target_all and target not in ("QUEUE", "ALL") and job.name != target:
+                    continue
+                # Check if this flag exists in the command
+                if flag in job.cmd:
+                    import re
+                    # Replace --flag <old_value> with --flag <new_value>
+                    pattern = rf"({re.escape(flag)})\s+\S+"
+                    new_cmd = re.sub(pattern, rf"\1 {value}", job.cmd)
+                    if new_cmd != job.cmd:
+                        print(f"[{ts}] MODIFY {job.name}: {flag} → {value}")
+                        job.cmd = new_cmd
 
     def _check_stale_jobs(self):
         """Kill and requeue jobs that have gone silent."""

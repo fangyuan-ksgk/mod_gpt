@@ -43,33 +43,56 @@ class ArithmeticEvaluator:
         )
 
     def _predict_sft(self, qwen_ids):
-        """SFT forward pass, returns predicted answer token IDs (Qwen3 space)."""
-        ids = qwen_ids.unsqueeze(0)
-        attn = torch.ones_like(ids)
-        out = self.model(ids, attention_mask=attn, memory_span_abs=1792, memory_span_traj=1792)
-        pred = out.logits[0, self.prompt_len - 1:-1, :self.base_v].argmax(dim=-1)
-        return pred
+        """SFT autoregressive eval: feed prompt, generate answer digit by digit."""
+        # Start with just the prompt
+        generated = qwen_ids[:self.prompt_len].clone()
+
+        for _ in range(self.answer_len):
+            ids = generated.unsqueeze(0)
+            attn = torch.ones_like(ids)
+            out = self.model(ids, attention_mask=attn, memory_span_abs=1792, memory_span_traj=1792)
+            next_token = out.logits[0, -1, :self.base_v].argmax()
+            generated = torch.cat([generated, next_token.unsqueeze(0)])
+
+        return generated[self.prompt_len:]
 
     def _predict_sorl(self, qwen_ids, K):
-        """SoRL recursion eval, returns predicted answer token IDs (Qwen3 space)."""
+        """SoRL autoregressive eval with fixed-length structure.
+        Pads to full sequence length so abstraction pattern matches training exactly.
+        Fills in answer digits one at a time (errors propagate)."""
         from sorl.sorl_trainer import infer_insert_mask, insert_tokens_with_padding, expand_prompt_len
 
-        ids = qwen_ids.unsqueeze(0)
-        attn = torch.ones_like(ids)
-        pl_t = torch.tensor([self.prompt_len], dtype=torch.long, device=self.device)
+        # Build full-length sequence: prompt + dummy trajectory tokens for answer
+        # Use token 0 (a valid trajectory token) — NOT pad_id which equals the abstraction placeholder
+        seq = qwen_ids[:self.prompt_len].clone()
+        pad_answer = torch.zeros(self.answer_len, dtype=torch.long, device=self.device)
+        seq = torch.cat([seq, pad_answer])  # [21] — same length as training
 
-        im = infer_insert_mask(ids, K, attn)
-        ep = expand_prompt_len(pl_t, im)
-        ed, ea = insert_tokens_with_padding(ids, attn, im, self.model.vocab_sizes[0], self.pad_id)
-        data, ppt, logits = self.model.recursion(
-            ed, ea, max_iterations=2,
-            memory_span_abs=1792, memory_span_traj=1792,
-            temperature=0.0, prompt_len=ep,
-        )
+        for digit_idx in range(self.answer_len):
+            ids = seq.unsqueeze(0)
+            attn = torch.ones_like(ids)
+            pl_t = torch.tensor([self.prompt_len], dtype=torch.long, device=self.device)
 
-        is_traj = data[0, 1:] < self.base_v
-        pred_logits = logits[0, :-1][is_traj][:, :self.base_v].argmax(dim=-1)
-        return pred_logits[-self.answer_len:]
+            # Insert abstractions into full-length sequence (same pattern as training)
+            im = infer_insert_mask(ids, K, attn)
+            ep = expand_prompt_len(pl_t, im)
+            ed, ea = insert_tokens_with_padding(ids, attn, im, self.model.vocab_sizes[0], self.pad_id)
+            data, ppt, logits = self.model.recursion(
+                ed, ea, max_iterations=2,
+                memory_span_abs=1792, memory_span_traj=1792,
+                temperature=0.0, prompt_len=ep,
+            )
+
+            # Find expanded position of this answer digit and predict from logits[pos-1]
+            is_traj = data[0] < self.base_v
+            traj_indices = is_traj.nonzero(as_tuple=True)[0]
+            answer_pos = traj_indices[self.prompt_len + digit_idx].item()
+            pred_token = logits[0, answer_pos - 1, :self.base_v].argmax()
+
+            # Fill it into the sequence for next iteration
+            seq[self.prompt_len + digit_idx] = pred_token
+
+        return seq[self.prompt_len:]
 
     def _eval_split(self, examples, K=None):
         """Evaluate a list of ArithmeticExample. Returns split-level results dict."""
@@ -113,7 +136,7 @@ class ArithmeticEvaluator:
         }
 
     def run(self, ops: str = "add", K: Optional[int] = None,
-            n_per_split: int = 50) -> dict:
+            n_per_split: int = 250) -> dict:
         """
         Run full evaluation across all Quirke complexity splits.
 

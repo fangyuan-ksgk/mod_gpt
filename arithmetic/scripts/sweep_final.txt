@@ -7,16 +7,16 @@
 # ═══════════════════════════════════════════════════════════
 
 # Baselines across data sizes
-python -m arithmetic.train --mode baseline --ops add_sub --dataset_size 10000 --num_epochs 10 --push_to_hub --output_dir ckpt/sweep/add_sub_baseline_10K
-python -m arithmetic.train --mode baseline --ops add_sub --dataset_size 25000 --num_epochs 10 --push_to_hub --output_dir ckpt/sweep/add_sub_baseline_25K
+python -m arithmetic.train --mode baseline --ops add_sub --dataset_size 10000 --num_epochs 20 --push_to_hub --output_dir ckpt/sweep/add_sub_baseline_10K
+python -m arithmetic.train --mode baseline --ops add_sub --dataset_size 25000 --num_epochs 20 --push_to_hub --output_dir ckpt/sweep/add_sub_baseline_25K
 python -m arithmetic.train --mode sorl --ops add_sub --dataset_size 25000 --abs_vocab 10 --K 1 --num_epochs 10 --push_to_hub --output_dir ckpt/sweep/as_sorl_abs10_K1_25K
-python -m arithmetic.train --mode baseline --ops add_sub --dataset_size 50000 --num_epochs 10 --push_to_hub --output_dir ckpt/sweep/add_sub_baseline_50K
+python -m arithmetic.train --mode baseline --ops add_sub --dataset_size 50000 --num_epochs 20 --push_to_hub --output_dir ckpt/sweep/add_sub_baseline_50K
 python -m arithmetic.train --mode sorl --ops add_sub --dataset_size 50000 --abs_vocab 10 --K 1 --num_epochs 10 --push_to_hub --output_dir ckpt/sweep/as_sorl_abs10_K1_50K
-python -m arithmetic.train --mode baseline --ops add_sub --dataset_size 100000 --num_epochs 10 --push_to_hub --output_dir ckpt/sweep/add_sub_baseline_100K
+python -m arithmetic.train --mode baseline --ops add_sub --dataset_size 100000 --num_epochs 20 --push_to_hub --output_dir ckpt/sweep/add_sub_baseline_100K
 python -m arithmetic.train --mode sorl --ops add_sub --dataset_size 100000 --abs_vocab 10 --K 1 --num_epochs 10 --push_to_hub --output_dir ckpt/sweep/as_sorl_abs10_K1_100K
-python -m arithmetic.train --mode baseline --ops add_sub --dataset_size 250000 --num_epochs 10 --push_to_hub --output_dir ckpt/sweep/add_sub_baseline_250K
+python -m arithmetic.train --mode baseline --ops add_sub --dataset_size 250000 --num_epochs 20 --push_to_hub --output_dir ckpt/sweep/add_sub_baseline_250K
 python -m arithmetic.train --mode sorl --ops add_sub --dataset_size 250000 --abs_vocab 10 --K 1 --num_epochs 10 --push_to_hub --output_dir ckpt/sweep/as_sorl_abs10_K1_250K
-python -m arithmetic.train --mode baseline --ops add_sub --dataset_size 500000 --num_epochs 10 --push_to_hub --output_dir ckpt/sweep/add_sub_baseline_500K
+python -m arithmetic.train --mode baseline --ops add_sub --dataset_size 500000 --num_epochs 20 --push_to_hub --output_dir ckpt/sweep/add_sub_baseline_500K
 python -m arithmetic.train --mode sorl --ops add_sub --dataset_size 10000 --abs_vocab 10 --K 1 --num_epochs 10 --push_to_hub --output_dir ckpt/sweep/as_sorl_abs10_K1_10K
 
 # ═══════════════════════════════════════════════════════════
@@ -91,37 +91,50 @@ python -m arithmetic.train --mode sorl --ops add_sub --dataset_size 500000 --abs
 # ═══════════════════════════════════════════════════════════
 
 # 1L/3H/510d
-python -m arithmetic.train --mode baseline --ops add_sub --dataset_size 25000 --num_epochs 10 --n_layer 1 --n_head 3 --n_embd 510 --push_to_hub --output_dir ckpt/sweep/as_baseline_25K_1L3H510d
+python -m arithmetic.train --mode baseline --ops add_sub --dataset_size 25000 --num_epochs 20 --n_layer 1 --n_head 3 --n_embd 510 --push_to_hub --output_dir ckpt/sweep/as_baseline_25K_1L3H510d
 python -m arithmetic.train --mode sorl --ops add_sub --dataset_size 25000 --abs_vocab 10 --K 1 --num_epochs 10 --n_layer 1 --n_head 3 --n_embd 510 --push_to_hub --output_dir ckpt/sweep/as_sorl_abs10_K1_25K_1L3H510d
-python -m arithmetic.train --mode baseline --ops add_sub --dataset_size 50000 --num_epochs 10 --n_layer 1 --n_head 3 --n_embd 510 --push_to_hub --output_dir ckpt/sweep/as_baseline_50K_1L3H510d
+python -m arithmetic.train --mode baseline --ops add_sub --dataset_size 50000 --num_epochs 20 --n_layer 1 --n_head 3 --n_embd 510 --push_to_hub --output_dir ckpt/sweep/as_baseline_50K_1L3H510d
 python -m arithmetic.train --mode sorl --ops add_sub --dataset_size 50000 --abs_vocab 10 --K 1 --num_epochs 10 --n_layer 1 --n_head 3 --n_embd 510 --push_to_hub --output_dir ckpt/sweep/as_sorl_abs10_K1_50K_1L3H510d
-python -m arithmetic.train --mode baseline --ops add_sub --dataset_size 100000 --num_epochs 10 --n_layer 1 --n_head 3 --n_embd 510 --push_to_hub --output_dir ckpt/sweep/as_baseline_100K_1L3H510d
+python -m arithmetic.train --mode baseline --ops add_sub --dataset_size 100000 --num_epochs 20 --n_layer 1 --n_head 3 --n_embd 510 --push_to_hub --output_dir ckpt/sweep/as_baseline_100K_1L3H510d
 python -m arithmetic.train --mode sorl --ops add_sub --dataset_size 100000 --abs_vocab 10 --K 1 --num_epochs 10 --n_layer 1 --n_head 3 --n_embd 510 --push_to_hub --output_dir ckpt/sweep/as_sorl_abs10_K1_100K_1L3H510d
-python -m arithmetic.train --mode baseline --ops add_sub --dataset_size 250000 --num_epochs 10 --n_layer 1 --n_head 3 --n_embd 510 --push_to_hub --output_dir ckpt/sweep/as_baseline_250K_1L3H510d
+python -m arithmetic.train --mode baseline --ops add_sub --dataset_size 250000 --num_epochs 20 --n_layer 1 --n_head 3 --n_embd 510 --push_to_hub --output_dir ckpt/sweep/as_baseline_250K_1L3H510d
 python -m arithmetic.train --mode sorl --ops add_sub --dataset_size 250000 --abs_vocab 10 --K 1 --num_epochs 10 --n_layer 1 --n_head 3 --n_embd 510 --push_to_hub --output_dir ckpt/sweep/as_sorl_abs10_K1_250K_1L3H510d
-python -m arithmetic.train --mode baseline --ops add_sub --dataset_size 500000 --num_epochs 10 --n_layer 1 --n_head 3 --n_embd 510 --push_to_hub --output_dir ckpt/sweep/as_baseline_500K_1L3H510d
+python -m arithmetic.train --mode baseline --ops add_sub --dataset_size 500000 --num_epochs 20 --n_layer 1 --n_head 3 --n_embd 510 --push_to_hub --output_dir ckpt/sweep/as_baseline_500K_1L3H510d
 python -m arithmetic.train --mode sorl --ops add_sub --dataset_size 500000 --abs_vocab 10 --K 1 --num_epochs 10 --n_layer 1 --n_head 3 --n_embd 510 --push_to_hub --output_dir ckpt/sweep/as_sorl_abs10_K1_500K_1L3H510d
 
 # 1L/2H/256d
-python -m arithmetic.train --mode baseline --ops add_sub --dataset_size 25000 --num_epochs 10 --n_layer 1 --n_head 2 --n_embd 256 --push_to_hub --output_dir ckpt/sweep/as_baseline_25K_1L2H256d
+python -m arithmetic.train --mode baseline --ops add_sub --dataset_size 25000 --num_epochs 20 --n_layer 1 --n_head 2 --n_embd 256 --push_to_hub --output_dir ckpt/sweep/as_baseline_25K_1L2H256d
 python -m arithmetic.train --mode sorl --ops add_sub --dataset_size 25000 --abs_vocab 10 --K 1 --num_epochs 10 --n_layer 1 --n_head 2 --n_embd 256 --push_to_hub --output_dir ckpt/sweep/as_sorl_abs10_K1_25K_1L2H256d
-python -m arithmetic.train --mode baseline --ops add_sub --dataset_size 50000 --num_epochs 10 --n_layer 1 --n_head 2 --n_embd 256 --push_to_hub --output_dir ckpt/sweep/as_baseline_50K_1L2H256d
+python -m arithmetic.train --mode baseline --ops add_sub --dataset_size 50000 --num_epochs 20 --n_layer 1 --n_head 2 --n_embd 256 --push_to_hub --output_dir ckpt/sweep/as_baseline_50K_1L2H256d
 python -m arithmetic.train --mode sorl --ops add_sub --dataset_size 50000 --abs_vocab 10 --K 1 --num_epochs 10 --n_layer 1 --n_head 2 --n_embd 256 --push_to_hub --output_dir ckpt/sweep/as_sorl_abs10_K1_50K_1L2H256d
-python -m arithmetic.train --mode baseline --ops add_sub --dataset_size 100000 --num_epochs 10 --n_layer 1 --n_head 2 --n_embd 256 --push_to_hub --output_dir ckpt/sweep/as_baseline_100K_1L2H256d
+python -m arithmetic.train --mode baseline --ops add_sub --dataset_size 100000 --num_epochs 20 --n_layer 1 --n_head 2 --n_embd 256 --push_to_hub --output_dir ckpt/sweep/as_baseline_100K_1L2H256d
 python -m arithmetic.train --mode sorl --ops add_sub --dataset_size 100000 --abs_vocab 10 --K 1 --num_epochs 10 --n_layer 1 --n_head 2 --n_embd 256 --push_to_hub --output_dir ckpt/sweep/as_sorl_abs10_K1_100K_1L2H256d
-python -m arithmetic.train --mode baseline --ops add_sub --dataset_size 250000 --num_epochs 10 --n_layer 1 --n_head 2 --n_embd 256 --push_to_hub --output_dir ckpt/sweep/as_baseline_250K_1L2H256d
+python -m arithmetic.train --mode baseline --ops add_sub --dataset_size 250000 --num_epochs 20 --n_layer 1 --n_head 2 --n_embd 256 --push_to_hub --output_dir ckpt/sweep/as_baseline_250K_1L2H256d
 python -m arithmetic.train --mode sorl --ops add_sub --dataset_size 250000 --abs_vocab 10 --K 1 --num_epochs 10 --n_layer 1 --n_head 2 --n_embd 256 --push_to_hub --output_dir ckpt/sweep/as_sorl_abs10_K1_250K_1L2H256d
-python -m arithmetic.train --mode baseline --ops add_sub --dataset_size 500000 --num_epochs 10 --n_layer 1 --n_head 2 --n_embd 256 --push_to_hub --output_dir ckpt/sweep/as_baseline_500K_1L2H256d
+python -m arithmetic.train --mode baseline --ops add_sub --dataset_size 500000 --num_epochs 20 --n_layer 1 --n_head 2 --n_embd 256 --push_to_hub --output_dir ckpt/sweep/as_baseline_500K_1L2H256d
 python -m arithmetic.train --mode sorl --ops add_sub --dataset_size 500000 --abs_vocab 10 --K 1 --num_epochs 10 --n_layer 1 --n_head 2 --n_embd 256 --push_to_hub --output_dir ckpt/sweep/as_sorl_abs10_K1_500K_1L2H256d
 
 # 2L/1H/128d
-python -m arithmetic.train --mode baseline --ops add_sub --dataset_size 25000 --num_epochs 10 --n_layer 2 --n_head 1 --n_embd 128 --push_to_hub --output_dir ckpt/sweep/as_baseline_25K_2L1H128d
+python -m arithmetic.train --mode baseline --ops add_sub --dataset_size 25000 --num_epochs 20 --n_layer 2 --n_head 1 --n_embd 128 --push_to_hub --output_dir ckpt/sweep/as_baseline_25K_2L1H128d
 python -m arithmetic.train --mode sorl --ops add_sub --dataset_size 25000 --abs_vocab 10 --K 1 --num_epochs 10 --n_layer 2 --n_head 1 --n_embd 128 --push_to_hub --output_dir ckpt/sweep/as_sorl_abs10_K1_25K_2L1H128d
-python -m arithmetic.train --mode baseline --ops add_sub --dataset_size 50000 --num_epochs 10 --n_layer 2 --n_head 1 --n_embd 128 --push_to_hub --output_dir ckpt/sweep/as_baseline_50K_2L1H128d
+python -m arithmetic.train --mode baseline --ops add_sub --dataset_size 50000 --num_epochs 20 --n_layer 2 --n_head 1 --n_embd 128 --push_to_hub --output_dir ckpt/sweep/as_baseline_50K_2L1H128d
 python -m arithmetic.train --mode sorl --ops add_sub --dataset_size 50000 --abs_vocab 10 --K 1 --num_epochs 10 --n_layer 2 --n_head 1 --n_embd 128 --push_to_hub --output_dir ckpt/sweep/as_sorl_abs10_K1_50K_2L1H128d
-python -m arithmetic.train --mode baseline --ops add_sub --dataset_size 100000 --num_epochs 10 --n_layer 2 --n_head 1 --n_embd 128 --push_to_hub --output_dir ckpt/sweep/as_baseline_100K_2L1H128d
+python -m arithmetic.train --mode baseline --ops add_sub --dataset_size 100000 --num_epochs 20 --n_layer 2 --n_head 1 --n_embd 128 --push_to_hub --output_dir ckpt/sweep/as_baseline_100K_2L1H128d
 python -m arithmetic.train --mode sorl --ops add_sub --dataset_size 100000 --abs_vocab 10 --K 1 --num_epochs 10 --n_layer 2 --n_head 1 --n_embd 128 --push_to_hub --output_dir ckpt/sweep/as_sorl_abs10_K1_100K_2L1H128d
-python -m arithmetic.train --mode baseline --ops add_sub --dataset_size 250000 --num_epochs 10 --n_layer 2 --n_head 1 --n_embd 128 --push_to_hub --output_dir ckpt/sweep/as_baseline_250K_2L1H128d
+python -m arithmetic.train --mode baseline --ops add_sub --dataset_size 250000 --num_epochs 20 --n_layer 2 --n_head 1 --n_embd 128 --push_to_hub --output_dir ckpt/sweep/as_baseline_250K_2L1H128d
 python -m arithmetic.train --mode sorl --ops add_sub --dataset_size 250000 --abs_vocab 10 --K 1 --num_epochs 10 --n_layer 2 --n_head 1 --n_embd 128 --push_to_hub --output_dir ckpt/sweep/as_sorl_abs10_K1_250K_2L1H128d
-python -m arithmetic.train --mode baseline --ops add_sub --dataset_size 500000 --num_epochs 10 --n_layer 2 --n_head 1 --n_embd 128 --push_to_hub --output_dir ckpt/sweep/as_baseline_500K_2L1H128d
+python -m arithmetic.train --mode baseline --ops add_sub --dataset_size 500000 --num_epochs 20 --n_layer 2 --n_head 1 --n_embd 128 --push_to_hub --output_dir ckpt/sweep/as_baseline_500K_2L1H128d
 python -m arithmetic.train --mode sorl --ops add_sub --dataset_size 500000 --abs_vocab 10 --K 1 --num_epochs 10 --n_layer 2 --n_head 1 --n_embd 128 --push_to_hub --output_dir ckpt/sweep/as_sorl_abs10_K1_500K_2L1H128d
+
+# ═══════════════════════════════════════════════════════════
+# SECTION 6: K=4 gap fill — 10K and 250K
+# ═══════════════════════════════════════════════════════════
+
+python -m arithmetic.train --mode sorl --ops add_sub --dataset_size 10000 --abs_vocab 5 --K 4 --num_epochs 10 --push_to_hub --output_dir ckpt/sweep/as_sorl_abs5_K4_10K
+python -m arithmetic.train --mode sorl --ops add_sub --dataset_size 10000 --abs_vocab 10 --K 4 --num_epochs 10 --push_to_hub --output_dir ckpt/sweep/as_sorl_abs10_K4_10K
+python -m arithmetic.train --mode sorl --ops add_sub --dataset_size 10000 --abs_vocab 30 --K 4 --num_epochs 10 --push_to_hub --output_dir ckpt/sweep/as_sorl_abs30_K4_10K
+python -m arithmetic.train --mode sorl --ops add_sub --dataset_size 10000 --abs_vocab 50 --K 4 --num_epochs 10 --push_to_hub --output_dir ckpt/sweep/as_sorl_abs50_K4_10K
+python -m arithmetic.train --mode sorl --ops add_sub --dataset_size 250000 --abs_vocab 5 --K 4 --num_epochs 10 --push_to_hub --output_dir ckpt/sweep/as_sorl_abs5_K4_250K
+python -m arithmetic.train --mode sorl --ops add_sub --dataset_size 250000 --abs_vocab 10 --K 4 --num_epochs 10 --push_to_hub --output_dir ckpt/sweep/as_sorl_abs10_K4_250K
+python -m arithmetic.train --mode sorl --ops add_sub --dataset_size 250000 --abs_vocab 30 --K 4 --num_epochs 10 --push_to_hub --output_dir ckpt/sweep/as_sorl_abs30_K4_250K
+python -m arithmetic.train --mode sorl --ops add_sub --dataset_size 250000 --abs_vocab 50 --K 4 --num_epochs 10 --push_to_hub --output_dir ckpt/sweep/as_sorl_abs50_K4_250K

@@ -76,39 +76,53 @@ def collate_fn(batch):
 
 def eval_with_recursion(model, dataset, device, K=4, num_samples=200):
     """
-    SoRL eval using recursion (same procedure as training):
-    insert placeholders, denoise via recursion, teacher-force trajectory predictions.
+    SoRL eval: autoregressive with fixed-length structure.
+    Pads to full sequence length so abstraction pattern matches training.
+    Fills in answer digits one at a time (errors propagate).
     """
     from sorl.sorl_trainer import infer_insert_mask, insert_tokens_with_padding, expand_prompt_len
 
     model.eval()
     base_v = model.vocab_sizes[0].item()
     prompt_len = dataset.prompt_len
+    answer_len = dataset.n_digits + 1
     pad_id = dataset.tokenizer.pad_token_id
     n_correct = 0
 
     for _ in range(num_samples):
         item = dataset[0]
-        ids = item["input_ids"].unsqueeze(0).to(device)
-        attn = item["attention_mask"].unsqueeze(0).to(device)
-        pl_t = item["prompt_len"].unsqueeze(0).to(device)
-        true_answer = ids[0, prompt_len:]
+        ids = item["input_ids"].to(device)
+        true_answer = ids[prompt_len:]
+
+        # Build full-length sequence: prompt + dummy trajectory tokens for answer
+        # Use token 0 (valid trajectory token) — NOT pad_id which equals abstraction placeholder
+        seq = ids[:prompt_len].clone()
+        pad_answer = torch.zeros(answer_len, dtype=torch.long, device=device)
+        seq = torch.cat([seq, pad_answer])
 
         with torch.no_grad():
-            im = infer_insert_mask(ids, K, attn)
-            ep = expand_prompt_len(pl_t, im)
-            ed, ea = insert_tokens_with_padding(ids, attn, im, model.vocab_sizes[0], pad_id)
-            data, ppt, logits = model.recursion(
-                ed, ea, max_iterations=2,
-                memory_span_abs=1792, memory_span_traj=1792,
-                temperature=0.0, prompt_len=ep,
-            )
+            for digit_idx in range(answer_len):
+                inp = seq.unsqueeze(0)
+                attn = torch.ones_like(inp)
+                pl_t = torch.tensor([prompt_len], dtype=torch.long, device=device)
 
-            # Extract trajectory predictions at answer positions
-            is_traj = data[0, 1:] < base_v
-            pred_logits = logits[0, :-1][is_traj][:, :base_v].argmax(dim=-1)
-            answer_len = dataset.n_digits + 1  # n_digits + overflow digit
-            pred_answer = pred_logits[-answer_len:]
+                im = infer_insert_mask(inp, K, attn)
+                ep = expand_prompt_len(pl_t, im)
+                ed, ea = insert_tokens_with_padding(inp, attn, im, model.vocab_sizes[0], pad_id)
+                data, ppt, logits = model.recursion(
+                    ed, ea, max_iterations=2,
+                    memory_span_abs=1792, memory_span_traj=1792,
+                    temperature=0.0, prompt_len=ep,
+                )
+
+                # Find expanded position of this answer digit and predict from logits[pos-1]
+                is_traj = data[0] < base_v
+                traj_indices = is_traj.nonzero(as_tuple=True)[0]
+                answer_pos = traj_indices[prompt_len + digit_idx].item()
+                pred_token = logits[0, answer_pos - 1, :base_v].argmax()
+                seq[prompt_len + digit_idx] = pred_token
+
+            pred_answer = seq[prompt_len:]
 
         if (pred_answer == true_answer).all():
             n_correct += 1
@@ -118,21 +132,28 @@ def eval_with_recursion(model, dataset, device, K=4, num_samples=200):
 
 
 def eval_sft(model, dataset, device, num_samples=200):
-    """SFT eval: no abstraction tokens, just forward pass."""
+    """SFT eval: autoregressive generation, no abstraction tokens."""
     model.eval()
     prompt_len = dataset.prompt_len
+    answer_len = dataset.n_digits + 1
     base_v = model.vocab_sizes[0].item()
     n_correct = 0
 
     for _ in range(num_samples):
         item = dataset[0]
         ids = item["input_ids"].unsqueeze(0).to(device)
-        attn = item["attention_mask"].unsqueeze(0).to(device)
+        target = ids[0, prompt_len:]
 
         with torch.no_grad():
-            out = model(ids, attention_mask=attn, memory_span_abs=1792, memory_span_traj=1792)
-        pred = out.logits[0, prompt_len - 1:-1, :base_v].argmax(dim=-1)
-        target = ids[0, prompt_len:]
+            generated = ids[0, :prompt_len].clone()
+            for _ in range(answer_len):
+                gen_ids = generated.unsqueeze(0)
+                gen_attn = torch.ones_like(gen_ids)
+                out = model(gen_ids, attention_mask=gen_attn, memory_span_abs=1792, memory_span_traj=1792)
+                next_token = out.logits[0, -1, :base_v].argmax()
+                generated = torch.cat([generated, next_token.unsqueeze(0)])
+            pred = generated[prompt_len:]
+
         if (pred == target).all():
             n_correct += 1
 
@@ -314,6 +335,8 @@ def main():
         args.abs_vocab = 0
 
     run_name = f"{args.ops}_{args.mode}"
+    if args.mode == "sorl":
+        run_name += "_v1"
     if args.abs_vocab > 0:
         run_name += f"_abs{args.abs_vocab}"
     if args.K != 4 and args.mode == "sorl":

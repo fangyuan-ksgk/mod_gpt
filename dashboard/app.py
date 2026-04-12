@@ -203,8 +203,56 @@ def build_detailed_splits(models, model_name):
 
 with gr.Blocks(title="SoRL Arithmetic Dashboard") as app:
     gr.Markdown("# SoRL Arithmetic Dashboard")
-    gr.Markdown("Baseline vs SoRL side-by-side. **Bold** = winner. "
-                "Source: [`thoughtworks/arithmetic-sorl`](https://huggingface.co/thoughtworks/arithmetic-sorl)")
+    gr.Markdown("Baseline vs SoRL side-by-side. **Bold** = winner. &nbsp;|&nbsp; "
+                "[Models](https://huggingface.co/thoughtworks/arithmetic-sorl) &nbsp;|&nbsp; "
+                "[Datasets](https://huggingface.co/datasets/thoughtworks/arithmetic-sorl-data) &nbsp;|&nbsp; "
+                "[WandB](https://wandb.ai/nlp_and_interpretability/sorl-arithmetic) &nbsp;|&nbsp; "
+                "[Code](https://github.com/fangyuan-ksgk/mod_gpt/tree/amir/arithmetic) &nbsp;|&nbsp; "
+                "[Quirke et al. 2024](https://arxiv.org/abs/2402.02619)")
+
+    gr.Markdown("""
+### What is SoRL?
+
+**Self-Organized Reinforcement Learning (SoRL)** augments a transformer with learned *abstraction tokens* —
+a small auxiliary vocabulary (e.g. 10 tokens) inserted at regular intervals (every K positions) into the sequence.
+These tokens act as an explicit, interpretable scratch-pad for intermediate reasoning.
+
+```
+  Standard SFT:     1 2 3 4 5 6 + 6 5 4 3 2 1 = 1 8 7 9 7 7
+
+  SoRL (K=4):       1 2 3 4 [a₃] 5 6 + 6 [a₇] 5 4 3 [a₁] 2 1 = 1 [a₃] 8 7 9 [a₇] 7 7
+                            │            │            │              │            │
+                       abstraction tokens from a learned vocabulary of size V
+```
+
+**How it works:**
+
+1. **Insert** — Placeholder abstraction tokens are inserted every K positions in the sequence.
+
+2. **Search (iterative recursion)** — The model runs multiple forward passes. Each pass predicts
+   what each abstraction token should be, conditioned on (a) the real tokens and (b) the previous
+   iteration's abstraction predictions. After several iterations, the abstractions converge.
+   Multiple rollouts (n=2) are generated with different random seeds, and the rollout with the
+   lowest trajectory loss is selected.
+
+3. **Information bottleneck** — A custom attention mask enforces that abstraction tokens and
+   real tokens have *separate memory spans*. Real tokens attend to nearby abstractions but not
+   distant real tokens, forcing information to flow *through* the abstraction layer. This
+   creates a compression bottleneck that makes abstractions carry meaningful information.
+
+4. **Training losses (v1):**
+   - **Info-gain loss** `p(s|a) / p(s)` — measures how much abstractions reduce prediction
+     uncertainty. This is the key loss: it forces abstractions to actually *help*, not just exist.
+   - **Abstraction prediction loss** `p(a|s)` — the model should be able to predict its own
+     abstractions from context (self-consistency).
+   - **Zipf regularizer** — encourages diverse usage of the abstraction vocabulary rather than
+     collapsing to a single token.
+
+**Why this matters for interpretability:** If the model learns to encode carry/borrow state in
+abstraction tokens, those reasoning steps become *directly readable* in the token sequence — no
+activation-level probing or SAEs needed. This is what we test on
+[Quirke et al.'s](https://arxiv.org/abs/2402.02619) 6-digit addition and subtraction task.
+""")
 
     models_state = gr.State([])
 
@@ -220,7 +268,7 @@ with gr.Blocks(title="SoRL Arithmetic Dashboard") as app:
     gr.Markdown("### Overall Accuracy (Baseline vs SoRL)")
     main_table = gr.Dataframe(
         headers=["Ops", "Data", "Arch", "Baseline", "SoRL", "Config", "B_wandb", "S_wandb"],
-        datatype=["str", "str", "str", "str", "str", "str", "markdown", "markdown"],
+        datatype=["str", "str", "str", "markdown", "markdown", "str", "markdown", "markdown"],
         interactive=False,
     )
 
@@ -228,8 +276,10 @@ with gr.Blocks(title="SoRL Arithmetic Dashboard") as app:
         gr.Markdown("Left = Baseline, Right = SoRL. **Bold** = winner.")
         hard_table = gr.Dataframe(
             headers=["Ops", "Data", "Config",
-                     "B_S5", "S_S5", "B_S6", "S_S6", "B_C6", "S_C6", "B_M5", "S_M5", "B_B5", "S_B5"],
-            datatype=["str"] * 13,
+                     "B_add_S5", "S_add_S5", "B_add_S6", "S_add_S6",
+                     "B_add_C6", "S_add_C6", "B_sub_M5", "S_sub_M5",
+                     "B_sub_B5", "S_sub_B5"],
+            datatype=["str", "str", "str"] + ["markdown"] * 10,
             interactive=False,
         )
 
@@ -238,40 +288,20 @@ with gr.Blocks(title="SoRL Arithmetic Dashboard") as app:
         detail_btn = gr.Button("Show splits")
         detail_table = gr.Dataframe(headers=["Split", "Accuracy", "N"], interactive=False)
 
-    with gr.Accordion("Eval Datasets & Resources", open=False):
-        gr.Markdown("""
-**Fixed eval sets** (seed=42, cached, deterministic — all models evaluated on identical examples):
-
-| Split Type | Splits | Examples | Description |
-|-----------|--------|----------|-------------|
-| Quirke cascades (add) | S0–S6 | 50 each | Carry cascade depth 0–6 |
-| Quirke cascades (sub) | M0–M5 | 50 each | Borrow cascade depth 0–5 (M6 impossible for 6-digit) |
-| Hot carry chains | C3–C6 | 50 each | Varied answer digits (not just 0s) |
-| Hot borrow chains | B3–B5 | 50 each | Varied answer digits (not just 9s) |
-| Random | add_random, sub_random | 200 each | Uniform random |
-
-**Total**: 1400 examples (add_sub), 750 examples (add-only)
-
-**Links**:
-- Models: [`thoughtworks/arithmetic-sorl`](https://huggingface.co/thoughtworks/arithmetic-sorl)
-- Datasets: [`thoughtworks/arithmetic-sorl-data`](https://huggingface.co/datasets/thoughtworks/arithmetic-sorl-data)
-- WandB: [`nlp_and_interpretability/sorl-arithmetic`](https://wandb.ai/nlp_and_interpretability/sorl-arithmetic)
-- Code: [`fangyuan-ksgk/mod_gpt`](https://github.com/fangyuan-ksgk/mod_gpt) (branch: `amir/arithmetic`)
-""")
+    with gr.Accordion("About This Study", open=False):
+        eval_info_md = gr.Markdown("")
 
     def get_queue_status_text(n_models):
         """Show live queue status from HF-uploaded queue_status.json."""
-        EXPECTED = 90
-
-        # Try to read live queue status
+        # Try to read live queue status (pushed by upload_status daemon)
         try:
             path = hf_hub_download(MODEL_REPO, "queue_status.json",
                                    local_dir="/tmp/hf_dash_cache")
             with open(path) as f:
                 qs = json.load(f)
 
-            total = qs.get("total", EXPECTED)
-            done = qs.get("done", 0)
+            total = qs.get("total", n_models)  # fall back to HF model count
+            done = qs.get("done", n_models)
             failed = qs.get("failed", 0)
             running = qs.get("running", 0)
             pending = qs.get("pending", 0)
@@ -321,6 +351,55 @@ with gr.Blocks(title="SoRL Arithmetic Dashboard") as app:
                 f"`{bar}`"
             )
 
+    def build_eval_info(models):
+        """Build eval set description from actual model metadata."""
+        # Try to get eval config from first available model
+        n_per_split = "?"
+        n_digits = 6
+        splits = []
+        total = "?"
+        for m in models:
+            metrics = m.get("metrics", {})
+            for key in ("sft_eval", "sorl_eval"):
+                cfg = metrics.get(key, {}).get("config", {})
+                if cfg.get("n_per_split"):
+                    n_per_split = cfg["n_per_split"]
+                    n_digits = cfg.get("n_digits", 6)
+                    total = metrics[key].get("summary", {}).get("total_examples", "?")
+                    splits = list(metrics[key].get("splits", {}).keys())
+                    break
+            if splits:
+                break
+
+        n_add_cascade = len([s for s in splits if s.startswith("add_S")])
+        n_sub_cascade = len([s for s in splits if s.startswith("sub_M")])
+        n_hot_carry = len([s for s in splits if s.startswith("add_C")])
+        n_hot_borrow = len([s for s in splits if s.startswith("sub_B")])
+
+        return f"""**Replication of [Quirke et al. 2024](https://arxiv.org/abs/2402.02619)** — \
+understanding addition and subtraction in transformers.
+
+We train tiny Qwen3 models (2L/3H/510d, ~8M transformer params) from scratch on \
+{n_digits}-digit arithmetic. SoRL v1 (info-gain loss) adds learnable "abstraction tokens" \
+every K positions. The hypothesis: SoRL externalizes carry/borrow circuits that Quirke \
+found via activation-level analysis as explicit, interpretable tokens.
+
+**Eval**: autoregressive (errors propagate, no teacher forcing). Fixed eval sets (seed=42, cached).
+
+| Split Type | Splits | Examples | Description |
+|-----------|--------|----------|-------------|
+| Carry cascades | S0–S{n_add_cascade - 1} | {n_per_split} each | Carry cascade depth (Quirke §3.2) |
+| Borrow cascades | M0–M{n_sub_cascade - 1} | {n_per_split} each | Borrow cascade depth (Quirke §3.3) |
+| Hot carry chains | C3–C{2 + n_hot_carry} | {n_per_split} each | Cascades with varied answer digits |
+| Hot borrow chains | B3–B{2 + n_hot_borrow} | {n_per_split} each | Borrow cascades with varied digits |
+| Random | add\\_random, sub\\_random | {n_per_split * 4} each | Uniform random |
+
+**Total**: {total} examples per eval. \
+[Paper](https://arxiv.org/abs/2402.02619) · \
+[Models](https://huggingface.co/thoughtworks/arithmetic-sorl) · \
+[Data](https://huggingface.co/datasets/thoughtworks/arithmetic-sorl-data) · \
+[Code](https://github.com/thoughtworks/mod_gpt)"""
+
     def on_refresh(arch):
         models = fetch_all_models()
         df = build_comparison_table(models, arch_filter=arch, enriched_only=False)
@@ -328,14 +407,17 @@ with gr.Blocks(title="SoRL Arithmetic Dashboard") as app:
         n_models = len(models)
         summary = f"**{n_models}** models | Arch filter: {arch}"
         q_status = get_queue_status_text(n_models)
+        eval_info = build_eval_info(models)
 
         main_cols = ["Ops", "Data", "Arch", "Baseline", "SoRL", "Config", "B_wandb", "S_wandb"]
 
         main_df = df[main_cols] if all(c in df.columns for c in main_cols) else pd.DataFrame()
-        hard_df = df[["Ops", "Data", "Config"] +
-                     [c for c in df.columns if c.startswith("B_") or c.startswith("S_")]] if len(df) > 0 else pd.DataFrame()
+        hard_cols = [c for c in df.columns
+                     if (c.startswith("B_") or c.startswith("S_")) and "wandb" not in c]
+        hard_base = ["Ops", "Data", "Arch", "Config"] if "Arch" in df.columns else ["Ops", "Data", "Config"]
+        hard_df = df[hard_base + hard_cols] if len(df) > 0 else pd.DataFrame()
 
-        return models, summary, q_status, main_df, hard_df
+        return models, summary, q_status, main_df, hard_df, eval_info
 
     def on_detail(models, name):
         return build_detailed_splits(models, name.strip())
@@ -343,13 +425,13 @@ with gr.Blocks(title="SoRL Arithmetic Dashboard") as app:
     refresh_btn.click(
         on_refresh,
         inputs=[arch_filter],
-        outputs=[models_state, summary_text, queue_status, main_table, hard_table],
+        outputs=[models_state, summary_text, queue_status, main_table, hard_table, eval_info_md],
     )
 
     arch_filter.change(
         on_refresh,
         inputs=[arch_filter],
-        outputs=[models_state, summary_text, queue_status, main_table, hard_table],
+        outputs=[models_state, summary_text, queue_status, main_table, hard_table, eval_info_md],
     )
 
     detail_btn.click(on_detail, inputs=[models_state, model_selector], outputs=[detail_table])

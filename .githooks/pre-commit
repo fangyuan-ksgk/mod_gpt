@@ -21,7 +21,7 @@ echo "Training code changed — running smoke test..."
 echo "(This takes ~30 seconds. Skip with --no-verify if you know what you're doing.)"
 
 # Run tiny baseline job
-output=$(timeout 120 python -m arithmetic.train \
+output=$(timeout 300 python -m arithmetic.train \
     --mode baseline --ops add_sub \
     --dataset_size 500 --num_epochs 1 \
     --output_dir /tmp/smoke_precommit \

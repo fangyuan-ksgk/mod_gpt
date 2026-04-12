@@ -44,8 +44,17 @@ See [`HYPOTHESES.md`](HYPOTHESES.md) for full descriptions. Training: H1-H4. Int
 - [ ] **Polysemanticity check** — do tokens map 1-to-1 or many-to-many with subtasks?
 - [ ] **Two-phase training** (SFT → SoRL) — compare with from-scratch v1.
 
+## Queue Improvements (for next queue restart)
+
+- [ ] **Priority flags** — high/low priority on jobs. Queue sorts pending by priority before picking next. Use case: flag experiments we want results from sooner. Implementation: add `priority` field to Redis job state, `job_state.py modify <name> --priority high/low`, queue sorts pending list before dispatch.
+- [ ] **bf16 autocast** — ~2x speedup, currently float32
+
 ## Done
 
+- [x] Fixed mask off-by-1 to match Fangyuan's `infer_rythmic_insert_mask` (2026-04-12)
+- [x] Fixed eval: autoregressive (errors propagate), NOT teacher-forced
+- [x] v6 works from scratch (84%) — "failure" was eval artifact
+- [x] Multi-model code review (Claude+Gemini+GPT-4o): implementation verified faithful to Fangyuan's
 - [x] v6 fails from scratch — switched to v1
 - [x] Fixed eval: recursion instead of model.generate()
 - [x] Baseline is pure SFT (not SoRLTrainer with alpha=0)

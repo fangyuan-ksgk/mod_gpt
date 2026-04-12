@@ -296,6 +296,31 @@ if __name__ == "__main__":
         target = sys.argv[2] if len(sys.argv) > 2 else "ALL"
         db.send_command(target, "kill")
         print(f"Kill signal sent to {target}")
+    elif sys.argv[1] == "submit":
+        # Submit a new job to the running queue:
+        #   job_state.py submit "python -m arithmetic.train ..." [--name my_job]
+        if len(sys.argv) < 3:
+            print("Usage: job_state.py submit \"<full command>\" [--name <name>]")
+            sys.exit(1)
+        cmd_str = sys.argv[2]
+        name = ""
+        for i, arg in enumerate(sys.argv):
+            if arg == "--name" and i + 1 < len(sys.argv):
+                name = sys.argv[i + 1]
+        db.send_command("QUEUE", "submit", cmd=cmd_str, name=name)
+        print(f"Submit command sent: {name or '(auto-name)'}")
+    elif sys.argv[1] == "modify":
+        # Modify a pending job's command: job_state.py modify <name> <new_cmd_fragment>
+        # e.g.: job_state.py modify add_sub_baseline_10K --num_epochs 20
+        # Replaces matching flag values in the stored command
+        if len(sys.argv) < 4:
+            print("Usage: job_state.py modify <name|ALL_BASELINE> <flag> <value>")
+            sys.exit(1)
+        target = sys.argv[2]
+        flag = sys.argv[3]
+        value = sys.argv[4] if len(sys.argv) > 4 else ""
+        db.send_command(target, "modify", flag=flag, value=value)
+        print(f"Modify command sent: {target} {flag} {value}")
     elif sys.argv[1] == "stale":
         timeout = float(sys.argv[2]) if len(sys.argv) > 2 else 1800
         stale = db.stale_jobs(timeout)

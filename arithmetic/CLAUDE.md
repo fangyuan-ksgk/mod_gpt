@@ -21,6 +21,18 @@ Also check [`TODO.md`](TODO.md) for the task backlog.
 2. **Send to GPT-4/5 for review** via `Reviewer` class (`arithmetic.job_manager.llm_reviewer`). State at `/workspace/sorl_logs/reviewer_state.json`.
 3. **Then commit and launch.**
 
+**MANDATORY for ANY change to job management code (gpu_queue.py, job_state.py, auto_triage.py, upload_status.py):**
+1. **Unit test**: verify the change works in isolation (import, regex, Redis round-trip, etc.)
+2. **Review for concurrency issues**: these run as daemons with threads — check for race conditions, double-decrements, lock ordering.
+3. **Then commit.**
+
+**Queue management — NEVER launch competing queues.** One queue runs from one file. To modify a running queue:
+- **Modify pending jobs**: `python -m arithmetic.job_manager.job_state modify <name> <flag> <value>`
+- **Kill a job**: `python -m arithmetic.job_manager.job_state kill <name>`
+- **Kill all**: `python -m arithmetic.job_manager.job_state kill ALL`
+- **Check status**: `python -m arithmetic.job_manager.job_state`
+- **Before restarting a queue**: check HF state, verify what already uploaded, what's running, what's pending.
+
 **For new modules and substantial changes, also:**
 1. **Check available APIs/tools first** — don't build what already exists
 2. **Write tests** — unit + E2E before committing
@@ -36,15 +48,29 @@ Working notes from experiment iteration. Main results in [`log/arithmetic.md`](.
 
 ## Critical Findings
 
-### v6 trainer fails from scratch (v1 works)
+### v6 DOES work from scratch (eval was broken)
 
-`SoRLTrainerv6` (self-routing, traj-only loss) produces **0% accuracy** when training from scratch on arithmetic. Every vocab size (1-24) and K value (1-4) tested — all 0%.
+**CORRECTED 2026-04-12**: Previous finding that v6 produces 0% accuracy was an **eval artifact**. The eval used growing-sequence generation which creates distribution shift on a fixed-length trained model.
 
-Root cause: v6's traj-only loss gives no gradient signal to make abstractions useful. The search finds random abstractions, the model learns to depend on them, but they carry no information. `base_loss` increases during training (model gets worse without abstractions) while `traj_loss` decreases (model gets better with them) — but the abstractions are noise.
+With fixed-length AR eval (correct method):
+- **v1**: 93.0% (vs 70.6% baseline) — abstractions help, model also works without them
+- **v6**: 84.0% (vs 70.6% baseline), 0.0% without abstractions — fully dependent on abstractions
+- **Baseline SFT**: 70.6%
 
-`SoRLTrainerv1` (info-gain loss) works: reaches 99-100% accuracy from scratch. The `alpha_info_gain=10.0` loss forces abstractions to actually reduce prediction uncertainty.
+v6's base_loss increases (1.8→7.5) while traj_loss drops (6.2→0.03). The model offloads ALL arithmetic to abstractions. This is actually a **positive for interpretability** — clean mechanistic decoupling.
 
-Fangyuan confirmed: "v6 doesn't work well with from-scratch training. v1 works well in pre-training."
+v1 is stronger overall (93% vs 84%) and still works without abstractions.
+
+### LLM Review Sessions
+
+For code review and multi-model consultation:
+- **OpenAI**: Use `Reviewer` class (`arithmetic.job_manager.llm_reviewer`). State at `/workspace/sorl_logs/reviewer_state.json`. Uses Responses API `previous_response_id` for **server-side conversation memory** — no need to resend context.
+- **Gemini**: No server-side sessions. Must pass full `contents[]` array each time. Consider CachedContent API for large prompts.
+- Always use non-leading prompts ("give your honest assessment" not "do you retract your concern").
+
+### NEVER use teacher-forced eval
+
+Teacher-forced eval is an instant paper reject. The model must generate answers autoregressively using its own predictions. For SoRL, use fixed-length AR eval: pad to full sequence length so the abstraction pattern matches training, then fill in answer digits one at a time with the model's own predictions (errors propagate). NEVER feed the ground truth answer during eval.
 
 ### Eval must use recursion, not generation
 
