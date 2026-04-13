@@ -103,8 +103,13 @@ PART_MODEL[12]="$LLAMA1";  PART_MTAG[12]="ll1"; PART_DATASET[12]="boolq";       
 PART_MODEL[13]="$QWEN17";  PART_MTAG[13]="q17"; PART_DATASET[13]="scienceqa";     PART_DTAG[13]="sci"; PART_NL[13]=28
 PART_MODEL[14]="$LLAMA3";  PART_MTAG[14]="l3b"; PART_DATASET[14]="scienceqa";     PART_DTAG[14]="sci"; PART_NL[14]=28
 
+# --- Add MMLU (qwen3-0.6B, qwen3-1.7B, llama3.2-1b) ---
+PART_MODEL[15]="$QWEN06";  PART_MTAG[15]="q06"; PART_DATASET[15]="mmlu";  PART_DTAG[15]="mmlu"; PART_NL[15]=28
+PART_MODEL[16]="$QWEN17";  PART_MTAG[16]="q17"; PART_DATASET[16]="mmlu";  PART_DTAG[16]="mmlu"; PART_NL[16]=28
+PART_MODEL[17]="$LLAMA1";  PART_MTAG[17]="ll1"; PART_DATASET[17]="mmlu";  PART_DTAG[17]="mmlu"; PART_NL[17]=16
+
 if [ "$PART" = "all" ]; then
-  PARTS=(1 2 3 4 5 6 7 8 9 10 11 12 13 14)
+  PARTS=(1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17)
 else
   PARTS=($PART)
 fi
