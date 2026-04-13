@@ -277,7 +277,7 @@ def evaluate_accuracy(
     is_mixed = hasattr(dataset, "extract_answer_for")
     extract_fn = getattr(dataset, "extract_answer", lambda _: None)
     pad_id = tokenizer.pad_token_id
-    n = min(num_samples, len(dataset))
+    n = len(dataset) if num_samples <= 0 else min(num_samples, len(dataset))
 
     has_exec_tests = hasattr(dataset, "get_test_cases")
     is_humaneval = isinstance(dataset, HumanEvalDataset)
