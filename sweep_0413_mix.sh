@@ -75,6 +75,7 @@ run_exp() {
     --scale $sc \
     --inject_layers $layers \
     --code_position first \
+    --routing_mode similar_magnitude \
     --eval_every 99999 \
     --save_every 99999 \
     --eval_samples $EVAL_SAMPLES \
