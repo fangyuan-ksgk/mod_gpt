@@ -1,0 +1,36 @@
+Model: add_sub_sorl_v1_abs30_K1_100K
+K=1, abs_vocab=30, n_examples=4400
+
+POSITION d0 (3 tokens)
+--------------------------------------------------------------------------------
+  t 1 (n=6359) sub=[MD=24%, UC=22%, SA=21%] op=[add=65%, sub=34%] carry=[no_carry=66%, carry=33%] sum%10=[9=26%, 3=14%, 4=13%]
+  t16 (n=1040) sub=[MD=32%, US=26%, UC=24%] op=[add=57%, sub=42%] carry=[carry=69%, no_carry=30%] sum%10=[1=57%, 6=12%, 2=11%]
+  t11 (n= 664) sub=[MD=57%, UC=20%, US=19%] op=[sub=59%, add=40%] carry=[carry=57%, no_carry=42%] sum%10=[0=40%, 1=25%, 5=13%]
+
+POSITION d1 (3 tokens)
+--------------------------------------------------------------------------------
+  t 2 (n=2550) sub=[UC=31%, MD=16%, UB=14%] op=[add=59%, sub=40%] carry=[no_carry=64%, carry=36%] sum%10=[9=25%, 6=21%, 5=21%]
+  t 3 (n=2084) sub=[UB=37%, US=27%, UC=15%] op=[add=54%, sub=45%] carry=[no_carry=79%, carry=20%] sum%10=[9=45%, 8=18%, 4=8%]
+  t 8 (n= 746) sub=[UC=39%, MD=34%, SA=9%] op=[add=53%, sub=46%] carry=[carry=54%, no_carry=45%] sum%10=[0=49%, 1=12%, 5=8%]
+
+POSITION d2 (5 tokens)
+--------------------------------------------------------------------------------
+  t 6 (n=1438) sub=[US=52%, UB=17%, UC=14%] op=[add=79%, sub=20%] carry=[no_carry=91%, carry=8%] sum%10=[9=78%, 8=5%, 1=3%]
+  t 5 (n=1377) sub=[UB=21%, US=17%, SA=14%] op=[add=52%, sub=47%] carry=[no_carry=61%, carry=38%] sum%10=[7=32%, 0=18%, 6=9%]
+  t 7 (n=1026) sub=[UB=47%, UD=43%, MD=5%] op=[sub=100%] carry=[no_carry=51%, carry=48%] sum%10=[2=20%, 4=20%, 0=19%]
+  t13 (n= 374) sub=[UC=44%, MD=30%, MB=13%] op=[add=51%, sub=48%] carry=[carry=66%, no_carry=33%] sum%10=[1=28%, 0=26%, 5=9%]
+  t22 (n= 231) sub=[UC=41%, MD=33%, MB=10%] op=[sub=51%, add=48%] carry=[carry=61%, no_carry=38%] sum%10=[1=31%, 2=22%, 6=13%]
+
+POSITION d3 (4 tokens)
+--------------------------------------------------------------------------------
+  t21 (n= 719) sub=[US=93%, UB=3%, ME=1%] op=[add=94%, sub=5%] carry=[no_carry=96%, carry=3%] sum%10=[9=95%, 4=1%, 0=1%]
+  t23 (n= 687) sub=[UD=88%, UC=2%, UB=2%] op=[sub=93%, add=6%] carry=[no_carry=52%, carry=47%] sum%10=[6=21%, 8=19%, 4=19%]
+  t 9 (n= 573) sub=[UC=40%, UB=35%, SA=12%] op=[add=56%, sub=43%] carry=[no_carry=77%, carry=22%] sum%10=[9=56%, 0=9%, 8=8%]
+  t20 (n= 283) sub=[UB=24%, SA=24%, UC=21%] op=[add=54%, sub=45%] carry=[no_carry=57%, carry=42%] sum%10=[3=15%, 0=14%, 7=11%]
+
+POSITION d4 (3 tokens)
+--------------------------------------------------------------------------------
+  t14 (n=1242) sub=[UD=73%, SS=10%, UC=5%] op=[sub=81%, add=18%] carry=[no_carry=62%, carry=37%] sum%10=[4=15%, 9=11%, 8=11%]
+  t15 (n= 310) sub=[UB=25%, SA=21%, UC=20%] op=[add=56%, sub=43%] carry=[no_carry=65%, carry=34%] sum%10=[8=25%, 3=24%, 4=11%]
+  t18 (n= 297) sub=[UC=31%, SA=19%, MD=18%] op=[add=63%, sub=36%] carry=[no_carry=53%, carry=46%] sum%10=[2=35%, 3=24%, 7=18%]
+

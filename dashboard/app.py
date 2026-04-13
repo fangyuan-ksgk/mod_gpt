@@ -358,59 +358,40 @@ effectively give the model external memory that compensates for its limited hidd
             gr.Markdown("""## Do abstraction tokens encode carry/borrow circuits?
 
 When humans add multi-digit numbers, they track **carries** — if 7+8=15, they write 5 and carry 1.
-[Quirke et al. (2024)](https://arxiv.org/abs/2402.02619) showed transformers learn carry/borrow
-circuits internally, discoverable only through activation-level analysis. They define a **tri-state
-carry classifier** (eq. 2): each position is **0** (no carry), **1** (definite carry), or **U**
-(uncertain — digit sum = 9, carry depends on cascade from right).
+For a chain like 999999+1, the carry cascades through all 6 digits. Subtraction has the same
+structure with **borrows** instead of carries.
 
-**SoRL makes these circuits visible as explicit tokens.** We analyze our K=4 abs30 model (which
-has fewer abstraction positions, forcing sharper specialization).
+[Quirke et al. (2024)](https://arxiv.org/abs/2402.02619) showed transformers learn carry/borrow
+circuits internally, but these are only discoverable through activation-level analysis (PCA, probing).
+
+**SoRL makes these circuits visible as explicit tokens.** With K=1 (an abstraction at every
+position), each answer digit gets its own scratchpad token. We analyze whether these tokens
+specialize by problem difficulty.
 """)
 
             gr.Markdown("""### 1. Token specialization by difficulty
 
 For each token, we ask: **what kinds of problems does this token appear in?** The heatmap shows
-P(difficulty level | token) — if a token is uniformly distributed across S0-S6, it carries no
-difficulty-specific information. If it concentrates on specific levels, it's a specialist.
-
-**Addition (left):** Token t3 (simple addition, 0% carry) concentrates on S0 (no cascades). Tokens
-t8, t9 (100% carry) spread across S1-S5 — they're the carry workhorses. Token t2 peaks at S6
-(the hardest cascade) despite having only 5% local carry — it encodes cascade *propagation*, not
-local carry state.
-
-**Subtraction (right):** Token t16 appears 93% in M0 (no borrows) — a pure "easy case" marker.
-Tokens t5 and t11 shift toward M4/M5 (deep borrow cascades).
+P(difficulty | token). Tokens at the top specialize in easy problems, tokens at the bottom
+specialize in hard cascades.
 """)
-            gr.Image("static_figures/fig1_token_difficulty_profiles.png")
+            gr.Image("static_figures/fig_k1_token_difficulty.png")
 
-            gr.Markdown("""### 2. Causal verification: token identity matters for hard cascades
+            gr.Markdown("""### 2. Causal verification: token identity is critical
 
 Three interventions test whether tokens carry real information:
-- **Shuffle**: randomly permute token IDs within the sequence (keeps positions, scrambles identity)
-- **Random**: replace all tokens with random IDs from the vocabulary
-- **Knockout**: remove all abstraction tokens entirely (replace with placeholder)
+- **Shuffle**: randomly permute token IDs (keeps positions, scrambles identity)
+- **Random**: replace all tokens with random IDs
+- **Knockout**: remove all abstraction tokens (0% accuracy — total dependence)
 
-For easy problems (S0-S2), shuffling barely matters. For **deep cascades (S4-S6)**,
-shuffling drops accuracy by 10-30 percentage points. The model needs the *correct*
-token identity to propagate carries through multiple digits.
+**Shuffle drops accuracy by 56-66 percentage points on S5/S6** (5-6 carry cascades).
+Even easy problems (S0) drop ~30pp — with K=1, every position has an abstraction,
+so shuffling disrupts every digit's computation.
 """)
-            gr.Image("static_figures/fig2_causal_by_depth.png")
+            gr.Image("static_figures/fig_k1_causal.png")
 
-            gr.Markdown("""### 3. Key token profiles
-
-| Token | Appears when... | Interpretation |
-|-------|----------------|----------------|
-| **t3** | Simple add (SA), no carry, answer digit = 0 | **"No overflow"** — leftmost digit is 0 |
-| **t6** | Use carry (UC), input digit sum mod 10 = 9 in 92% of cases | **"Sum-of-9"** — Quirke's tri-state **U** (uncertain carry) |
-| **t8, t9** | Use carry (UC), carry = 100% of cases | **"Definite carry"** — Quirke's tri-state **1** |
-| **t17** | Make borrow (MB) 51%, subtraction only | **"Borrow indicator"** — Quirke's MBn (eq. 7) |
-| **t16** | Carry = 82%, mixed addition/subtraction | **"Active carry/borrow state"** |
-
-The model independently discovered Quirke's tri-state carry classifier: separate tokens for
-"no carry" (t3), "uncertain / sum=9" (t6), and "definite carry" (t8/t9).
-This emerged purely from SoRL's info-gain objective — no supervision about carry logic.
-
-*Model: abs30 K=4, 2L/3H/510d, 100K training examples. Analysis: 2400 eval examples.*
+            gr.Markdown("""
+*Model: K=1 abs30, 2L/3H/510d, 100K training examples. Analysis: 4400 eval examples (200/split).*
 """)
 
         # ── Tab 3: About ──
