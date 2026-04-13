@@ -22,9 +22,9 @@
 #   slr      ∈ {5e-2, 1e-1}         (2)
 #
 # Total per part: 3 × 2 × 2 × 9 = 108 (28-layer) or × 7 = 84 (16-layer)
-# 8 parts: 2 models × 4 datasets
+# 12 parts: 2 models × 6 datasets
 #
-# Usage: ./sweep_0412_steer.sh <PART>   (PART = 1-8|all)
+# Usage: ./sweep_0412_steer.sh <PART>   (PART = 1-12|all)
 # ===========================================================================
 set -euo pipefail
 
@@ -81,18 +81,24 @@ LAYERS_16[L10_14]="10,14"
 # No more direction split — v6 only, code_position=first
 declare -A PART_MODEL PART_MTAG PART_DATASET PART_DTAG PART_NL
 
-PART_MODEL[1]="$QWEN06"; PART_MTAG[1]="q06"; PART_DATASET[1]="gsm8k";         PART_DTAG[1]="gsm";  PART_NL[1]=28
-PART_MODEL[2]="$QWEN06"; PART_MTAG[2]="q06"; PART_DATASET[2]="scienceqa";      PART_DTAG[2]="sci";  PART_NL[2]=28
-PART_MODEL[3]="$QWEN06"; PART_MTAG[3]="q06"; PART_DATASET[3]="commonsenseqa";  PART_DTAG[3]="csqa"; PART_NL[3]=28
-PART_MODEL[4]="$QWEN06"; PART_MTAG[4]="q06"; PART_DATASET[4]="openbookqa";     PART_DTAG[4]="obqa"; PART_NL[4]=28
+PART_MODEL[1]="$QWEN06";  PART_MTAG[1]="q06"; PART_DATASET[1]="gsm8k";         PART_DTAG[1]="gsm";  PART_NL[1]=28
+PART_MODEL[2]="$QWEN06";  PART_MTAG[2]="q06"; PART_DATASET[2]="scienceqa";      PART_DTAG[2]="sci";  PART_NL[2]=28
+PART_MODEL[3]="$QWEN06";  PART_MTAG[3]="q06"; PART_DATASET[3]="commonsenseqa";  PART_DTAG[3]="csqa"; PART_NL[3]=28
+PART_MODEL[4]="$QWEN06";  PART_MTAG[4]="q06"; PART_DATASET[4]="openbookqa";     PART_DTAG[4]="obqa"; PART_NL[4]=28
 
-PART_MODEL[5]="$LLAMA1";  PART_MTAG[5]="ll1"; PART_DATASET[5]="gsm8k";         PART_DTAG[5]="gsm";  PART_NL[5]=16
-PART_MODEL[6]="$LLAMA1";  PART_MTAG[6]="ll1"; PART_DATASET[6]="scienceqa";      PART_DTAG[6]="sci";  PART_NL[6]=16
-PART_MODEL[7]="$LLAMA1";  PART_MTAG[7]="ll1"; PART_DATASET[7]="commonsenseqa";  PART_DTAG[7]="csqa"; PART_NL[7]=16
-PART_MODEL[8]="$LLAMA1";  PART_MTAG[8]="ll1"; PART_DATASET[8]="openbookqa";     PART_DTAG[8]="obqa"; PART_NL[8]=16
+PART_MODEL[5]="$LLAMA1";   PART_MTAG[5]="ll1"; PART_DATASET[5]="gsm8k";         PART_DTAG[5]="gsm";  PART_NL[5]=16
+PART_MODEL[6]="$LLAMA1";   PART_MTAG[6]="ll1"; PART_DATASET[6]="scienceqa";      PART_DTAG[6]="sci";  PART_NL[6]=16
+PART_MODEL[7]="$LLAMA1";   PART_MTAG[7]="ll1"; PART_DATASET[7]="commonsenseqa";  PART_DTAG[7]="csqa"; PART_NL[7]=16
+PART_MODEL[8]="$LLAMA1";   PART_MTAG[8]="ll1"; PART_DATASET[8]="openbookqa";     PART_DTAG[8]="obqa"; PART_NL[8]=16
+
+# --- New datasets (ARC, BoolQ) ---
+PART_MODEL[9]="$QWEN06";   PART_MTAG[9]="q06"; PART_DATASET[9]="arc";           PART_DTAG[9]="arc";  PART_NL[9]=28
+PART_MODEL[10]="$QWEN06";  PART_MTAG[10]="q06"; PART_DATASET[10]="boolq";        PART_DTAG[10]="bq";  PART_NL[10]=28
+PART_MODEL[11]="$LLAMA1";  PART_MTAG[11]="ll1"; PART_DATASET[11]="arc";          PART_DTAG[11]="arc"; PART_NL[11]=16
+PART_MODEL[12]="$LLAMA1";  PART_MTAG[12]="ll1"; PART_DATASET[12]="boolq";        PART_DTAG[12]="bq";  PART_NL[12]=16
 
 if [ "$PART" = "all" ]; then
-  PARTS=(1 2 3 4 5 6 7 8)
+  PARTS=(1 2 3 4 5 6 7 8 9 10 11 12)
 else
   PARTS=($PART)
 fi
@@ -115,7 +121,7 @@ for P in "${PARTS[@]}"; do
 
   echo ""
   echo "============================================================"
-  echo "Part ${P}/8: ${mtag} + ${dataset} | ${n_exps} experiments | ${TIMESTAMP}"
+  echo "Part ${P}/12: ${mtag} + ${dataset} | ${n_exps} experiments | ${TIMESTAMP}"
   echo "============================================================"
 
   JOB_IDX=0
