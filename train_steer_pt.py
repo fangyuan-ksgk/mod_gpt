@@ -39,7 +39,7 @@ from transformers import AutoTokenizer, AutoModelForCausalLM
 from concurrent.futures import ThreadPoolExecutor
 
 from data.pt_dataset import get_dataset, collate_fn, check_code_correctness, HumanEvalDataset
-from sorl.steer import StackedAbstractionWrapper, StackedAbstractionWrapperV6, StackedAbstractionWrapperV7
+from sorl.steer import StackedAbstractionWrapper, StackedAbstractionWrapperV6, StackedAbstractionWrapperV7, StackedAbstractionWrapperV8
 from sorl.tokenassort import TokenAssortedVQVAE, DEFAULT_L, DEFAULT_C_SIZE, DEFAULT_D_BOT, DEFAULT_BETA
 
 
@@ -65,8 +65,8 @@ def parse_args():
     p = argparse.ArgumentParser(description="Steering Abstraction Post-Training")
 
     # Mode
-    p.add_argument("--mode", type=str, default="v6", choices=["vq", "v6", "v7"],
-                   help="vq = VQ-coded; v6 = self-routed diagonal; v7 = v6 + direction/multi-layer")
+    p.add_argument("--mode", type=str, default="v6", choices=["vq", "v6", "v7", "v8"],
+                   help="vq = VQ-coded; v6 = self-routed diagonal; v7 = v6 + direction/multi-layer; v8 = STE-trainable routing")
 
     # Model
     p.add_argument("--model_name", type=str, default="Qwen/Qwen3-0.6B")
@@ -510,6 +510,17 @@ def main():
             routing_mode=args.routing_mode,
         )
 
+    elif args.mode == "v8":
+        train_ds = base_train_ds
+        collate = collate_fn
+
+        wrapper = StackedAbstractionWrapperV8(
+            model, C_SIZE=args.C_SIZE, D_MODEL=D_MODEL,
+            inject_layers=inject_layers, scale=args.scale, L=args.L,
+            per_layer_emb=args.per_layer_emb,
+            code_position=args.code_position,
+        )
+
     log(f"Steering: mode={args.mode} C_SIZE={args.C_SIZE} L={args.L} "
         f"scale={args.scale} layers={wrapper.inject_layers}"
         + (f" read_layer={wrapper.read_layer}" if args.mode == 'v7' else '')
@@ -537,7 +548,7 @@ def main():
     raw_model = model.to(device)
     # Move all steering sub-modules to device
     for name, mod in wrapper.named_modules():
-        if 'steering_emb' in name and hasattr(mod, 'to'):
+        if ('steering_emb' in name or 'routing_proj' in name) and hasattr(mod, 'to'):
             mod.to(device=device)
 
     if ddp:

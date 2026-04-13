@@ -365,33 +365,29 @@ class StackedAbstractionWrapperV6(nn.Module):
 
 
 # ---------------------------------------------------------------------------
-# V8: V6 + learned routing projection + best-of-N training
+# V8: V6 + STE-trainable routing
 # ---------------------------------------------------------------------------
 
 class StackedAbstractionWrapperV8(nn.Module):
     """
-    V6 + learned routing projection + best-of-N training.
+    End-to-end trainable routing via Straight-Through Estimator (STE).
 
-    At selected transformer layer(s):
-      1. Chunk hidden states into L-token windows.
-      2. code = sample(softmax(routing_proj(h) / temp))   during training
-             or argmax(routing_proj(h))                    during eval
-      3. hidden += steering_emb[code] * scale
+    Like V6, but routing is differentiable:
+      1. logits = routing_proj(h)                         (learned projection)
+      2. soft   = softmax(logits)                         (differentiable)
+      3. hard   = one_hot(argmax(logits))                 (discrete, forward path)
+      4. ste    = hard - soft.detach() + soft             (STE: fwd=hard, bwd=soft)
+      5. steer  = ste @ steering_emb.weight * scale       (differentiable lookup)
 
-    Best-of-N training loop:
-      1. data.repeat(N) → forward with stochastic routing → N per-sample losses
-      2. best_idx = argmin(loss) per sample
-      3. CE loss on the best repeat (trains steering_emb)
-      4. Routing loss: push routing_proj to predict the winning codes
+    No separate routing loss needed — routing_proj and steering_emb both
+    receive gradients from the main CE loss via STE.
 
-    After each forward pass, `_last_chunk_codes` (B, S) and
-    `_last_hidden_states` (list of (B, S, D) per hook) are stored
-    for computing the routing loss.
+    During eval / generate: plain argmax, no STE overhead.
     """
 
     def __init__(self, model, C_SIZE, D_MODEL, inject_layers=None,
                  scale=0.1, L=16, per_layer_emb=False,
-                 code_position="first", routing_temperature=1.0):
+                 code_position="first"):
         super().__init__()
         self.model = model
         self.L = L
@@ -400,7 +396,6 @@ class StackedAbstractionWrapperV8(nn.Module):
         self.D_MODEL = D_MODEL
         self.per_layer_emb = per_layer_emb
         self.code_position = code_position
-        self.routing_temperature = routing_temperature
 
         n_layers = model.config.num_hidden_layers
         if inject_layers is None:
@@ -421,10 +416,6 @@ class StackedAbstractionWrapperV8(nn.Module):
         else:
             self.steering_emb = nn.Embedding(C_SIZE, D_MODEL)
             nn.init.zeros_(self.steering_emb.weight)
-
-        # State from last forward (for routing loss)
-        self._last_chunk_codes = None       # (B, S)  codes used for steering
-        self._last_hidden_list = []         # list of (B, S, D) per hook, detached
 
         self._hooks = []
         self._register_hooks()
@@ -450,81 +441,61 @@ class StackedAbstractionWrapperV8(nn.Module):
             rest = None
 
         B, S, D = hidden_states.shape
-
-        # Learned routing (detached for steering, hidden stored for routing loss)
-        with torch.no_grad():
-            logits = self.routing_proj(hidden_states)  # (B, S, C)
-            if self.routing_temperature is not None and self.training:
-                probs = F.softmax(logits / self.routing_temperature, dim=-1)
-                pos_codes = torch.multinomial(probs.view(-1, self.C_SIZE), 1).view(B, S)
-            else:
-                pos_codes = logits.argmax(dim=-1)  # (B, S)
-
-        # Store hidden states (detached) for routing loss computation later
-        self._last_hidden_list.append(hidden_states.detach())
-
-        # Chunk-level codes
         n_chunks = S // self.L
-        if n_chunks > 0:
-            chunk_codes = torch.full((B, S), -1, dtype=torch.long,
-                                     device=hidden_states.device)
-            for c in range(n_chunks):
-                if self.code_position == "last":
-                    src = c * self.L + self.L - 1
-                else:
-                    src = c * self.L
-                chunk_codes[:, c * self.L:(c + 1) * self.L] = pos_codes[:, src:src + 1]
+        if n_chunks == 0:
+            return (hidden_states,) + rest if rest is not None else hidden_states
 
-            # Store chunk codes
-            self._last_chunk_codes = chunk_codes
+        # Routing logits — WITH gradient
+        logits = self.routing_proj(hidden_states)  # (B, S, C)
 
-            mask = chunk_codes >= 0
-            safe_codes = chunk_codes.clamp(min=0)
+        # Source positions per chunk
+        if self.code_position == "last":
+            src_idx = [c * self.L + self.L - 1 for c in range(n_chunks)]
+        else:  # "first"
+            src_idx = [c * self.L for c in range(n_chunks)]
+
+        src_logits = logits[:, src_idx, :]  # (B, n_chunks, C)
+
+        if self.training:
+            # STE: forward = hard one-hot, backward = soft probabilities
+            soft = F.softmax(src_logits.float(), dim=-1)       # (B, nc, C) fp32
+            hard = F.one_hot(soft.argmax(dim=-1),
+                             self.C_SIZE).to(soft.dtype)       # (B, nc, C)
+            ste = (hard - soft).detach() + soft                # STE trick
+
             emb = self.steering_emb[hook_idx] if self.per_layer_emb else self.steering_emb
-            steer_vecs = emb(safe_codes)
-            steer_vecs = steer_vecs * mask.unsqueeze(-1).float() * self.scale
-            hidden_states = hidden_states + steer_vecs.to(hidden_states.dtype)
+            # (B, nc, C) @ (C, D) → (B, nc, D)
+            chunk_steer = torch.matmul(ste, emb.weight.float())
+        else:
+            # Eval: plain argmax, no STE
+            codes = src_logits.argmax(dim=-1)  # (B, nc)
+            emb = self.steering_emb[hook_idx] if self.per_layer_emb else self.steering_emb
+            chunk_steer = emb(codes)           # (B, nc, D)
+
+        # Expand chunk vectors to all positions in each chunk
+        # (B, nc, D) → (B, nc, L, D) → (B, nc*L, D)
+        steer_vecs = chunk_steer.unsqueeze(2).expand(-1, -1, self.L, -1)
+        steer_vecs = steer_vecs.reshape(B, n_chunks * self.L, D)
+
+        # Pad tail tokens (< 1 full chunk) with zeros
+        if n_chunks * self.L < S:
+            pad = steer_vecs.new_zeros(B, S - n_chunks * self.L, D)
+            steer_vecs = torch.cat([steer_vecs, pad], dim=1)
+
+        hidden_states = hidden_states + (steer_vecs * self.scale).to(hidden_states.dtype)
 
         return (hidden_states,) + rest if rest is not None else hidden_states
 
     # ---- forward / generate ----
 
     def forward(self, input_ids, attention_mask=None, labels=None, **kwargs):
-        self._last_hidden_list = []
-        self._last_chunk_codes = None
         return self.model(
             input_ids=input_ids, attention_mask=attention_mask,
             labels=labels, **kwargs
         )
 
     def generate(self, **kwargs):
-        self._last_hidden_list = []
-        self._last_chunk_codes = None
         return self.model.generate(**kwargs)
-
-    # ---- routing loss ----
-
-    def routing_loss(self, target_codes):
-        """
-        CE loss to push routing_proj toward target_codes.
-
-        Args:
-            target_codes: (B, S) long tensor, -1 = ignore.
-                          Typically the chunk_codes from the best-of-N repeat.
-
-        Uses stored hidden states from the last forward pass.
-        routing_proj is applied WITH gradient here.
-        """
-        loss = 0.0
-        count = 0
-        for h in self._last_hidden_list:
-            logits = self.routing_proj(h)  # (B, S, C) — WITH grad on routing_proj
-            mask = target_codes >= 0
-            if mask.any():
-                loss = loss + F.cross_entropy(
-                    logits[mask], target_codes[mask], reduction='mean')
-                count += 1
-        return loss / max(count, 1)
 
     # ---- param groups ----
 
@@ -532,10 +503,6 @@ class StackedAbstractionWrapperV8(nn.Module):
         """Return steering + routing params."""
         return [p for n, p in self.named_parameters()
                 if 'steering_emb' in n or 'routing_proj' in n]
-
-    def get_routing_params(self):
-        """Return only routing projection params."""
-        return list(self.routing_proj.parameters())
 
     # ---- save / load ----
 
@@ -550,7 +517,6 @@ class StackedAbstractionWrapperV8(nn.Module):
                 'scale': self.scale, 'L': self.L,
                 'per_layer_emb': self.per_layer_emb,
                 'code_position': self.code_position,
-                'routing_temperature': self.routing_temperature,
             },
         }, os.path.join(path, 'steer_v8.pt'))
 
