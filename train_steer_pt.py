@@ -686,7 +686,7 @@ def main():
                 total_loss = (loss_read.item() + loss_steer.item()) * (2 * ga)
                 del loss_read, loss_steer
 
-            elif args.mode in ("v6",):
+            elif args.mode in ("v6", "v8"):
                 outputs = wrapper(input_ids, attn, labels)
                 loss = outputs.loss / args.gradient_accumulation_steps
                 loss.backward()

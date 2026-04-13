@@ -5,24 +5,33 @@
     │ Model      │ GSM8K  │ SciQA  │   ARC  │  MMLU  │  CSQA  │ BoolQ  │ ObookQA│  AQuA  │ HotpotQA │
     │            │ /1319  │ /2224  │ /1172  │ /2000  │ /1221  │ /3270  │  /1000 │  /254  │  /4000   │
     ├────────────┼────────┼────────┼────────┼────────┼────────┼────────┼────────┼────────┼──────────┤
-    │ Qwen3-0.6B │   46.4 │   48.0 │   60.8 │   46.1 │   65.1 │   82.7 │   69.2 │   39.0 │     15   │
+    │ Qwen3-0.6B │   46.0 │   48.0 │   60.8 │   46.1 │   65.1 │   82.7 │   69.2 │   39.0 │     15   │
     │ Qwen3-1.7B │   60.2 │   56.4 │   76.7 │   57.6 │      ? │   87.1 │   79.7 │   52.4 │     16   │
-    │ Llama-1B   │   16.9 │   48.3 │   51.3 │   44.2 │      ? │   83.9 │   67.5 │   23.2 │     18   │
+    │ Llama-1B   │   ??9 │   48.3 │   51.3 │   44.2 │      ? │   83.9 │   67.5 │   23.2 │     18   │
     │ Llama-3B   │   41.3 │   61.7 │   71.4 │   57.0 │   79.8 │   89.3 │   80.7 │      ? │     21   │
     │ Qwen3-4B.  │   75.4 │   59.4 │   87.6 │   70.5 │   84.5 │      ? │     —  │      ? │      —   │
     └────────────┴────────┴────────┴────────┴────────┴────────┴────────┴────────┴────────┴──────────┘
 
-    SFT ep=2 | lr=1e-5, EBS=8 | Qwen3-4B added lora (fair comparison against "v7 max_iter=2")
+#### SoRL (v6 per-layer steering) |
     ┌────────────┬────────┬────────┬────────┬────────┬────────┬────────┬────────┬────────┬──────────┐
     │ Model      │ GSM8K  │ SciQA  │   ARC  │  MMLU  │  CSQA  │ BoolQ  │ ObookQA│  AQuA  │ HotpotQA │
     │            │ /1319  │ /2224  │ /1172  │ /2000  │ /1221  │ /3270  │  /1000 │  /254  │  /4000   │
     ├────────────┼────────┼────────┼────────┼────────┼────────┼────────┼────────┼────────┼──────────┤
-    │ Qwen3-0.6B │   47.1 │   54.5 │   63.0 │   45.6 │ train  │      ? │      ? │      ? │      ?   │
-    │ Qwen3-1.7B │   60.9 │   58.5 │      ? │   57.4 │ train  │      ? │      ? │      ? │      ?   │
-    │ Llama-1B   │   22.1 │   54.7 │   53.8 │   44.4 │ train  │      ? │      ? │      ? │      ?   │
-    │ Llama-3B   │   45.3 │   64.2 │   73.5 │   55.5 │ train  │      ? │      ? │      ? │      ?   │
-    │ Qwen3-4B   │   78.8 │   62.9 │   87.3 │      ? │      ? │      ? │      ? │      ? │      ?   │
+    │ Qwen3-0.6B │   48.2 │  55.0  │   -    │   -    │  67.5  │   -    │   -    │   -    │    -     │
+    │ Qwen3-1.7B │   -    │   -    │   -    │   -    │   -    │   -    │   -    │   -    │    -     │
+    │ Llama-1B   │   -    │   -    │   -    │   -    │  70.6  │   -    │   -    │   -    │    -     │
+    │ Llama-3B   │   -    │   -    │   -    │   -    │   -    │   -    │   -    │   -    │    -     │
+    │ Qwen3-4B   │   -    │   -    │   -    │   -    │   -    │   -    │   -    │   -    │    -     │
     └────────────┴────────┴────────┴────────┴────────┴────────┴────────┴────────┴────────┴──────────┘
+
+    :: Remark -- baseline steering is equivalent to setting "C=1"
+    :: SciQA q06 config: C=32, slr=1e-1, L=8, layers=mid(14), routing=diagonal, pos=first
+    :: GSM8K q06 config: C=4, slr=1e-1, L=8, layers=[14] or [14, 24], routing=diagonal, pos=first
+    :: CSQA q06 config (incomplete sweep): C=1/4, slr=5e-2. L=4, layers=[14, 24], routing=diagonal, pos=first 
+    :: CSQA l1b config (incomplete sweep) C=1, L=2, slr=5e-2 layers=[10,14], routing=diagonal, pos=first
+
+
+
 
     Pause Token (LoRA r=16, ep=1)
     ┌────────────┬────────┬────────┬────────┬────────┬────────┬────────┬────────┬────────┬──────────┐
@@ -46,6 +55,21 @@
     │ Qwen3-4B   │  60.9⚠ │   68.0 │      — │   65.7 │      — │      — │      — │      — │   11.8   │
     └────────────┴────────┴────────┴────────┴────────┴────────┴────────┴────────┴────────┴──────────┘
 
+
+
+
+    SFT ep=2 | lr=1e-5, EBS=8 | Qwen3-4B added lora (fair comparison against "v7 max_iter=2")
+    ┌────────────┬────────┬────────┬────────┬────────┬────────┬────────┬────────┬────────┬──────────┐
+    │ Model      │ GSM8K  │ SciQA  │   ARC  │  MMLU  │  CSQA  │ BoolQ  │ ObookQA│  AQuA  │ HotpotQA │
+    │            │ /1319  │ /2224  │ /1172  │ /2000  │ /1221  │ /3270  │  /1000 │  /254  │  /4000   │
+    ├────────────┼────────┼────────┼────────┼────────┼────────┼────────┼────────┼────────┼──────────┤
+    │ Qwen3-0.6B │   47.1 │   54.5 │   63.0 │   45.6 │ train  │      ? │      ? │      ? │      ?   │
+    │ Qwen3-1.7B │   60.9 │   58.5 │      ? │   57.4 │ train  │      ? │      ? │      ? │      ?   │
+    │ Llama-1B   │   22.1 │   54.7 │   53.8 │   44.4 │ train  │      ? │      ? │      ? │      ?   │
+    │ Llama-3B   │   45.3 │   64.2 │   73.5 │   55.5 │ train  │      ? │      ? │      ? │      ?   │
+    │ Qwen3-4B   │   78.8 │   62.9 │   87.3 │   70.2 │   83.5 │   89.7 │   89.9 │      ? │      ?   │
+    └────────────┴────────┴────────┴────────┴────────┴────────┴────────┴────────┴────────┴──────────┘
+
     SoRL (v7, max_iter=2, SorlWrapper v1) | compare with SFT ep=2
     ┌────────────┬────────┬────────┬────────┬────────┬────────┬────────┬────────┬────────┬──────────┐
     │ Model      │ GSM8K  │ SciQA  │   ARC  │  MMLU  │  CSQA  │ BoolQ  │ ObookQA│  AQuA  │ HotpotQA │
@@ -57,96 +81,203 @@
     │ Llama-3B   │   46.9 │   68.7 │   71.4 │   51.0 │   79.8 │   89.3 │   80.6 │      ? │     0.0  │
     │ Qwen3-4B   │   79.5 │   64.1 │   88.6 │   65.5 │   84.5 │      ? │   90.4 │      ? │     16.0 │
     └────────────┴────────┴────────┴────────┴────────┴────────┴────────┴────────┴────────┴──────────┘
-
-    SoRL (v7, max_iter=2, SorlWrapper v2) | compare with SFT ep=2
-    ┌────────────┬────────┬────────┬────────┬────────┬────────┬────────┬────────┬────────┬──────────┐
-    │ Model      │ GSM8K  │ SciQA  │   ARC  │  MMLU  │  CSQA  │ BoolQ  │ ObookQA│  AQuA  │ HotpotQA │
-    │            │ /1319  │ /2224  │ /1172  │ /2000  │ /1221  │ /3270  │  /1000 │  /254  │  /4000   │
-    ├────────────┼────────┼────────┼────────┼────────┼────────┼────────┼────────┼────────┼──────────┤
-    │ Qwen3-0.6B │   46.9 │   56.7 │   63.1 │   -    │  67.5  │  83.0  │   -    │   -    │    -     │
-    │ Qwen3-1.7B │   -    │   -    │   -    │   -    │   -    │   -    │   -    │   -    │    -     │
-    │ Llama-1B   │   -    │   -    │   -    │   -    │   -    │   -    │   -    │   -    │    -     │
-    │ Llama-3B   │   -    │   -    │   -    │   -    │   -    │   -    │   -    │   -    │    -     │
-    │ Qwen3-4B   │   -    │   -    │   -    │   -    │   -    │   -    │   -    │   -    │    -     │
-    └────────────┴────────┴────────┴────────┴────────┴────────┴────────┴────────┴────────┴──────────┘
       
-    SoRL (backward steering, ep=1) | compare with SFT ep=1
+    SoRL (v7 backward steering, ep=1) | compare with SFT ep=1
     ┌────────────┬────────┬────────┬────────┬────────┬────────┬────────┬────────┬────────┬──────────┐
     │ Model      │ GSM8K  │ SciQA  │   ARC  │  MMLU  │  CSQA  │ BoolQ  │ ObookQA│  AQuA  │ HotpotQA │
     │            │ /1319  │ /2224  │ /1172  │ /2000  │ /1221  │ /3270  │  /1000 │  /254  │  /4000   │
     ├────────────┼────────┼────────┼────────┼────────┼────────┼────────┼────────┼────────┼──────────┤
-    │ Qwen3-0.6B │   46.7 │   56.7 │   63.1 │   -    │  67.5  │  83.0  │   -    │   -    │    -     │
+    │ Qwen3-0.6B │   45.0 │   56.7 │   63.1 │   -    │  67.5  │  83.0  │   -    │   -    │    -     │
     │ Qwen3-1.7B │   -    │   -    │   -    │   -    │   -    │   -    │   -    │   -    │    -     │
     │ Llama-1B   │   -    │   -    │   -    │   -    │   -    │   -    │   -    │   -    │    -     │
     │ Llama-3B   │   -    │   -    │   -    │   -    │   -    │   -    │   -    │   -    │    -     │
     │ Qwen3-4B   │   -    │   -    │   -    │   -    │   -    │   -    │   -    │   -    │    -     │
     └────────────┴────────┴────────┴────────┴────────┴────────┴────────┴────────┴────────┴──────────┘
-
-    SoRL (forward steering)
-
-    SoRL (backward steering)
-
-    ● GSM8K | Qwen3-0.6B | v7 + steering vectors
-      backward steering C_SIZE=32 L=4 scale=0.5 read_layer=27 code_pos=first routing=diagonal
-      - mid inject layer [14]
-      - multi3 inject layers [7 14 21]
-      - [Comment] Be bold on slr, 1e-1 worth trying, too. Also, we can try extend it to ep=2. 
-
-    ● steer7_20260412_1429 | GSM8K | Qwen3-0.6B | backward steering                                                                                                                             
-        C_SIZE=32, scale=0.5, read_layer=27, code_pos=first                                                                                                                                     
-        ┌────────┬────────┬───────────────────┬────────┬────────┐                                                                                                                               
-        │ Layers │ Inject │ Routing           │  SLR   │  Acc%  │                                                                                                                               
-        ├────────┼────────┼───────────────────┼────────┼────────┤                                                                                                                               
-        │ L=4    │ mid    │ diagonal          │ 1e-2   │  44.0  │
-        │ L=4    │ mid    │ diagonal          │ 1e-3   │  44.7  │                                                                                                                               
-        │ L=4    │ mid    │ similar_magnitude │ 1e-2   │  45.0  │                                                                                                                               
-        │ L=4    │ mid    │ similar_magnitude │ 1e-3   │  44.2  │                                                                                                                               
-        │        │        │                   │        │        │                                                                                                                               
-        │ L=4    │ multi3 │ diagonal          │ 1e-2   │  43.3  │
-        │ L=4    │ multi3 │ diagonal          │ 1e-3   │  43.7  │                                                                                                                               
-        │ L=4    │ multi3 │ similar_magnitude │ 1e-2   │  43.2  │
-        │ L=4    │ multi3 │ similar_magnitude │ 1e-3   │  44.2  │                                                                                                                               
-        │        │        │                   │        │        │
-        │ L=8    │ mid    │ diagonal          │ 1e-2   │  45.0  │                                                                                                                               
-        │ L=8    │ mid    │ diagonal          │ 1e-3   │  44.0  │
-        │ L=8    │ mid    │ similar_magnitude │ 1e-2   │  46.7 ★│                                                                                                                               
-        │ L=8    │ mid    │ similar_magnitude │ 1e-3   │  44.5  │
-        │        │        │                   │        │        │                                                                                                                               
-        │ L=8    │ multi3 │ diagonal          │ 1e-2   │  44.1  │
-        │ L=8    │ multi3 │ diagonal          │ 1e-3   │  43.2  │                                                                                                                               
-        │ L=8    │ multi3 │ similar_magnitude │ 1e-2   │  42.5  │
-        │ L=8    │ multi3 │ similar_magnitude │ 1e-3   │  43.8  │                                                                                                                               
-        ├────────┴────────┴───────────────────┴────────┼────────┤
-        │ Ref: v7 no-steer (ELR=1.0, MI=2)            │  43.4  │                                                                                                                                
-        │ Ref: v7 no-steer (ELR=5.0, MI=2)            │  46.5  │
-        └──────────────────────────────────────────────┴────────┘
-    
-    - not optimal yet target is beyond 46% | if we can go to 49% that'd be ideal. 
-    -> We need to be more agressive on "steering learning rate", currently steering norm is <5.0, prev experience
-       suggests steering norm > 10.0 is needed for better performance. It's also okay to use more eps, so long as
-       the advantage compounds. 
+     :: the loss design is probably off -- we should only compute gradient on the "steering phase"
+        not in the "reading phase"
 
 
+    steer6_20260412_1629 | Qwen3-0.6B GSM8K | v6, C=4, scale=0.5, diagonal routing
+
+                   -─── ep1 ─────────   ─── ep2 ───────────   ─── ep3 ─────────── 
+
+     slr   L       mid   late     ml      mid   late     ml      mid   late     ml                                    
+    ─────────────────────────────────────────────────────────────────────────────────                                                                                                       
+    1e-2   8      46.1  44.1   45.9     47.8  46.7   48.7     47.5  47.2   48.0   
+
+    1e-2  16      46.2  44.5   47.1     47.7  46.6   47.6     47.8  48.0   48.7   
+
+    1e-2  32      47.4  44.3   46.5     48.7  46.2   48.1     48.4  48.8    --- 
+                                              
+    5e-2   8      46.2  44.6   46.9     48.7  47.4  ★49.3     47.8 ★49.0   48.5 
+
+    5e-2  16      47.4  44.3   47.6     47.3  48.0   47.8     48.2  48.7   48.4
+
+    5e-2  32      47.4  45.0   47.1     46.5  47.0   48.5    ★49.1  47.2   47.5  
+
+    1e-1   8      47.8  46.9   *48.0     46.3  46.2   47.4     46.2  48.0  ★49.4  
+
+    1e-1  16      47.5  45.4   46.5     46.2  47.5   47.1     46.6  46.9   46.5  
+
+    1e-1  32      47.8  44.2   47.5     47.6  47.2   46.2     47.2  48.1   46.4
 
 
-    :: emb_lr_mult is effective on 'ScienceQA'
-    
-        Qwen3-0.6B | SciQA | v7, V=128, temp=1.0, α_abs=0, α_kd=1.0                                                                                                                             
-    ┌─────────────────────┬──────┬──────┬────────┬────────┬──────┐                                                                                                                          
-    │ Sweep / Exp         │  ELR │  MI  │   NL%  │  K=N%  │  Gap │                                                                                                                          
-    ├─────────────────────┼──────┼──────┼────────┼────────┼──────┤                                                                                                                          
-    │ 1503/exp9           │  1.0 │   2  │  46.3  │  47.2  │ -0.9 │                                                                                                                          
-    │ 0702/exp1           │  5.0 │   1  │  50.0  │  46.3  │  3.7 │                                                                                                                          
-    │ 0702/exp8           │  5.0 │   2  │  59.8  │   --   │  --  │                                                                                                                          
-    └─────────────────────┴──────┴──────┴────────┴────────┴──────┘ 
+        C    L     mid   late    ml     (ep1)
+    ───────────────────────────────────────
+    C32  L=8   45.3  43.7   47.6
+    C32  L=16  44.9  44.3   46.6
+    C4   L=8   47.8  46.9   48.0
+    C4   L=16  47.5  45.4   46.5
+    C4   L=32  47.8  44.2   47.5
+    → C4 > C32 at ep1; C4+L=8+ml=48.0 best
 
-    [GSM8K] Qwen3-4B GSM8K SoRL adopts V=1024.
-    [ScienceQA] using max_iter=1 gives Acc[NL] = 64% before, worth trying again, finding optimal config matters here. Previous 
-        conclusion on sciencqA advantage relies on tuning the emb_lr_mult variables, this is not a special trick to SoRL, since
-        we are not actually training the abs embedding matrix. Worth validating max_iter=1, max_iter=4 results, as well as sft ep=2
-        results. 
-    [ARC & OpenBook QA] These dataset is sensitive to lora - full sft change, indicating a bigger "emb_lr_mult" might improves results. 
+    [Observation] L=8 > L=16, 32, worth trying 4
+    [Observation] ml > mid > late || steering mid layer is more effective, steering more layers are more effective than less, worth trying "separate steering vectors per layer"
+    [Observation] C=4 > C=3, but the gap is small when steering multiple layers
+    [Flaw] we share steering vectors in above runs
 
-    On Qwen3-0.6B, we can quickly test on these datasets: ScienceQA, ARC, MMLU, CSQA, ObQA, AQuA, BoolQ
-     - tune emb_lr_mult to 5.0 & 10.0 | tune V between (128 & 1024) | also try max_iter=1
-                                                                                              
+
+    Qwen3-0.6B | ScienceQA | mode=v6 | L=4 | slr=0.05 | ablation (best of routing/pos/PLE per group)
+    ┌────┬───────────┬──────────────────────────┬───────┐
+    │  C │   Inject  │  Best config             │  Acc  │
+    ├────┼───────────┼──────────────────────────┼───────┤
+    │  1 │ mid(14)   │ (baseline, all same)     │  49.1 │
+    │  1 │ ml(14,24) │ (baseline, all same)     │  49.1 │
+    │  4 │ mid(14)   │ sim_mag/first            │  52.6 │
+    │  4 │ ml(14,24) │ diag/last/ple            │  52.8 │
+    │ 32 │ mid(14)   │ sim_mag/first            │  55.0 │ ← BEST
+    │ 32 │ ml(14,24) │ diag/first               │  53.0 │
+    └────┴───────────┴──────────────────────────┴───────┘
+    C=32 > C=4 >> C=1 (~6pp) | mid > ml | first > last (~2-3pp) | sim_mag ≈ diag | PLE: no help  
+    [Observation]. "Just Steering" (C=1) is worse than SoRL (diverse, dynamic steering) (C=32) by ~4-6pp
+                -> This validate SoRL steering is "not trivial" nor "redundant". 
+    [Observation]. We haven't yet found a better steering layer than mid(14) for q06
+
+                                                        
+
+
+    CSQA: 
+        steer6_20260413_0137 | Qwen3-0.6B CommonsenseQA | v6, C=4, scale=0.5, ep=1
+    inject: mid=14, ml=14+24, sp3=3+14+24, sp5=3+7+14+21+24                                                                                                                                 
+    SFT baseline (q06 CSQA 2ep): 65.4%        
+                                                                                                                                                                                            
+             │  slr=5e-2                 │  slr=1e-1                 │                                                                                                                      
+       L     │  mid    ml   sp3   sp5    │  mid    ml   sp3   sp5    │                                                                                                                      
+    ─────────┼───────────────────────────┼───────────────────────────┤                                                                                                                      
+       1     │ 65.3  65.4  62.7  63.1    │ 65.6  64.9  58.2  56.8   │                                                                                                                       
+       2     │ 64.7  65.9  61.7  60.9    │ 64.4  64.5  57.7  53.4   │                                                                                                                       
+       4     │ 64.7  64.7  61.0  59.3    │ train train train train   │                                                                                                                      
+    ─────────┴───────────────────────────┴───────────────────────────┘  
+
+
+    ┌─────────────────────────────────────────────────────────────────┐
+    │                          GSM8K (1319 eval)                      │
+    ├────────┬────┬──────────────────────┬────────┐                   │
+    │    slr │  L │ Inject(layers)       │   Acc  │                   │
+    ├────────┼────┼──────────────────────┼────────┤                   │
+    │   5e-2 │  1 │ mid(14)              │   43.4 │                   │
+    │   5e-2 │  1 │ ml(14,24)            │   44.2 │                   │
+    │   5e-2 │  1 │ sp3(3,14,24)         │   42.7 │                   │
+    │   5e-2 │  1 │ sp5(3,7,14,21,24)    │   40.9 │                   │
+    │   5e-2 │  2 │ mid(14)              │   47.6 │                   │
+    │   5e-2 │  2 │ ml(14,24)            │   47.3 │                   │
+    │   5e-2 │  2 │ sp3(3,14,24)         │   41.8 │                   │
+    │   5e-2 │  2 │ sp5(3,7,14,21,24)    │   43.1 │                   │
+    │   5e-2 │  4 │ mid(14)              │   48.2 │                   │
+    │   5e-2 │  4 │ ml(14,24)            │   47.6 │                   │
+    │   5e-2 │  4 │ sp3(3,14,24)         │   41.8 │                   │
+    │   5e-2 │  4 │ sp5(3,7,14,21,24)    │   43.2 │                   │
+    ├────────┼────┼──────────────────────┼────────┤                   │
+    │   1e-1 │  1 │ mid(14)              │   43.5 │                   │
+    │   1e-1 │  1 │ ml(14,24)            │   42.6 │                   │
+    │   1e-1 │  1 │ sp3(3,14,24)         │   43.1 │                   │
+    │   1e-1 │  1 │ sp5(3,7,14,21,24)    │   39.0 │                   │
+    │   1e-1 │  2 │ mid(14)              │   45.0 │                   │
+    │   1e-1 │  2 │ ml(14,24)            │   45.6 │                   │
+    │   1e-1 │  2 │ sp3(3,14,24)         │   43.7 │                   │
+    │   1e-1 │  2 │ sp5(3,7,14,21,24)    │   41.3 │                   │
+    │   1e-1 │  4 │ mid(14)              │   47.8 │  ← GSM best      │
+    │   1e-1 │  4 │ ml(14,24)            │   47.1 │                   │
+    │   1e-1 │  4 │ sp3(3,14,24)         │   41.5 │                   │
+    │   1e-1 │  4 │ sp5(3,7,14,21,24)    │   42.1 │                   │
+    ├────────┼────┼──────────────────────┼────────┤                   │
+    │   2e-1 │  1 │ mid(14)              │   ...  │  ~8%, running     │
+    │   2e-1 │  1 │ ml(14,24)            │   ...  │  ~8%, running     │
+    │   2e-1 │  1 │ sp3(3,14,24)         │   ...  │  ~8%, running     │
+    │   2e-1 │  1 │ sp5(3,7,14,21,24)    │   ...  │  ~7%, running     │
+    └────────┴────┴──────────────────────┴────────┘                   │
+    24/28 completed, 4 running                                        │
+    ─────────────────────────────────────────────────────────────────-─┤
+    │                        ScienceQA (1319 eval)                    │
+    ├────────┬────┬──────────────────────┬────────┐                   │
+    │    slr │  L │ Inject(layers)       │   Acc  │                   │
+    ├────────┼────┼──────────────────────┼────────┤                   │
+    │   5e-2 │  1 │ mid(14)              │   46.5 │                   │
+    │   5e-2 │  1 │ ml(14,24)            │   46.1 │                   │
+    │   5e-2 │  1 │ sp3(3,14,24)         │   45.9 │                   │
+    │   5e-2 │  1 │ sp5(3,7,14,21,24)    │   42.2 │                   │
+    │   5e-2 │  2 │ mid(14)              │   50.1 │                   │
+    │   5e-2 │  2 │ ml(14,24)            │   50.0 │                   │
+    │   5e-2 │  2 │ sp3(3,14,24)         │   46.3 │                   │
+    │   5e-2 │  2 │ sp5(3,7,14,21,24)    │   43.5 │                   │
+    │   5e-2 │  4 │ mid(14)              │   51.2 │                   │
+    │   5e-2 │  4 │ ml(14,24)            │   50.8 │                   │
+    │   5e-2 │  4 │ sp3(3,14,24)         │   49.9 │                   │
+    │   5e-2 │  4 │ sp5(3,7,14,21,24)    │   42.3 │                   │
+    ├────────┼────┼──────────────────────┼────────┤                   │
+    │   1e-1 │  1 │ mid(14)              │   45.6 │                   │
+    │   1e-1 │  1 │ ml(14,24)            │   45.3 │                   │
+    │   1e-1 │  1 │ sp3(3,14,24)         │   43.7 │                   │
+    │   1e-1 │  1 │ sp5(3,7,14,21,24)    │   44.6 │                   │
+    │   1e-1 │  2 │ mid(14)              │   50.2 │                   │
+    │   1e-1 │  2 │ ml(14,24)            │   50.8 │                   │
+    │   1e-1 │  2 │ sp3(3,14,24)         │   46.9 │                   │
+    │   1e-1 │  2 │ sp5(3,7,14,21,24)    │   35.8 │                   │
+    │   1e-1 │  4 │ mid(14)              │   50.2 │                   │
+    │   1e-1 │  4 │ ml(14,24)            │   54.4 │  ← SCI best      │
+    │   1e-1 │  4 │ sp3(3,14,24)         │   49.4 │                   │
+    │   1e-1 │  4 │ sp5(3,7,14,21,24)    │   45.7 │                   │
+    ├────────┼────┼──────────────────────┼────────┤                   │
+    │   2e-1 │  1 │ mid(14)              │   ...  │  ~90%, almost done│
+    │   2e-1 │  1 │ ml(14,24)            │   ...  │  ~89%, almost done│
+    │   2e-1 │  1 │ sp3(3,14,24)         │   ...  │  ~84%, almost done│
+    │   2e-1 │  1 │ sp5(3,7,14,21,24)    │   ...  │  ~76%, running    │
+    └────────┴────┴──────────────────────┴────────┘                   │
+    24/28 completed, 4 running                                        │
+    └─────────────────────────────────────────────────────────────────┘   
+
+
+
+    Qwen3-0.6B | CommonsenseQA | 1221 val | steer_lr=5e-2, scale=0.5, L=4, 1 epoch                                                                                                                                 
+    ┌───────────────────────────┬────┬────────┬─────────┬────────┬─────┬────────┬──────────┐                                                                                                                       
+    │ Experiment                │  C │ Layers │ Routing │  CPos  │ PLE │  Acc%  │ SteerNrm │                                                                                                                       
+    ├───────────────────────────┼────┼────────┼─────────┼────────┼─────┼────────┼──────────┤                                                                                                                       
+    │ C1_mid                    │  1 │     14 │ diag    │ first  │  —  │  64.5  │     23.6 │                                                                                                                       
+    │ C1_ml                     │  1 │  14,24 │ diag    │ first  │  —  │  66.1  │     23.7 │                                                                                                                       
+    ├───────────────────────────┼────┼────────┼─────────┼────────┼─────┼────────┼──────────┤                                                                                                                       
+    │ C4_mid_diag_first         │  4 │     14 │ diag    │ first  │  no │  64.9  │     22.2 │                                                                                                                       
+    │ C4_mid_diag_last          │  4 │     14 │ diag    │  last  │  no │  64.7  │     25.7 │                                                                                                                       
+    │ C4_mid_simmag_first       │  4 │     14 │ simmag  │ first  │  no │  64.0  │     22.1 │                                                                                                                       
+    │ C4_mid_simmag_last        │  4 │     14 │ simmag  │  last  │  no │  64.9  │     23.5 │                                                                                                                       
+    ├───────────────────────────┼────┼────────┼─────────┼────────┼─────┼────────┼──────────┤                                                                                                                       
+    │ C32_mid_diag_first        │ 32 │     14 │ diag    │ first  │  no │  64.5  │     26.0 │                                                                                                                       
+    │ C32_mid_diag_last         │ 32 │     14 │ diag    │  last  │  no │  63.9  │     27.3 │                                                                                                                       
+    │ C32_mid_simmag_first      │ 32 │     14 │ simmag  │ first  │  no │  64.6  │     25.1 │                                                                                                                       
+    │ C32_mid_simmag_last       │ 32 │     14 │ simmag  │  last  │  no │  64.1  │     26.7 │                                                                                                                       
+    ├───────────────────────────┼────┼────────┼─────────┼────────┼─────┼────────┼──────────┤                                                                                                                       
+    │ C4_ml_diag_first          │  4 │  14,24 │ diag    │ first  │  no │  66.1  │     22.1 │                                                                                                                       
+    │ C4_ml_diag_first_ple      │  4 │  14,24 │ diag    │ first  │ yes │  65.7  │     22.0 │                                                                                                                       
+    │ C4_ml_diag_last           │  4 │  14,24 │ diag    │  last  │  no │  64.1  │     26.4 │
+    │ C4_ml_diag_last_ple       │  4 │  14,24 │ diag    │  last  │ yes │  63.4  │     27.3 │                                                                                                                       
+    │ C4_ml_simmag_first        │  4 │  14,24 │ simmag  │ first  │  no │  65.6  │     21.6 │                                                                                                                       
+    │ C4_ml_simmag_first_ple    │  4 │  14,24 │ simmag  │ first  │ yes │  64.5  │     21.9 │                                                                                                                       
+    ├───────────────────────────┼────┼────────┼─────────┼────────┼─────┼────────┼──────────┤                                                                                                                       
+    │ C32_ml_diag_first         │ 32 │  14,24 │ diag    │ first  │  no │  ···   │     ···  │                                                                                                                       
+    │ C32_ml_diag_first_ple     │ 32 │  14,24 │ diag    │ first  │ yes │  ···   │     ···  │                                                                                                                       
+    │ C32_ml_diag_last          │ 32 │  14,24 │ diag    │  last  │  no │  ···   │     ···  │                                                                                                                       
+    │ C32_ml_diag_last_ple      │ 32 │  14,24 │ diag    │  last  │ yes │  ···   │     ···  │                                                                                                                       
+    └───────────────────────────┴────┴────────┴─────────┴────────┴─────┴────────┴──────────┘                                                                                                      
+                                                                                     
+    [Observation] first > last, PLE doesn't help, simmag doesn't help
+
+                                                                                    
