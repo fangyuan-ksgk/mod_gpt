@@ -22,9 +22,9 @@
 #   slr      ∈ {5e-2, 1e-1}         (2)
 #
 # Total per part: 3 × 2 × 2 × 9 = 108 (28-layer) or × 7 = 84 (16-layer)
-# 17 parts: 2 models × 6 datasets + 2 new models × scienceqa + 3 models × mmlu
+# 20 parts: 2 models × 6 datasets + 2 new models × scienceqa + 3 models × mmlu + 3 models × sciq
 #
-# Usage: ./sweep_0412_steer.sh <PART>   (PART = 1-17|all)
+# Usage: ./sweep_0412_steer.sh <PART>   (PART = 1-20|all)
 # ===========================================================================
 set -euo pipefail
 
@@ -73,7 +73,7 @@ LAYERS_28[L14_20]="14,20"; LAYERS_28[L14_22]="14,22"; LAYERS_28[L14_24]="14,24"
 LAYERS_28[L14_26]="14,26"; LAYERS_28[L15_24]="15,24"; LAYERS_28[L16_24]="16,24"
 
 # 16-layer (Llama-1B): single + pairs with 8
-LAYER_NAMES_16=("L8" "L9" "L10" "L8_12" "L8_14" "L9_14" "L10_14")
+LAYER_NAMES_16=("L8" "L9" "L10") # -> use single layer ONLY
 declare -A LAYERS_16
 LAYERS_16[L8]="8";       LAYERS_16[L9]="9";       LAYERS_16[L10]="10"
 LAYERS_16[L8_12]="8,12"; LAYERS_16[L8_14]="8,14"; LAYERS_16[L9_14]="9,14"
@@ -108,8 +108,13 @@ PART_MODEL[15]="$QWEN06";  PART_MTAG[15]="q06"; PART_DATASET[15]="mmlu";  PART_D
 PART_MODEL[16]="$QWEN17";  PART_MTAG[16]="q17"; PART_DATASET[16]="mmlu";  PART_DTAG[16]="mmlu"; PART_NL[16]=28
 PART_MODEL[17]="$LLAMA1";  PART_MTAG[17]="ll1"; PART_DATASET[17]="mmlu";  PART_DTAG[17]="mmlu"; PART_NL[17]=16
 
+# --- Add SciQ (qwen3-0.6B, qwen3-1.7B, llama3.2-1b) ---
+PART_MODEL[18]="$QWEN06";  PART_MTAG[18]="q06"; PART_DATASET[18]="sciq";  PART_DTAG[18]="sciq"; PART_NL[18]=28
+PART_MODEL[19]="$QWEN17";  PART_MTAG[19]="q17"; PART_DATASET[19]="sciq";  PART_DTAG[19]="sciq"; PART_NL[19]=28
+PART_MODEL[20]="$LLAMA1";  PART_MTAG[20]="ll1"; PART_DATASET[20]="sciq";  PART_DTAG[20]="sciq"; PART_NL[20]=16
+
 if [ "$PART" = "all" ]; then
-  PARTS=(1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17)
+  PARTS=(1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20)
 else
   PARTS=($PART)
 fi
@@ -128,18 +133,30 @@ for P in "${PARTS[@]}"; do
     LNAMES=("${LAYER_NAMES_16[@]}")
   fi
 
-  n_exps=$(( ${#C_SIZES[@]} * ${#LS[@]} * ${#STEER_LRS[@]} * ${#LNAMES[@]} ))
+  if [ "$nl" -eq 16 ]; then
+    n_slrs=3
+  else
+    n_slrs=${#STEER_LRS[@]}
+  fi
+  n_exps=$(( ${#C_SIZES[@]} * ${#LS[@]} * n_slrs * ${#LNAMES[@]} ))
 
   echo ""
   echo "============================================================"
-  echo "Part ${P}/17: ${mtag} + ${dataset} | ${n_exps} experiments | ${TIMESTAMP}"
+  echo "Part ${P}/20: ${mtag} + ${dataset} | ${n_exps} experiments | ${TIMESTAMP}"
   echo "============================================================"
 
   JOB_IDX=0
 
+  # Per-model steer_lr: llama is sensitive, use smaller slr
+  if [ "$nl" -eq 16 ]; then
+    CUR_SLRS=("1e-3" "5e-2" "1e-1")
+  else
+    CUR_SLRS=("${STEER_LRS[@]}")
+  fi
+
   for C in "${C_SIZES[@]}"; do
     for L in "${LS[@]}"; do
-      for slr in "${STEER_LRS[@]}"; do
+      for slr in "${CUR_SLRS[@]}"; do
         for lname in "${LNAMES[@]}"; do
 
           JOB_IDX=$((JOB_IDX + 1))

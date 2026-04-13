@@ -713,6 +713,72 @@ class ScienceQADataset(Dataset):
         return match.group(1).upper() if match else None
 
 
+class SciQDataset(Dataset):
+    """SciQ: 13.7k crowdsourced science MCQ (Physics, Chemistry, Biology).
+
+    4 choices per question, with optional support paragraph.
+    Test + validation are merged into the eval split (2,000 samples).
+    """
+
+    def __init__(self, split="train", tokenizer=None, max_length=512):
+        if split in ("test", "validation", "val"):
+            # Merge test + validation for evaluation
+            from datasets import concatenate_datasets
+            ds_test = load_dataset("allenai/sciq", split="test")
+            ds_val = load_dataset("allenai/sciq", split="validation")
+            self.dataset = concatenate_datasets([ds_test, ds_val])
+        else:
+            self.dataset = load_dataset("allenai/sciq", split="train")
+        self.tokenizer = tokenizer
+        self.max_length = max_length
+
+    def __len__(self):
+        return len(self.dataset)
+
+    def __getitem__(self, idx):
+        ex = self.dataset[idx]
+        prompt, text = self.parse_sample(ex)
+        prompt_len = len(self.tokenizer(prompt, add_special_tokens=False)["input_ids"])
+        enc = self.tokenizer(text, truncation=True, max_length=self.max_length,
+                             padding="max_length", return_tensors="pt")
+        prompt_len = min(prompt_len, self.max_length)
+        return {
+            "input_ids": enc["input_ids"].squeeze(0),
+            "attention_mask": enc["attention_mask"].squeeze(0),
+            "prompt_len": prompt_len,
+        }
+
+    @staticmethod
+    def parse_sample(ex):
+        """Return (prompt, full_text)."""
+        import random as _rand
+        choices = [ex["correct_answer"], ex["distractor1"],
+                   ex["distractor2"], ex["distractor3"]]
+        # Shuffle choices deterministically per question
+        rng = _rand.Random(hash(ex["question"]))
+        rng.shuffle(choices)
+        correct_idx = choices.index(ex["correct_answer"])
+        answer_letter = chr(ord("A") + correct_idx)
+
+        choices_str = "\n".join(f"{chr(ord('A')+i)}) {c}" for i, c in enumerate(choices))
+
+        # Use support paragraph as reasoning if available
+        support = ex.get("support", "").strip()
+        reasoning = support if support else answer_letter
+
+        prompt = f"Question: {ex['question']}\n{choices_str}\nAnswer:"
+        text = f"{prompt} {reasoning}\n#### {answer_letter}"
+        return prompt, text
+
+    @staticmethod
+    def extract_answer(text):
+        match = re.search(r"####\s*([A-Da-d])", text)
+        if match:
+            return match.group(1).upper()
+        match = re.search(r"Answer:\s*([A-Da-d])\)", text)
+        return match.group(1).upper() if match else None
+
+
 class HumanEvalDataset(Dataset):
     """HumanEval Python coding problems (OpenAI)."""
 
@@ -1461,6 +1527,7 @@ DATASET_REGISTRY = {
     "aqua": AQuADataset,
     "math": MATHDataset,
     "scienceqa": ScienceQADataset, # verified
+    "sciq": SciQDataset,
     # Multi-hop QA
     "hotpotqa": HotpotQADataset,
     # Code generation
