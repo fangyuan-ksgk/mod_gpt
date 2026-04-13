@@ -344,10 +344,21 @@ so whether there's a carry depends on the cascade from the right).
 abstraction tokens inserted every 4 positions (K=4).
 """)
 
-            gr.Markdown("### 1. Token distribution changes with problem difficulty")
-            gr.Markdown("Easy problems (S0: no carries) and hard problems (S6: 6 consecutive carries) "
-                        "use **different abstraction tokens**.")
-            gr.Image("static_figures/fig1_token_by_difficulty.png")
+            gr.Markdown("""### 1. Token specialization by difficulty
+
+For each token, we ask: **what kinds of problems does this token appear in?** The heatmap shows
+P(difficulty level | token) — if a token is uniformly distributed across S0-S6, it carries no
+difficulty-specific information. If it concentrates on specific levels, it's a specialist.
+
+**Addition (left):** Token t3 (simple addition, 0% carry) concentrates on S0 (no cascades). Tokens
+t8, t9 (100% carry) spread across S1-S5 — they're the carry workhorses. Token t2 peaks at S6
+(the hardest cascade) despite having only 5% local carry — it encodes cascade *propagation*, not
+local carry state.
+
+**Subtraction (right):** Token t16 appears 93% in M0 (no borrows) — a pure "easy case" marker.
+Tokens t5 and t11 shift toward M4/M5 (deep borrow cascades).
+""")
+            gr.Image("static_figures/fig1_token_difficulty_profiles.png")
 
             gr.Markdown("""### 2. Causal verification: token identity matters for hard cascades
 
