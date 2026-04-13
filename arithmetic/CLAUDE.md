@@ -190,6 +190,15 @@ Logs saved to `/workspace/sorl_logs/`.
 
 Check [`TODO.md`](TODO.md) periodically for status.
 
+## Caches & Persistent Storage
+
+All under `/workspace/` (persists across sessions):
+- `/workspace/sorl_logs/` — queue logs, daemon logs, reviewer state
+- `/workspace/sorl_caches/interp_results/` — cached token_records.json per model (expensive to regenerate)
+- `/workspace/codes/mod_gpt/arithmetic/interp_results/` — working copy (synced to HF)
+- `/workspace/codes/mod_gpt/arithmetic/eval_sets/` — deterministic eval sets (seed=42)
+- `/tmp/hf_cache/` — HF model downloads (non-persistent, re-downloads on session start)
+
 ## Key Files
 
 - `arithmetic/train.py` — SFT baseline + SoRL v1 training
