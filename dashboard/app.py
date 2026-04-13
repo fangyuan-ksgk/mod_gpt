@@ -289,12 +289,49 @@ activation-level probing or SAEs needed. This is what we test on
         detail_table = gr.Dataframe(headers=["Split", "Accuracy", "N"], interactive=False)
 
     with gr.Accordion("Token Interpretability", open=True):
-        gr.Markdown("""**Do abstraction tokens encode carry/borrow circuits?**
-Parallels [Quirke et al. §3.2-3.3](https://arxiv.org/abs/2402.02619) — their equations 2 (STn tri-state carry) and 7 (MBn borrow).""")
-        interp_model_dd = gr.Dropdown(label="Model", choices=[], allow_custom_value=True)
-        interp_btn = gr.Button("Analyze", variant="primary")
-        interp_profiles = gr.Markdown("")
-        interp_causal = gr.Markdown("")
+        gr.Markdown("""## Do abstraction tokens encode arithmetic reasoning?
+
+When humans add multi-digit numbers, they track **carries** — if 7+8=15, they write 5 and carry 1 to the next column. [Quirke et al. (2024)](https://arxiv.org/abs/2402.02619) showed that transformers learn the same carry/borrow circuits internally, discoverable only through activation-level analysis (PCA, probing).
+
+**SoRL makes these circuits visible as explicit tokens.** Below we analyze a model trained with 30 abstraction tokens inserted every 4 positions (K=4). We ask: do specific tokens correlate with carry/borrow operations, and does the model *need* the right tokens to get the right answer?
+
+### 1. Token distribution changes with problem difficulty
+
+Easy problems (S0: no carries) and hard problems (S6: 6 consecutive carries) use **different abstraction tokens**. The model assigns different "scratchpad notes" depending on the arithmetic complexity.
+""")
+        gr.Image("static_figures/fig1_token_by_difficulty.png", label="Token distribution by cascade depth")
+
+        gr.Markdown("""### 2. Causal verification: token identity matters for hard problems
+
+Three interventions test whether tokens carry real information:
+- **Shuffle**: randomly permute token IDs within the sequence (keeps positions, scrambles identity)
+- **Random**: replace all tokens with random IDs
+- **Knockout**: remove all abstraction tokens entirely
+
+For easy problems (S0-S2), shuffling barely matters — the model can solve them without carry information. For **deep cascades (S4-S6)**, shuffling drops accuracy by 10-30 percentage points. The model needs the *correct* token identity to propagate carries through multiple digits.
+""")
+        gr.Image("static_figures/fig2_causal_by_depth.png", label="Causal verification by cascade depth")
+
+        gr.Markdown("""### 3. Key token profiles
+
+| Token | Appears when... | Interpretation |
+|-------|----------------|----------------|
+| **t3** | SA (simple add), addition only, no carry, answer=0 | **"No overflow"** — the leftmost digit is 0 |
+| **t6** | UC (use carry), addition, sum%10=9 in 92% of cases | **"Sum-of-9 carry"** — Quirke's tri-state U case (eq. 2) |
+| **t8, t9** | UC (use carry), addition, carry=100% | **"Definite carry"** — Quirke's tri-state 1 case |
+| **t17** | MB (make borrow) 51%, subtraction | **"Borrow indicator"** — Quirke's MBn (eq. 7) |
+| **t16** | carry=82%, mixed add/sub | **"Active carry/borrow state"** |
+
+The model has independently discovered Quirke's tri-state carry classifier (eq. 2): separate tokens for "no carry" (t3), "uncertain/sum=9" (t6), and "definite carry" (t8/t9). This structure emerged purely from the SoRL info-gain objective, without any supervision about carry logic.
+
+*Model: abs30 K=4, 2L/3H/510d, 100K training examples*
+""")
+        # Keep interactive analysis as fallback
+        with gr.Accordion("Interactive Analysis (select model)", open=False):
+            interp_model_dd = gr.Dropdown(label="Model", choices=[], allow_custom_value=True)
+            interp_btn = gr.Button("Analyze")
+            interp_profiles = gr.Markdown("")
+            interp_causal = gr.Markdown("")
 
     with gr.Accordion("About This Study", open=False):
         eval_info_md = gr.Markdown("")

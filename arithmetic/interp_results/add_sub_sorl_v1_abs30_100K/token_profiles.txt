@@ -1,0 +1,29 @@
+Model: add_sub_sorl_v1_abs30_100K
+K=4, abs_vocab=30, n_examples=2400
+
+POSITION d0 (11 tokens)
+--------------------------------------------------------------------------------
+  t 3 (n= 580) sub=[SA=100%] op=[add=100%] carry=[no_carry=100%] sum%10=[7=15%, 5=12%, 6=12%]
+  t 2 (n= 520) sub=[UC=87%, MD=12%] op=[add=87%, sub=12%] carry=[no_carry=87%, carry=12%] sum%10=[9=82%, 4=4%, 0=3%]
+  t 4 (n= 303) sub=[MD=100%] op=[sub=100%] carry=[no_carry=56%, carry=43%] sum%10=[4=14%, 0=13%, 8=13%]
+  t 5 (n= 267) sub=[MD=100%] op=[sub=100%] carry=[no_carry=62%, carry=37%] sum%10=[2=20%, 4=20%, 6=17%]
+  t11 (n= 183) sub=[MD=100%] op=[sub=100%] carry=[no_carry=65%, carry=34%] sum%10=[1=31%, 3=24%, 5=18%]
+  t 7 (n= 179) sub=[MD=100%] op=[sub=100%] carry=[no_carry=59%, carry=40%] sum%10=[7=16%, 1=16%, 9=13%]
+  t 8 (n= 116) sub=[UC=100%] op=[add=100%] carry=[carry=100%] sum%10=[2=32%, 1=19%, 3=14%]
+  t 9 (n= 103) sub=[UC=100%] op=[add=100%] carry=[carry=100%] sum%10=[0=49%, 1=30%, 2=14%]
+  t 6 (n=  79) sub=[MD=100%] op=[sub=100%] carry=[no_carry=67%, carry=32%] sum%10=[1=24%, 3=18%, 5=15%]
+  t12 (n=  44) sub=[UC=100%] op=[add=100%] carry=[carry=100%] sum%10=[0=52%, 3=27%, 7=13%]
+  t10 (n=  26) sub=[MD=100%] op=[sub=100%] carry=[no_carry=53%, carry=46%] sum%10=[0=23%, 6=23%, 2=19%]
+
+POSITION d4 (9 tokens)
+--------------------------------------------------------------------------------
+  t 1 (n=1977) sub=[UD=22%, US=21%, UB=16%] op=[add=55%, sub=44%] carry=[no_carry=65%, carry=34%] sum%10=[9=23%, 0=10%, 4=10%]
+  t17 (n=  74) sub=[MB=51%, MD=32%, ME=16%] op=[sub=100%] carry=[no_carry=68%, carry=31%] sum%10=[3=18%, 1=16%, 2=13%]
+  t16 (n=  73) sub=[MD=46%, UC=43%, MB=6%] op=[sub=56%, add=43%] carry=[carry=82%, no_carry=17%] sum%10=[1=16%, 0=13%, 2=12%]
+  t20 (n=  58) sub=[UC=50%, US=36%, MD=6%] op=[add=86%, sub=13%] carry=[carry=93%, no_carry=6%] sum%10=[0=25%, 1=22%, 2=12%]
+  t19 (n=  55) sub=[MD=45%, MB=41%, ME=12%] op=[sub=100%] carry=[no_carry=60%, carry=40%] sum%10=[5=20%, 7=14%, 9=12%]
+  t18 (n=  54) sub=[UC=51%, US=25%, MD=11%] op=[add=77%, sub=22%] carry=[carry=85%, no_carry=14%] sum%10=[0=27%, 1=25%, 2=18%]
+  t23 (n=  41) sub=[UC=48%, US=29%, MD=12%] op=[add=78%, sub=21%] carry=[carry=90%, no_carry=9%] sum%10=[0=24%, 1=19%, 3=17%]
+  t21 (n=  37) sub=[UC=64%, US=18%, MD=13%] op=[add=83%, sub=16%] carry=[carry=86%, no_carry=13%] sum%10=[2=24%, 0=21%, 3=13%]
+  t22 (n=  31) sub=[US=58%, UC=19%, MB=12%] op=[add=77%, sub=22%] carry=[carry=90%, no_carry=9%] sum%10=[0=35%, 3=22%, 2=12%]
+
