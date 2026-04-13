@@ -150,6 +150,12 @@ for P in "${PARTS[@]}"; do
             layers=${LAYERS_16[$lname]}
           fi
 
+          # Use per-layer embeddings for multi-layer configs
+          ple_flag=""
+          if [ "$lname" != "mid" ]; then
+            ple_flag="--per_layer_emb"
+          fi
+
           tag="${mtag}_${dtag}_C${C}_slr${slr}_L${L}_${lname}"
           out="${OUT_ROOT}/${tag}"
 
@@ -173,6 +179,7 @@ for P in "${PARTS[@]}"; do
             --L $L \
             --scale $SCALE \
             --inject_layers $layers \
+            $ple_flag \
             --eval_every 99999 \
             --save_every 99999 \
             --eval_samples $EVAL_SAMPLES \
