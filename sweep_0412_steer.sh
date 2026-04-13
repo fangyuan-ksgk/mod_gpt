@@ -22,9 +22,9 @@
 #   slr      ∈ {5e-2, 1e-1}         (2)
 #
 # Total per part: 3 × 2 × 2 × 9 = 108 (28-layer) or × 7 = 84 (16-layer)
-# 12 parts: 2 models × 6 datasets
+# 14 parts: 2 models × 6 datasets + 2 new models × scienceqa
 #
-# Usage: ./sweep_0412_steer.sh <PART>   (PART = 1-12|all)
+# Usage: ./sweep_0412_steer.sh <PART>   (PART = 1-14|all)
 # ===========================================================================
 set -euo pipefail
 
@@ -42,7 +42,9 @@ N_GPUS=4
 
 # ---- Model & shared hyper-params ----
 QWEN06="Qwen/Qwen3-0.6B"
+QWEN17="Qwen/Qwen3-1.7B"
 LLAMA1="meta-llama/Llama-3.2-1B"
+LLAMA3="meta-llama/Llama-3.2-3B"
 LR=1e-5
 SCALE=0.5
 EPOCHS=1
@@ -97,8 +99,12 @@ PART_MODEL[10]="$QWEN06";  PART_MTAG[10]="q06"; PART_DATASET[10]="boolq";       
 PART_MODEL[11]="$LLAMA1";  PART_MTAG[11]="ll1"; PART_DATASET[11]="arc";          PART_DTAG[11]="arc"; PART_NL[11]=16
 PART_MODEL[12]="$LLAMA1";  PART_MTAG[12]="ll1"; PART_DATASET[12]="boolq";        PART_DTAG[12]="bq";  PART_NL[12]=16
 
+# --- New models (Qwen3-1.7B, Llama-3.2-3B) + ScienceQA ---
+PART_MODEL[13]="$QWEN17";  PART_MTAG[13]="q17"; PART_DATASET[13]="scienceqa";     PART_DTAG[13]="sci"; PART_NL[13]=28
+PART_MODEL[14]="$LLAMA3";  PART_MTAG[14]="l3b"; PART_DATASET[14]="scienceqa";     PART_DTAG[14]="sci"; PART_NL[14]=28
+
 if [ "$PART" = "all" ]; then
-  PARTS=(1 2 3 4 5 6 7 8 9 10 11 12)
+  PARTS=(1 2 3 4 5 6 7 8 9 10 11 12 13 14)
 else
   PARTS=($PART)
 fi
@@ -121,7 +127,7 @@ for P in "${PARTS[@]}"; do
 
   echo ""
   echo "============================================================"
-  echo "Part ${P}/12: ${mtag} + ${dataset} | ${n_exps} experiments | ${TIMESTAMP}"
+  echo "Part ${P}/14: ${mtag} + ${dataset} | ${n_exps} experiments | ${TIMESTAMP}"
   echo "============================================================"
 
   JOB_IDX=0
