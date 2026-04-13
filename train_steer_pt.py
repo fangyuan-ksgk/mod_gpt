@@ -28,6 +28,7 @@ import argparse
 import time
 import json
 import random
+from collections import defaultdict
 
 import torch
 import torch.nn as nn
@@ -273,6 +274,7 @@ def evaluate_accuracy(
     raw_model = wrapper.model if hasattr(wrapper, 'model') else wrapper
     raw_model.eval()
     correct = 0
+    is_mixed = hasattr(dataset, "extract_answer_for")
     extract_fn = getattr(dataset, "extract_answer", lambda _: None)
     pad_id = tokenizer.pad_token_id
     n = min(num_samples, len(dataset))
@@ -284,11 +286,12 @@ def evaluate_accuracy(
     all_prompt_texts = [None] * n
     all_preds = [None] * n
     all_golds = [None] * n
+    all_ds_idx = [0] * n
 
     for bs_start in range(0, n, eval_batch_size):
         bs_end = min(bs_start + eval_batch_size, n)
 
-        prompts, prompt_lens, ref_texts = [], [], []
+        prompts, prompt_lens, ref_texts, ds_indices = [], [], [], []
         for i in range(bs_start, bs_end):
             item = dataset[i]
             pl = item["prompt_len"]
@@ -296,6 +299,7 @@ def evaluate_accuracy(
             prompt_lens.append(pl)
             ref_texts.append(tokenizer.decode(item["input_ids"].tolist(),
                                               skip_special_tokens=True))
+            ds_indices.append(item.get("_ds_idx", 0))
 
         input_ids, attn_mask = _left_pad_prompts(prompts, pad_id)
         input_ids, attn_mask = input_ids.to(device), attn_mask.to(device)
@@ -314,8 +318,11 @@ def evaluate_accuracy(
             prompt_text = tokenizer.decode(prompts[j].tolist(), skip_special_tokens=True)
             all_full_texts[i] = full_text
             all_prompt_texts[i] = prompt_text
-            all_preds[i] = extract_fn(full_text)
-            all_golds[i] = extract_fn(ref_texts[j])
+            ds_i = ds_indices[j]
+            all_ds_idx[i] = ds_i
+            efn = dataset.extract_answer_for(ds_i) if is_mixed else extract_fn
+            all_preds[i] = efn(full_text)
+            all_golds[i] = efn(ref_texts[j])
 
     # Scoring
     is_correct_list = [False] * n
@@ -361,9 +368,28 @@ def evaluate_accuracy(
     raw_model.train()
     result = {"accuracy": accuracy, "correct": correct, "total": n, "samples": samples}
 
+    # Per-dataset breakdown for mixed datasets
+    if is_mixed:
+        per_ds = defaultdict(lambda: {"correct": 0, "total": 0})
+        for i in range(n):
+            d = per_ds[all_ds_idx[i]]
+            d["total"] += 1
+            if is_correct_list[i]:
+                d["correct"] += 1
+        per_ds_results = {}
+        for ds_i in sorted(per_ds):
+            d = per_ds[ds_i]
+            name = dataset.names[ds_i]
+            acc = d["correct"] / max(d["total"], 1)
+            per_ds_results[name] = {"accuracy": acc, "correct": d["correct"], "total": d["total"]}
+        result["per_dataset"] = per_ds_results
+
     if log_fn is not None:
         log_fn(f"\n{'='*60}")
         log_fn(f"  Accuracy: {correct}/{n} = {accuracy*100:.1f}%")
+        if is_mixed and "per_dataset" in result:
+            for name, d in result["per_dataset"].items():
+                log_fn(f"    {name}: {d['correct']}/{d['total']} = {d['accuracy']*100:.1f}%")
         log_fn(f"{'='*60}")
         for s in samples:
             log_fn(f"\n--- Sample {s['idx']} ---")

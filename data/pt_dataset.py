@@ -1421,14 +1421,25 @@ class MixedDataset(Dataset):
     def __len__(self):
         return self._total
 
-    def __getitem__(self, idx):
-        if idx < 0 or idx >= self._total:
-            raise IndexError(idx)
+    def _locate(self, idx):
+        """Return (sub_dataset_index, local_index) for global idx."""
         for i, cum in enumerate(self.cumulative_sizes):
             if idx < cum:
                 offset = self.cumulative_sizes[i - 1] if i > 0 else 0
-                return self.sub_datasets[i][idx - offset]
+                return i, idx - offset
         raise IndexError(idx)
+
+    def __getitem__(self, idx):
+        if idx < 0 or idx >= self._total:
+            raise IndexError(idx)
+        ds_i, local_i = self._locate(idx)
+        item = self.sub_datasets[ds_i][local_i]
+        item["_ds_idx"] = ds_i
+        return item
+
+    def extract_answer_for(self, ds_idx):
+        """Return the extract_answer callable for a specific sub-dataset."""
+        return self.sub_datasets[ds_idx].extract_answer
 
     @property
     def extract_answer(self):
