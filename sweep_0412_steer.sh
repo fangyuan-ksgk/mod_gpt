@@ -22,9 +22,9 @@
 #   slr      ∈ {5e-2, 1e-1}         (2)
 #
 # Total per part: 3 × 2 × 2 × 9 = 108 (28-layer) or × 7 = 84 (16-layer)
-# 20 parts: 2 models × 6 datasets + 2 new models × scienceqa + 3 models × mmlu + 3 models × sciq
+# 23 parts: 2 models × 6 datasets + 2 new models × scienceqa + 3 models × mmlu + 3 models × sciq + 3 × Qwen4B(lora)
 #
-# Usage: ./sweep_0412_steer.sh <PART>   (PART = 1-20|all)
+# Usage: ./sweep_0412_steer.sh <PART>   (PART = 1-23|all)
 # ===========================================================================
 set -euo pipefail
 
@@ -43,6 +43,7 @@ N_GPUS=4
 # ---- Model & shared hyper-params ----
 QWEN06="Qwen/Qwen3-0.6B"
 QWEN17="Qwen/Qwen3-1.7B"
+QWEN4B="Qwen/Qwen3-4B"
 LLAMA1="meta-llama/Llama-3.2-1B"
 LLAMA3="meta-llama/Llama-3.2-3B"
 LR=1e-5
@@ -71,6 +72,12 @@ declare -A LAYERS_28
 LAYERS_28[L14]="14";     LAYERS_28[L15]="15";     LAYERS_28[L16]="16"
 LAYERS_28[L14_20]="14,20"; LAYERS_28[L14_22]="14,22"; LAYERS_28[L14_24]="14,24"
 LAYERS_28[L14_26]="14,26"; LAYERS_28[L15_24]="15,24"; LAYERS_28[L16_24]="16,24"
+
+# 36-layer (Qwen3-4B): single + pairs with 18
+LAYER_NAMES_36=("L18" "L19" "L20" "L18_26" "L18_28" "L18_30")
+declare -A LAYERS_36
+LAYERS_36[L18]="18";     LAYERS_36[L19]="19";     LAYERS_36[L20]="20"
+LAYERS_36[L18_26]="18,26"; LAYERS_36[L18_28]="18,28"; LAYERS_36[L18_30]="18,30"
 
 # 16-layer (Llama-1B): single + pairs with 8
 LAYER_NAMES_16=("L8" "L9" "L10") # -> use single layer ONLY
@@ -113,8 +120,13 @@ PART_MODEL[18]="$QWEN06";  PART_MTAG[18]="q06"; PART_DATASET[18]="sciq";  PART_D
 PART_MODEL[19]="$QWEN17";  PART_MTAG[19]="q17"; PART_DATASET[19]="sciq";  PART_DTAG[19]="sciq"; PART_NL[19]=28
 PART_MODEL[20]="$LLAMA1";  PART_MTAG[20]="ll1"; PART_DATASET[20]="sciq";  PART_DTAG[20]="sciq"; PART_NL[20]=16
 
+# --- Add Qwen4B + lora | sciqa, gsm8k, sciq sweeps (C=4,32, L=4 only) ---
+PART_MODEL[21]="$QWEN4B";  PART_MTAG[21]="q4b"; PART_DATASET[21]="scienceqa";  PART_DTAG[21]="sci";  PART_NL[21]=36
+PART_MODEL[22]="$QWEN4B";  PART_MTAG[22]="q4b"; PART_DATASET[22]="gsm8k";     PART_DTAG[22]="gsm";  PART_NL[22]=36
+PART_MODEL[23]="$QWEN4B";  PART_MTAG[23]="q4b"; PART_DATASET[23]="sciq";      PART_DTAG[23]="sciq"; PART_NL[23]=36
+
 if [ "$PART" = "all" ]; then
-  PARTS=(1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20)
+  PARTS=(1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23)
 else
   PARTS=($PART)
 fi
@@ -127,35 +139,42 @@ for P in "${PARTS[@]}"; do
   nl=${PART_NL[$P]}
 
   # Select layer configs for this model's depth
-  if [ "$nl" -eq 28 ]; then
+  if [ "$nl" -eq 36 ]; then
+    LNAMES=("${LAYER_NAMES_36[@]}")
+  elif [ "$nl" -eq 28 ]; then
     LNAMES=("${LAYER_NAMES_28[@]}")
   else
     LNAMES=("${LAYER_NAMES_16[@]}")
   fi
 
-  if [ "$nl" -eq 16 ]; then
-    n_slrs=3
+  # Per-part sweep axis overrides for Qwen4B (parts 21-23)
+  if [ "$nl" -eq 36 ]; then
+    CUR_CS=(4 32)
+    CUR_LS=(4)
+    CUR_SLRS=("5e-2" "1e-1")
+    LORA_FLAG="--use_lora"
+  elif [ "$nl" -eq 16 ]; then
+    CUR_CS=("${C_SIZES[@]}")
+    CUR_LS=("${LS[@]}")
+    CUR_SLRS=("1e-3" "5e-2" "1e-1")
+    LORA_FLAG=""
   else
-    n_slrs=${#STEER_LRS[@]}
+    CUR_CS=("${C_SIZES[@]}")
+    CUR_LS=("${LS[@]}")
+    CUR_SLRS=("${STEER_LRS[@]}")
+    LORA_FLAG=""
   fi
-  n_exps=$(( ${#C_SIZES[@]} * ${#LS[@]} * n_slrs * ${#LNAMES[@]} ))
+  n_exps=$(( ${#CUR_CS[@]} * ${#CUR_LS[@]} * ${#CUR_SLRS[@]} * ${#LNAMES[@]} ))
 
   echo ""
   echo "============================================================"
-  echo "Part ${P}/20: ${mtag} + ${dataset} | ${n_exps} experiments | ${TIMESTAMP}"
+  echo "Part ${P}/23: ${mtag} + ${dataset} | ${n_exps} experiments | ${TIMESTAMP}"
   echo "============================================================"
 
   JOB_IDX=0
 
-  # Per-model steer_lr: llama is sensitive, use smaller slr
-  if [ "$nl" -eq 16 ]; then
-    CUR_SLRS=("1e-3" "5e-2" "1e-1")
-  else
-    CUR_SLRS=("${STEER_LRS[@]}")
-  fi
-
-  for C in "${C_SIZES[@]}"; do
-    for L in "${LS[@]}"; do
+  for C in "${CUR_CS[@]}"; do
+    for L in "${CUR_LS[@]}"; do
       for slr in "${CUR_SLRS[@]}"; do
         for lname in "${LNAMES[@]}"; do
 
@@ -163,7 +182,9 @@ for P in "${PARTS[@]}"; do
           gpu=$(( (JOB_IDX - 1) % N_GPUS ))
           port=$((BASE_PORT + P * 200 + JOB_IDX))
 
-          if [ "$nl" -eq 28 ]; then
+          if [ "$nl" -eq 36 ]; then
+            layers=${LAYERS_36[$lname]}
+          elif [ "$nl" -eq 28 ]; then
             layers=${LAYERS_28[$lname]}
           else
             layers=${LAYERS_16[$lname]}
@@ -198,7 +219,7 @@ for P in "${PARTS[@]}"; do
             --eval_batch_size $EVAL_BATCH \
             --num_log_samples $NUM_LOG \
             --log_every 10 \
-            --output_dir $out &
+            --output_dir $out $LORA_FLAG &
 
           if (( JOB_IDX % N_GPUS == 0 )); then wait; fi
 
