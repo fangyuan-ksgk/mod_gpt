@@ -288,6 +288,14 @@ activation-level probing or SAEs needed. This is what we test on
         detail_btn = gr.Button("Show splits")
         detail_table = gr.Dataframe(headers=["Split", "Accuracy", "N"], interactive=False)
 
+    with gr.Accordion("Token Interpretability", open=True):
+        gr.Markdown("""**Do abstraction tokens encode carry/borrow circuits?**
+Parallels [Quirke et al. §3.2-3.3](https://arxiv.org/abs/2402.02619) — their equations 2 (STn tri-state carry) and 7 (MBn borrow).""")
+        interp_model_dd = gr.Dropdown(label="Model", choices=[], allow_custom_value=True)
+        interp_btn = gr.Button("Analyze", variant="primary")
+        interp_profiles = gr.Markdown("")
+        interp_causal = gr.Markdown("")
+
     with gr.Accordion("About This Study", open=False):
         eval_info_md = gr.Markdown("")
 
@@ -421,7 +429,11 @@ found via activation-level analysis as explicit, interpretable tokens.
         model_names = sorted([m["subfolder"].removeprefix("non_enriched/") for m in models])
         model_dd_update = gr.update(choices=model_names, value=model_names[0] if model_names else "")
 
-        return models, summary, q_status, main_df, hard_df, eval_info, model_dd_update
+        # Filter sorl models for interp dropdown
+        sorl_names = [n for n in model_names if "sorl" in n]
+        interp_dd_update = gr.update(choices=sorl_names, value=sorl_names[0] if sorl_names else "")
+
+        return models, summary, q_status, main_df, hard_df, eval_info, model_dd_update, interp_dd_update
 
     def on_detail(models, name):
         return build_detailed_splits(models, name.strip() if name else "")
@@ -429,16 +441,99 @@ found via activation-level analysis as explicit, interpretable tokens.
     refresh_btn.click(
         on_refresh,
         inputs=[arch_filter],
-        outputs=[models_state, summary_text, queue_status, main_table, hard_table, eval_info_md, model_selector],
+        outputs=[models_state, summary_text, queue_status, main_table, hard_table, eval_info_md, model_selector, interp_model_dd],
     )
 
     arch_filter.change(
         on_refresh,
         inputs=[arch_filter],
-        outputs=[models_state, summary_text, queue_status, main_table, hard_table, eval_info_md, model_selector],
+        outputs=[models_state, summary_text, queue_status, main_table, hard_table, eval_info_md, model_selector, interp_model_dd],
     )
 
     detail_btn.click(on_detail, inputs=[models_state, model_selector], outputs=[detail_table])
+
+    # ── Interpretability tab logic ──
+    def on_interp(model_name):
+        if not model_name:
+            return "Select a model.", ""
+        try:
+            # Try to load analysis.json and causal_verification.json from HF
+            analysis_path = hf_hub_download(
+                MODEL_REPO, f"interp_results/{model_name}/analysis.json",
+                local_dir="/tmp/hf_dash_cache")
+            analysis = json.load(open(analysis_path))
+
+            # Build per-token profile markdown
+            tokens = analysis.get("tokens", {})
+            K = analysis.get("K", 4)
+            abs_vocab = analysis.get("abs_vocab", 10)
+            n_ex = analysis.get("n_examples", 0)
+
+            lines = [f"**{model_name}** — K={K}, abs_vocab={abs_vocab}, {n_ex} examples\n"]
+            lines.append("| Token | N | Top Subtasks | Operation | Carry | Position | Top Sum%10 |")
+            lines.append("|-------|---|-------------|-----------|-------|----------|-----------|")
+
+            for tid in sorted(tokens.keys(), key=lambda t: -tokens[t]["count"]):
+                td = tokens[tid]
+                cnt = td["count"]
+                if cnt < 15:
+                    continue
+                subs = ", ".join(f"{l} {c*100//cnt}%" for l, c in
+                    sorted(td["subtask"].items(), key=lambda x: -x[1])[:3])
+                ops = ", ".join(f"{o} {c*100//cnt}%" for o, c in
+                    sorted(td["operation"].items(), key=lambda x: -x[1]))
+                carries = ", ".join(f"{s} {c*100//cnt}%" for s, c in
+                    sorted(td["carry_state"].items(), key=lambda x: -x[1]))
+                positions = ", ".join(f"d{p} {c*100//cnt}%" for p, c in
+                    sorted(td["answer_position"].items(), key=lambda x: -x[1])[:2])
+                sums = ", ".join(f"{v}={c*100//cnt}%" for v, c in
+                    sorted(td["input_sum_mod10"].items(), key=lambda x: -x[1])[:3])
+                lines.append(f"| t{tid} | {cnt} | {subs} | {ops} | {carries} | {positions} | {sums} |")
+
+            profile_md = "\n".join(lines)
+        except Exception as e:
+            profile_md = f"No token analysis found for {model_name}. Run `run_interp.sh` first. ({e})"
+
+        # Causal verification
+        try:
+            causal_path = hf_hub_download(
+                MODEL_REPO, f"interp_results/{model_name}/causal_verification.json",
+                local_dir="/tmp/hf_dash_cache")
+            causal = json.load(open(causal_path))
+
+            lines = ["### Causal Verification\n"]
+            lines.append("**Interventions on abstraction tokens — does token identity matter?**\n")
+            lines.append("| Intervention | Accuracy | Delta |")
+            lines.append("|-------------|----------|-------|")
+            base_acc = causal.get("baseline", {}).get("accuracy", 0)
+            for label in ["baseline", "knockout", "shuffle", "random"]:
+                acc = causal.get(label, {}).get("accuracy", 0)
+                delta = acc - base_acc
+                lines.append(f"| {label} | {acc:.1%} | {delta:+.1%} |")
+
+            # Hard splits
+            per_split = causal.get("per_split", {})
+            hard = ["add_S4", "add_S5", "add_S6", "sub_M4", "sub_M5"]
+            if any(s in per_split for s in hard):
+                lines.append("\n**Hard splits (where token identity matters most):**\n")
+                lines.append("| Split | Baseline | Knockout | Shuffle | Random |")
+                lines.append("|-------|----------|----------|---------|--------|")
+                for s in hard:
+                    if s in per_split:
+                        sp = per_split[s]
+                        b = sp.get("baseline", {}).get("accuracy", 0)
+                        k = sp.get("knockout", {}).get("accuracy", 0)
+                        sh = sp.get("shuffle", {}).get("accuracy", 0)
+                        r = sp.get("random", {}).get("accuracy", 0)
+                        lines.append(f"| {s} | {b:.0%} | {k:.0%} | {sh:.0%} | {r:.0%} |")
+
+            causal_md = "\n".join(lines)
+        except Exception:
+            causal_md = ""
+
+        return profile_md, causal_md
+
+    interp_btn.click(on_interp, inputs=[interp_model_dd], outputs=[interp_profiles, interp_causal])
 
     # Auto-refresh every 2 min
     timer = gr.Timer(120)
