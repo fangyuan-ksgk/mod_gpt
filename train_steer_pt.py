@@ -127,6 +127,8 @@ def parse_args():
                    help="Routing mode: diagonal (last C_SIZE dims) or similar_magnitude")
     p.add_argument("--per_layer_emb", action="store_true",
                    help="V6: use separate steering embedding per inject layer (default: shared)")
+    p.add_argument("--routing_temperature", type=float, default=None,
+                   help="V6: temperature for multinomial routing during training (None=argmax)")
 
     # VQ-VAE config (mode=vq only)
     p.add_argument("--vqvae_ckpt", type=str, default=None)
@@ -494,6 +496,7 @@ def main():
             routing_mode=args.routing_mode,
             per_layer_emb=args.per_layer_emb,
             code_position=args.code_position,
+            routing_temperature=args.routing_temperature,
         )
 
     elif args.mode == "v7":
@@ -511,7 +514,8 @@ def main():
         f"scale={args.scale} layers={wrapper.inject_layers}"
         + (f" read_layer={wrapper.read_layer}" if args.mode == 'v7' else '')
         + f" code_pos={args.code_position} routing={args.routing_mode}"
-        + (f" per_layer_emb" if args.per_layer_emb else ''))
+        + (f" per_layer_emb" if args.per_layer_emb else '')
+        + (f" temp={args.routing_temperature}" if args.routing_temperature else ''))
 
     # ---- Freeze model if requested ----
     if args.freeze_model:
