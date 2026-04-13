@@ -11,6 +11,7 @@ purely in representation space.
 """
 
 import os
+import functools
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -209,24 +210,52 @@ class StackedAbstractionWrapperV6(nn.Module):
     Steering is unconditional — every representable position is steered.
     The routing is non-differentiable (fixed diagonal + argmax).
     Only the steering embeddings and (optionally) model params are learned.
+
+    Variants (all backward-compatible, defaults match original behaviour):
+      routing_mode   – "diagonal" (last C_SIZE dims) | "similar_magnitude"
+      per_layer_emb  – False → shared embedding | True → one per inject layer
+      code_position  – "first" → first token routes chunk (forward steering)
+                       "last"  → last token routes chunk (backward steering)
     """
 
     def __init__(self, model, C_SIZE, D_MODEL, inject_layers=None,
-                 scale=0.1, L=16):
+                 scale=0.1, L=16, routing_mode="diagonal",
+                 per_layer_emb=False, code_position="first"):
         super().__init__()
         self.model = model
         self.L = L
         self.scale = scale
         self.C_SIZE = C_SIZE
         self.D_MODEL = D_MODEL
-
-        self.steering_emb = nn.Embedding(C_SIZE, D_MODEL)
-        nn.init.zeros_(self.steering_emb.weight)
+        self.routing_mode = routing_mode
+        self.per_layer_emb = per_layer_emb
+        self.code_position = code_position
 
         n_layers = model.config.num_hidden_layers
         if inject_layers is None:
             inject_layers = [n_layers // 2]
         self.inject_layers = inject_layers
+
+        # Routing dims
+        if routing_mode == "similar_magnitude":
+            lm_weight = model.lm_head.weight
+            self._routing_dims, self._routing_importances, self._routing_cv = \
+                _find_similar_magnitude_dims(lm_weight, C_SIZE)
+            print(f"V6 similar_magnitude routing: selected {C_SIZE} dims, "
+                  f"importance range=[{self._routing_importances.min():.4f}, {self._routing_importances.max():.4f}], "
+                  f"CV={self._routing_cv:.6f}")
+        else:
+            self._routing_dims = None
+
+        # Steering embeddings
+        if per_layer_emb:
+            self.steering_emb = nn.ModuleList([
+                nn.Embedding(C_SIZE, D_MODEL) for _ in inject_layers])
+            for emb in self.steering_emb:
+                nn.init.zeros_(emb.weight)
+        else:
+            self.steering_emb = nn.Embedding(C_SIZE, D_MODEL)
+            nn.init.zeros_(self.steering_emb.weight)
 
         self._hooks = []
         self._register_hooks()
@@ -237,12 +266,13 @@ class StackedAbstractionWrapperV6(nn.Module):
         for hook in self._hooks:
             hook.remove()
         self._hooks = []
-        for layer_idx in self.inject_layers:
+        for i, layer_idx in enumerate(self.inject_layers):
             layer = self.model.model.layers[layer_idx]
-            hook = layer.register_forward_hook(self._steering_hook)
+            hook = layer.register_forward_hook(
+                functools.partial(self._steering_hook, hook_idx=i))
             self._hooks.append(hook)
 
-    def _steering_hook(self, module, input, output):
+    def _steering_hook(self, module, input, output, hook_idx=0):
         if isinstance(output, tuple):
             hidden_states = output[0]
             rest = output[1:]
@@ -252,22 +282,30 @@ class StackedAbstractionWrapperV6(nn.Module):
 
         B, S, D = hidden_states.shape
 
-        # Diagonal routing: last C_SIZE dims → code per position (detached)
+        # Routing: select dims for code extraction
         with torch.no_grad():
-            pos_codes = hidden_states[..., -self.C_SIZE:].argmax(dim=-1)   # (B, S)
+            if self._routing_dims is not None:  # similar_magnitude
+                routed = hidden_states[..., self._routing_dims]
+            else:  # diagonal: last C_SIZE dims
+                routed = hidden_states[..., -self.C_SIZE:]
+            pos_codes = routed.argmax(dim=-1)   # (B, S)
 
-        # Chunk-level codes: first position of each L-window determines code
+        # Chunk-level codes
         n_chunks = S // self.L
         if n_chunks > 0:
             chunk_codes = torch.full((B, S), -1, dtype=torch.long,
                                      device=hidden_states.device)
             for c in range(n_chunks):
-                ps = c * self.L
-                chunk_codes[:, ps:ps + self.L] = pos_codes[:, ps:ps + 1]
+                if self.code_position == "last":
+                    src = c * self.L + self.L - 1
+                else:  # "first"
+                    src = c * self.L
+                chunk_codes[:, c * self.L:(c + 1) * self.L] = pos_codes[:, src:src + 1]
 
             mask = chunk_codes >= 0
             safe_codes = chunk_codes.clamp(min=0)
-            steer_vecs = self.steering_emb(safe_codes)          # (B, S, D)
+            emb = self.steering_emb[hook_idx] if self.per_layer_emb else self.steering_emb
+            steer_vecs = emb(safe_codes)          # (B, S, D)
             steer_vecs = steer_vecs * mask.unsqueeze(-1).float() * self.scale
             hidden_states = hidden_states + steer_vecs.to(hidden_states.dtype)
 
@@ -286,6 +324,10 @@ class StackedAbstractionWrapperV6(nn.Module):
 
     # ---- save / load ----
 
+    def get_steer_params(self):
+        """Return all steering embedding parameters (for separate optimizer group)."""
+        return [p for n, p in self.named_parameters() if 'steering_emb' in n]
+
     def save_pretrained(self, path):
         os.makedirs(path, exist_ok=True)
         torch.save({
@@ -294,6 +336,9 @@ class StackedAbstractionWrapperV6(nn.Module):
                 'C_SIZE': self.C_SIZE, 'D_MODEL': self.D_MODEL,
                 'inject_layers': self.inject_layers,
                 'scale': self.scale, 'L': self.L,
+                'routing_mode': self.routing_mode,
+                'per_layer_emb': self.per_layer_emb,
+                'code_position': self.code_position,
             },
         }, os.path.join(path, 'steer_v6.pt'))
 

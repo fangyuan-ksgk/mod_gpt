@@ -119,12 +119,14 @@ def parse_args():
                    help="Comma-separated layer indices to inject steering (default: middle layer)")
     p.add_argument("--read_layer", type=int, default=None,
                    help="Layer index to read codes from (v7 only, default: last layer)")
-    p.add_argument("--code_position", type=str, default="last",
+    p.add_argument("--code_position", type=str, default="first",
                    choices=["first", "last"],
-                   help="Which position in each chunk determines the code (v7 only)")
+                   help="Which position in each chunk determines the code")
     p.add_argument("--routing_mode", type=str, default="diagonal",
                    choices=["diagonal", "similar_magnitude"],
-                   help="Routing mode for V7: diagonal (last C_SIZE dims) or similar_magnitude (select dims with uniform importance)")
+                   help="Routing mode: diagonal (last C_SIZE dims) or similar_magnitude")
+    p.add_argument("--per_layer_emb", action="store_true",
+                   help="V6: use separate steering embedding per inject layer (default: shared)")
 
     # VQ-VAE config (mode=vq only)
     p.add_argument("--vqvae_ckpt", type=str, default=None)
@@ -489,6 +491,9 @@ def main():
         wrapper = StackedAbstractionWrapperV6(
             model, C_SIZE=args.C_SIZE, D_MODEL=D_MODEL,
             inject_layers=inject_layers, scale=args.scale, L=args.L,
+            routing_mode=args.routing_mode,
+            per_layer_emb=args.per_layer_emb,
+            code_position=args.code_position,
         )
 
     elif args.mode == "v7":
@@ -504,8 +509,9 @@ def main():
 
     log(f"Steering: mode={args.mode} C_SIZE={args.C_SIZE} L={args.L} "
         f"scale={args.scale} layers={wrapper.inject_layers}"
-        + (f" read_layer={wrapper.read_layer} code_pos={args.code_position} routing={args.routing_mode}"
-           if args.mode == 'v7' else ''))
+        + (f" read_layer={wrapper.read_layer}" if args.mode == 'v7' else '')
+        + f" code_pos={args.code_position} routing={args.routing_mode}"
+        + (f" per_layer_emb" if args.per_layer_emb else ''))
 
     # ---- Freeze model if requested ----
     if args.freeze_model:
