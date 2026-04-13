@@ -327,21 +327,44 @@ a small auxiliary vocabulary (e.g. 30 tokens) inserted at regular intervals (eve
                 detail_btn = gr.Button("Show splits")
                 detail_table = gr.Dataframe(headers=["Split", "Accuracy", "N"], interactive=False)
 
-        # ── Tab 2: Interpretability ──
+        # ── Tab 2: Results ──
+        with gr.TabItem("Results"):
+            gr.Markdown("""## SoRL K=1 abs30: never loses to baseline
+
+Our best config — **K=1 (abstraction at every position), vocab size 30** — matches or beats
+the SFT baseline on every data size and every architecture tested. No exceptions.
+""")
+            gr.Image("static_figures/fig_data_efficiency.png")
+
+            gr.Markdown("""**At 10K training examples**, SoRL K=1 abs30 reaches **96.1%** while the baseline
+reaches only 72.4% — a **+24 percentage point** improvement. At 25K, SoRL hits 100% while the
+baseline is at 91.6%. By 50K both reach 100%.
+
+K=4 (abstraction every 4th position) fails at 10K data — it doesn't have enough examples to learn
+useful abstractions through search. K=1 is more data-efficient because every position gets a
+scratchpad token.
+""")
+
+            gr.Markdown("### SoRL helps undersized models the most")
+            gr.Image("static_figures/fig_undersized.png")
+
+            gr.Markdown("""The biggest gains are on **capacity-limited architectures**. A 2L/1H/128d model
+goes from 50% (baseline) to **85%** (SoRL K=1 abs30) — a +35pp improvement. The abstraction tokens
+effectively give the model external memory that compensates for its limited hidden dimensions.
+""")
+
+        # ── Tab 3: Interpretability ──
         with gr.TabItem("Interpretability"):
-            gr.Markdown("""## Do abstraction tokens encode arithmetic reasoning?
+            gr.Markdown("""## Do abstraction tokens encode carry/borrow circuits?
 
-When humans add multi-digit numbers, they track **carries** — if 7+8=15, they write 5 and carry 1
-to the next column. For a chain like 999999+1, the carry cascades through all 6 digits.
+When humans add multi-digit numbers, they track **carries** — if 7+8=15, they write 5 and carry 1.
+[Quirke et al. (2024)](https://arxiv.org/abs/2402.02619) showed transformers learn carry/borrow
+circuits internally, discoverable only through activation-level analysis. They define a **tri-state
+carry classifier** (eq. 2): each position is **0** (no carry), **1** (definite carry), or **U**
+(uncertain — digit sum = 9, carry depends on cascade from right).
 
-[Quirke et al. (2024)](https://arxiv.org/abs/2402.02619) showed that transformers learn carry/borrow
-circuits internally, discoverable only through activation-level analysis (PCA, probing). They define
-a **tri-state carry classifier** (their eq. 2): for each digit position, the carry state is either
-**0** (no carry), **1** (definite carry), or **U** (uncertain — the digit pair sums to exactly 9,
-so whether there's a carry depends on the cascade from the right).
-
-**SoRL makes these circuits visible as explicit tokens.** We analyze a model trained with 30
-abstraction tokens inserted every 4 positions (K=4).
+**SoRL makes these circuits visible as explicit tokens.** We analyze our K=4 abs30 model (which
+has fewer abstraction positions, forcing sharper specialization).
 """)
 
             gr.Markdown("""### 1. Token specialization by difficulty
