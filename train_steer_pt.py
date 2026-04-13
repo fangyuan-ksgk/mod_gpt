@@ -125,6 +125,15 @@ def parse_args():
     p.add_argument("--routing_temperature", type=float, default=None,
                    help="V6: temperature for multinomial routing during training (None=argmax)")
 
+    # LoRA
+    p.add_argument("--use_lora", action="store_true",
+                   help="Enable LoRA fine-tuning (backbone only; steering params remain full-rank)")
+    p.add_argument("--lora_rank", type=int, default=16, help="LoRA rank r")
+    p.add_argument("--lora_alpha", type=int, default=32, help="LoRA scaling alpha")
+    p.add_argument("--lora_dropout", type=float, default=0.05, help="LoRA dropout")
+    p.add_argument("--lora_target_modules", type=str, default="q_proj,k_proj,v_proj,o_proj",
+                   help="Comma-separated LoRA target modules")
+
     # VQ-VAE config (mode=vq only)
     p.add_argument("--vqvae_ckpt", type=str, default=None)
     p.add_argument("--vqvae_steps", type=int, default=20000)
@@ -547,6 +556,26 @@ def main():
         + f" code_pos={args.code_position} routing={args.routing_mode}"
         + (f" per_layer_emb" if args.per_layer_emb else '')
         + (f" temp={args.routing_temperature}" if args.routing_temperature else ''))
+
+    # ---- Apply LoRA (optional) ----
+    if args.use_lora:
+        from peft import get_peft_model, LoraConfig
+        lora_cfg = LoraConfig(
+            r=args.lora_rank,
+            lora_alpha=args.lora_alpha,
+            target_modules=args.lora_target_modules.split(','),
+            lora_dropout=args.lora_dropout,
+            bias="none",
+            task_type="CAUSAL_LM",
+        )
+        model = get_peft_model(model, lora_cfg)
+        # Update wrapper's reference
+        wrapper.model = model
+        trainable_lora = sum(p.numel() for p in model.parameters() if p.requires_grad)
+        total_model = sum(p.numel() for p in model.parameters())
+        log(f"LoRA: rank={args.lora_rank} alpha={args.lora_alpha} "
+            f"targets={args.lora_target_modules} | "
+            f"Trainable: {trainable_lora/1e6:.1f}M / {total_model/1e6:.1f}M ({100*trainable_lora/total_model:.1f}%)")
 
     # ---- Freeze model if requested ----
     if args.freeze_model:
