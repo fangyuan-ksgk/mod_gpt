@@ -22,9 +22,9 @@
 #   slr      ∈ {5e-2, 1e-1}         (2)
 #
 # Total per part: 3 × 2 × 2 × 9 = 108 (28-layer) or × 7 = 84 (16-layer)
-# 14 parts: 2 models × 6 datasets + 2 new models × scienceqa
+# 17 parts: 2 models × 6 datasets + 2 new models × scienceqa + 3 models × mmlu
 #
-# Usage: ./sweep_0412_steer.sh <PART>   (PART = 1-14|all)
+# Usage: ./sweep_0412_steer.sh <PART>   (PART = 1-17|all)
 # ===========================================================================
 set -euo pipefail
 
@@ -132,7 +132,7 @@ for P in "${PARTS[@]}"; do
 
   echo ""
   echo "============================================================"
-  echo "Part ${P}/14: ${mtag} + ${dataset} | ${n_exps} experiments | ${TIMESTAMP}"
+  echo "Part ${P}/17: ${mtag} + ${dataset} | ${n_exps} experiments | ${TIMESTAMP}"
   echo "============================================================"
 
   JOB_IDX=0
