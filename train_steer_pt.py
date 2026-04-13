@@ -76,13 +76,7 @@ def parse_args():
 
     # Data
     p.add_argument("--dataset", type=str, default="gsm8k",
-                   choices=["gsm8k", "math_qa", "arc", "hellaswag",
-                            "winogrande", "boolq", "openbookqa",
-                            "commonsenseqa", "mmlu",
-                            "aqua", "math", "scienceqa",
-                            "mbpp", "humaneval", "livecodebench",
-                            "codecontests", "deepmind_code_contests",
-                            "wildifeval", "xlam"])
+                   help="Single dataset or comma-separated mix, e.g. 'gsm8k,scienceqa,commonsenseqa'")
     p.add_argument("--max_length", type=int, default=512)
 
     # Optimizer
