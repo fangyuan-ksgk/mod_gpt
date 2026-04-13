@@ -1,0 +1,335 @@
+{
+  "model": "add_sub_sorl_v1_abs30_100K",
+  "K": 4,
+  "n_examples": 1400,
+  "baseline": {
+    "correct": 1352,
+    "total": 1400,
+    "accuracy": 0.9657142857142857
+  },
+  "knockout": {
+    "correct": 0,
+    "total": 1400,
+    "accuracy": 0.0
+  },
+  "shuffle": {
+    "correct": 1297,
+    "total": 1400,
+    "accuracy": 0.9264285714285714
+  },
+  "random": {
+    "correct": 1253,
+    "total": 1400,
+    "accuracy": 0.895
+  },
+  "per_split": {
+    "add_S0": {
+      "baseline": {
+        "accuracy": 1.0
+      },
+      "knockout": {
+        "accuracy": 0.0
+      },
+      "shuffle": {
+        "accuracy": 1.0
+      },
+      "random": {
+        "accuracy": 1.0
+      }
+    },
+    "add_S1": {
+      "baseline": {
+        "accuracy": 1.0
+      },
+      "knockout": {
+        "accuracy": 0.0
+      },
+      "shuffle": {
+        "accuracy": 0.96
+      },
+      "random": {
+        "accuracy": 1.0
+      }
+    },
+    "add_S2": {
+      "baseline": {
+        "accuracy": 1.0
+      },
+      "knockout": {
+        "accuracy": 0.0
+      },
+      "shuffle": {
+        "accuracy": 1.0
+      },
+      "random": {
+        "accuracy": 1.0
+      }
+    },
+    "add_S3": {
+      "baseline": {
+        "accuracy": 1.0
+      },
+      "knockout": {
+        "accuracy": 0.0
+      },
+      "shuffle": {
+        "accuracy": 0.94
+      },
+      "random": {
+        "accuracy": 0.94
+      }
+    },
+    "add_S4": {
+      "baseline": {
+        "accuracy": 0.96
+      },
+      "knockout": {
+        "accuracy": 0.0
+      },
+      "shuffle": {
+        "accuracy": 0.9
+      },
+      "random": {
+        "accuracy": 0.72
+      }
+    },
+    "add_S5": {
+      "baseline": {
+        "accuracy": 0.72
+      },
+      "knockout": {
+        "accuracy": 0.0
+      },
+      "shuffle": {
+        "accuracy": 0.4
+      },
+      "random": {
+        "accuracy": 0.32
+      }
+    },
+    "add_S6": {
+      "baseline": {
+        "accuracy": 0.98
+      },
+      "knockout": {
+        "accuracy": 0.0
+      },
+      "shuffle": {
+        "accuracy": 0.68
+      },
+      "random": {
+        "accuracy": 0.5
+      }
+    },
+    "add_random": {
+      "baseline": {
+        "accuracy": 1.0
+      },
+      "knockout": {
+        "accuracy": 0.0
+      },
+      "shuffle": {
+        "accuracy": 0.99
+      },
+      "random": {
+        "accuracy": 0.985
+      }
+    },
+    "add_C3": {
+      "baseline": {
+        "accuracy": 0.98
+      },
+      "knockout": {
+        "accuracy": 0.0
+      },
+      "shuffle": {
+        "accuracy": 0.9
+      },
+      "random": {
+        "accuracy": 0.92
+      }
+    },
+    "add_C4": {
+      "baseline": {
+        "accuracy": 0.98
+      },
+      "knockout": {
+        "accuracy": 0.0
+      },
+      "shuffle": {
+        "accuracy": 0.92
+      },
+      "random": {
+        "accuracy": 0.92
+      }
+    },
+    "add_C5": {
+      "baseline": {
+        "accuracy": 1.0
+      },
+      "knockout": {
+        "accuracy": 0.0
+      },
+      "shuffle": {
+        "accuracy": 0.96
+      },
+      "random": {
+        "accuracy": 1.0
+      }
+    },
+    "add_C6": {
+      "baseline": {
+        "accuracy": 0.96
+      },
+      "knockout": {
+        "accuracy": 0.0
+      },
+      "shuffle": {
+        "accuracy": 0.92
+      },
+      "random": {
+        "accuracy": 0.9
+      }
+    },
+    "sub_M0": {
+      "baseline": {
+        "accuracy": 1.0
+      },
+      "knockout": {
+        "accuracy": 0.0
+      },
+      "shuffle": {
+        "accuracy": 1.0
+      },
+      "random": {
+        "accuracy": 1.0
+      }
+    },
+    "sub_M1": {
+      "baseline": {
+        "accuracy": 1.0
+      },
+      "knockout": {
+        "accuracy": 0.0
+      },
+      "shuffle": {
+        "accuracy": 1.0
+      },
+      "random": {
+        "accuracy": 1.0
+      }
+    },
+    "sub_M2": {
+      "baseline": {
+        "accuracy": 1.0
+      },
+      "knockout": {
+        "accuracy": 0.0
+      },
+      "shuffle": {
+        "accuracy": 1.0
+      },
+      "random": {
+        "accuracy": 0.98
+      }
+    },
+    "sub_M3": {
+      "baseline": {
+        "accuracy": 0.98
+      },
+      "knockout": {
+        "accuracy": 0.0
+      },
+      "shuffle": {
+        "accuracy": 0.98
+      },
+      "random": {
+        "accuracy": 0.96
+      }
+    },
+    "sub_M4": {
+      "baseline": {
+        "accuracy": 0.84
+      },
+      "knockout": {
+        "accuracy": 0.0
+      },
+      "shuffle": {
+        "accuracy": 0.74
+      },
+      "random": {
+        "accuracy": 0.64
+      }
+    },
+    "sub_M5": {
+      "baseline": {
+        "accuracy": 0.68
+      },
+      "knockout": {
+        "accuracy": 0.0
+      },
+      "shuffle": {
+        "accuracy": 0.74
+      },
+      "random": {
+        "accuracy": 0.6
+      }
+    },
+    "sub_random": {
+      "baseline": {
+        "accuracy": 0.995
+      },
+      "knockout": {
+        "accuracy": 0.0
+      },
+      "shuffle": {
+        "accuracy": 0.995
+      },
+      "random": {
+        "accuracy": 0.975
+      }
+    },
+    "sub_B3": {
+      "baseline": {
+        "accuracy": 0.98
+      },
+      "knockout": {
+        "accuracy": 0.0
+      },
+      "shuffle": {
+        "accuracy": 1.0
+      },
+      "random": {
+        "accuracy": 0.94
+      }
+    },
+    "sub_B4": {
+      "baseline": {
+        "accuracy": 1.0
+      },
+      "knockout": {
+        "accuracy": 0.0
+      },
+      "shuffle": {
+        "accuracy": 0.96
+      },
+      "random": {
+        "accuracy": 0.96
+      }
+    },
+    "sub_B5": {
+      "baseline": {
+        "accuracy": 1.0
+      },
+      "knockout": {
+        "accuracy": 0.0
+      },
+      "shuffle": {
+        "accuracy": 1.0
+      },
+      "random": {
+        "accuracy": 0.92
+      }
+    }
+  }
+}
