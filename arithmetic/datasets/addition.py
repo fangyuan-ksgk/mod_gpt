@@ -669,7 +669,7 @@ def make_eval_set(n_digits: int = 6, ops: str = "add", N: int = 50):
     categories["add_random"] = [random_add_example(n_digits) for _ in range(200)]
 
     # Hot carry chains (varied answer digits, not just 0's)
-    for chain_len in range(3, n_digits + 1):
+    for chain_len in range(1, n_digits + 1):
         examples = []
         attempts = 0
         while len(examples) < N and attempts < N * 500:
