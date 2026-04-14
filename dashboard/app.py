@@ -408,44 +408,55 @@ so shuffling disrupts every digit's computation.
             gr.Markdown("""### Using the models
 
 All models are on [HuggingFace](https://huggingface.co/thoughtworks/arithmetic-sorl).
-To load a model and run inference:
+Code is on the [`amir/arithmetic`](https://github.com/fangyuan-ksgk/mod_gpt/tree/amir/arithmetic) branch.
 
 ```python
+import torch
 from arithmetic.hub import load_model
+from arithmetic.evaluate import ArithmeticEvaluator
+from transformers import AutoTokenizer
+
+# Load model + tokenizer
+model, config, metrics = load_model("add_sub_sorl_v1_abs30_K1_100K", device="cuda")
+tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen3-0.6B")
+
+# Run full evaluation with per-split accuracy
+evaluator = ArithmeticEvaluator(model, tokenizer, device="cuda")
+results = evaluator.run(ops="add_sub", K=1, n_per_split=100)  # K=None for baseline
+evaluator.print_table(results)
+```
+
+To inspect abstraction tokens on a single example:
+
+```python
 from arithmetic.train import QWEN3_TOKEN_MAP, QWEN3_INV_MAP
 from sorl.sorl_trainer import infer_insert_mask, insert_tokens_with_padding, expand_prompt_len
 
-# Load model
-model, config, metrics = load_model("add_sub_sorl_v1_abs30_K1_100K", device="cuda")
 base_v = model.vocab_sizes[0].item()
 
 # Encode: 123456+654321=
-tokens = [1,2,3,4,5,6, 10, 6,5,4,3,2,1, 12]  # internal token IDs
-qwen_ids = torch.tensor([QWEN3_TOKEN_MAP[t] for t in tokens], device="cuda")
+prompt = [1,2,3,4,5,6, 10, 6,5,4,3,2,1, 12]
+qwen_ids = torch.tensor([QWEN3_TOKEN_MAP[t] for t in prompt], device="cuda")
 
-# Insert abstraction tokens (K=1 = every position)
-seq = qwen_ids.unsqueeze(0)
-im = infer_insert_mask(seq, K=1, attention_mask=torch.ones_like(seq))
+# Pad to full 21 tokens (14 prompt + 7 dummy answer), insert abstractions, recurse
+seq = torch.cat([qwen_ids, torch.zeros(7, dtype=torch.long, device="cuda")])
+ids = seq.unsqueeze(0)
+im = infer_insert_mask(ids, K=1, attention_mask=torch.ones_like(ids))
 ep = expand_prompt_len(torch.tensor([14], device="cuda"), im)
-ed, ea = insert_tokens_with_padding(seq, torch.ones_like(seq), im, model.vocab_sizes[0], 151643)
+ed, ea = insert_tokens_with_padding(ids, torch.ones_like(ids), im, model.vocab_sizes[0], 151643)
 
-# Recursion fills abstraction tokens
 data, ppt, logits = model.recursion(ed, ea, max_iterations=2,
     memory_span_abs=1792, memory_span_traj=1792, temperature=0.0, prompt_len=ep)
 
 # Separate trajectory vs abstraction tokens
 is_abs = data[0] >= base_v
-trajectory = data[0][~is_abs]              # real digit tokens
 abstractions = data[0][is_abs] - base_v    # abstraction token IDs (0-indexed)
-
-# Decode answer
-answer = [QWEN3_INV_MAP[t.item()] for t in trajectory[14:]]  # skip prompt
-print(f"Answer: {''.join(str(d) for d in answer)}")
 print(f"Abstraction tokens: {abstractions.tolist()}")
+# Each abstraction token encodes carry/borrow state at that position
 ```
 
 Token IDs: `0-9` = digits, `10` = `+`, `11` = `-`, `12` = `=`.
-Abstraction tokens are integers from 0 to `abs_vocab-1`, where 0 is the placeholder.
+Abstraction tokens are integers from 1 to `abs_vocab` (0 is the placeholder before recursion).
 """)
 
 
