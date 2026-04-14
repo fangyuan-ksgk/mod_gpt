@@ -8,7 +8,7 @@ Also check [`TODO.md`](TODO.md) for the task backlog.
 
 ## Cost Rules
 
-**NEVER use fast mode (`/fast`).** It costs 6x ($30/$150 per M tokens vs $5/$25). With long context sessions this burns money fast. The quality difference is negligible for our workload.
+**NEVER use fast mode (`/fast`).** It costs 6x ($30/$150 per M tokens vs $5/$25) AND produces lower quality output (shallower reasoning, more bugs missed). We pay more for worse results.
 
 ## Job Safety Rules
 
