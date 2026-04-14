@@ -389,9 +389,50 @@ effectively give the model external memory that compensates for its limited hidd
         with gr.TabItem("Interpretability"):
             gr.Markdown("""## SoRL tokens externalize arithmetic circuits
 
+### Background: how multi-digit arithmetic works
+
+Adding two 6-digit numbers like `345678 + 657893` requires tracking **carries** — when
+a column sums to 10 or more, you carry 1 to the next column. A **carry cascade** happens
+when carries chain through multiple consecutive columns (e.g., `999 + 1 = 1000`).
+
+We evaluate on **C-splits** — problems grouped by how many consecutive columns produce carries,
+with varied (non-zero) answer digits:
+
+| Split | Meaning | Example | Why it's hard |
+|-------|---------|---------|---------------|
+| **C1** | 1 carry | `345678 + 100921 = 446599` | Single carry — easy |
+| **C2** | 2 consecutive carries | `503847 + 297162 = 801009` | Carry propagates once |
+| **C3** | 3 consecutive carries | `145232 + 957868 = 1103100` | Must track 3-step cascade |
+| **C4** | 4 consecutive carries | `780149 + 819959 = 1600108` | Longer cascade chain |
+| **C5** | 5 consecutive carries | `553777 + 847927 = 1401704` | Nearly full cascade |
+| **C6** | 6 carries (max) | `503847 + 996167 = 1500014` | Every column cascades |
+
 [Quirke et al. (2024)](https://arxiv.org/abs/2402.02619) showed that transformers learn
-carry/borrow circuits for multi-digit arithmetic, but these are hidden inside activations
-and require PCA, probing, or ablation at the activation level to discover.
+these carry/borrow circuits internally, but they're hidden in activations — discoverable only
+through PCA, probing, or ablation at the activation level.
+
+### Quirke's subtask definitions
+
+At each digit position, the model must compute one of these operations
+([Quirke et al. §3.2-3.3](https://arxiv.org/abs/2402.02619)):
+
+**Addition:**
+| Subtask | Meaning | Quirke eq. |
+|---------|---------|-----------|
+| **SA** | Simple Add: `(d₁ + d₂) mod 10` | — |
+| **SC** | Sum Carry: `d₁ + d₂ ≥ 10`, produces a local carry | — |
+| **SS** | Sum-of-9: `d₁ + d₂ = 9`, carry state is **uncertain** | eq. 2: STn = U |
+| **UC** | Use Carry: this digit's answer depends on carry from right | eq. 2: STn = 1 |
+| **US** | Use Sum-9 cascade: carry propagates through a chain of sum-9 digits | eq. 4-6 |
+
+**Subtraction** (same structure with borrows replacing carries):
+| Subtask | Meaning | Quirke eq. |
+|---------|---------|-----------|
+| **MD** | Base Diff: `(d₁ - d₂) mod 10` | — |
+| **MB** | Make Borrow: `d₁ < d₂`, produces a local borrow | eq. 7: MBn = 1 |
+| **ME** | Equal digits: `d₁ = d₂`, borrow state is **uncertain** | eq. 7: MBn = U |
+| **UB** | Use Borrow: answer depends on borrow from right | — |
+| **UD** | Cascade borrow: borrow propagates through equal-digit chain | — |
 
 **SoRL makes these circuits directly observable as tokens.** We show that:
 1. More abstraction vocabulary → richer representations
