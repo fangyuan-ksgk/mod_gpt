@@ -324,16 +324,16 @@ on **hard carry/borrow cascades** — problems requiring multi-digit propagation
 | C4 (4 hot carries) | 88% | **100%** | **+12pp** |
 | C5 (5 hot carries) | 76% | **100%** | **+24pp** |
 | C6 (6 hot carries) | 92% | **100%** | **+8pp** |
-| sub\_M4 (4 borrows) | 8% | **100%** | **+92pp** |
+| sub\_M4 (4 borrows) | 10% | **100%** | **+90pp** |
 
 **Undersized model (2L/1H/128d) at 100K — where both plateau below 100%:**
 
 | Split | Baseline | SoRL K=1 abs30 | Gap |
 |-------|----------|----------------|-----|
-| C3 (3 hot carries) | 44% | **93%** | **+49pp** |
+| C3 (3 hot carries) | 28% | **98%** | **+70pp** |
 | C4 (4 hot carries) | 38% | **94%** | **+56pp** |
-| C5 (5 hot carries) | 33% | **85%** | **+52pp** |
-| C6 (6 hot carries) | 39% | **96%** | **+57pp** |
+| C5 (5 hot carries) | 48% | **86%** | **+38pp** |
+| C6 (6 hot carries) | 32% | **94%** | **+62pp** |
 
 Even when the model is too small to reach 100%, SoRL's abstraction tokens provide
 external scratch-pad memory that doubles or triples accuracy on hard cascades.
@@ -356,38 +356,18 @@ See the **Results** and **Interpretability** tabs for figures and analysis.
                     interactive=False,
                 )
 
+            with gr.Accordion("Data Efficiency & Undersized Models", open=False):
+                gr.Image("static_figures/fig_data_efficiency.png")
+                gr.Markdown("At 10K, SoRL K=1 abs30 reaches **96.7%** vs baseline **76.6%** (+20pp). By 50K both hit 100%.")
+                gr.Image("static_figures/fig_undersized.png")
+                gr.Markdown("Undersized 2L/1H/128d: baseline 50% → SoRL **85%** (+35pp). Abstraction tokens compensate for limited capacity.")
+
             with gr.Accordion("Per-Split Detail", open=False):
                 model_selector = gr.Dropdown(label="Model", choices=[], allow_custom_value=True)
                 detail_btn = gr.Button("Show splits")
                 detail_table = gr.Dataframe(headers=["Split", "Accuracy", "N"], interactive=False)
 
-        # ── Tab 2: Results ──
-        with gr.TabItem("Results"):
-            gr.Markdown("""## SoRL K=1 abs30: never loses to baseline
-
-Our best config — **K=1 (abstraction at every position), vocab size 30** — matches or beats
-the SFT baseline on every data size and every architecture tested. No exceptions.
-""")
-            gr.Image("static_figures/fig_data_efficiency.png")
-
-            gr.Markdown("""**At 10K training examples**, SoRL K=1 abs30 reaches **96.1%** while the baseline
-reaches only 72.4% — a **+24 percentage point** improvement. At 25K, SoRL hits 100% while the
-baseline is at 91.6%. By 50K both reach 100%.
-
-K=4 (abstraction every 4th position) fails at 10K data — it doesn't have enough examples to learn
-useful abstractions through search. K=1 is more data-efficient because every position gets a
-scratchpad token.
-""")
-
-            gr.Markdown("### SoRL helps undersized models the most")
-            gr.Image("static_figures/fig_undersized.png")
-
-            gr.Markdown("""The biggest gains are on **capacity-limited architectures**. A 2L/1H/128d model
-goes from 50% (baseline) to **85%** (SoRL K=1 abs30) — a +35pp improvement. The abstraction tokens
-effectively give the model external memory that compensates for its limited hidden dimensions.
-""")
-
-        # ── Tab 3: Interpretability ──
+        # ── Tab 2: Interpretability ──
         with gr.TabItem("Interpretability"):
             gr.Markdown("""## SoRL tokens externalize arithmetic circuits
 
