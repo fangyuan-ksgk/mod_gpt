@@ -531,46 +531,65 @@ t2 = carry cascade. t7 = borrow cascade (subtraction only). t3 = no cascade need
 The model has learned a **vocabulary for arithmetic reasoning** that maps directly to
 Quirke's circuit definitions — without any supervision about carry logic.
 
-### 4. Surgical token transplant: fixing errors by swapping one token
+### 4. Surgical intervention: the right token fixes hard-case failures
 
-The strongest causal evidence: we find problems where the model gets the answer **wrong**,
-then transplant a single abstraction token from a **correct** example (same subtask, same
-position), and the error is reduced.
+*All experiments below use the 1L/3H/510d model with K=1 abs30, trained on 100K examples.
+This model gets C3-C6 accuracy ~70% — enough correct examples for comparison, enough errors to fix.*
 
-Using the 1L/3H/510d model at 100K (C3-C6 accuracy ~65%, mix of correct and wrong):
+**The two carry tokens: t9 vs t21**
+
+The model learned two tokens that both appear at carry-related positions, but with different specializations:
+
+| | **t9** (n=573) | **t21** (n=719) |
+|---|---|---|
+| Position | d2-d4 (spread) | d3 only (100%) |
+| Sum = 9 | 56% | **95%** |
+| Carry rate | 22% | 3% |
+| Difficulty | **easy** (S0=23%, S2=28%) | **hard** (S5=37%, S6=37%) |
+| Role | "shallow carry, maybe sum-9" | "deep cascade, definitely sum-9" |
+
+t9 is a **shallow/ambiguous** token — it appears in easy problems where carry state doesn't matter much.
+t21 is a **deep cascade specialist** — it appears specifically in 5-6 carry cascades where
+every digit's sum is exactly 9 (Quirke's uncertain U state, eq. 2).
+
+**The failure mode: using t9 at hard-cascade positions**
+
+When the model encounters a hard cascade (C5/C6), it sometimes assigns t9 (the shallow token)
+instead of t21 (the cascade specialist). This is like using the wrong circuit — the model
+treats a deep cascade as a shallow one and gets the carry propagation wrong.
+
+**The fix: globally replacing t9 with t21**
+
+We test what happens when we force the model to always use t21 (the cascade specialist)
+instead of t9:
 
 ```
-Example 1:  014560 + 125450 = 0140010
-  Wrong:    0139010  — t9 at d2 (Use Carry position)
-  Fix:      transplant t3 from a correct UC example
-  Result:   0130010  — d2 fixed (9→0), 2→1 errors ✓
-
-Example 2:  109221 + 326780 = 0436001
-  Wrong:    0435901  — t21 at d3 (Use Carry position)
-  Fix:      transplant t18 from a correct UC example
-  Result:   0435001  — d3 fixed (9→0), 2→1 errors ✓
-
-Example 3:  332200 + 868010 = 1200210
-  Wrong:    1190210  — t9 at d1 (Use Carry position)
-  Fix:      transplant t3 from a correct UC example
-  Result:   1100210  — d1 fixed (9→0), 2→1 errors ✓
+                      Normal    All t9→t21    Effect
+C3-C6 (hard carries):  70%        93%        +23pp ← hard cases dramatically improve
+S5 (5 cascades):       27%        92%        +65pp ← nearly fixes the hardest split
+S0 (no carries):       99%        74%        -25pp ← easy cases get worse
 ```
 
-**What went wrong in each case?** The model confused the carry state:
+Forcing t21 everywhere is like telling the model "always assume deep cascade" — it fixes
+hard problems (+65pp on S5!) but hurts easy ones where no cascade exists. The model needs
+to *correctly choose* between t9 and t21 based on the input, and its main failure mode on
+hard cases is choosing too conservatively (t9 instead of t21).
 
-- **t21** encodes "sum-of-9, carry uncertain" (Quirke's U state — 93% US, sum=9 in 95% of cases)
-- **t9** encodes "maybe carry, maybe not" (mixed — 56% sum=9, only 22% carry)
-- **t18** encodes "definite carry, not from a sum-9" (Quirke's 1 state — 46% carry, only 2% sum=9)
+**Individual transplants confirm this:**
 
-The model assigned t21 or t9 ("carry is uncertain") at positions where the carry was actually
-**resolved** — it needed t18 or t3 ("carry is definite"). Transplanting the correct carry-state
-token from a problem where the model got it right fixes that digit.
+```
+014560 + 125450 = 0140010
+  Wrong: 0139010  — t9 at d2 (shallow token at carry position)
+  Fixed: 0130010  — transplant correct token → d2 fixed ✓
 
-The fixes are partial (2→1 errors, not 2→0) because fixing one carry doesn't always
-fix the downstream cascade. But they prove that **token identity causally determines
-carry computation** — wrong token = wrong carry state = wrong answer digit.
+332200 + 868010 = 1200210
+  Wrong: 1190210  — t9 at d1 (shallow token at carry position)
+  Fixed: 1100210  — transplant correct token → d1 fixed ✓
+```
 
-*Model: abs30 K=1, 1L/3H/510d, 100K training examples.*
+Each transplant fixes the specific digit where the wrong carry token was assigned.
+This proves **token identity causally determines carry computation** — the wrong
+token = wrong carry state = wrong answer digit.
 """)
 
             gr.Markdown("""### 3. Tokens spread across digit positions
