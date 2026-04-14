@@ -5,6 +5,7 @@ Results placeholders in `log/arithmetic.md` use `<!-- PLACEHOLDER: description -
 **Start here:** Read [`MEMORY.md`](MEMORY.md) first for current session state and what to do next.
 Also check [`TODO.md`](TODO.md) for the task backlog.
 **Before launching any sweep:** Run [`AUDIT.md`](AUDIT.md) checklist. Every past queue restart was caused by skipping this.
+**For interpretability:** Focus on C-splits (C1-C6, hot carries with varied answers), NOT S-splits (S5/S6 have degenerate `1000000` answers where baseline can shortcut). See `on_shortcuts.md`.
 
 ## Cost Rules
 
