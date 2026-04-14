@@ -311,7 +311,12 @@ a small auxiliary vocabulary (e.g. 30 tokens) inserted at regular intervals (eve
             summary_text = gr.Markdown("Click Refresh to load.")
             queue_status = gr.Markdown("")
 
-            gr.Markdown("### Overall Accuracy")
+            gr.Markdown("""### Overall Accuracy
+
+**Summary:** SoRL v1 (K=1, abs30) **never loses** to the SFT baseline across all data sizes
+and architectures tested. Gains are largest at low data (+24pp at 10K) and on undersized
+models (+35pp on 2L/1H/128d). At 50K+ both converge to ~100%. See the **Results** tab for figures.
+""")
             main_table = gr.Dataframe(
                 headers=["Ops", "Data", "Arch", "Baseline", "SoRL", "Config", "B_hf", "S_hf", "B_wandb", "S_wandb"],
                 datatype=["str", "str", "str", "markdown", "markdown", "str", "markdown", "markdown", "markdown", "markdown"],
