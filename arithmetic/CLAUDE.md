@@ -7,6 +7,15 @@ Also check [`TODO.md`](TODO.md) for the task backlog.
 **Before launching any sweep:** Run [`AUDIT.md`](AUDIT.md) checklist. Every past queue restart was caused by skipping this.
 **For interpretability:** Focus on C-splits (C1-C6, hot carries with varied answers), NOT S-splits (S5/S6 have degenerate `1000000` answers where baseline can shortcut). See `on_shortcuts.md`.
 
+## Eval Sets
+
+**ONE canonical eval set: `eval_add_sub_6d_N100_seed42.json` (100/split, seed=42).**
+
+NEVER generate new eval sets with different N values. Every experiment, script, and analysis
+must use this file. Different N values produce different random examples (even with same seed),
+causing inconsistent results between experiments. If you need more examples, increase N in
+this file and re-eval ALL models — never have multiple eval sets coexisting.
+
 ## Cost Rules
 
 **NEVER use fast mode (`/fast`).** It costs 6x ($30/$150 per M tokens vs $5/$25) AND produces lower quality output (shallower reasoning, more bugs missed). We pay more for worse results.
