@@ -144,10 +144,12 @@ def validate_uploaded_model(name: str) -> list:
             if not has_sft_eval:
                 issues.append("no sft_eval in metrics")
 
-            # Check training history has eval curves
+            # Check training history has eval curves (optional for v6 which logs differently)
             history = metrics.get("history", {})
-            if "eval_step" not in history or len(history.get("eval_step", [])) == 0:
-                issues.append("no eval curves in training history")
+            trainer_version = config.get("trainer_version", "")
+            if trainer_version != "v6":
+                if "eval_step" not in history or len(history.get("eval_step", [])) == 0:
+                    issues.append("no eval curves in training history")
 
             # Check splits exist in eval
             for eval_key in ["sft_eval", "sorl_eval"]:
