@@ -128,12 +128,16 @@ def build_comparison_table(models, arch_filter="All", enriched_only=True):
         raw_base_wandb = base["config"].get("wandb_url", "") if base else ""
         base_wandb = f"[wandb]({raw_base_wandb})" if raw_base_wandb else ""
 
+        HF_BASE = "https://huggingface.co/thoughtworks/arithmetic-sorl/tree/main"
+        base_hf = f"[model]({HF_BASE}/{base['subfolder']})" if base else ""
+
         if not matching_sorl:
             base_hard = {s: get_split_acc(base["metrics"], "sft_eval", s) for s in HARD_SPLITS} if base else {}
             row = {
                 "Ops": ops, "Data": ds_label, "Arch": arch,
                 "Baseline": fmt_pct(base_acc), "SoRL": "pending", "Config": "pending",
                 "B_wandb": base_wandb, "S_wandb": "pending",
+                "B_hf": base_hf, "S_hf": "pending",
             }
             for s in HARD_SPLITS:
                 row[f"B_{s}"] = fmt_pct(base_hard.get(s))
@@ -147,12 +151,15 @@ def build_comparison_table(models, arch_filter="All", enriched_only=True):
                 sorl_wandb = f"[wandb]({raw_sorl_wandb})" if raw_sorl_wandb else ""
                 eval_key = "sorl_eval"
 
+                sorl_hf = f"[model]({HF_BASE}/{sorl_m['subfolder']})"
+
                 b_str, s_str = bold_winner(base_acc, sorl_acc)
                 row = {
                     "Ops": ops, "Data": ds_label, "Arch": arch,
                     "Baseline": b_str, "SoRL": s_str,
                     "Config": f"K={K} v={vocab}",
                     "B_wandb": base_wandb, "S_wandb": sorl_wandb,
+                    "B_hf": base_hf, "S_hf": sorl_hf,
                 }
                 for s in HARD_SPLITS:
                     bv = get_split_acc(base["metrics"], "sft_eval", s) if base else None
@@ -306,8 +313,8 @@ a small auxiliary vocabulary (e.g. 30 tokens) inserted at regular intervals (eve
 
             gr.Markdown("### Overall Accuracy")
             main_table = gr.Dataframe(
-                headers=["Ops", "Data", "Arch", "Baseline", "SoRL", "Config", "B_wandb", "S_wandb"],
-                datatype=["str", "str", "str", "markdown", "markdown", "str", "markdown", "markdown"],
+                headers=["Ops", "Data", "Arch", "Baseline", "SoRL", "Config", "B_hf", "S_hf", "B_wandb", "S_wandb"],
+                datatype=["str", "str", "str", "markdown", "markdown", "str", "markdown", "markdown", "markdown", "markdown"],
                 interactive=False,
             )
 
@@ -398,6 +405,50 @@ so shuffling disrupts every digit's computation.
         with gr.TabItem("About"):
             eval_info_md = gr.Markdown("")
 
+            gr.Markdown("""### Using the models
+
+All models are on [HuggingFace](https://huggingface.co/thoughtworks/arithmetic-sorl).
+To load a model and run inference:
+
+```python
+from arithmetic.hub import load_model
+from arithmetic.train import QWEN3_TOKEN_MAP, QWEN3_INV_MAP
+from sorl.sorl_trainer import infer_insert_mask, insert_tokens_with_padding, expand_prompt_len
+
+# Load model
+model, config, metrics = load_model("add_sub_sorl_v1_abs30_K1_100K", device="cuda")
+base_v = model.vocab_sizes[0].item()
+
+# Encode: 123456+654321=
+tokens = [1,2,3,4,5,6, 10, 6,5,4,3,2,1, 12]  # internal token IDs
+qwen_ids = torch.tensor([QWEN3_TOKEN_MAP[t] for t in tokens], device="cuda")
+
+# Insert abstraction tokens (K=1 = every position)
+seq = qwen_ids.unsqueeze(0)
+im = infer_insert_mask(seq, K=1, attention_mask=torch.ones_like(seq))
+ep = expand_prompt_len(torch.tensor([14], device="cuda"), im)
+ed, ea = insert_tokens_with_padding(seq, torch.ones_like(seq), im, model.vocab_sizes[0], 151643)
+
+# Recursion fills abstraction tokens
+data, ppt, logits = model.recursion(ed, ea, max_iterations=2,
+    memory_span_abs=1792, memory_span_traj=1792, temperature=0.0, prompt_len=ep)
+
+# Separate trajectory vs abstraction tokens
+is_abs = data[0] >= base_v
+trajectory = data[0][~is_abs]              # real digit tokens
+abstractions = data[0][is_abs] - base_v    # abstraction token IDs (0-indexed)
+
+# Decode answer
+answer = [QWEN3_INV_MAP[t.item()] for t in trajectory[14:]]  # skip prompt
+print(f"Answer: {''.join(str(d) for d in answer)}")
+print(f"Abstraction tokens: {abstractions.tolist()}")
+```
+
+Token IDs: `0-9` = digits, `10` = `+`, `11` = `-`, `12` = `=`.
+Abstraction tokens are integers from 0 to `abs_vocab-1`, where 0 is the placeholder.
+""")
+
+
     # ═══════════════════════════════════════════════════════════════
     # Callbacks
     # ═══════════════════════════════════════════════════════════════
@@ -411,7 +462,7 @@ so shuffling disrupts every digit's computation.
         q_status = get_queue_status_text(n_models)
         eval_info = build_eval_info(models)
 
-        main_cols = ["Ops", "Data", "Arch", "Baseline", "SoRL", "Config", "B_wandb", "S_wandb"]
+        main_cols = ["Ops", "Data", "Arch", "Baseline", "SoRL", "Config", "B_hf", "S_hf", "B_wandb", "S_wandb"]
         main_df = df[main_cols] if all(c in df.columns for c in main_cols) else pd.DataFrame()
 
         hard_cols = [c for c in df.columns
