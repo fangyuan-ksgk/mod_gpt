@@ -1,24 +1,19 @@
 """
 Steering Abstraction Post-Training Script (DDP-compatible)
 
-Two modes:
+Modes:
   --mode vq    VQ-coded steering: train a VQ-VAE to assign chunk codes, then
                fine-tune with learned steering vectors injected at hook layers.
-               Token sequence is NOT modified — steering is representation-only.
 
-  --mode v6    Self-routed steering: no VQ-VAE needed.  At each hook layer,
-               codes are determined from hidden states via fixed diagonal
-               projection (last C_SIZE dims → argmax).  Only steering
-               embeddings + model params are learned.
+  --mode v6    Self-routed steering: codes via fixed diagonal projection.
+
+  --mode v9    Search-based routing: learned abs_proj head + 3-phase loop
+               (base CE → search rollouts → train with forced codes).
+               Extra losses: info_gain, abs_loss, zipf diversity.
 
 Usage:
-    # V6 mode (recommended — no VQ-VAE overhead)
     torchrun --nproc_per_node=1 train_steer_pt.py --mode v6 --dataset gsm8k
-
-    # VQ mode (needs VQ-VAE phase)
-    torchrun --nproc_per_node=1 train_steer_pt.py --mode vq --dataset gsm8k
-
-    # Freeze model, only train steering embeddings
+    torchrun --nproc_per_node=1 train_steer_pt.py --mode v9 --dataset scienceqa
     torchrun --nproc_per_node=1 train_steer_pt.py --mode v6 --freeze_model
 """
 
@@ -40,7 +35,7 @@ from transformers import AutoTokenizer, AutoModelForCausalLM
 from concurrent.futures import ThreadPoolExecutor
 
 from data.pt_dataset import get_dataset, collate_fn, check_code_correctness, HumanEvalDataset
-from sorl.steer import StackedAbstractionWrapper, StackedAbstractionWrapperV6, StackedAbstractionWrapperV7, StackedAbstractionWrapperV8
+from sorl.steer import StackedAbstractionWrapper, StackedAbstractionWrapperV6, StackedAbstractionWrapperV7, StackedAbstractionWrapperV8, StackedAbstractionWrapperV9
 from sorl.tokenassort import TokenAssortedVQVAE, DEFAULT_L, DEFAULT_C_SIZE, DEFAULT_D_BOT, DEFAULT_BETA
 
 
@@ -66,8 +61,8 @@ def parse_args():
     p = argparse.ArgumentParser(description="Steering Abstraction Post-Training")
 
     # Mode
-    p.add_argument("--mode", type=str, default="v6", choices=["vq", "v6", "v7", "v8"],
-                   help="vq = VQ-coded; v6 = self-routed diagonal; v7 = v6 + direction/multi-layer; v8 = STE-trainable routing")
+    p.add_argument("--mode", type=str, default="v6", choices=["vq", "v6", "v7", "v8", "v9"],
+                   help="vq = VQ-coded; v6 = self-routed diagonal; v7 = v6 + direction/multi-layer; v8 = STE-trainable routing; v9 = search-based routing")
 
     # Model
     p.add_argument("--model_name", type=str, default="Qwen/Qwen3-0.6B")
@@ -124,6 +119,15 @@ def parse_args():
                    help="V6: use separate steering embedding per inject layer (default: shared)")
     p.add_argument("--routing_temperature", type=float, default=None,
                    help="V6: temperature for multinomial routing during training (None=argmax)")
+
+    # V9 search config
+    p.add_argument("--num_rollouts", type=int, default=4, help="V9: number of search rollouts per batch")
+    p.add_argument("--search_temp", type=float, default=1.0, help="V9: temperature for sampling during search")
+    p.add_argument("--alpha_info", type=float, default=1.0, help="V9: weight for info-gain loss")
+    p.add_argument("--alpha_abs", type=float, default=0.5, help="V9: weight for abs_loss (routing prediction)")
+    p.add_argument("--alpha_zipf", type=float, default=0.01, help="V9: weight for zipf diversity loss")
+    p.add_argument("--detach_routing", action="store_true",
+                   help="V9: detach hidden states before abs_proj (decouple policy from rep)")
 
     # LoRA
     p.add_argument("--use_lora", action="store_true",
@@ -550,12 +554,34 @@ def main():
             code_position=args.code_position,
         )
 
+    elif args.mode == "v9":
+        import torch.nn.functional as F
+        from sorl.sorl_trainer import VariableZipfian2gramLoss
+
+        train_ds = base_train_ds
+        collate = collate_fn
+
+        wrapper = StackedAbstractionWrapperV9(
+            model, C_SIZE=args.C_SIZE, D_MODEL=D_MODEL,
+            inject_layers=inject_layers, scale=args.scale, L=args.L,
+            per_layer_emb=args.per_layer_emb,
+            code_position=args.code_position,
+        )
+        wrapper._detach_routing = args.detach_routing
+
+        zipf_loss_fn = VariableZipfian2gramLoss(
+            vocab_size=torch.tensor(args.C_SIZE, device=device))
+
     log(f"Steering: mode={args.mode} C_SIZE={args.C_SIZE} L={args.L} "
         f"scale={args.scale} layers={wrapper.inject_layers}"
         + (f" read_layer={wrapper.read_layer}" if args.mode == 'v7' else '')
-        + f" code_pos={args.code_position} routing={args.routing_mode}"
+        + f" code_pos={args.code_position}"
+        + (f" routing={args.routing_mode}" if args.mode != 'v9' else '')
         + (f" per_layer_emb" if args.per_layer_emb else '')
-        + (f" temp={args.routing_temperature}" if args.routing_temperature else ''))
+        + (f" temp={args.routing_temperature}" if args.routing_temperature else '')
+        + (f" rollouts={args.num_rollouts} search_T={args.search_temp}"
+           f" a_info={args.alpha_info} a_abs={args.alpha_abs} a_zipf={args.alpha_zipf}"
+           f" detach={args.detach_routing}" if args.mode == 'v9' else ''))
 
     # ---- Apply LoRA (optional) ----
     if args.use_lora:
@@ -597,7 +623,7 @@ def main():
     raw_model = model.to(device)
     # Move all steering sub-modules to device
     for name, mod in wrapper.named_modules():
-        if ('steering_emb' in name or 'routing_proj' in name) and hasattr(mod, 'to'):
+        if ('steering_emb' in name or 'routing_proj' in name or 'abs_proj' in name) and hasattr(mod, 'to'):
             mod.to(device=device)
 
     if ddp:
@@ -637,6 +663,8 @@ def main():
         ckpt = torch.load(args.resume_from, map_location=device, weights_only=False)
         raw_model.load_state_dict(ckpt["model"])
         wrapper.steering_emb.load_state_dict(ckpt["steering_emb"])
+        if "abs_proj" in ckpt and hasattr(wrapper, 'abs_proj'):
+            wrapper.abs_proj.load_state_dict(ckpt["abs_proj"])
         optimizer.load_state_dict(ckpt["optimizer"])
         start_epoch = ckpt.get("epoch", 0)
         start_step = ckpt.get("step", 0)
@@ -650,13 +678,16 @@ def main():
         if not is_master:
             return
         os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-        torch.save({
+        ckpt_dict = {
             "step": global_step, "epoch": epoch,
             "model": raw_model.state_dict(),
             "steering_emb": wrapper.steering_emb.state_dict(),
             "optimizer": optimizer.state_dict(),
             "args": vars(args),
-        }, path)
+        }
+        if hasattr(wrapper, 'abs_proj'):
+            ckpt_dict["abs_proj"] = wrapper.abs_proj.state_dict()
+        torch.save(ckpt_dict, path)
         log(f"Saved: {path}")
 
     def evaluate():
@@ -742,6 +773,52 @@ def main():
                 total_loss = loss.item() * args.gradient_accumulation_steps
                 del loss, outputs
 
+            elif args.mode == "v9":
+                ga = args.gradient_accumulation_steps
+                B = input_ids.size(0)
+
+                # Phase 1: Base CE (no steering) for info-gain reference
+                old_scale = wrapper.scale
+                wrapper.scale = 0.0
+                with torch.no_grad():
+                    base_out = wrapper(input_ids, attn, labels)
+                    base_ce = base_out.loss.item()
+                wrapper.scale = old_scale
+
+                # Phase 2: Search — parallel rollouts via temperature sampling
+                N = args.num_rollouts
+                rep_ids = input_ids.repeat_interleave(N, dim=0)
+                rep_attn = attn.repeat_interleave(N, dim=0)
+                rep_labels = labels.repeat_interleave(N, dim=0)
+
+                with torch.no_grad():
+                    rep_out = wrapper(rep_ids, rep_attn, rep_labels,
+                                     temperature=args.search_temp, reduction='none')
+                    per_sample_loss = rep_out.per_sample_loss.view(B, N)
+                    best_idx = per_sample_loss.argmin(dim=-1)
+                    all_codes = wrapper._last_chunk_codes.view(B, N, -1)
+                    best_codes = all_codes[torch.arange(B, device=device), best_idx]
+                    del rep_out
+
+                # Phase 3: Train with forced codes = search winners
+                out = wrapper(input_ids, attn, labels, forced_codes=best_codes)
+                ce_loss = out.loss
+                info_gain = ce_loss - base_ce
+                abs_loss_val = wrapper.compute_abs_loss(target_codes=best_codes)
+                routing_logits_flat = wrapper._last_routing_logits.reshape(-1, args.C_SIZE)
+                zipf_loss_val = zipf_loss_fn(routing_logits_flat)
+
+                loss = (ce_loss + args.alpha_info * info_gain
+                        + args.alpha_abs * abs_loss_val
+                        + args.alpha_zipf * zipf_loss_val)
+                loss = loss / ga
+                loss.backward()
+                total_loss = loss.item() * ga
+                _v9_info = info_gain.item() if torch.is_tensor(info_gain) else info_gain
+                _v9_abs = abs_loss_val.item()
+                _v9_zipf = zipf_loss_val.item()
+                del loss, out
+
             elif args.mode == "vq":
                 outputs = wrapper(input_ids, attn, labels,
                                   chunk_codes_list=batch['chunk_codes_list'],
@@ -777,12 +854,21 @@ def main():
 
                 peak = (f"Mem:{torch.cuda.max_memory_allocated(device)/1024**3:.2f}GB"
                         if torch.cuda.is_available() else "")
+                v9_extra = ""
+                if args.mode == "v9":
+                    v9_extra = (f" info={_v9_info:.4f} abs={_v9_abs:.4f}"
+                                f" zipf={_v9_zipf:.4f} base={base_ce:.4f}")
                 log(f"ep {epoch_frac:.3f}/{args.num_epochs} | ETA {eta_str} | "
                     f"loss={total_loss:.4f} | lr={lr:.2e} | "
-                    f"steer_norm={steer_norm:.4f} | {peak}")
+                    f"steer_norm={steer_norm:.4f}{v9_extra} | {peak}")
                 history["step"].append(global_step)
                 history["loss"].append(total_loss)
                 history["lr"].append(lr)
+                if args.mode == "v9":
+                    history.setdefault("info_gain", []).append(_v9_info)
+                    history.setdefault("abs_loss", []).append(_v9_abs)
+                    history.setdefault("zipf_loss", []).append(_v9_zipf)
+                    history.setdefault("base_ce", []).append(base_ce)
 
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()

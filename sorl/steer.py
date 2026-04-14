@@ -538,8 +538,6 @@ class StackedAbstractionWrapperV8(nn.Module):
 
 
 
-
-
 class StackedAbstractionWrapperV9(nn.Module):
     """
     Learnable abstraction routing (V9).
