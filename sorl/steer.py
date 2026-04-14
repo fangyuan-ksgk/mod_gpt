@@ -290,9 +290,10 @@ class StackedAbstractionWrapperV6(nn.Module):
                 routed = hidden_states[..., self._routing_dims]
             else:  # diagonal: last C_SIZE dims
                 routed = hidden_states[..., -self.C_SIZE:]
+
             if self.routing_temperature is not None and self.training:
                 probs = F.softmax(routed / self.routing_temperature, dim=-1)  # (B, S, C)
-                pos_codes = torch.multinomial(probs.view(-1, self.C_SIZE), 1).view(B, S)
+                pos_codes = torch.multinomial(probs.view(-1, self.C_SIZE), 1).view(B, S) # -> not tested
             else:
                 pos_codes = routed.argmax(dim=-1)   # (B, S)
 
@@ -326,7 +327,7 @@ class StackedAbstractionWrapperV6(nn.Module):
         )
 
     def generate(self, **kwargs):
-        return self.model.generate(**kwargs)
+        return self.model.generate(**kwargs) # -> expose abstract tokens
 
     # ---- save / load ----
 
@@ -534,6 +535,245 @@ class StackedAbstractionWrapperV8(nn.Module):
         for hook in self._hooks:
             hook.remove()
         self._hooks = []
+
+
+
+
+
+class StackedAbstractionWrapperV9(nn.Module):
+    """
+    Learnable abstraction routing (V9).
+
+    Like V6, but routing uses a trainable linear projection instead of
+    fixed diagonal dims:
+      1. Chunk hidden states into L-token windows.
+      2. logits = abs_proj(h)              (learned D → C_SIZE projection)
+      3. code = argmax(logits)             (detached, non-differentiable)
+      4. hidden += steering_emb[code] * scale
+
+    The abs_proj head and steering embeddings are both learned via the
+    main CE loss.  Unlike V8 (STE), routing gradients do NOT flow through
+    the argmax — only the steering embeddings receive direct gradients.
+    The abs_proj learns from the indirect signal of which codes reduce loss.
+
+    Variants:
+      per_layer_emb  – False → shared embedding | True → one per inject layer
+      code_position  – "first" | "last"
+      routing_temperature – if set, use multinomial sampling during training
+    """
+
+    def __init__(self, model, C_SIZE, D_MODEL, inject_layers=None,
+                 scale=0.1, L=16, routing_mode="learned",
+                 per_layer_emb=False, code_position="first"):
+        super().__init__()
+        self.model = model
+        self.L = L
+        self.scale = scale
+        self.C_SIZE = C_SIZE
+        self.D_MODEL = D_MODEL
+        self.routing_mode = routing_mode
+        self.per_layer_emb = per_layer_emb
+        self.code_position = code_position
+
+        n_layers = model.config.num_hidden_layers
+        if inject_layers is None:
+            inject_layers = [n_layers // 2]
+        self.inject_layers = inject_layers
+
+        # Trainable routing head: D_MODEL → C_SIZE
+        dtype = next(model.parameters()).dtype
+        self.abs_proj = nn.Linear(D_MODEL, C_SIZE, bias=False, dtype=dtype)
+        nn.init.normal_(self.abs_proj.weight, std=0.01)
+
+        # Steering embeddings
+        if per_layer_emb:
+            self.steering_emb = nn.ModuleList([
+                nn.Embedding(C_SIZE, D_MODEL) for _ in inject_layers])
+            for emb in self.steering_emb:
+                nn.init.zeros_(emb.weight)
+        else:
+            self.steering_emb = nn.Embedding(C_SIZE, D_MODEL)
+            nn.init.zeros_(self.steering_emb.weight)
+
+        # State populated by hooks during forward pass
+        self._last_routing_logits = None  # (B, n_chunks, C) — abs_proj logits at src positions
+        self._last_chunk_codes = None     # (B, n_chunks)     — argmax codes actually used
+        self._forced_codes = None         # set externally to override routing in next forward
+        self._forward_temperature = None   # set by forward(), consumed by hook
+        self._detach_routing = False      # Whether to detach training of policy model from rep
+
+        self._hooks = []
+        self._register_hooks()
+
+    # ---- hooks ----
+
+    def _register_hooks(self):
+        for hook in self._hooks:
+            hook.remove()
+        self._hooks = []
+        for i, layer_idx in enumerate(self.inject_layers):
+            layer = self.model.model.layers[layer_idx]
+            hook = layer.register_forward_hook(
+                functools.partial(self._steering_hook, hook_idx=i))
+            self._hooks.append(hook)
+
+    def _steering_hook(self, module, input, output, hook_idx=0):
+        if isinstance(output, tuple):
+            hidden_states = output[0]
+            rest = output[1:]
+        else:
+            hidden_states = output
+            rest = None
+
+        B, S, D = hidden_states.shape
+
+        # Routing: learned projection → logits
+        if self._detach_routing: 
+            routed = self.abs_proj(hidden_states.detach())  # (B, S, C) — gradient ONLY on policy/routing
+        else: 
+            routed = self.abs_proj(hidden_states)  # (B, S, C) — gradient on policy & representation
+
+        # Chunk-source positions
+        n_chunks = S // self.L
+        if n_chunks == 0:
+            return (hidden_states,) + rest if rest is not None else hidden_states
+
+        if self.code_position == "last":
+            src_idx = [c * self.L + self.L - 1 for c in range(n_chunks)]
+        else:  # "first"
+            src_idx = [c * self.L for c in range(n_chunks)]
+
+        src_logits = routed[:, src_idx, :]  # (B, n_chunks, C)
+
+        # Code selection: forced_codes > temperature sampling > argmax
+        if self._forced_codes is not None:
+            codes = self._forced_codes  # (B, n_chunks) — externally supplied
+        elif self._forward_temperature is not None:
+            with torch.no_grad():
+                probs = F.softmax(src_logits / self._forward_temperature, dim=-1)
+                codes = torch.multinomial(probs.view(-1, self.C_SIZE), 1).view(B, n_chunks)
+        else:
+            with torch.no_grad():
+                codes = src_logits.argmax(dim=-1)  # (B, n_chunks)
+
+        self._last_routing_logits = src_logits  # (B, n_chunks, C) — retains gradient
+        self._last_chunk_codes = codes.detach()  # (B, n_chunks)
+
+        emb = self.steering_emb[hook_idx] if self.per_layer_emb else self.steering_emb
+        chunk_steer = emb(codes)  # (B, n_chunks, D)
+
+        steer_vecs = chunk_steer.unsqueeze(2).expand(-1, -1, self.L, -1)
+        steer_vecs = steer_vecs.reshape(B, n_chunks * self.L, D)
+
+        # Pad tail tokens (< 1 full chunk) with zeros
+        if n_chunks * self.L < S:
+            pad = steer_vecs.new_zeros(B, S - n_chunks * self.L, D)
+            steer_vecs = torch.cat([steer_vecs, pad], dim=1)
+
+        hidden_states = hidden_states + (steer_vecs * self.scale).to(hidden_states.dtype)
+
+        return (hidden_states,) + rest if rest is not None else hidden_states
+
+    # ---- forward / generate ----
+
+    def forward(self, input_ids, attention_mask=None, labels=None,
+                forced_codes=None, temperature=None, reduction='mean', **kwargs):
+        """Forward pass. After calling, inspect:
+           - self._last_chunk_codes    (B, n_chunks)  — codes used for steering
+           - self._last_routing_logits  (B, n_chunks, C) — logits (with grad) for abs_loss
+
+        Args:
+            forced_codes: (B, n_chunks) int tensor — override routing with these codes.
+            temperature:  float — if set, sample codes via softmax(logits/T). Otherwise argmax.
+            reduction: 'mean' (default HF) or 'none' → return per-sample losses.
+        """
+        self._forced_codes = forced_codes
+        self._forward_temperature = temperature
+
+        if reduction == 'none' and labels is not None:
+            # Skip labels → HF won't compute redundant scalar CE
+            out = self.model(
+                input_ids=input_ids, attention_mask=attention_mask,
+                **kwargs
+            )
+            shift_logits = out.logits[:, :-1, :].contiguous()
+            shift_labels = labels[:, 1:].contiguous()
+            per_token = F.cross_entropy(
+                shift_logits.view(-1, shift_logits.size(-1)),
+                shift_labels.view(-1),
+                ignore_index=-100, reduction='none',
+            ).view(input_ids.size(0), -1)
+            valid = (shift_labels != -100).float()
+            out.per_sample_loss = (per_token * valid).sum(-1) / valid.sum(-1).clamp(min=1)
+        else:
+            out = self.model(
+                input_ids=input_ids, attention_mask=attention_mask,
+                labels=labels, **kwargs
+            )
+
+        self._forced_codes = None
+        self._forward_temperature = None
+        return out
+
+    def compute_abs_loss(self, target_codes=None):
+        """Compute abs_loss: CE(routing_logits, target_codes) at chunk positions.
+
+        Args:
+            target_codes: (B, n_chunks) int tensor of target codes from search.
+                          If None, uses self._last_chunk_codes (self-distillation).
+        Returns:
+            scalar loss, or 0 if no routing logits were captured.
+        """
+        logits = self._last_routing_logits  # (B, n_chunks, C) — has gradient
+        if logits is None:
+            return torch.tensor(0.0, device=next(self.parameters()).device)
+        if target_codes is None:
+            target_codes = self._last_chunk_codes
+        return F.cross_entropy(
+            logits.reshape(-1, self.C_SIZE),
+            target_codes.reshape(-1),
+        )
+
+    def generate(self, **kwargs):
+        return self.model.generate(**kwargs)
+
+    # ---- save / load ----
+
+    def get_steer_params(self):
+        """Return all steering + routing parameters (for separate optimizer group)."""
+        return [p for n, p in self.named_parameters()
+                if 'steering_emb' in n or 'abs_proj' in n]
+
+    def save_pretrained(self, path):
+        os.makedirs(path, exist_ok=True)
+        torch.save({
+            'steering_emb': self.steering_emb.state_dict(),
+            'abs_proj': self.abs_proj.state_dict(),
+            'config': {
+                'C_SIZE': self.C_SIZE, 'D_MODEL': self.D_MODEL,
+                'inject_layers': self.inject_layers,
+                'scale': self.scale, 'L': self.L,
+                'routing_mode': self.routing_mode,
+                'per_layer_emb': self.per_layer_emb,
+                'code_position': self.code_position,
+            },
+        }, os.path.join(path, 'steer_v9.pt'))
+
+    @classmethod
+    def from_pretrained(cls, model, path):
+        ckpt = torch.load(os.path.join(path, 'steer_v9.pt'),
+                          map_location='cpu', weights_only=False)
+        cfg = ckpt['config']
+        wrapper = cls(model, **cfg)
+        wrapper.steering_emb.load_state_dict(ckpt['steering_emb'])
+        wrapper.abs_proj.load_state_dict(ckpt['abs_proj'])
+        return wrapper
+
+    def remove_hooks(self):
+        for hook in self._hooks:
+            hook.remove()
+        self._hooks = []
+
 
 
 # ---------------------------------------------------------------------------
