@@ -851,6 +851,180 @@ class HumanEvalDataset(Dataset):
         return text.strip()
 
 
+class MMLUProDataset(Dataset):
+    """MMLU-Pro: 10-way multiple choice across 14 domains (TIGER-Lab).
+
+    Much harder than standard MMLU due to 10 options (vs 4) and more reasoning-heavy
+    questions. Small LMs (~0.6B-1.7B) typically score 10-20% (random = 10%).
+    Uses test split partitioned: first 8k for train, last 4k for test.
+    """
+
+    _IDX_TO_LETTER = {i: chr(ord("A") + i) for i in range(10)}
+
+    def __init__(self, split="train", tokenizer=None, max_length=512):
+        full = load_dataset("TIGER-Lab/MMLU-Pro", split="test")
+        if split == "train":
+            self.dataset = full.select(range(min(8000, len(full))))
+        else:
+            self.dataset = full.select(range(8000, len(full)))
+        self.tokenizer = tokenizer
+        self.max_length = max_length
+
+    def __len__(self):
+        return len(self.dataset)
+
+    def __getitem__(self, idx):
+        ex = self.dataset[idx]
+        prompt, text = self.parse_sample(ex)
+        prompt_len = len(self.tokenizer(prompt, add_special_tokens=False)["input_ids"])
+        enc = self.tokenizer(text, truncation=True, max_length=self.max_length,
+                             padding="max_length", return_tensors="pt")
+        prompt_len = min(prompt_len, self.max_length)
+        return {
+            "input_ids": enc["input_ids"].squeeze(0),
+            "attention_mask": enc["attention_mask"].squeeze(0),
+            "prompt_len": prompt_len,
+        }
+
+    @classmethod
+    def parse_sample(cls, ex):
+        """Return (prompt, full_text)."""
+        options = ex["options"]
+        answer_idx = ex["answer_index"]
+        answer_letter = cls._IDX_TO_LETTER[answer_idx]
+        answer_text = options[answer_idx]
+        choices_str = "\n".join(
+            f"{cls._IDX_TO_LETTER[i]}) {o}" for i, o in enumerate(options)
+        )
+        prompt = f"Question: {ex['question']}\n{choices_str}\nAnswer:"
+        cot = ex.get("cot_content", "").strip()
+        if cot:
+            text = f"{prompt} {cot}\n#### {answer_letter}"
+        else:
+            text = f"{prompt} {answer_letter}) {answer_text}\n#### {answer_letter}"
+        return prompt, text
+
+    @staticmethod
+    def extract_answer(text):
+        match = re.search(r"####\s*([A-Ja-j])", text)
+        if match:
+            return match.group(1).upper()
+        match = re.search(r"[Tt]he answer is\s*\(?([A-Ja-j])\)?", text)
+        if match:
+            return match.group(1).upper()
+        match = re.search(r"Answer:\s*([A-Ja-j])\)", text)
+        return match.group(1).upper() if match else None
+
+
+class StrategyQADataset(Dataset):
+    """StrategyQA: Multi-hop yes/no reasoning requiring implicit decomposition.
+
+    Each question requires combining 2-5 facts to reach a yes/no answer.
+    Small LMs struggle because the reasoning chain is not stated in the question.
+    Train: 1603 samples, Test: 687 samples.
+    """
+
+    def __init__(self, split="train", tokenizer=None, max_length=256):
+        hf_split = "test" if split == "test" else "train"
+        self.dataset = load_dataset("ChilleD/StrategyQA", split=hf_split)
+        self.tokenizer = tokenizer
+        self.max_length = max_length
+
+    def __len__(self):
+        return len(self.dataset)
+
+    def __getitem__(self, idx):
+        ex = self.dataset[idx]
+        prompt, text = self.parse_sample(ex)
+        prompt_len = len(self.tokenizer(prompt, add_special_tokens=False)["input_ids"])
+        enc = self.tokenizer(text, truncation=True, max_length=self.max_length,
+                             padding="max_length", return_tensors="pt")
+        prompt_len = min(prompt_len, self.max_length)
+        return {
+            "input_ids": enc["input_ids"].squeeze(0),
+            "attention_mask": enc["attention_mask"].squeeze(0),
+            "prompt_len": prompt_len,
+        }
+
+    @staticmethod
+    def parse_sample(ex):
+        """Return (prompt, full_text)."""
+        question = ex["question"].strip()
+        answer = "yes" if ex["answer"] else "no"
+        facts = ex.get("facts", "").strip()
+        prompt = f"Question: {question}\nAnswer (yes or no):"
+        if facts:
+            text = f"{prompt} {facts}\n#### {answer}"
+        else:
+            text = f"{prompt} {answer}\n#### {answer}"
+        return prompt, text
+
+    @staticmethod
+    def extract_answer(text):
+        match = re.search(r"####\s*(yes|no)", text, re.IGNORECASE)
+        if match:
+            return match.group(1).lower()
+        match = re.search(r"Answer.*?:\s*(yes|no)", text, re.IGNORECASE)
+        return match.group(1).lower() if match else None
+
+
+class BBHLogicDataset(Dataset):
+    """BIG-Bench Hard — Logical Deduction (5 objects, 5-way MCQ).
+
+    Requires multi-step constraint satisfaction: given ordering constraints,
+    determine positions. Small LMs typically score ~20% (random = 20%).
+    Uses single split partitioned: first 150 for train, last 100 for test.
+    """
+
+    def __init__(self, split="train", tokenizer=None, max_length=512):
+        ds = load_dataset("lukaemon/bbh", "logical_deduction_five_objects", split="test")
+        if split == "test":
+            self.dataset = ds.select(range(150, min(250, len(ds))))
+        else:
+            self.dataset = ds.select(range(min(150, len(ds))))
+        self.tokenizer = tokenizer
+        self.max_length = max_length
+
+    def __len__(self):
+        return len(self.dataset)
+
+    def __getitem__(self, idx):
+        ex = self.dataset[idx]
+        prompt, text = self.parse_sample(ex)
+        prompt_len = len(self.tokenizer(prompt, add_special_tokens=False)["input_ids"])
+        enc = self.tokenizer(text, truncation=True, max_length=self.max_length,
+                             padding="max_length", return_tensors="pt")
+        prompt_len = min(prompt_len, self.max_length)
+        return {
+            "input_ids": enc["input_ids"].squeeze(0),
+            "attention_mask": enc["attention_mask"].squeeze(0),
+            "prompt_len": prompt_len,
+        }
+
+    @staticmethod
+    def parse_sample(ex):
+        """Return (prompt, full_text)."""
+        input_text = ex["input"].strip()
+        target = ex["target"].strip()
+        answer_match = re.search(r"\(([A-E])\)", target)
+        answer_letter = answer_match.group(1) if answer_match else target
+        prompt = f"{input_text}\nAnswer:"
+        text = f"{prompt} {target}\n#### {answer_letter}"
+        return prompt, text
+
+    @staticmethod
+    def extract_answer(text):
+        match = re.search(r"####\s*([A-Ea-e])", text)
+        if match:
+            return match.group(1).upper()
+        match = re.search(r"\(([A-Ea-e])\)", text)
+        if match:
+            return match.group(1).upper()
+        match = re.search(r"Answer:\s*([A-Ea-e])", text)
+        return match.group(1).upper() if match else None
+
+
+
 # =====================================================================
 # Code execution sandbox
 # =====================================================================
