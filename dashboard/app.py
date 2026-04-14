@@ -400,11 +400,16 @@ and require PCA, probing, or ablation at the activation level to discover.
 4. These tokens correspond to Quirke's carry/borrow circuits
 """)
 
-            gr.Markdown("""### 1. Diversity: more vocabulary enables richer representations
+            gr.Markdown("""### 1. More vocabulary → higher accuracy and richer representations
 
-With 10 abstraction tokens (abs10), the model only uses 5 — heavy vocabulary collapse.
-With 30 tokens (abs30), it uses 18, with higher entropy. The additional tokens allow the model
-to assign distinct symbols to distinct arithmetic states rather than overloading a few tokens.
+Increasing the abstraction vocabulary from 10 to 30 tokens improves accuracy, especially
+on undersized models where capacity is limited. The 2L/1H/128d model gains +16pp
+going from abs10 to abs30. The standard model saturates at ~100% regardless of vocab size.
+""")
+            gr.Image("static_figures/fig_vocab_scaling.png")
+
+            gr.Markdown("""With more tokens available, the model uses more of them and distributes usage
+more evenly. abs10 collapses to 5 tokens; abs30 uses 18 with higher entropy.
 """)
             gr.Image("static_figures/fig_diversity.png")
 
