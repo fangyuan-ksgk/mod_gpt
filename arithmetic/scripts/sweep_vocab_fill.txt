@@ -1,0 +1,22 @@
+# Fill vocab curve: abs20 undersized + remaining abs{1,2,5,50} from earlier
+
+#PRIORITY:HIGH
+
+# abs20 K=1 undersized at 100K
+python -m arithmetic.train --mode sorl --ops add_sub --dataset_size 100000 --abs_vocab 20 --K 1 --num_epochs 20 --n_layer 2 --n_head 1 --n_embd 128 --push_to_hub --output_dir ckpt/sweep/as_sorl_abs20_K1_100K_2L1H128d
+python -m arithmetic.train --mode sorl --ops add_sub --dataset_size 100000 --abs_vocab 20 --K 1 --num_epochs 20 --n_layer 1 --n_head 2 --n_embd 256 --push_to_hub --output_dir ckpt/sweep/as_sorl_abs20_K1_100K_1L2H256d
+python -m arithmetic.train --mode sorl --ops add_sub --dataset_size 100000 --abs_vocab 20 --K 1 --num_epochs 20 --n_layer 1 --n_head 3 --n_embd 510 --push_to_hub --output_dir ckpt/sweep/as_sorl_abs20_K1_100K_1L3H510d
+
+# abs{1,2,5,50} K=1 undersized at 100K (from sweep_next.txt, in case not yet run)
+python -m arithmetic.train --mode sorl --ops add_sub --dataset_size 100000 --abs_vocab 1 --K 1 --num_epochs 20 --n_layer 2 --n_head 1 --n_embd 128 --push_to_hub --output_dir ckpt/sweep/as_sorl_abs1_K1_100K_2L1H128d
+python -m arithmetic.train --mode sorl --ops add_sub --dataset_size 100000 --abs_vocab 1 --K 1 --num_epochs 20 --n_layer 1 --n_head 2 --n_embd 256 --push_to_hub --output_dir ckpt/sweep/as_sorl_abs1_K1_100K_1L2H256d
+python -m arithmetic.train --mode sorl --ops add_sub --dataset_size 100000 --abs_vocab 1 --K 1 --num_epochs 20 --n_layer 1 --n_head 3 --n_embd 510 --push_to_hub --output_dir ckpt/sweep/as_sorl_abs1_K1_100K_1L3H510d
+python -m arithmetic.train --mode sorl --ops add_sub --dataset_size 100000 --abs_vocab 2 --K 1 --num_epochs 20 --n_layer 2 --n_head 1 --n_embd 128 --push_to_hub --output_dir ckpt/sweep/as_sorl_abs2_K1_100K_2L1H128d
+python -m arithmetic.train --mode sorl --ops add_sub --dataset_size 100000 --abs_vocab 2 --K 1 --num_epochs 20 --n_layer 1 --n_head 2 --n_embd 256 --push_to_hub --output_dir ckpt/sweep/as_sorl_abs2_K1_100K_1L2H256d
+python -m arithmetic.train --mode sorl --ops add_sub --dataset_size 100000 --abs_vocab 2 --K 1 --num_epochs 20 --n_layer 1 --n_head 3 --n_embd 510 --push_to_hub --output_dir ckpt/sweep/as_sorl_abs2_K1_100K_1L3H510d
+python -m arithmetic.train --mode sorl --ops add_sub --dataset_size 100000 --abs_vocab 5 --K 1 --num_epochs 20 --n_layer 2 --n_head 1 --n_embd 128 --push_to_hub --output_dir ckpt/sweep/as_sorl_abs5_K1_100K_2L1H128d
+python -m arithmetic.train --mode sorl --ops add_sub --dataset_size 100000 --abs_vocab 5 --K 1 --num_epochs 20 --n_layer 1 --n_head 2 --n_embd 256 --push_to_hub --output_dir ckpt/sweep/as_sorl_abs5_K1_100K_1L2H256d
+python -m arithmetic.train --mode sorl --ops add_sub --dataset_size 100000 --abs_vocab 5 --K 1 --num_epochs 20 --n_layer 1 --n_head 3 --n_embd 510 --push_to_hub --output_dir ckpt/sweep/as_sorl_abs5_K1_100K_1L3H510d
+python -m arithmetic.train --mode sorl --ops add_sub --dataset_size 100000 --abs_vocab 50 --K 1 --num_epochs 20 --n_layer 2 --n_head 1 --n_embd 128 --push_to_hub --output_dir ckpt/sweep/as_sorl_abs50_K1_100K_2L1H128d
+python -m arithmetic.train --mode sorl --ops add_sub --dataset_size 100000 --abs_vocab 50 --K 1 --num_epochs 20 --n_layer 1 --n_head 2 --n_embd 256 --push_to_hub --output_dir ckpt/sweep/as_sorl_abs50_K1_100K_1L2H256d
+python -m arithmetic.train --mode sorl --ops add_sub --dataset_size 100000 --abs_vocab 50 --K 1 --num_epochs 20 --n_layer 1 --n_head 3 --n_embd 510 --push_to_hub --output_dir ckpt/sweep/as_sorl_abs50_K1_100K_1L3H510d
