@@ -362,43 +362,81 @@ effectively give the model external memory that compensates for its limited hidd
 
         # ── Tab 3: Interpretability ──
         with gr.TabItem("Interpretability"):
-            gr.Markdown("""## Do abstraction tokens encode carry/borrow circuits?
+            gr.Markdown("""## SoRL tokens externalize arithmetic circuits
 
-When humans add multi-digit numbers, they track **carries** — if 7+8=15, they write 5 and carry 1.
-For a chain like 999999+1, the carry cascades through all 6 digits. Subtraction has the same
-structure with **borrows** instead of carries.
+[Quirke et al. (2024)](https://arxiv.org/abs/2402.02619) showed that transformers learn
+carry/borrow circuits for multi-digit arithmetic, but these are hidden inside activations
+and require PCA, probing, or ablation at the activation level to discover.
 
-[Quirke et al. (2024)](https://arxiv.org/abs/2402.02619) showed transformers learn carry/borrow
-circuits internally, but these are only discoverable through activation-level analysis (PCA, probing).
-
-**SoRL makes these circuits visible as explicit tokens.** With K=1 (an abstraction at every
-position), each answer digit gets its own scratchpad token. We analyze whether these tokens
-specialize by problem difficulty.
+**SoRL makes these circuits directly observable as tokens.** We show that:
+1. More abstraction vocabulary → richer representations
+2. Different tokens map to different arithmetic operations
+3. Token identity is causally necessary for correct answers
+4. These tokens correspond to Quirke's carry/borrow circuits
 """)
 
-            gr.Markdown("""### 1. Token specialization by difficulty
+            gr.Markdown("""### 1. Diversity: more vocabulary enables richer representations
 
-For each token, we ask: **what kinds of problems does this token appear in?** The heatmap shows
-P(difficulty | token). Tokens at the top specialize in easy problems, tokens at the bottom
-specialize in hard cascades.
+With 10 abstraction tokens (abs10), the model only uses 5 — heavy vocabulary collapse.
+With 30 tokens (abs30), it uses 18, with higher entropy. The additional tokens allow the model
+to assign distinct symbols to distinct arithmetic states rather than overloading a few tokens.
 """)
-            gr.Image("static_figures/fig_k1_token_difficulty.png")
+            gr.Image("static_figures/fig_diversity.png")
 
-            gr.Markdown("""### 2. Causal verification: token identity is critical
+            gr.Markdown("""### 2. Tokens map to Quirke's subtasks
+
+Quirke defines specific subtasks for each digit position during addition and subtraction:
+- **SA** (Simple Add): base addition, no carry involved
+- **SC** (Sum Carry): local digit sum ≥ 10, produces a carry
+- **UC** (Use Carry): this digit's answer depends on a carry from the right
+- **US** (Use Sum-9): carry cascades through a chain of sum-9 digits
+- **MD/MB/UB/UD**: subtraction equivalents (base diff, make borrow, use borrow, cascade borrow)
+
+The heatmap below shows P(subtask | token) — **what each token encodes**. Tokens specialize:
+some handle only addition (SA, UC), others only subtraction (MD, MB). Within addition,
+different tokens handle different carry states.
+""")
+            gr.Image("static_figures/fig_token_subtask.png")
+
+            gr.Markdown("""### 3. Tokens spread across digit positions
+
+Unlike K=4 (where tokens are locked to fixed positions), K=1 tokens serve multiple
+digit positions. This means token identity encodes **what computation to perform**,
+not just **where in the sequence we are**.
+""")
+            gr.Image("static_figures/fig_token_positions.png")
+
+            gr.Markdown("""### 4. Causal verification: token identity is essential for cascades
 
 Three interventions test whether tokens carry real information:
-- **Shuffle**: randomly permute token IDs (keeps positions, scrambles identity)
-- **Random**: replace all tokens with random IDs
-- **Knockout**: remove all abstraction tokens (0% accuracy — total dependence)
+- **Knockout**: remove all abstraction tokens → **0% accuracy** (total dependence)
+- **Shuffle**: randomly permute token IDs within the sequence → accuracy drops
+- **Random**: replace tokens with random IDs → accuracy drops further
 
-**Shuffle drops accuracy by 56-66 percentage points on S5/S6** (5-6 carry cascades).
-Even easy problems (S0) drop ~30pp — with K=1, every position has an abstraction,
-so shuffling disrupts every digit's computation.
+The key finding: **the harder the cascade, the more token identity matters.**
+For S5-S6 (5-6 consecutive carries), shuffling drops accuracy by 56-66 percentage points.
+This directly parallels Quirke's finding that deeper cascades require more complex
+internal circuits — SoRL externalizes these circuits as token sequences that must be correct.
 """)
-            gr.Image("static_figures/fig_k1_causal.png")
+            gr.Image("static_figures/fig_causal_ablation.png")
 
-            gr.Markdown("""
-*Model: K=1 abs30, 2L/3H/510d, 100K training examples. Analysis: 4400 eval examples (200/split).*
+            gr.Markdown("""### 5. Correspondence with Quirke's tri-state carry classifier
+
+Quirke's eq. 2 defines a **tri-state carry classifier** STn for each digit position:
+- **STn = 0**: digit sum ≤ 8, definitely no carry
+- **STn = 1**: digit sum ≥ 10, definitely carry
+- **STn = U**: digit sum = 9, carry depends on cascade from right (uncertain)
+
+In our K=4 abs30 model (where tokens are position-locked, forcing sharper specialization):
+- **Token t3**: maps to SA (simple add) with 0% carry — Quirke's **STn = 0**
+- **Token t6**: maps to UC with input sum mod 10 = 9 in 92% of cases — Quirke's **STn = U**
+- **Tokens t8, t9**: map to UC with carry = 100% — Quirke's **STn = 1**
+
+The model independently discovered the tri-state classifier from the info-gain loss alone,
+with no supervision about carry logic. This is the same circuit Quirke found via PCA of
+hidden activations — but here it is readable directly from the token sequence.
+
+*Analysis: K=1 abs30 and K=4 abs30, 2L/3H/510d, 100K training examples, 4400 eval examples.*
 """)
 
         # ── Tab 3: About ──
