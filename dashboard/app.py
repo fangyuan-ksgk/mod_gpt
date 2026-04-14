@@ -15,7 +15,7 @@ from PIL import Image
 from huggingface_hub import HfApi, hf_hub_download
 
 MODEL_REPO = "thoughtworks/arithmetic-sorl"
-HARD_SPLITS = ["add_S5", "add_S6", "add_C6", "sub_M5", "sub_B5"]
+HARD_SPLITS = ["add_C4", "add_C5", "add_C6", "sub_M4", "sub_M5"]
 ALL_SPLITS = [
     "add_S0", "add_S1", "add_S2", "add_S3", "add_S4", "add_S5", "add_S6", "add_random",
     "add_C3", "add_C4", "add_C5", "add_C6",
@@ -314,20 +314,22 @@ a small auxiliary vocabulary (e.g. 30 tokens) inserted at regular intervals (eve
             gr.Markdown("""### Overall Accuracy
 
 **Summary:** SoRL v1 (K=1, abs30) **never loses** to the SFT baseline. The biggest gains are
-on **hard cascade splits** — problems requiring multi-digit carry/borrow propagation with varied answers:
+on **hard carry/borrow cascades** — problems requiring multi-digit propagation with varied answers:
 
-**Standard model (2L/3H/510d) at low data:**
+**Standard model (2L/3H/510d) at 10K data:**
 
-| Split | 10K Baseline | 10K SoRL | Gap | 25K Baseline | 25K SoRL | Gap |
-|-------|-------------|----------|-----|-------------|----------|-----|
-| sub\_M4 (4 borrows) | 8% | **100%** | **+92pp** | 56% | **100%** | **+44pp** |
-| add\_S5 (5 carries) | 32% | **99%** | **+67pp** | 54% | **100%** | **+46pp** |
-| sub\_M5 (5 borrows) | 2% | **14%** | **+12pp** | 34% | **100%** | **+66pp** |
+| Split | Baseline | SoRL K=1 abs30 | Gap |
+|-------|----------|----------------|-----|
+| C3 (3 hot carries) | 78% | **100%** | **+22pp** |
+| C4 (4 hot carries) | 88% | **100%** | **+12pp** |
+| C5 (5 hot carries) | 76% | **100%** | **+24pp** |
+| C6 (6 hot carries) | 92% | **100%** | **+8pp** |
+| sub\_M4 (4 borrows) | 8% | **100%** | **+92pp** |
 
 **Undersized model (2L/1H/128d) at 100K — where both plateau below 100%:**
 
-| Split | Baseline | SoRL | Gap |
-|-------|----------|------|-----|
+| Split | Baseline | SoRL K=1 abs30 | Gap |
+|-------|----------|----------------|-----|
 | C3 (3 hot carries) | 44% | **93%** | **+49pp** |
 | C4 (4 hot carries) | 38% | **94%** | **+56pp** |
 | C5 (5 hot carries) | 33% | **85%** | **+52pp** |
@@ -343,13 +345,13 @@ See the **Results** and **Interpretability** tabs for figures and analysis.
                 interactive=False,
             )
 
-            with gr.Accordion("Hard Split Comparison (S5, S6, C6, M5, B5)", open=False):
-                gr.Markdown("Left = Baseline, Right = SoRL. **Bold** = winner.")
+            with gr.Accordion("Hard Split Comparison (C4, C5, C6, M4, M5)", open=False):
+                gr.Markdown("Left = Baseline, Right = SoRL. **Bold** = winner. C-splits = hot carry chains (varied answers).")
                 hard_table = gr.Dataframe(
                     headers=["Ops", "Data", "Arch", "Config",
-                             "B_add_S5", "S_add_S5", "B_add_S6", "S_add_S6",
-                             "B_add_C6", "S_add_C6", "B_sub_M5", "S_sub_M5",
-                             "B_sub_B5", "S_sub_B5"],
+                             "B_add_C4", "S_add_C4", "B_add_C5", "S_add_C5",
+                             "B_add_C6", "S_add_C6", "B_sub_M4", "S_sub_M4",
+                             "B_sub_M5", "S_sub_M5"],
                     datatype=["str", "str", "str", "str"] + ["markdown"] * 10,
                     interactive=False,
                 )
