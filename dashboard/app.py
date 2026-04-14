@@ -456,18 +456,77 @@ more evenly. abs10 collapses to 5 tokens; abs30 uses 18 with higher entropy.
 
             gr.Markdown("""### 2. Tokens map to Quirke's subtasks
 
-Quirke defines specific subtasks for each digit position during addition and subtraction:
-- **SA** (Simple Add): base addition, no carry involved
-- **SC** (Sum Carry): local digit sum ≥ 10, produces a carry
-- **UC** (Use Carry): this digit's answer depends on a carry from the right
-- **US** (Use Sum-9): carry cascades through a chain of sum-9 digits
-- **MD/MB/UB/UD**: subtraction equivalents (base diff, make borrow, use borrow, cascade borrow)
-
 The heatmap below shows P(subtask | token) — **what each token encodes**. Tokens specialize:
 some handle only addition (SA, UC), others only subtraction (MD, MB). Within addition,
 different tokens handle different carry states.
 """)
             gr.Image("static_figures/fig_token_subtask.png")
+
+            gr.Markdown("""### 3. Three token vignettes
+
+To make this concrete, here are three annotated examples showing exactly which abstraction
+token the model assigns at each position, and what arithmetic role that position plays.
+
+---
+
+**Vignette 1: Addition with 5-carry cascade (C5)**
+
+```
+  959271 + 040756 = 1000027
+
+  Position:   d0   d1   d2   d3   d4   d5   d6
+  Answer:      1    0    0    0    0    2    7
+  Subtask:    UC   US   US   US   US   SC   SA
+  Token:      t2   t2   t6   t2   t1    —    —
+```
+
+d5-d6 are easy (SC = make carry, SA = simple add) — no abstraction needed.
+d1-d4 are all **US (Use Sum-9)**: each digit pair sums to exactly 9, so the carry
+state is uncertain until resolved from the right. The model assigns **t2** to most
+cascade positions and **t6** where the sum-of-9 chain begins (d2).
+d0 receives **t2** — it must "use carry" from the full cascade.
+
+---
+
+**Vignette 2: Subtraction with 4-borrow cascade (M4)**
+
+```
+  698401 - 128406 = 0569995
+
+  Position:   d0   d1   d2   d3   d4   d5   d6
+  Answer:      0    5    6    9    9    9    5
+  Subtask:    MD   MD   UB   UD   UD   UD   MB
+  Token:      t1   t5   t7   t7   t1    —    —
+```
+
+d6 triggers a borrow (MB). d3-d5 cascade that borrow through equal-digit positions (UD).
+The model uses **t7** for the borrow cascade positions (d2-d3) — a subtraction-only token
+(100% subtraction). **t1** appears at d4 as the generic cascade token.
+
+---
+
+**Vignette 3: Easy addition, no carries (S0)**
+
+```
+  417080 + 531003 = 0948083
+
+  Position:   d0   d1   d2   d3   d4   d5   d6
+  Answer:      0    9    4    8    0    8    3
+  Subtask:    SA   SS   SA   SA   SA   SA   SA
+  Token:      t6  t15   t3   t8   t3    —    —
+```
+
+No carries anywhere — every position is SA (simple add) or SS (sum-of-9 but no cascade).
+The model assigns **t3** to the easy SA positions and different tokens (t6, t15, t8) to
+positions with specific digit-sum values. No carry-related tokens appear.
+
+---
+
+The key insight: **the same token IDs recur across different problems with the same
+arithmetic role.** t2 appears wherever there's a carry cascade; t7 appears wherever there's
+a borrow cascade; t3 appears at simple-add positions. The model has learned a consistent
+vocabulary for arithmetic operations.
+""")
 
             gr.Markdown("""### 3. Tokens spread across digit positions
 
