@@ -313,9 +313,18 @@ a small auxiliary vocabulary (e.g. 30 tokens) inserted at regular intervals (eve
 
             gr.Markdown("""### Overall Accuracy
 
-**Summary:** SoRL v1 (K=1, abs30) **never loses** to the SFT baseline across all data sizes
-and architectures tested. Gains are largest at low data (+24pp at 10K) and on undersized
-models (+35pp on 2L/1H/128d). At 50K+ both converge to ~100%. See the **Results** tab for figures.
+**Summary:** SoRL v1 (K=1, abs30) **never loses** to the SFT baseline. The biggest gains are
+on **hard cascade splits at low data** — where the baseline struggles most:
+
+| Split | 10K Baseline | 10K SoRL | Gap | 25K Baseline | 25K SoRL | Gap |
+|-------|-------------|----------|-----|-------------|----------|-----|
+| sub\_M4 (4 borrows) | 8% | **100%** | **+92pp** | 56% | **100%** | **+44pp** |
+| add\_S5 (5 carries) | 32% | **99%** | **+67pp** | 54% | **100%** | **+46pp** |
+| add\_S6 (6 carries) | 46% | **100%** | **+54pp** | 98% | **100%** | +2pp |
+| sub\_M5 (5 borrows) | 2% | **14%** | **+12pp** | 34% | **100%** | **+66pp** |
+
+At 50K+ both reach 100% on all splits. On undersized models, SoRL gains up to +35pp.
+See the **Results** and **Interpretability** tabs for figures and analysis.
 """)
             main_table = gr.Dataframe(
                 headers=["Ops", "Data", "Arch", "Baseline", "SoRL", "Config", "B_hf", "S_hf", "B_wandb", "S_wandb"],
