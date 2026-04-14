@@ -314,7 +314,7 @@ def train_sft(model, train_ds, val_ds, cfg: ArithmeticConfig, run_name, tokenize
                 # Full per-split eval every epoch
                 from arithmetic.evaluate import ArithmeticEvaluator
                 evaluator = ArithmeticEvaluator(model, tokenizer, device=device, n_digits=cfg.n_digits)
-                epoch_eval = evaluator.run(ops=cfg.ops, K=None, n_per_split=25)
+                epoch_eval = evaluator.run(K=None, eval_set_path="epoch")
                 acc = epoch_eval["summary"]["overall_accuracy"]
 
                 print(f"  --- Epoch {current_epoch}/{cfg.num_epochs}: accuracy={acc:.3f} ---")
@@ -366,7 +366,7 @@ class WandbSoRLTrainer(SoRLTrainer):
                 self.model, self.tokenizer, device=str(self.device),
                 n_digits=6,
             )
-            epoch_eval = evaluator.run(ops="add_sub", K=K, n_per_split=25)
+            epoch_eval = evaluator.run(K=K, eval_set_path="epoch")
 
             if wandb.run is not None:
                 log_dict = {"eval/accuracy": epoch_eval["summary"]["overall_accuracy"]}
@@ -541,11 +541,11 @@ def main():
     from arithmetic.evaluate import ArithmeticEvaluator
     evaluator = ArithmeticEvaluator(model, tokenizer, device=cfg.device, n_digits=cfg.n_digits)
     K_eval = cfg.K if is_sorl else None
-    eval_results_sft = evaluator.run(ops=cfg.ops, K=None, n_per_split=100)
+    eval_results_sft = evaluator.run(K=None)  # canonical N=100 from HF
     print(f"\nSFT eval (no abs):")
     evaluator.print_table(eval_results_sft)
     if is_sorl:
-        eval_results_sorl = evaluator.run(ops=cfg.ops, K=cfg.K, n_per_split=100)
+        eval_results_sorl = evaluator.run(K=cfg.K)  # canonical N=100 from HF
         print(f"\nSoRL eval (K={cfg.K}):")
         evaluator.print_table(eval_results_sorl)
     else:

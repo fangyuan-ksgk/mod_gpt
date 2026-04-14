@@ -432,7 +432,7 @@ def main():
     print(f"  EVALUATION ({args.n_eval} examples per split)")
     print(f"{'─' * 60}")
 
-    categories = get_eval_set(6, args.ops, N=args.n_eval)
+    categories = get_eval_set()
     all_examples = []
     for split_name, examples in categories.items():
         all_examples.extend(examples)

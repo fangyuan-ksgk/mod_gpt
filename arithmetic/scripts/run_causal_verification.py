@@ -80,7 +80,7 @@ def run_causal_verification(model_name, K, device, n_per_split=100):
     pad_id = tokenizer.pad_token_id
     model.eval()
 
-    categories = get_eval_set(6, "add_sub", N=n_per_split)
+    categories = get_eval_set()
     all_examples = []
     for split_name, examples in categories.items():
         for ex in examples:

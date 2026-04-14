@@ -11,7 +11,7 @@ For each eval example:
 Usage:
     from arithmetic.interp_utils.token_analysis import TokenAnalyzer
     analyzer = TokenAnalyzer(model, tokenizer, device="cuda")
-    results = analyzer.analyze(ops="add_sub", K=4, n_per_split=50)
+    results = analyzer.analyze(ops="add_sub", K=4, n_per_split=100)
     analyzer.print_summary(results)
     analyzer.plot_heatmap(results, "token_heatmap.png")
 """
@@ -75,10 +75,10 @@ class TokenAnalyzer:
 
         return abs_indices, abs_token_ids, abs_after_traj
 
-    def analyze(self, ops="add_sub", K=4, n_per_split=50, max_iterations=2):
+    def analyze(self, ops="add_sub", K=4, n_per_split=100, max_iterations=2):
         """Run token-subtask correlation analysis across all eval splits."""
         self.model.eval()
-        categories = get_eval_set(self.n_digits, ops, N=n_per_split)
+        categories = get_eval_set()
 
         # Collect: for each (subtask_label, digit_position), count token_id occurrences
         token_counts = defaultdict(lambda: defaultdict(int))  # {label: {token_id: count}}

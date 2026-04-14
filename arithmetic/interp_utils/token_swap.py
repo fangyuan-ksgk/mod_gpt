@@ -114,7 +114,7 @@ def run_swap_experiment(model_name, swap_from, swap_to, splits,
     model.eval()
 
     evaluator = ArithmeticEvaluator(model, tokenizer, device=device)
-    categories = get_eval_set(6, "add_sub", N=n_per_split)
+    categories = get_eval_set()
 
     results = {}
     total = {"normal_correct": 0, "swap_correct": 0,

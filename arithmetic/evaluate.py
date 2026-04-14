@@ -140,29 +140,32 @@ class ArithmeticEvaluator:
             "per_subtask": per_subtask,
         }
 
-    def run(self, ops: str = "add", K: Optional[int] = None,
-            n_per_split: int = 250) -> dict:
+    def run(self, K: Optional[int] = None, eval_set_path: str = None) -> dict:
         """
         Run full evaluation across all Quirke complexity splits.
+        Loads eval set from HuggingFace (canonical N=100) or a specified path.
 
         Args:
-            ops: "add" or "add_sub"
             K: if set, use SoRL recursion eval with this K. None = SFT eval.
-            n_per_split: examples per complexity level (passed to make_eval_set)
+            eval_set_path: path to eval set JSON. None = canonical set from HF.
 
         Returns:
             dict with per-split results + summary.
         """
         self.model.eval()
-        categories = get_eval_set(self.n_digits, ops, N=n_per_split)
+        if eval_set_path == "epoch":
+            from arithmetic.datasets.addition import get_epoch_eval_set
+            categories = get_epoch_eval_set()
+        else:
+            categories = get_eval_set(path=eval_set_path)
 
         results = {
             "config": {
-                "ops": ops,
+                "ops": "add_sub",
                 "K": K,
                 "mode": "sorl" if K is not None else "sft",
                 "n_digits": self.n_digits,
-                "n_per_split": n_per_split,
+                "n_per_split": 100,  # canonical eval set
             },
             "splits": {},
         }

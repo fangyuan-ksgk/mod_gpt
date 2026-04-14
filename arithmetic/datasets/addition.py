@@ -593,34 +593,74 @@ def forced_sub_hot_chain(n_digits: int, target_depth: int) -> ArithmeticExample:
 EVAL_CACHE_DIR = Path("/workspace/codes/mod_gpt/arithmetic/eval_sets")
 
 
-def get_eval_set(n_digits: int = 6, ops: str = "add", N: int = 50,
-                 seed: int = 42) -> dict:
+def _load_eval_from_disk(cache_file):
+    """Load eval set from a JSON file. Returns dict of {split: [ArithmeticExample]}."""
+    import json
+    with open(cache_file) as f:
+        data = json.load(f)
+    categories = {}
+    for split_name, examples_data in data.items():
+        categories[split_name] = [ArithmeticExample(**ed) for ed in examples_data]
+    return categories
+
+
+CANONICAL_EVAL_SET = "eval_add_sub_6d_N100_seed42.json"  # final eval (100/split)
+EPOCH_EVAL_SET = "eval_add_sub_6d_N25_seed42.json"      # epoch eval (25/split, faster)
+EVAL_HF_REPO = "thoughtworks/arithmetic-sorl-data"
+
+
+def get_eval_set(path: str = None) -> dict:
     """
-    Get a fixed eval set. Generates once with a fixed seed, caches to disk.
-    All models are evaluated on the exact same examples.
+    Load the canonical eval set. Downloads from HuggingFace if not cached locally.
+    NEVER generates data.
+
+    Args:
+        path: path to eval set JSON. If None, downloads/loads the canonical set
+              from thoughtworks/arithmetic-sorl-data on HuggingFace.
+
+    All experiments, scripts, and analyses MUST use this function.
+    """
+    if path is not None:
+        cache_file = Path(path)
+        if not cache_file.exists():
+            raise FileNotFoundError(f"Eval set not found: {cache_file}")
+    else:
+        # Always download from HuggingFace (cached by huggingface_hub)
+        from huggingface_hub import hf_hub_download
+        cache_file = Path(hf_hub_download(
+            EVAL_HF_REPO,
+            f"eval_sets/{CANONICAL_EVAL_SET}",
+            repo_type="dataset",
+        ))
+
+    categories = _load_eval_from_disk(cache_file)
+    return categories
+
+
+def get_epoch_eval_set() -> dict:
+    """Load the smaller epoch eval set (N=25) from HuggingFace. For fast mid-training evals."""
+    from huggingface_hub import hf_hub_download
+    cache_file = Path(hf_hub_download(
+        EVAL_HF_REPO, f"eval_sets/{EPOCH_EVAL_SET}", repo_type="dataset",
+    ))
+    return _load_eval_from_disk(cache_file)
+
+
+def generate_eval_set(n_digits: int = 6, ops: str = "add_sub", N: int = 100,
+                      seed: int = 42) -> dict:
+    """
+    Generate and persist a new eval set. ONE-TIME USE for creating the canonical set.
+
+    WARNING: This overwrites the existing eval set. All models must be re-evaluated
+    after running this. Do not call this casually.
     """
     cache_file = EVAL_CACHE_DIR / f"eval_{ops}_{n_digits}d_N{N}_seed{seed}.json"
 
-    if cache_file.exists():
-        import json
-        with open(cache_file) as f:
-            data = json.load(f)
-        # Reconstruct ArithmeticExample objects
-        categories = {}
-        for split_name, examples_data in data.items():
-            examples = []
-            for ed in examples_data:
-                examples.append(ArithmeticExample(**ed))
-            categories[split_name] = examples
-        return categories
-
-    # Generate with fixed seed
     old_state = random.getstate()
     random.seed(seed)
     categories = make_eval_set(n_digits=n_digits, ops=ops, N=N)
     random.setstate(old_state)
 
-    # Cache to disk
     import json
     cache_file.parent.mkdir(parents=True, exist_ok=True)
     data = {}
@@ -637,6 +677,9 @@ def get_eval_set(n_digits: int = 6, ops: str = "add", N: int = 50,
         ]
     with open(cache_file, "w") as f:
         json.dump(data, f)
+
+    print(f"Generated eval set: {cache_file} ({sum(len(v) for v in categories.values())} examples)")
+    return categories
 
     print(f"Cached eval set to {cache_file} ({sum(len(v) for v in categories.values())} examples)")
     return categories

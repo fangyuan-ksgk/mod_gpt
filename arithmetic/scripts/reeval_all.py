@@ -24,8 +24,8 @@ for i, name in enumerate(folders):
         K = cfg.get("K") if cfg.get("mode") in ("sorl", "sorl_v6") else None
         
         # Run updated eval
-        sft_results = evaluator.run(ops="add_sub", K=None, n_per_split=50)
-        sorl_results = evaluator.run(ops="add_sub", K=K, n_per_split=50) if K is not None else None
+        sft_results = evaluator.run(ops="add_sub", K=None, n_per_split=100)
+        sorl_results = evaluator.run(ops="add_sub", K=K, n_per_split=100) if K is not None else None
         
         # Merge into existing metrics
         old_metrics["sft_eval"] = sft_results
