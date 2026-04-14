@@ -556,13 +556,19 @@ Example 3:  332200 + 868010 = 1200210
   Result:   1100210  — d1 fixed (9→0), 2→1 errors ✓
 ```
 
-In each case, the model assigned the **wrong carry token** (t9 or t21) at a Use Carry
-position. Transplanting the **correct carry token** (t3 or t18) from a problem where
-the model got it right fixes that specific digit.
+**What went wrong in each case?** The model confused the carry state:
+
+- **t21** encodes "sum-of-9, carry uncertain" (Quirke's U state — 93% US, sum=9 in 95% of cases)
+- **t9** encodes "maybe carry, maybe not" (mixed — 56% sum=9, only 22% carry)
+- **t18** encodes "definite carry, not from a sum-9" (Quirke's 1 state — 46% carry, only 2% sum=9)
+
+The model assigned t21 or t9 ("carry is uncertain") at positions where the carry was actually
+**resolved** — it needed t18 or t3 ("carry is definite"). Transplanting the correct carry-state
+token from a problem where the model got it right fixes that digit.
 
 The fixes are partial (2→1 errors, not 2→0) because fixing one carry doesn't always
 fix the downstream cascade. But they prove that **token identity causally determines
-carry computation** — the wrong token = wrong carry state = wrong digit.
+carry computation** — wrong token = wrong carry state = wrong answer digit.
 
 *Model: abs30 K=1, 1L/3H/510d, 100K training examples.*
 """)
