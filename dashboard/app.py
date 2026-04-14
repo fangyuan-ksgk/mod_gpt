@@ -456,10 +456,14 @@ more evenly. abs10 collapses to 5 tokens; abs30 uses 18 with higher entropy.
 
             gr.Markdown("""### 2. Tokens map to Quirke's subtasks
 
-The heatmap below shows P(subtask | token) — **what each token encodes**. Tokens specialize:
-some handle only addition (SA, UC), others only subtraction (MD, MB). Within addition,
-different tokens handle different carry states.
+Within addition alone, tokens form a **carry computation spectrum** — sorted by how often
+they appear at positions with an active carry. Tokens at the top handle "no carry" positions
+(SA, SS). Tokens at the bottom are pure carry tokens (UC=87-100%). The model has learned
+a graded vocabulary from "nothing happening" to "full carry cascade."
 """)
+            gr.Image("static_figures/fig_addition_hierarchy.png")
+
+            gr.Markdown("""The full heatmap across both addition and subtraction:""")
             gr.Image("static_figures/fig_token_subtask.png")
 
             gr.Markdown("""### 3. Three token vignettes
