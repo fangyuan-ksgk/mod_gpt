@@ -12,20 +12,21 @@
 #   q17 = Qwen3-1.7B  (28L, layer 14)
 #   l1  = Llama-3.2-1B (16L, layer 8)
 #   l3  = Llama-3.2-3B (28L, layer 14)
+#   q4b = Qwen3-4B     (36L, layer 18, LoRA r=16)
+#
+# Datasets (9):
+#   scienceqa, gsm8k, arc, commonsenseqa, mmlu, boolq, openbookqa, aqua, hotpotqa
 #
 # Per (model, dataset): 6 runs
 #   v6 C=4, v6 C=32, v9 joint C=4, v9 detach C=4, v9 joint C=32, v9 detach C=32
 #
 # Parts (1 per model×dataset):
-#   1  q06+scienceqa     5  q17+scienceqa     9  l1+scienceqa     13 l3+scienceqa
-#   2  q06+gsm8k         6  q17+gsm8k        10  l1+gsm8k        14 l3+gsm8k
-#   3  q06+arc           7  q17+arc           11  l1+arc          15 l3+arc
-#   4  q06+commonsenseqa 8  q17+commonsenseqa 12  l1+commonsenseqa16 l3+commonsenseqa
+#   q06:  1-9     q17: 10-18    l1: 19-27    l3: 28-36    q4b: 37-45
 #
-# Total: 16 parts × 6 runs = 96 runs
+# Total: 45 parts × 6 runs = 270 runs
 #
 # Usage: ./sweep_0414_search_steer.sh <PART>
-#   PART=1..16  → specific model+dataset combo
+#   PART=1..45  → specific model+dataset combo
 #   PART=all    → everything (default)
 # ===========================================================================
 set -euo pipefail
@@ -69,44 +70,46 @@ TIMESTAMP=$(date +%Y%m%d_%H%M)
 OUT_ROOT="./ckpt/search_v9_${TIMESTAMP}"
 mkdir -p "$OUT_ROOT"
 
-# ---- Part → (model, mtag, dataset, dtag, layer) mapping ----
+# ---- Part → (model, mtag, dataset, dtag, layer, extra_args) mapping ----
 QWEN06="Qwen/Qwen3-0.6B"
 QWEN17="Qwen/Qwen3-1.7B"
 LLAMA1="meta-llama/Llama-3.2-1B"
 LLAMA3="meta-llama/Llama-3.2-3B"
+QWEN4B="Qwen/Qwen3-4B"
 
-declare -A P_MODEL P_MTAG P_DS P_DTAG P_LAYER
+# 9 datasets in order
+DS_NAMES=(scienceqa gsm8k arc commonsenseqa mmlu boolq openbookqa aqua hotpotqa)
+DS_TAGS=(sci gsm arc csqa mmlu boolq oqa aqua hpqa)
+N_DS=${#DS_NAMES[@]}
 
-# q06
-P_MODEL[1]="$QWEN06"; P_MTAG[1]="q06"; P_DS[1]="scienceqa";      P_DTAG[1]="sci";  P_LAYER[1]="14"
-P_MODEL[2]="$QWEN06"; P_MTAG[2]="q06"; P_DS[2]="gsm8k";          P_DTAG[2]="gsm";  P_LAYER[2]="14"
-P_MODEL[3]="$QWEN06"; P_MTAG[3]="q06"; P_DS[3]="arc";            P_DTAG[3]="arc";  P_LAYER[3]="14"
-P_MODEL[4]="$QWEN06"; P_MTAG[4]="q06"; P_DS[4]="commonsenseqa";  P_DTAG[4]="csqa"; P_LAYER[4]="14"
+declare -A P_MODEL P_MTAG P_DS P_DTAG P_LAYER P_EXTRA
 
-# q17
-P_MODEL[5]="$QWEN17"; P_MTAG[5]="q17"; P_DS[5]="scienceqa";      P_DTAG[5]="sci";  P_LAYER[5]="14"
-P_MODEL[6]="$QWEN17"; P_MTAG[6]="q17"; P_DS[6]="gsm8k";          P_DTAG[6]="gsm";  P_LAYER[6]="14"
-P_MODEL[7]="$QWEN17"; P_MTAG[7]="q17"; P_DS[7]="arc";            P_DTAG[7]="arc";  P_LAYER[7]="14"
-P_MODEL[8]="$QWEN17"; P_MTAG[8]="q17"; P_DS[8]="commonsenseqa";  P_DTAG[8]="csqa"; P_LAYER[8]="14"
+# Helper to fill 9 consecutive parts for a model
+fill_model() {
+  local start=$1 model=$2 mtag=$3 layer=$4 extra="$5"
+  for i in $(seq 0 $((N_DS-1))); do
+    local p=$((start + i))
+    P_MODEL[$p]="$model"
+    P_MTAG[$p]="$mtag"
+    P_DS[$p]="${DS_NAMES[$i]}"
+    P_DTAG[$p]="${DS_TAGS[$i]}"
+    P_LAYER[$p]="$layer"
+    P_EXTRA[$p]="$extra"
+  done
+}
 
-# l1
-P_MODEL[9]="$LLAMA1";  P_MTAG[9]="l1";  P_DS[9]="scienceqa";      P_DTAG[9]="sci";  P_LAYER[9]="8"
-P_MODEL[10]="$LLAMA1"; P_MTAG[10]="l1"; P_DS[10]="gsm8k";         P_DTAG[10]="gsm"; P_LAYER[10]="8"
-P_MODEL[11]="$LLAMA1"; P_MTAG[11]="l1"; P_DS[11]="arc";           P_DTAG[11]="arc"; P_LAYER[11]="8"
-P_MODEL[12]="$LLAMA1"; P_MTAG[12]="l1"; P_DS[12]="commonsenseqa"; P_DTAG[12]="csqa";P_LAYER[12]="8"
+fill_model  1 "$QWEN06" "q06"  "14" ""
+fill_model 10 "$QWEN17" "q17"  "14" ""
+fill_model 19 "$LLAMA1" "l1"   "8"  ""
+fill_model 28 "$LLAMA3" "l3"   "14" ""
+fill_model 37 "$QWEN4B" "q4b"  "18" "--use_lora --lora_rank 16 --lora_alpha 32"
 
-# l3
-P_MODEL[13]="$LLAMA3"; P_MTAG[13]="l3"; P_DS[13]="scienceqa";      P_DTAG[13]="sci";  P_LAYER[13]="14"
-P_MODEL[14]="$LLAMA3"; P_MTAG[14]="l3"; P_DS[14]="gsm8k";          P_DTAG[14]="gsm";  P_LAYER[14]="14"
-P_MODEL[15]="$LLAMA3"; P_MTAG[15]="l3"; P_DS[15]="arc";            P_DTAG[15]="arc";  P_LAYER[15]="14"
-P_MODEL[16]="$LLAMA3"; P_MTAG[16]="l3"; P_DS[16]="commonsenseqa";  P_DTAG[16]="csqa"; P_LAYER[16]="14"
-
-N_PARTS=16
+N_PARTS=45
 
 # ---- Runner ----
 run_one() {
   local mode=$1 C=$2 dataset=$3 dtag=$4 detach_flag=$5 detach_tag=$6 job_idx=$7 \
-        cur_model=$8 cur_mtag=$9 cur_layer=${10}
+        cur_model=$8 cur_mtag=$9 cur_layer=${10} model_extra="${11:-}"
 
   local gpu=$(( (job_idx - 1) % N_GPUS ))
   local port=$((BASE_PORT + PART_NUM * 100 + job_idx))
@@ -148,7 +151,7 @@ run_one() {
     --eval_batch_size $EVAL_BATCH \
     --num_log_samples $NUM_LOG \
     --log_every 10 \
-    --output_dir $out $extra_args &
+    --output_dir $out $extra_args $model_extra &
 }
 
 run_part() {
@@ -163,21 +166,23 @@ run_part() {
   echo ""
   echo "--- Part ${p}/${N_PARTS}: ${cur_mtag} + ${dataset} (layer ${cur_layer}) ---"
 
+  local cur_extra="${P_EXTRA[$p]}"
+
   local JOB_IDX=0
   for C in "${C_SIZES[@]}"; do
     # V6 baseline
     JOB_IDX=$((JOB_IDX + 1))
-    run_one v6 $C $dataset $dtag 0 "base" $JOB_IDX $cur_model $cur_mtag $cur_layer
+    run_one v6 $C $dataset $dtag 0 "base" $JOB_IDX $cur_model $cur_mtag $cur_layer "$cur_extra"
     if (( JOB_IDX % N_GPUS == 0 )); then wait; fi
 
     # V9 joint
     JOB_IDX=$((JOB_IDX + 1))
-    run_one v9 $C $dataset $dtag 0 "joint" $JOB_IDX $cur_model $cur_mtag $cur_layer
+    run_one v9 $C $dataset $dtag 0 "joint" $JOB_IDX $cur_model $cur_mtag $cur_layer "$cur_extra"
     if (( JOB_IDX % N_GPUS == 0 )); then wait; fi
 
     # V9 detach
     JOB_IDX=$((JOB_IDX + 1))
-    run_one v9 $C $dataset $dtag 1 "detach" $JOB_IDX $cur_model $cur_mtag $cur_layer
+    run_one v9 $C $dataset $dtag 1 "detach" $JOB_IDX $cur_model $cur_mtag $cur_layer "$cur_extra"
     if (( JOB_IDX % N_GPUS == 0 )); then wait; fi
   done
   wait
