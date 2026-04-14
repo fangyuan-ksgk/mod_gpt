@@ -6,6 +6,10 @@ Results placeholders in `log/arithmetic.md` use `<!-- PLACEHOLDER: description -
 Also check [`TODO.md`](TODO.md) for the task backlog.
 **Before launching any sweep:** Run [`AUDIT.md`](AUDIT.md) checklist. Every past queue restart was caused by skipping this.
 
+## Cost Rules
+
+**NEVER use fast mode (`/fast`).** It costs 6x ($30/$150 per M tokens vs $5/$25). With long context sessions this burns money fast. The quality difference is negligible for our workload.
+
 ## Job Safety Rules
 
 **ALWAYS kill running training jobs before modifying code they depend on** (train.py, evaluate.py, datasets/addition.py, hub.py, sorl/). Running jobs load code at start time — edits during execution cause failures with stale imports or mismatched logic. Kill first, edit, then relaunch.
