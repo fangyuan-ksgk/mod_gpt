@@ -464,68 +464,86 @@ different tokens handle different carry states.
 
             gr.Markdown("""### 3. Three token vignettes
 
-To make this concrete, here are three annotated examples showing exactly which abstraction
-token the model assigns at each position, and what arithmetic role that position plays.
+Each vignette introduces one token, explains its role across many examples, then
+walks through a concrete problem showing it in action.
 
 ---
 
-**Vignette 1: Addition with 5-carry cascade (C5)**
+**Vignette 1: Token t2 — the carry cascade propagator**
+
+Across 2,550 occurrences, t2 appears primarily at **UC (Use Carry, 31%)** and **UB (Use Borrow, 14%)**
+positions — places where the answer digit depends on a carry or borrow propagating from the right.
+It appears at multiple answer positions (d1=28%, d3=22%, d0=17%), always where cascade state
+must be tracked. It's the model's way of saying: *"this digit depends on what happened to the right."*
+
+Here it is in a 5-carry cascade (`959271 + 040756 = 1000027`):
 
 ```
-  959271 + 040756 = 1000027
-
   Position:   d0   d1   d2   d3   d4   d5   d6
   Answer:      1    0    0    0    0    2    7
   Subtask:    UC   US   US   US   US   SC   SA
   Token:      t2   t2   t6   t2   t1    —    —
+                ↑    ↑         ↑
+              t2 marks every position that must propagate the carry cascade
 ```
 
-d5-d6 are easy (SC = make carry, SA = simple add) — no abstraction needed.
-d1-d4 are all **US (Use Sum-9)**: each digit pair sums to exactly 9, so the carry
-state is uncertain until resolved from the right. The model assigns **t2** to most
-cascade positions and **t6** where the sum-of-9 chain begins (d2).
-d0 receives **t2** — it must "use carry" from the full cascade.
+d5-d6 are easy (SC/SA) — no abstraction needed. d1-d4 are all US (sum-of-9): the carry
+cascades left through four consecutive uncertain positions. t2 appears at d0, d1, and d3 —
+every position that needs to resolve the cascade.
 
 ---
 
-**Vignette 2: Subtraction with 4-borrow cascade (M4)**
+**Vignette 2: Token t7 — the borrow cascade specialist**
+
+t7 appears 1,026 times and is **100% subtraction** — never appears in addition problems.
+It splits between **UB (Use Borrow, 47%)** and **UD (cascade borrow, 43%)**, and is locked
+to position d2 (95%). When the model assigns t7, it means: *"borrow is propagating through
+this position in a subtraction."*
+
+Here it is in a 4-borrow cascade (`698401 - 128406 = 0569995`):
 
 ```
-  698401 - 128406 = 0569995
-
   Position:   d0   d1   d2   d3   d4   d5   d6
   Answer:      0    5    6    9    9    9    5
   Subtask:    MD   MD   UB   UD   UD   UD   MB
   Token:      t1   t5   t7   t7   t1    —    —
+                         ↑    ↑
+                   t7 marks the borrow cascade positions
 ```
 
-d6 triggers a borrow (MB). d3-d5 cascade that borrow through equal-digit positions (UD).
-The model uses **t7** for the borrow cascade positions (d2-d3) — a subtraction-only token
-(100% subtraction). **t1** appears at d4 as the generic cascade token.
+d6 triggers the borrow (MB). The borrow cascades left through d3-d5 (UD = equal digits,
+borrow uncertain). t7 appears at d2-d3 where the cascade must be resolved. Note that t7
+never appears in the addition vignette above — the model has learned operation-specific tokens.
 
 ---
 
-**Vignette 3: Easy addition, no carries (S0)**
+**Vignette 3: Token t3 — the simple addition marker**
+
+t3 appears 2,084 times, primarily at **UB (37%)** and **US (27%)** positions, but critically
+at positions where no carry computation is needed. In easy problems (S0), it marks the
+"nothing interesting here" positions.
+
+Here it is in a no-carry addition (`417080 + 531003 = 0948083`):
 
 ```
-  417080 + 531003 = 0948083
-
   Position:   d0   d1   d2   d3   d4   d5   d6
   Answer:      0    9    4    8    0    8    3
   Subtask:    SA   SS   SA   SA   SA   SA   SA
   Token:      t6  t15   t3   t8   t3    —    —
+                         ↑         ↑
+                   t3 at simple-add positions (no carry)
 ```
 
-No carries anywhere — every position is SA (simple add) or SS (sum-of-9 but no cascade).
-The model assigns **t3** to the easy SA positions and different tokens (t6, t15, t8) to
-positions with specific digit-sum values. No carry-related tokens appear.
+Every position is SA (simple add) — no cascades at all. t3 appears at d2 and d4 (both SA).
+Other tokens (t6, t15, t8) handle positions with specific digit-sum values, but none of the
+carry-cascade tokens (t2, t7) appear anywhere.
 
 ---
 
-The key insight: **the same token IDs recur across different problems with the same
-arithmetic role.** t2 appears wherever there's a carry cascade; t7 appears wherever there's
-a borrow cascade; t3 appears at simple-add positions. The model has learned a consistent
-vocabulary for arithmetic operations.
+**The key insight:** the same token IDs recur consistently across different problems.
+t2 = carry cascade. t7 = borrow cascade (subtraction only). t3 = no cascade needed.
+The model has learned a **vocabulary for arithmetic reasoning** that maps directly to
+Quirke's circuit definitions — without any supervision about carry logic.
 """)
 
             gr.Markdown("""### 3. Tokens spread across digit positions
