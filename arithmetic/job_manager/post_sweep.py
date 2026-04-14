@@ -146,7 +146,7 @@ def validate_uploaded_model(name: str) -> list:
 
             # Check training history has eval curves (optional for v6 which logs differently)
             history = metrics.get("history", {})
-            trainer_version = config.get("trainer_version", "")
+            trainer_version = cfg.get("trainer_version", "")
             if trainer_version != "v6":
                 if "eval_step" not in history or len(history.get("eval_step", [])) == 0:
                     issues.append("no eval curves in training history")
