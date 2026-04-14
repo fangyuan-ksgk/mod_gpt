@@ -3,7 +3,7 @@
     SFT ep=1 | lr=1e-5, EBS=8 | Qwen3-4B added lora
     ┌────────────┬────────┬────────┬────────┬────────┬────────┬────────┬────────┬────────┬──────────┐
     │ Model      │ GSM8K  │ SciQA  │   ARC  │  MMLU  │  CSQA  │ BoolQ  │ ObookQA│  AQuA  │ HotpotQA │
-    │            │ /1319  │ /2224  │ /1172  │ /2000  │ /1221  │ /3270  │  /1000 │  /254  │  /4000   │
+    │            │ /1319  │ /2224  │ /1172  │ /2000  │ /1221  │ /3270  │  /1000 │  /254  │  /4000   │ -> 
     ├────────────┼────────┼────────┼────────┼────────┼────────┼────────┼────────┼────────┼──────────┤
     │ Qwen3-0.6B │   46.0 │   48.0 │   60.8 │   46.1 │   64.1 │   82.7 │   69.2 │   39.0 │     15   │
     │ Qwen3-1.7B │   60.2 │   56.4 │   76.7 │   57.6 │      ? │   87.1 │   79.7 │   52.4 │     16   │
@@ -31,6 +31,8 @@
     :: CSQA l1b config (incomplete sweep) C=1, L=2, slr=5e-2 layers=[10,14], routing=diagonal, pos=first
 
     :: Llama + SciQA | we might need slr < 5e-2, llama is sensitive to change in representation
+
+    :: ScienceQA - position bias
 
 
 
