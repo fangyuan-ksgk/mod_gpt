@@ -314,16 +314,27 @@ a small auxiliary vocabulary (e.g. 30 tokens) inserted at regular intervals (eve
             gr.Markdown("""### Overall Accuracy
 
 **Summary:** SoRL v1 (K=1, abs30) **never loses** to the SFT baseline. The biggest gains are
-on **hard cascade splits at low data** — where the baseline struggles most:
+on **hard cascade splits** — problems requiring multi-digit carry/borrow propagation with varied answers:
+
+**Standard model (2L/3H/510d) at low data:**
 
 | Split | 10K Baseline | 10K SoRL | Gap | 25K Baseline | 25K SoRL | Gap |
 |-------|-------------|----------|-----|-------------|----------|-----|
 | sub\_M4 (4 borrows) | 8% | **100%** | **+92pp** | 56% | **100%** | **+44pp** |
 | add\_S5 (5 carries) | 32% | **99%** | **+67pp** | 54% | **100%** | **+46pp** |
-| add\_S6 (6 carries) | 46% | **100%** | **+54pp** | 98% | **100%** | +2pp |
 | sub\_M5 (5 borrows) | 2% | **14%** | **+12pp** | 34% | **100%** | **+66pp** |
 
-At 50K+ both reach 100% on all splits. On undersized models, SoRL gains up to +35pp.
+**Undersized model (2L/1H/128d) at 100K — where both plateau below 100%:**
+
+| Split | Baseline | SoRL | Gap |
+|-------|----------|------|-----|
+| C3 (3 hot carries) | 44% | **93%** | **+49pp** |
+| C4 (4 hot carries) | 38% | **94%** | **+56pp** |
+| C5 (5 hot carries) | 33% | **85%** | **+52pp** |
+| C6 (6 hot carries) | 39% | **96%** | **+57pp** |
+
+Even when the model is too small to reach 100%, SoRL's abstraction tokens provide
+external scratch-pad memory that doubles or triples accuracy on hard cascades.
 See the **Results** and **Interpretability** tabs for figures and analysis.
 """)
             main_table = gr.Dataframe(

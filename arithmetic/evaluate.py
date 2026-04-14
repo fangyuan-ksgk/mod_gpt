@@ -97,6 +97,8 @@ class ArithmeticEvaluator:
     def _eval_split(self, examples, K=None):
         """Evaluate a list of ArithmeticExample. Returns split-level results dict."""
         n_correct = 0
+        total_digits = 0
+        correct_digits_total = 0
         digit_correct_by_label = {t: [] for t in ALL_LABELS}
 
         for ex in examples:
@@ -115,6 +117,8 @@ class ArithmeticEvaluator:
             correct_digits = (pred == target)
             if correct_digits.all():
                 n_correct += 1
+            total_digits += len(correct_digits)
+            correct_digits_total += correct_digits.sum().item()
 
             # Per-digit subtask accuracy
             for d in range(self.answer_len):
@@ -131,6 +135,7 @@ class ArithmeticEvaluator:
 
         return {
             "full_accuracy": n_correct / max(len(examples), 1),
+            "digit_accuracy": correct_digits_total / max(total_digits, 1),
             "n_examples": len(examples),
             "per_subtask": per_subtask,
         }
@@ -164,6 +169,8 @@ class ArithmeticEvaluator:
 
         total_correct = 0
         total_examples = 0
+        total_digits_correct = 0
+        total_digits = 0
 
         for split_name, examples in categories.items():
             if not examples:
@@ -172,9 +179,12 @@ class ArithmeticEvaluator:
             results["splits"][split_name] = split_result
             total_correct += int(split_result["full_accuracy"] * split_result["n_examples"])
             total_examples += split_result["n_examples"]
+            total_digits_correct += int(split_result["digit_accuracy"] * split_result["n_examples"] * self.answer_len)
+            total_digits += split_result["n_examples"] * self.answer_len
 
         results["summary"] = {
             "overall_accuracy": total_correct / max(total_examples, 1),
+            "digit_accuracy": total_digits_correct / max(total_digits, 1),
             "total_examples": total_examples,
             "n_splits": len(results["splits"]),
         }
@@ -244,7 +254,8 @@ class ArithmeticEvaluator:
         print(f"  └{'─' * 14}┴{'─' * 8}┴{'─' * 6}┴" + "┴".join(f"{'─' * 8}" for _ in all_subtasks) + "┘")
 
         summary = results["summary"]
-        print(f"  Overall: {summary['overall_accuracy'] * 100:.1f}% ({summary['total_examples']} examples)")
+        digit_acc = summary.get('digit_accuracy', 0)
+        print(f"  Overall: {summary['overall_accuracy'] * 100:.1f}% full-seq, {digit_acc * 100:.1f}% per-digit ({summary['total_examples']} examples)")
 
     @staticmethod
     def plot_by_complexity(results: dict, path: str = None, show: bool = False):
