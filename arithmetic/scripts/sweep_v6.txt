@@ -1,0 +1,34 @@
+# SoRL v6 (self-routing) sweep — 20 models
+# K=1 abs30, matching v1 configs for direct comparison
+# All 20 epochs for fair comparison with baselines
+
+#PRIORITY:HIGH
+
+# ── Standard model (2L/3H/510d) across data sizes ──
+python -m arithmetic.train --mode sorl_v6 --ops add_sub --dataset_size 10000 --abs_vocab 30 --K 1 --num_epochs 20 --push_to_hub --output_dir ckpt/sweep/as_sorl_v6_abs30_K1_10K
+python -m arithmetic.train --mode sorl_v6 --ops add_sub --dataset_size 25000 --abs_vocab 30 --K 1 --num_epochs 20 --push_to_hub --output_dir ckpt/sweep/as_sorl_v6_abs30_K1_25K
+python -m arithmetic.train --mode sorl_v6 --ops add_sub --dataset_size 50000 --abs_vocab 30 --K 1 --num_epochs 20 --push_to_hub --output_dir ckpt/sweep/as_sorl_v6_abs30_K1_50K
+python -m arithmetic.train --mode sorl_v6 --ops add_sub --dataset_size 100000 --abs_vocab 30 --K 1 --num_epochs 20 --push_to_hub --output_dir ckpt/sweep/as_sorl_v6_abs30_K1_100K
+
+# ── Standard model, K=4 (for comparison) ──
+python -m arithmetic.train --mode sorl_v6 --ops add_sub --dataset_size 10000 --abs_vocab 30 --K 4 --num_epochs 20 --push_to_hub --output_dir ckpt/sweep/as_sorl_v6_abs30_K4_10K
+python -m arithmetic.train --mode sorl_v6 --ops add_sub --dataset_size 25000 --abs_vocab 30 --K 4 --num_epochs 20 --push_to_hub --output_dir ckpt/sweep/as_sorl_v6_abs30_K4_25K
+python -m arithmetic.train --mode sorl_v6 --ops add_sub --dataset_size 50000 --abs_vocab 30 --K 4 --num_epochs 20 --push_to_hub --output_dir ckpt/sweep/as_sorl_v6_abs30_K4_50K
+python -m arithmetic.train --mode sorl_v6 --ops add_sub --dataset_size 100000 --abs_vocab 30 --K 4 --num_epochs 20 --push_to_hub --output_dir ckpt/sweep/as_sorl_v6_abs30_K4_100K
+
+# ── Vocab sweep at 100K K=1 ──
+python -m arithmetic.train --mode sorl_v6 --ops add_sub --dataset_size 100000 --abs_vocab 5 --K 1 --num_epochs 20 --push_to_hub --output_dir ckpt/sweep/as_sorl_v6_abs5_K1_100K
+python -m arithmetic.train --mode sorl_v6 --ops add_sub --dataset_size 100000 --abs_vocab 10 --K 1 --num_epochs 20 --push_to_hub --output_dir ckpt/sweep/as_sorl_v6_abs10_K1_100K
+python -m arithmetic.train --mode sorl_v6 --ops add_sub --dataset_size 100000 --abs_vocab 50 --K 1 --num_epochs 20 --push_to_hub --output_dir ckpt/sweep/as_sorl_v6_abs50_K1_100K
+python -m arithmetic.train --mode sorl_v6 --ops add_sub --dataset_size 100000 --abs_vocab 100 --K 1 --num_epochs 20 --push_to_hub --output_dir ckpt/sweep/as_sorl_v6_abs100_K1_100K
+
+# ── Undersized models at 100K K=1 abs30 ──
+python -m arithmetic.train --mode sorl_v6 --ops add_sub --dataset_size 100000 --abs_vocab 30 --K 1 --num_epochs 20 --n_layer 2 --n_head 1 --n_embd 128 --push_to_hub --output_dir ckpt/sweep/as_sorl_v6_abs30_K1_100K_2L1H128d
+python -m arithmetic.train --mode sorl_v6 --ops add_sub --dataset_size 100000 --abs_vocab 30 --K 1 --num_epochs 20 --n_layer 1 --n_head 2 --n_embd 256 --push_to_hub --output_dir ckpt/sweep/as_sorl_v6_abs30_K1_100K_1L2H256d
+python -m arithmetic.train --mode sorl_v6 --ops add_sub --dataset_size 100000 --abs_vocab 30 --K 1 --num_epochs 20 --n_layer 1 --n_head 3 --n_embd 510 --push_to_hub --output_dir ckpt/sweep/as_sorl_v6_abs30_K1_100K_1L3H510d
+
+# ── Low data undersized ──
+python -m arithmetic.train --mode sorl_v6 --ops add_sub --dataset_size 25000 --abs_vocab 30 --K 1 --num_epochs 20 --n_layer 2 --n_head 1 --n_embd 128 --push_to_hub --output_dir ckpt/sweep/as_sorl_v6_abs30_K1_25K_2L1H128d
+python -m arithmetic.train --mode sorl_v6 --ops add_sub --dataset_size 25000 --abs_vocab 30 --K 1 --num_epochs 20 --n_layer 1 --n_head 2 --n_embd 256 --push_to_hub --output_dir ckpt/sweep/as_sorl_v6_abs30_K1_25K_1L2H256d
+python -m arithmetic.train --mode sorl_v6 --ops add_sub --dataset_size 25000 --abs_vocab 30 --K 1 --num_epochs 20 --n_layer 1 --n_head 3 --n_embd 510 --push_to_hub --output_dir ckpt/sweep/as_sorl_v6_abs30_K1_25K_1L3H510d
+python -m arithmetic.train --mode sorl_v6 --ops add_sub --dataset_size 10000 --abs_vocab 30 --K 1 --num_epochs 20 --n_layer 2 --n_head 1 --n_embd 128 --push_to_hub --output_dir ckpt/sweep/as_sorl_v6_abs30_K1_10K_2L1H128d

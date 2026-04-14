@@ -382,7 +382,7 @@ def _parse_args():
     """Parse CLI args into an ArithmeticConfig."""
     p = argparse.ArgumentParser()
     # Architecture
-    p.add_argument("--mode", choices=["baseline", "sorl"], default="baseline")
+    p.add_argument("--mode", choices=["baseline", "sorl", "sorl_v6"], default="baseline")
     p.add_argument("--ops", choices=["add", "add_sub"], default="add")
     p.add_argument("--n_digits", type=int, default=6)
     p.add_argument("--n_layer", type=int, default=2)
@@ -434,12 +434,13 @@ def main():
     random.seed(cfg.seed)
     np.random.seed(cfg.seed)
 
+    is_sorl = cfg.mode in ("sorl", "sorl_v6")
     run_name = f"{cfg.ops}_{cfg.mode}"
     if cfg.mode == "sorl":
         run_name += "_v1"
     if cfg.abs_vocab > 0:
         run_name += f"_abs{cfg.abs_vocab}"
-    if cfg.K != 4 and cfg.mode == "sorl":
+    if cfg.K != 4 and is_sorl:
         run_name += f"_K{cfg.K}"
     run_name += f"_{cfg.dataset_size // 1000}K"
     if cfg.n_layer != 2 or cfg.n_head != 3 or cfg.n_embd != 510:
@@ -469,6 +470,8 @@ def main():
     print(f"  optim: lr={cfg.lr:.1e} warmup={cfg.warmup_ratio:.0%} wd={cfg.weight_decay} beta2={cfg.beta2}")
     if cfg.mode == "sorl":
         print(f"  SoRL v1: abs={cfg.abs_vocab} K={cfg.K} ig={cfg.alpha_info_gain} abs_w={cfg.alpha_abs} zipf={cfg.alpha_soft_zipf}")
+    elif cfg.mode == "sorl_v6":
+        print(f"  SoRL v6 (self-routing): abs={cfg.abs_vocab} K={cfg.K}")
     else:
         print(f"  pure SFT")
     print(f"{'═' * 60}")
@@ -491,7 +494,7 @@ def main():
         "dataset_repo": "thoughtworks/arithmetic-sorl-data",
         "dataset_config": "add_sub_6digit" if cfg.ops == "add_sub" else "add_6digit",
         "model_repo": "thoughtworks/arithmetic-sorl",
-        "trainer_version": "sft" if cfg.mode == "baseline" else "v1",
+        "trainer_version": "sft" if cfg.mode == "baseline" else ("v6" if cfg.mode == "sorl_v6" else "v1"),
         "wandb_run_id": wandb.run.id if wandb.run is not None else None,
         "wandb_url": wandb.run.url if wandb.run is not None else None,
     }
@@ -503,7 +506,25 @@ def main():
     if cfg.mode == "baseline":
         history = train_sft(model, train_ds, val_ds, cfg, run_name, tokenizer=tokenizer)
         final_acc = eval_sft(model, val_ds, cfg.device, 200)
+    elif cfg.mode == "sorl_v6":
+        # v6: self-routing, traj-only loss, fixed diagonal lm_head for abstractions
+        from sorl.selfroute import SoRLTrainerv6
+        # v6 uses traj_loss only — zero out info-gain/abs/zipf
+        cfg.alpha_traj = 1.0
+        cfg.alpha_info_gain = 0.0
+        cfg.alpha_abs = 0.0
+        cfg.alpha_soft_zipf = 0.0
+        cfg.alpha_contrastive = 0.0
+        trainer = SoRLTrainerv6(
+            model, tokenizer, train_ds, val_ds,
+            compute_accuracy=compute_accuracy_for_trainer,
+            collate_fn=collate_fn, config=cfg, device=cfg.device,
+        )
+        trainer.train()
+        history = trainer.history
+        final_acc = eval_with_recursion(model, val_ds, cfg.device, K=cfg.K, num_samples=200)
     else:
+        # v1: info-gain loss
         # cfg is already an ArithmeticConfig (inherits SoRLConfig) — pass directly
         trainer = WandbSoRLTrainer(
             model, tokenizer, train_ds, val_ds,
@@ -519,11 +540,11 @@ def main():
     # Full per-split eval with ArithmeticEvaluator
     from arithmetic.evaluate import ArithmeticEvaluator
     evaluator = ArithmeticEvaluator(model, tokenizer, device=cfg.device, n_digits=cfg.n_digits)
-    K_eval = cfg.K if cfg.mode == "sorl" else None
+    K_eval = cfg.K if is_sorl else None
     eval_results_sft = evaluator.run(ops=cfg.ops, K=None, n_per_split=100)
     print(f"\nSFT eval (no abs):")
     evaluator.print_table(eval_results_sft)
-    if cfg.mode == "sorl":
+    if is_sorl:
         eval_results_sorl = evaluator.run(ops=cfg.ops, K=cfg.K, n_per_split=100)
         print(f"\nSoRL eval (K={cfg.K}):")
         evaluator.print_table(eval_results_sorl)
