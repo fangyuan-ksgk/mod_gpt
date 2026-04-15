@@ -104,12 +104,14 @@ def parse_args():
     max_length_dict = {"gsm8k": 512, "math_qa": 512, "math": 512, "arc": 256, "hellaswag": 512, "winogrande": 256,
                        "boolq": 1024, "openbookqa": 768, "commonsenseqa": 256, "mmlu": 256,
                        "aqua": 1024, "scienceqa": 512, "sciq": 512, "hotpotqa": 512,
-                       "mmlupro": 512, "strategyqa": 256, "bbhlogic": 512,
+                       "mmlupro": 512, "strategyqa": 256, "bbhlogic": 512, "bbh": 512,
+                       "race": 1024, "logiqa": 512, "medqa": 512, "drop": 1024, "triviaqa": 128,
                        "mbpp": 1024, "humaneval": 1024, "livecodebench": 1024, "codecontests": 1024, "deepmind_code_contests": 2048, "wildifeval": 2048, "xlam": 1024}
     max_new_tokens_dict = {"gsm8k": 256, "math_qa": 128, "math": 256, "arc": 64, "hellaswag": 64, "winogrande": 64,
                            "boolq": 32, "openbookqa": 128, "commonsenseqa": 64, "mmlu": 64,
                            "aqua": 768, "scienceqa": 256, "sciq": 256, "hotpotqa": 64,
-                           "mmlupro": 512, "strategyqa": 256, "bbhlogic": 512,
+                           "mmlupro": 128, "strategyqa": 64, "bbhlogic": 128, "bbh": 128,
+                           "race": 64, "logiqa": 64, "medqa": 64, "drop": 64, "triviaqa": 64,
                            "mbpp": 256, "humaneval": 256, "livecodebench": 256, "codecontests": 512, "deepmind_code_contests": 1024, "wildifeval": 1024, "xlam": 256}
     p.add_argument("--max_length", type=int, default=None)
 

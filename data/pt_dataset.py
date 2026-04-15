@@ -974,44 +974,149 @@ class StrategyQADataset(Dataset):
         return match.group(1).lower() if match else None
 
 
-class BBHLogicDataset(Dataset):
-    """BIG-Bench Hard — all MCQ-format subtasks (17 tasks × 250 samples).
+class BBHDataset(Dataset):
+    """BIG-Bench Hard — all 27 subtasks.
 
-    Only includes subtasks with (A)/(B)/... letter-choice answers so a single
-    extract_answer works across all tasks.
-    Total: 17 × 250 = 4250 → train = 2550 (first 150/task), test = 1700 (last 100/task).
+    Train = first 150 per task (4,050 total).
+    Test  = last  100 per task (2,700 total).
+    Accuracy is reported as macro-average over tasks (matches published BBH numbers).
     """
 
-    _SUBTASKS = [
+    ALL_TASKS = [
+        "boolean_expressions",
+        "causal_judgement",
         "date_understanding",
         "disambiguation_qa",
+        "dyck_languages",
+        "formal_fallacies",
         "geometric_shapes",
         "hyperbaton",
         "logical_deduction_five_objects",
         "logical_deduction_seven_objects",
         "logical_deduction_three_objects",
         "movie_recommendation",
+        "multistep_arithmetic_two",
+        "navigate",
+        "object_counting",
         "penguins_in_a_table",
         "reasoning_about_colored_objects",
         "ruin_names",
         "salient_translation_error_detection",
         "snarks",
+        "sports_understanding",
         "temporal_sequences",
         "tracking_shuffled_objects_five_objects",
         "tracking_shuffled_objects_seven_objects",
         "tracking_shuffled_objects_three_objects",
+        "web_of_lies",
+        "word_sorting",
     ]
+
+    # Tasks that are NOT letter-MCQ; everything else defaults to "letter"
+    _ANSWER_TYPE = {
+        "boolean_expressions": "truefalse",
+        "causal_judgement":    "yesno",
+        "navigate":            "yesno",
+        "sports_understanding":"yesno",
+        "web_of_lies":         "yesno",
+        "multistep_arithmetic_two": "number",
+        "object_counting":     "number",
+        "dyck_languages":      "exact",
+        "formal_fallacies":    "exact",
+        "word_sorting":        "exact",
+    }
 
     def __init__(self, split="train", tokenizer=None, max_length=512):
         from datasets import concatenate_datasets
         parts = []
-        for subtask in self._SUBTASKS:
-            ds = load_dataset("lukaemon/bbh", subtask, split="test")
+        task_ids = []
+        for tid, task in enumerate(self.ALL_TASKS):
+            ds = load_dataset("lukaemon/bbh", task, split="test")
             if split == "test":
-                parts.append(ds.select(range(150, min(250, len(ds)))))
+                subset = ds.select(range(150, min(250, len(ds))))
             else:
-                parts.append(ds.select(range(min(150, len(ds)))))
+                subset = ds.select(range(min(150, len(ds))))
+            parts.append(subset)
+            task_ids.extend([tid] * len(subset))
         self.dataset = concatenate_datasets(parts)
+        self.task_ids = task_ids
+        self.tokenizer = tokenizer
+        self.max_length = max_length
+
+    def __len__(self):
+        return len(self.dataset)
+
+    def _normalize_target(self, target, task):
+        atype = self._ANSWER_TYPE.get(task, "letter")
+        if atype == "letter":
+            m = re.search(r"\(([A-Za-z])\)", target)
+            return m.group(1).upper() if m else target.strip().upper()
+        elif atype in ("yesno", "truefalse"):
+            return target.strip().lower()
+        elif atype == "number":
+            m = re.search(r"(-?\d+)", target)
+            return m.group(1) if m else target.strip()
+        else:  # exact
+            return target.strip().lower()
+
+    def parse_sample(self, ex, task=None):
+        """Return (prompt, full_text). task must be provided."""
+        input_text = ex["input"].strip()
+        target = ex["target"].strip()
+        norm = self._normalize_target(target, task)
+        prompt = f"{input_text}\nAnswer:"
+        text = f"{prompt} {target}\n#### {norm}"
+        return prompt, text
+
+    def __getitem__(self, idx):
+        ex = self.dataset[idx]
+        task = self.ALL_TASKS[self.task_ids[idx]]
+        prompt, text = self.parse_sample(ex, task)
+        prompt_len = len(self.tokenizer(prompt, add_special_tokens=False)["input_ids"])
+        enc = self.tokenizer(text, truncation=True, max_length=self.max_length,
+                             padding="max_length", return_tensors="pt")
+        prompt_len = min(prompt_len, self.max_length)
+        return {
+            "input_ids": enc["input_ids"].squeeze(0),
+            "attention_mask": enc["attention_mask"].squeeze(0),
+            "prompt_len": prompt_len,
+        }
+
+    @staticmethod
+    def extract_answer(text):
+        """Unified extractor: letter > yes/no > true/false > number > exact."""
+        m = re.search(r"####\s*([A-Z])\b", text)
+        if m: return m.group(1).upper()
+        m = re.search(r"####\s*(yes|no)\b", text, re.IGNORECASE)
+        if m: return m.group(1).lower()
+        m = re.search(r"####\s*(true|false)\b", text, re.IGNORECASE)
+        if m: return m.group(1).lower()
+        m = re.search(r"####\s*(-?\d+)", text)
+        if m: return m.group(1)
+        m = re.search(r"####\s*(.+)", text)
+        return m.group(1).strip().lower() if m else None
+
+
+BBHLogicDataset = BBHDataset  # backward-compat alias
+
+
+class RACEDataset(Dataset):
+    """RACE reading comprehension MCQ (middle + high school English exams, 4-way).
+
+    Train capped to 20k (full=87k). Fields: article, question, options (A-D), answer letter.
+    """
+
+    _TRAIN_CAP = 20_000
+    _TEST_CAP  =  4_000
+
+    def __init__(self, split="train", tokenizer=None, max_length=1024):
+        hf_split = "test" if split == "test" else "train"
+        ds = load_dataset("ehovy/race", "all", split=hf_split)
+        if split == "train" and len(ds) > self._TRAIN_CAP:
+            ds = ds.shuffle(seed=42).select(range(self._TRAIN_CAP))
+        elif split == "test" and len(ds) > self._TEST_CAP:
+            ds = ds.shuffle(seed=42).select(range(self._TEST_CAP))
+        self.dataset = ds
         self.tokenizer = tokenizer
         self.max_length = max_length
 
@@ -1033,26 +1138,215 @@ class BBHLogicDataset(Dataset):
 
     @staticmethod
     def parse_sample(ex):
-        """Return (prompt, full_text)."""
-        input_text = ex["input"].strip()
-        target = ex["target"].strip()
-        answer_match = re.search(r"\(([A-E])\)", target)
-        answer_letter = answer_match.group(1) if answer_match else target
-        prompt = f"{input_text}\nAnswer:"
-        text = f"{prompt} {target}\n#### {answer_letter}"
+        options = ex["options"]
+        answer = ex["answer"].upper()   # "A"/"B"/"C"/"D"
+        answer_idx = ord(answer) - ord("A")
+        choices_str = "\n".join(f"{chr(ord('A')+i)}) {o}" for i, o in enumerate(options))
+        prompt = f"Passage: {ex['article']}\nQuestion: {ex['question']}\n{choices_str}\nAnswer:"
+        text = f"{prompt} {answer}) {options[answer_idx]}\n#### {answer}"
         return prompt, text
 
     @staticmethod
     def extract_answer(text):
-        match = re.search(r"####\s*([A-Ea-e])", text)
-        if match:
-            return match.group(1).upper()
-        match = re.search(r"\(([A-Ea-e])\)", text)
-        if match:
-            return match.group(1).upper()
-        match = re.search(r"Answer:\s*([A-Ea-e])", text)
-        return match.group(1).upper() if match else None
+        m = re.search(r"####\s*([A-Da-d])", text)
+        if m: return m.group(1).upper()
+        m = re.search(r"Answer:\s*([A-Da-d])\)", text)
+        return m.group(1).upper() if m else None
 
+
+class LogiQADataset(Dataset):
+    """LogiQA logical reasoning MCQ (4-way) derived from Chinese civil-service exams.
+
+    Train: 5,664 samples. Test: 651 samples. Fields: context, query, options, label (0-3).
+    """
+
+    def __init__(self, split="train", tokenizer=None, max_length=512):
+        hf_split = "test" if split == "test" else "train"
+        self.dataset = load_dataset("lucasmccabe/logiqa", split=hf_split)
+        self.tokenizer = tokenizer
+        self.max_length = max_length
+
+    def __len__(self):
+        return len(self.dataset)
+
+    def __getitem__(self, idx):
+        ex = self.dataset[idx]
+        prompt, text = self.parse_sample(ex)
+        prompt_len = len(self.tokenizer(prompt, add_special_tokens=False)["input_ids"])
+        enc = self.tokenizer(text, truncation=True, max_length=self.max_length,
+                             padding="max_length", return_tensors="pt")
+        prompt_len = min(prompt_len, self.max_length)
+        return {
+            "input_ids": enc["input_ids"].squeeze(0),
+            "attention_mask": enc["attention_mask"].squeeze(0),
+            "prompt_len": prompt_len,
+        }
+
+    @staticmethod
+    def parse_sample(ex):
+        options = ex["options"]         # list of 4 strings
+        answer_idx = int(ex["label"])   # 0-3
+        answer_letter = chr(ord("A") + answer_idx)
+        choices_str = "\n".join(f"{chr(ord('A')+i)}) {o}" for i, o in enumerate(options))
+        prompt = f"Context: {ex['context']}\nQuestion: {ex['query']}\n{choices_str}\nAnswer:"
+        text = f"{prompt} {answer_letter}) {options[answer_idx]}\n#### {answer_letter}"
+        return prompt, text
+
+    @staticmethod
+    def extract_answer(text):
+        m = re.search(r"####\s*([A-Da-d])", text)
+        if m: return m.group(1).upper()
+        m = re.search(r"Answer:\s*([A-Da-d])\)", text)
+        return m.group(1).upper() if m else None
+
+
+class MedQADataset(Dataset):
+    """MedQA USMLE-style medical MCQ (4-way).
+
+    Train: 10,178 samples. Test: 1,273 samples.
+    options is a dict {'A': text, ...}, answer is the correct answer TEXT (not letter).
+    """
+
+    def __init__(self, split="train", tokenizer=None, max_length=512):
+        hf_split = "test" if split == "test" else "train"
+        self.dataset = load_dataset("GBaker/MedQA-USMLE-4-options", split=hf_split)
+        self.tokenizer = tokenizer
+        self.max_length = max_length
+
+    def __len__(self):
+        return len(self.dataset)
+
+    def __getitem__(self, idx):
+        ex = self.dataset[idx]
+        prompt, text = self.parse_sample(ex)
+        prompt_len = len(self.tokenizer(prompt, add_special_tokens=False)["input_ids"])
+        enc = self.tokenizer(text, truncation=True, max_length=self.max_length,
+                             padding="max_length", return_tensors="pt")
+        prompt_len = min(prompt_len, self.max_length)
+        return {
+            "input_ids": enc["input_ids"].squeeze(0),
+            "attention_mask": enc["attention_mask"].squeeze(0),
+            "prompt_len": prompt_len,
+        }
+
+    @staticmethod
+    def parse_sample(ex):
+        options = ex["options"]          # dict {'A': text, 'B': text, ...}
+        answer_text = ex["answer"]       # the correct answer TEXT
+        # Reverse-lookup the letter
+        text_to_letter = {v: k for k, v in options.items()}
+        answer_letter = text_to_letter.get(answer_text, next(iter(options)))
+        choices_str = "\n".join(f"{k}) {v}" for k, v in sorted(options.items()))
+        prompt = f"Question: {ex['question']}\n{choices_str}\nAnswer:"
+        text_full = f"{prompt} {answer_letter}) {answer_text}\n#### {answer_letter}"
+        return prompt, text_full
+
+    @staticmethod
+    def extract_answer(text):
+        m = re.search(r"####\s*([A-Da-d])", text)
+        if m: return m.group(1).upper()
+        m = re.search(r"Answer:\s*([A-Da-d])\)", text)
+        return m.group(1).upper() if m else None
+
+
+class DROPDataset(Dataset):
+    """DROP: Discrete Reasoning Over Paragraphs — reading + arithmetic.
+
+    Train capped to 20k (full=77k). Test = validation split (~9.5k).
+    Answers are short spans or numbers; exact-match after lowercasing.
+    """
+
+    _TRAIN_CAP = 20_000
+    _TEST_CAP  =  4_000
+
+    def __init__(self, split="train", tokenizer=None, max_length=1024):
+        hf_split = "validation" if split == "test" else "train"
+        ds = load_dataset("ucinlp/drop", split=hf_split)
+        if split == "train" and len(ds) > self._TRAIN_CAP:
+            ds = ds.shuffle(seed=42).select(range(self._TRAIN_CAP))
+        elif split == "test" and len(ds) > self._TEST_CAP:
+            ds = ds.shuffle(seed=42).select(range(self._TEST_CAP))
+        self.dataset = ds
+        self.tokenizer = tokenizer
+        self.max_length = max_length
+
+    def __len__(self):
+        return len(self.dataset)
+
+    def __getitem__(self, idx):
+        ex = self.dataset[idx]
+        prompt, text = self.parse_sample(ex)
+        prompt_len = len(self.tokenizer(prompt, add_special_tokens=False)["input_ids"])
+        enc = self.tokenizer(text, truncation=True, max_length=self.max_length,
+                             padding="max_length", return_tensors="pt")
+        prompt_len = min(prompt_len, self.max_length)
+        return {
+            "input_ids": enc["input_ids"].squeeze(0),
+            "attention_mask": enc["attention_mask"].squeeze(0),
+            "prompt_len": prompt_len,
+        }
+
+    @staticmethod
+    def parse_sample(ex):
+        spans = ex["answers_spans"]["spans"]
+        answer = spans[0].strip() if spans else ""
+        prompt = f"Passage: {ex['passage']}\nQuestion: {ex['question']}\nAnswer:"
+        text = f"{prompt} {answer}\n#### {answer.lower()}"
+        return prompt, text
+
+    @staticmethod
+    def extract_answer(text):
+        m = re.search(r"####\s*(.+?)(?:\n|$)", text)
+        return m.group(1).strip().lower() if m else None
+
+
+class TriviaQADataset(Dataset):
+    """TriviaQA open-domain factual QA (rc.nocontext — question only, no passage).
+
+    Train capped to 20k (full=78k). Answers matched against primary value (lowercase).
+    """
+
+    _TRAIN_CAP = 20_000
+    _TEST_CAP  =  4_000
+
+    def __init__(self, split="train", tokenizer=None, max_length=128):
+        hf_split = "validation" if split == "test" else "train"
+        ds = load_dataset("trivia_qa", "rc.nocontext", split=hf_split)
+        if split == "train" and len(ds) > self._TRAIN_CAP:
+            ds = ds.shuffle(seed=42).select(range(self._TRAIN_CAP))
+        elif split == "test" and len(ds) > self._TEST_CAP:
+            ds = ds.shuffle(seed=42).select(range(self._TEST_CAP))
+        self.dataset = ds
+        self.tokenizer = tokenizer
+        self.max_length = max_length
+
+    def __len__(self):
+        return len(self.dataset)
+
+    def __getitem__(self, idx):
+        ex = self.dataset[idx]
+        prompt, text = self.parse_sample(ex)
+        prompt_len = len(self.tokenizer(prompt, add_special_tokens=False)["input_ids"])
+        enc = self.tokenizer(text, truncation=True, max_length=self.max_length,
+                             padding="max_length", return_tensors="pt")
+        prompt_len = min(prompt_len, self.max_length)
+        return {
+            "input_ids": enc["input_ids"].squeeze(0),
+            "attention_mask": enc["attention_mask"].squeeze(0),
+            "prompt_len": prompt_len,
+        }
+
+    @staticmethod
+    def parse_sample(ex):
+        answer = ex["answer"]["value"].strip()
+        prompt = f"Question: {ex['question'].strip()}\nAnswer:"
+        text = f"{prompt} {answer}\n#### {answer.lower()}"
+        return prompt, text
+
+    @staticmethod
+    def extract_answer(text):
+        m = re.search(r"####\s*(.+?)(?:\n|$)", text)
+        return m.group(1).strip().lower() if m else None
 
 
 # =====================================================================
@@ -1737,7 +2031,14 @@ DATASET_REGISTRY = {
     "strategyqa": StrategyQADataset,
     # Harder reasoning benchmarks
     "mmlupro": MMLUProDataset,
-    "bbhlogic": BBHLogicDataset,
+    "bbh": BBHDataset,
+    "bbhlogic": BBHDataset,  # backward-compat alias
+    # Reading & reasoning (proper train splits)
+    "race": RACEDataset,
+    "logiqa": LogiQADataset,
+    "medqa": MedQADataset,
+    "drop": DROPDataset,
+    "triviaqa": TriviaQADataset,
     # Code generation
     "humaneval": HumanEvalDataset,
     "mbpp": MBPPDataset,
@@ -1877,6 +2178,7 @@ def evaluate_accuracy(model, tokenizer, dataset, device, num_samples=100,
         correct = sum(results)
     else:
         # String-matching for non-code datasets
+        per_correct = [False] * attempted
         for i in range(attempted):
             it = items[i]
             ref_ids = it["input_ids"][it["input_ids"] < base_vocab_size]
@@ -1886,14 +2188,30 @@ def evaluate_accuracy(model, tokenizer, dataset, device, num_samples=100,
             if (pred is not None and gold_answer is not None
                     and pred.strip() == gold_answer.strip()):
                 correct += 1
+                per_correct[i] = True
 
     strict_accuracy = correct / max(attempted, 1)
     parsed_accuracy = correct / max(parsed_count, 1)
     parse_rate = parsed_count / max(attempted, 1)
+
+    # Macro-average over tasks for BBH-style datasets
+    macro_accuracy = strict_accuracy
+    if not has_exec_tests and hasattr(dataset, 'task_ids'):
+        task_correct = {}
+        task_total = {}
+        for i in range(attempted):
+            tid = dataset.task_ids[i]
+            task_total[tid] = task_total.get(tid, 0) + 1
+            task_correct[tid] = task_correct.get(tid, 0) + (1 if per_correct[i] else 0)
+        task_accs = [task_correct.get(t, 0) / max(task_total[t], 1) for t in task_total]
+        macro_accuracy = sum(task_accs) / len(task_accs)
+        strict_accuracy = macro_accuracy  # report macro as primary metric
+
     model.train()
     return {
         "accuracy": strict_accuracy,
         "strict_accuracy": strict_accuracy,
+        "macro_accuracy": macro_accuracy,
         "parsed_accuracy": parsed_accuracy,
         "parse_rate": parse_rate,
         "correct": correct,
