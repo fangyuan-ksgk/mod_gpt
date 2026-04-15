@@ -1162,7 +1162,8 @@ class LogiQADataset(Dataset):
 
     def __init__(self, split="train", tokenizer=None, max_length=512):
         hf_split = "test" if split == "test" else "train"
-        self.dataset = load_dataset("lucasmccabe/logiqa", split=hf_split)
+        self.dataset = load_dataset("lucasmccabe/logiqa", "default",
+                                     revision="refs/convert/parquet", split=hf_split)
         self.tokenizer = tokenizer
         self.max_length = max_length
 
@@ -1185,7 +1186,7 @@ class LogiQADataset(Dataset):
     @staticmethod
     def parse_sample(ex):
         options = ex["options"]         # list of 4 strings
-        answer_idx = int(ex["label"])   # 0-3
+        answer_idx = int(ex.get("label", ex.get("correct_option")))  # 0-3
         answer_letter = chr(ord("A") + answer_idx)
         choices_str = "\n".join(f"{chr(ord('A')+i)}) {o}" for i, o in enumerate(options))
         prompt = f"Context: {ex['context']}\nQuestion: {ex['query']}\n{choices_str}\nAnswer:"
