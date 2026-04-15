@@ -951,7 +951,13 @@ class StrategyQADataset(Dataset):
         """Return (prompt, full_text)."""
         question = ex["question"].strip()
         answer = "yes" if ex["answer"] else "no"
-        facts = ex.get("facts", "").strip()
+        raw_facts = ex.get("facts", None)
+        if isinstance(raw_facts, list):
+            facts = " ".join(raw_facts).strip()
+        elif isinstance(raw_facts, str):
+            facts = raw_facts.strip()
+        else:
+            facts = ""
         prompt = f"Question: {question}\nAnswer (yes or no):"
         if facts:
             text = f"{prompt} {facts}\n#### {answer}"
@@ -1704,6 +1710,10 @@ DATASET_REGISTRY = {
     "sciq": SciQDataset,
     # Multi-hop QA
     "hotpotqa": HotpotQADataset,
+    "strategyqa": StrategyQADataset,
+    # Harder reasoning benchmarks
+    "mmlupro": MMLUProDataset,
+    "bbhlogic": BBHLogicDataset,
     # Code generation
     "humaneval": HumanEvalDataset,
     "mbpp": MBPPDataset,
