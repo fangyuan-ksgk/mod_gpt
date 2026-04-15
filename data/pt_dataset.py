@@ -975,19 +975,32 @@ class StrategyQADataset(Dataset):
 
 
 class BBHLogicDataset(Dataset):
-    """BIG-Bench Hard — Logical Deduction (5 objects, 5-way MCQ).
+    """BIG-Bench Hard — Logical Deduction (3 + 5 + 7 objects, combined).
 
-    Requires multi-step constraint satisfaction: given ordering constraints,
-    determine positions. Small LMs typically score ~20% (random = 20%).
-    Uses single split partitioned: first 150 for train, last 100 for test.
+    Combines three logical deduction subtasks to give a larger eval set:
+      logical_deduction_three_objects  (250 samples)
+      logical_deduction_five_objects   (250 samples)
+      logical_deduction_seven_objects  (250 samples)
+    Total: 750 → train = 450 (first 150 per subtask), test = 300 (last 100 per subtask).
+    All subtasks share the same MCQ format with (A)/(B)/... answer choices.
     """
 
+    _SUBTASKS = [
+        "logical_deduction_three_objects",
+        "logical_deduction_five_objects",
+        "logical_deduction_seven_objects",
+    ]
+
     def __init__(self, split="train", tokenizer=None, max_length=512):
-        ds = load_dataset("lukaemon/bbh", "logical_deduction_five_objects", split="test")
-        if split == "test":
-            self.dataset = ds.select(range(150, min(250, len(ds))))
-        else:
-            self.dataset = ds.select(range(min(150, len(ds))))
+        from datasets import concatenate_datasets
+        parts = []
+        for subtask in self._SUBTASKS:
+            ds = load_dataset("lukaemon/bbh", subtask, split="test")
+            if split == "test":
+                parts.append(ds.select(range(150, min(250, len(ds)))))
+            else:
+                parts.append(ds.select(range(min(150, len(ds)))))
+        self.dataset = concatenate_datasets(parts)
         self.tokenizer = tokenizer
         self.max_length = max_length
 
