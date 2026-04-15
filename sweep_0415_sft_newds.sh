@@ -51,7 +51,7 @@ mkdir -p "$OUT_ROOT"
 # ---- Dataset config ----
 DATASETS=(mmlupro strategyqa bbhlogic)
 DTAGS=(mmlupro sqqa bbh)
-EVAL_SAMPLES=(2000 687 100)
+EVAL_SAMPLES=(2000 687 1700)
 
 # ---- Model config ----
 declare -A M_MODEL M_MTAG M_EXTRA

@@ -975,20 +975,31 @@ class StrategyQADataset(Dataset):
 
 
 class BBHLogicDataset(Dataset):
-    """BIG-Bench Hard — Logical Deduction (3 + 5 + 7 objects, combined).
+    """BIG-Bench Hard — all MCQ-format subtasks (17 tasks × 250 samples).
 
-    Combines three logical deduction subtasks to give a larger eval set:
-      logical_deduction_three_objects  (250 samples)
-      logical_deduction_five_objects   (250 samples)
-      logical_deduction_seven_objects  (250 samples)
-    Total: 750 → train = 450 (first 150 per subtask), test = 300 (last 100 per subtask).
-    All subtasks share the same MCQ format with (A)/(B)/... answer choices.
+    Only includes subtasks with (A)/(B)/... letter-choice answers so a single
+    extract_answer works across all tasks.
+    Total: 17 × 250 = 4250 → train = 2550 (first 150/task), test = 1700 (last 100/task).
     """
 
     _SUBTASKS = [
-        "logical_deduction_three_objects",
+        "date_understanding",
+        "disambiguation_qa",
+        "geometric_shapes",
+        "hyperbaton",
         "logical_deduction_five_objects",
         "logical_deduction_seven_objects",
+        "logical_deduction_three_objects",
+        "movie_recommendation",
+        "penguins_in_a_table",
+        "reasoning_about_colored_objects",
+        "ruin_names",
+        "salient_translation_error_detection",
+        "snarks",
+        "temporal_sequences",
+        "tracking_shuffled_objects_five_objects",
+        "tracking_shuffled_objects_seven_objects",
+        "tracking_shuffled_objects_three_objects",
     ]
 
     def __init__(self, split="train", tokenizer=None, max_length=512):
