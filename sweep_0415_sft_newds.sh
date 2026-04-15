@@ -49,9 +49,9 @@ OUT_ROOT="./ckpt/sft_newds_${TIMESTAMP}"
 mkdir -p "$OUT_ROOT"
 
 # ---- Dataset config ----
-DATASETS=(mmlupro strategyqa bbhlogic)
-DTAGS=(mmlupro sqqa bbh)
-EVAL_SAMPLES=(2000 687 1700)
+DATASETS=(strategyqa race logiqa medqa drop triviaqa)
+DTAGS=(sqqa race lqa medqa drop tqa)
+EVAL_SAMPLES=(687 4000 651 1273 4000 4000)
 
 # ---- Model config ----
 declare -A M_MODEL M_MTAG M_EXTRA
