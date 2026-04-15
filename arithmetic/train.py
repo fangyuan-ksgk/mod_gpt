@@ -24,6 +24,7 @@ from sorl.sorl_wrapper import SorlModelWrapper
 from sorl.trainer_ablate import SoRLTrainer, SoRLConfig
 from arithmetic.datasets.addition import (
     generate_batch, NUM_TOKENS, ALL_LABELS,
+    CANONICAL_EVAL_SET, EPOCH_EVAL_SET, EVAL_HF_REPO,
 )
 
 torch.set_float32_matmul_precision('high')
@@ -103,31 +104,52 @@ QWEN3_INV_MAP = {v: k for k, v in QWEN3_TOKEN_MAP.items()}
 
 
 class Qwen3ArithmeticDataset(Dataset):
-    """On-the-fly arithmetic dataset producing Qwen3 token IDs.
+    """Fixed arithmetic dataset loaded from HuggingFace.
 
-    Each __getitem__ call generates a fresh random example (idx is used as
-    an RNG offset for reproducibility when a seed is set).
+    All models (baseline and SoRL) train on the exact same data for
+    apples-to-apples comparison. Data is generated once, uploaded to HF,
+    and loaded here.
     """
-    def __init__(self, tokenizer, n_digits=6, ops="add", size=100_000, seed=None):
+    DATASET_REPO = "thoughtworks/arithmetic-sorl-data"
+
+    def __init__(self, tokenizer, n_digits=6, ops="add", size=100_000, split="train"):
         assert "qwen" in type(tokenizer).__module__.lower() or "qwen" in getattr(tokenizer, 'name_or_path', '').lower()
         self.tokenizer = tokenizer
         self.n_digits = n_digits
         self.ops = ops
         self.size = size
-        self.seed = seed
         self.prompt_len = 2 * n_digits + 2
         self.seq_len = 3 * n_digits + 3
+
+        # Load fixed dataset from HuggingFace
+        size_k = size // 1000
+        if split == "val":
+            hf_path = f"fixed_train/val_{size_k}K_seed123.pt"
+        else:
+            hf_path = f"fixed_train/train_{size_k}K_seed42.pt"
+        from huggingface_hub import hf_hub_download
+        local = hf_hub_download(
+            self.DATASET_REPO, hf_path, repo_type="dataset",
+        )
+        data = torch.load(local, weights_only=False)
+        self._raw_tokens = data["tokens"]  # (N, 21) internal token IDs
+        assert self._raw_tokens.shape[0] == size, \
+            f"Dataset size mismatch: expected {size}, got {self._raw_tokens.shape[0]}"
+
+        # Pre-convert to Qwen3 token IDs (vectorized)
+        mapping = torch.zeros(max(QWEN3_TOKEN_MAP.keys()) + 1, dtype=torch.long)
+        for k, v in QWEN3_TOKEN_MAP.items():
+            mapping[k] = v
+        self._token_ids = mapping[self._raw_tokens.long()]
+        print(f"Loaded fixed dataset: {hf_path} ({size} examples)")
 
     def __len__(self):
         return self.size
 
     def __getitem__(self, idx):
-        tokens, _, _ = generate_batch(1, self.n_digits, ops=self.ops,
-                                      use_enrichment=True, device="cpu")
-        token_ids = torch.tensor([QWEN3_TOKEN_MAP[t.item()] for t in tokens[0]], dtype=torch.long)
         return {
-            "input_ids": token_ids,
-            "attention_mask": torch.ones(len(token_ids), dtype=torch.long),
+            "input_ids": self._token_ids[idx],
+            "attention_mask": torch.ones(self.seq_len, dtype=torch.long),
             "prompt_len": torch.tensor(self.prompt_len, dtype=torch.long),
         }
 
@@ -476,11 +498,19 @@ def main():
         print(f"  pure SFT")
     print(f"{'═' * 60}")
 
-    if wandb.run is not None:
-        wandb.config.update({"n_params": n_params})
-
     train_ds = Qwen3ArithmeticDataset(tokenizer, cfg.n_digits, cfg.ops, cfg.dataset_size)
-    val_ds = Qwen3ArithmeticDataset(tokenizer, cfg.n_digits, cfg.ops, 1000)
+    # Val set: fixed 5K, seed=123, disjoint from all train sets
+    val_ds = Qwen3ArithmeticDataset(tokenizer, cfg.n_digits, cfg.ops, 5000, split="val")
+
+    if wandb.run is not None:
+        wandb.config.update({
+            "n_params": n_params,
+            "train_dataset": f"fixed_train/train_{cfg.dataset_size // 1000}K_seed42.pt",
+            "val_dataset": "fixed_train/val_5K_seed123.pt",
+            "eval_final_dataset": f"eval_sets/{CANONICAL_EVAL_SET}",
+            "eval_epoch_dataset": f"eval_sets/{EPOCH_EVAL_SET}",
+            "eval_hf_repo": EVAL_HF_REPO,
+        })
 
     import subprocess, datetime
     git_hash = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
@@ -493,10 +523,14 @@ def main():
         "tokenizer": TOKENIZER_NAME,
         "dataset_repo": "thoughtworks/arithmetic-sorl-data",
         "dataset_config": "add_sub_6digit" if cfg.ops == "add_sub" else "add_6digit",
+        "train_dataset": f"fixed_train/train_{cfg.dataset_size // 1000}K_seed42.pt",
         "model_repo": "thoughtworks/arithmetic-sorl",
         "trainer_version": "sft" if cfg.mode == "baseline" else ("v6" if cfg.mode == "sorl_v6" else "v1"),
         "wandb_run_id": wandb.run.id if wandb.run is not None else None,
         "wandb_url": wandb.run.url if wandb.run is not None else None,
+        "eval_final_dataset": f"eval_sets/{CANONICAL_EVAL_SET}",
+        "eval_epoch_dataset": f"eval_sets/{EPOCH_EVAL_SET}",
+        "eval_hf_repo": EVAL_HF_REPO,
     }
 
     os.makedirs(cfg.output_dir, exist_ok=True)

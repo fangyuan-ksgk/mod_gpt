@@ -427,7 +427,7 @@ class GPUQueue:
                         t.start()
 
     def _write_status(self):
-        """Write machine-readable status JSON."""
+        """Write machine-readable status JSON and upload to HuggingFace."""
         status = {
             "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
             "total": len(self.jobs),
@@ -444,6 +444,18 @@ class GPUQueue:
                 json.dump(status, f, indent=2)
         except Exception:
             pass
+
+        # Upload status to HuggingFace model repo
+        try:
+            from huggingface_hub import HfApi
+            HfApi().upload_file(
+                path_or_fileobj=self.status_file,
+                path_in_repo="queue_status.json",
+                repo_id="thoughtworks/arithmetic-sorl",
+                repo_type="model",
+            )
+        except Exception:
+            pass  # don't crash the queue on upload failure
 
     def wait(self):
         """Block until all submitted jobs finish."""

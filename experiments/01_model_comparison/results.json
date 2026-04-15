@@ -1,0 +1,1565 @@
+{
+  "models": [
+    {
+      "name": "add_sub_baseline_100K",
+      "mode": "baseline",
+      "trainer": "sft",
+      "arch": "2L/3H/510d",
+      "dataset_size": 100000,
+      "abs_vocab": 0,
+      "K": 4,
+      "overall_accuracy": 1.0,
+      "sft_accuracy": 1.0,
+      "hard_splits": {
+        "add_C1": 1.0,
+        "add_C2": 1.0,
+        "add_C3": 1.0,
+        "add_C4": 1.0,
+        "add_C5": 1.0,
+        "add_C6": 1.0
+      },
+      "eval_method": "ArithmeticEvaluator"
+    },
+    {
+      "name": "add_sub_baseline_100K_1L2H256d",
+      "mode": "baseline",
+      "trainer": "sft",
+      "arch": "1L/2H/256d",
+      "dataset_size": 100000,
+      "abs_vocab": 0,
+      "K": 4,
+      "overall_accuracy": 0.33375,
+      "sft_accuracy": 0.33375,
+      "hard_splits": {
+        "add_C1": 0.86,
+        "add_C2": 0.66,
+        "add_C3": 0.36,
+        "add_C4": 0.3,
+        "add_C5": 0.26,
+        "add_C6": 0.3
+      },
+      "eval_method": "ArithmeticEvaluator"
+    },
+    {
+      "name": "add_sub_baseline_100K_1L3H510d",
+      "mode": "baseline",
+      "trainer": "sft",
+      "arch": "1L/3H/510d",
+      "dataset_size": 100000,
+      "abs_vocab": 0,
+      "K": 4,
+      "overall_accuracy": 0.6070833333333333,
+      "sft_accuracy": 0.6070833333333333,
+      "hard_splits": {
+        "add_C1": 0.94,
+        "add_C2": 0.82,
+        "add_C3": 0.68,
+        "add_C4": 0.76,
+        "add_C5": 0.62,
+        "add_C6": 0.68
+      },
+      "eval_method": "ArithmeticEvaluator"
+    },
+    {
+      "name": "add_sub_baseline_100K_2L1H128d",
+      "mode": "baseline",
+      "trainer": "sft",
+      "arch": "2L/1H/128d",
+      "dataset_size": 100000,
+      "abs_vocab": 0,
+      "K": 4,
+      "overall_accuracy": 0.5025,
+      "sft_accuracy": 0.5025,
+      "hard_splits": {
+        "add_C1": 0.96,
+        "add_C2": 0.72,
+        "add_C3": 0.28,
+        "add_C4": 0.38,
+        "add_C5": 0.48,
+        "add_C6": 0.32
+      },
+      "eval_method": "ArithmeticEvaluator"
+    },
+    {
+      "name": "add_sub_baseline_10K",
+      "mode": "baseline",
+      "trainer": "sft",
+      "arch": "2L/3H/510d",
+      "dataset_size": 10000,
+      "abs_vocab": 0,
+      "K": 4,
+      "overall_accuracy": 0.7241666666666666,
+      "sft_accuracy": 0.7241666666666666,
+      "hard_splits": {
+        "add_C1": 1.0,
+        "add_C2": 0.98,
+        "add_C3": 0.78,
+        "add_C4": 0.88,
+        "add_C5": 0.76,
+        "add_C6": 0.92
+      },
+      "eval_method": "ArithmeticEvaluator"
+    },
+    {
+      "name": "add_sub_baseline_10K_1L2H256d",
+      "mode": "baseline",
+      "trainer": "sft",
+      "arch": "1L/2H/256d",
+      "dataset_size": 10000,
+      "abs_vocab": 0,
+      "K": 4,
+      "overall_accuracy": 0.0016666666666666668,
+      "sft_accuracy": 0.0016666666666666668,
+      "hard_splits": {
+        "add_C1": 0.0,
+        "add_C2": 0.0,
+        "add_C3": 0.0,
+        "add_C4": 0.0,
+        "add_C5": 0.0,
+        "add_C6": 0.0
+      },
+      "eval_method": "ArithmeticEvaluator"
+    },
+    {
+      "name": "add_sub_baseline_10K_1L3H510d",
+      "mode": "baseline",
+      "trainer": "sft",
+      "arch": "1L/3H/510d",
+      "dataset_size": 10000,
+      "abs_vocab": 0,
+      "K": 4,
+      "overall_accuracy": 0.33625,
+      "sft_accuracy": 0.33625,
+      "hard_splits": {
+        "add_C1": 0.56,
+        "add_C2": 0.44,
+        "add_C3": 0.32,
+        "add_C4": 0.34,
+        "add_C5": 0.28,
+        "add_C6": 0.12
+      },
+      "eval_method": "ArithmeticEvaluator"
+    },
+    {
+      "name": "add_sub_baseline_10K_2L1H128d",
+      "mode": "baseline",
+      "trainer": "sft",
+      "arch": "2L/1H/128d",
+      "dataset_size": 10000,
+      "abs_vocab": 0,
+      "K": 4,
+      "overall_accuracy": 0.0,
+      "sft_accuracy": 0.0,
+      "hard_splits": {
+        "add_C1": 0.0,
+        "add_C2": 0.0,
+        "add_C3": 0.0,
+        "add_C4": 0.0,
+        "add_C5": 0.0,
+        "add_C6": 0.0
+      },
+      "eval_method": "ArithmeticEvaluator"
+    },
+    {
+      "name": "add_sub_baseline_25K",
+      "mode": "baseline",
+      "trainer": "sft",
+      "arch": "2L/3H/510d",
+      "dataset_size": 25000,
+      "abs_vocab": 0,
+      "K": 4,
+      "overall_accuracy": 0.91625,
+      "sft_accuracy": 0.91625,
+      "hard_splits": {
+        "add_C1": 1.0,
+        "add_C2": 1.0,
+        "add_C3": 0.96,
+        "add_C4": 0.96,
+        "add_C5": 0.94,
+        "add_C6": 1.0
+      },
+      "eval_method": "ArithmeticEvaluator"
+    },
+    {
+      "name": "add_sub_baseline_25K_1L2H256d",
+      "mode": "baseline",
+      "trainer": "sft",
+      "arch": "1L/2H/256d",
+      "dataset_size": 25000,
+      "abs_vocab": 0,
+      "K": 4,
+      "overall_accuracy": 0.06916666666666667,
+      "sft_accuracy": 0.06916666666666667,
+      "hard_splits": {
+        "add_C1": 0.16,
+        "add_C2": 0.08,
+        "add_C3": 0.02,
+        "add_C4": 0.02,
+        "add_C5": 0.0,
+        "add_C6": 0.0
+      },
+      "eval_method": "ArithmeticEvaluator"
+    },
+    {
+      "name": "add_sub_baseline_25K_1L3H510d",
+      "mode": "baseline",
+      "trainer": "sft",
+      "arch": "1L/3H/510d",
+      "dataset_size": 25000,
+      "abs_vocab": 0,
+      "K": 4,
+      "overall_accuracy": 0.49541666666666667,
+      "sft_accuracy": 0.49541666666666667,
+      "hard_splits": {
+        "add_C1": 0.84,
+        "add_C2": 0.76,
+        "add_C3": 0.38,
+        "add_C4": 0.5,
+        "add_C5": 0.42,
+        "add_C6": 0.48
+      },
+      "eval_method": "ArithmeticEvaluator"
+    },
+    {
+      "name": "add_sub_baseline_25K_2L1H128d",
+      "mode": "baseline",
+      "trainer": "sft",
+      "arch": "2L/1H/128d",
+      "dataset_size": 25000,
+      "abs_vocab": 0,
+      "K": 4,
+      "overall_accuracy": 0.03791666666666667,
+      "sft_accuracy": 0.03791666666666667,
+      "hard_splits": {
+        "add_C1": 0.0,
+        "add_C2": 0.02,
+        "add_C3": 0.0,
+        "add_C4": 0.06,
+        "add_C5": 0.02,
+        "add_C6": 0.0
+      },
+      "eval_method": "ArithmeticEvaluator"
+    },
+    {
+      "name": "add_sub_baseline_50K",
+      "mode": "baseline",
+      "trainer": "sft",
+      "arch": "2L/3H/510d",
+      "dataset_size": 50000,
+      "abs_vocab": 0,
+      "K": 4,
+      "overall_accuracy": 1.0,
+      "sft_accuracy": 1.0,
+      "hard_splits": {
+        "add_C1": 1.0,
+        "add_C2": 1.0,
+        "add_C3": 1.0,
+        "add_C4": 1.0,
+        "add_C5": 1.0,
+        "add_C6": 1.0
+      },
+      "eval_method": "ArithmeticEvaluator"
+    },
+    {
+      "name": "add_sub_baseline_50K_1L2H256d",
+      "mode": "baseline",
+      "trainer": "sft",
+      "arch": "1L/2H/256d",
+      "dataset_size": 50000,
+      "abs_vocab": 0,
+      "K": 4,
+      "overall_accuracy": 0.20041666666666666,
+      "sft_accuracy": 0.20041666666666666,
+      "hard_splits": {
+        "add_C1": 0.6,
+        "add_C2": 0.42,
+        "add_C3": 0.16,
+        "add_C4": 0.14,
+        "add_C5": 0.14,
+        "add_C6": 0.1
+      },
+      "eval_method": "ArithmeticEvaluator"
+    },
+    {
+      "name": "add_sub_baseline_50K_1L3H510d",
+      "mode": "baseline",
+      "trainer": "sft",
+      "arch": "1L/3H/510d",
+      "dataset_size": 50000,
+      "abs_vocab": 0,
+      "K": 4,
+      "overall_accuracy": 0.54125,
+      "sft_accuracy": 0.54125,
+      "hard_splits": {
+        "add_C1": 0.94,
+        "add_C2": 0.84,
+        "add_C3": 0.62,
+        "add_C4": 0.66,
+        "add_C5": 0.54,
+        "add_C6": 0.5
+      },
+      "eval_method": "ArithmeticEvaluator"
+    },
+    {
+      "name": "add_sub_baseline_50K_2L1H128d",
+      "mode": "baseline",
+      "trainer": "sft",
+      "arch": "2L/1H/128d",
+      "dataset_size": 50000,
+      "abs_vocab": 0,
+      "K": 4,
+      "overall_accuracy": 0.1925,
+      "sft_accuracy": 0.1925,
+      "hard_splits": {
+        "add_C1": 0.26,
+        "add_C2": 0.24,
+        "add_C3": 0.14,
+        "add_C4": 0.18,
+        "add_C5": 0.16,
+        "add_C6": 0.14
+      },
+      "eval_method": "ArithmeticEvaluator"
+    },
+    {
+      "name": "add_sub_sorl_v1_abs100_100K",
+      "mode": "sorl",
+      "trainer": "v1",
+      "arch": "2L/3H/510d",
+      "dataset_size": 100000,
+      "abs_vocab": 100,
+      "K": 4,
+      "overall_accuracy": 0.9995833333333334,
+      "sft_accuracy": 0.6229166666666667,
+      "hard_splits": {
+        "add_C1": 1.0,
+        "add_C2": 1.0,
+        "add_C3": 1.0,
+        "add_C4": 1.0,
+        "add_C5": 1.0,
+        "add_C6": 1.0
+      },
+      "eval_method": "ArithmeticEvaluator"
+    },
+    {
+      "name": "add_sub_sorl_v1_abs100_K1_100K",
+      "mode": "sorl",
+      "trainer": "v1",
+      "arch": "2L/3H/510d",
+      "dataset_size": 100000,
+      "abs_vocab": 100,
+      "K": 1,
+      "overall_accuracy": 1.0,
+      "sft_accuracy": 0.9995833333333334,
+      "hard_splits": {
+        "add_C1": 1.0,
+        "add_C2": 1.0,
+        "add_C3": 1.0,
+        "add_C4": 1.0,
+        "add_C5": 1.0,
+        "add_C6": 1.0
+      },
+      "eval_method": "ArithmeticEvaluator"
+    },
+    {
+      "name": "add_sub_sorl_v1_abs10_100K",
+      "mode": "sorl",
+      "trainer": "v1",
+      "arch": "2L/3H/510d",
+      "dataset_size": 100000,
+      "abs_vocab": 10,
+      "K": 4,
+      "overall_accuracy": 1.0,
+      "sft_accuracy": 0.9033333333333333,
+      "hard_splits": {
+        "add_C1": 1.0,
+        "add_C2": 1.0,
+        "add_C3": 1.0,
+        "add_C4": 1.0,
+        "add_C5": 1.0,
+        "add_C6": 1.0
+      },
+      "eval_method": "ArithmeticEvaluator"
+    },
+    {
+      "name": "add_sub_sorl_v1_abs10_10K",
+      "mode": "sorl",
+      "trainer": "v1",
+      "arch": "2L/3H/510d",
+      "dataset_size": 10000,
+      "abs_vocab": 10,
+      "K": 4,
+      "overall_accuracy": 0.007083333333333333,
+      "sft_accuracy": 0.007083333333333333,
+      "hard_splits": {
+        "add_C1": 0.0,
+        "add_C2": 0.0,
+        "add_C3": 0.0,
+        "add_C4": 0.0,
+        "add_C5": 0.0,
+        "add_C6": 0.02
+      },
+      "eval_method": "ArithmeticEvaluator"
+    },
+    {
+      "name": "add_sub_sorl_v1_abs10_25K",
+      "mode": "sorl",
+      "trainer": "v1",
+      "arch": "2L/3H/510d",
+      "dataset_size": 25000,
+      "abs_vocab": 10,
+      "K": 4,
+      "overall_accuracy": 0.9704166666666667,
+      "sft_accuracy": 0.4425,
+      "hard_splits": {
+        "add_C1": 1.0,
+        "add_C2": 1.0,
+        "add_C3": 1.0,
+        "add_C4": 1.0,
+        "add_C5": 0.96,
+        "add_C6": 1.0
+      },
+      "eval_method": "ArithmeticEvaluator"
+    },
+    {
+      "name": "add_sub_sorl_v1_abs10_50K",
+      "mode": "sorl",
+      "trainer": "v1",
+      "arch": "2L/3H/510d",
+      "dataset_size": 50000,
+      "abs_vocab": 10,
+      "K": 4,
+      "overall_accuracy": 1.0,
+      "sft_accuracy": 0.7220833333333333,
+      "hard_splits": {
+        "add_C1": 1.0,
+        "add_C2": 1.0,
+        "add_C3": 1.0,
+        "add_C4": 1.0,
+        "add_C5": 1.0,
+        "add_C6": 1.0
+      },
+      "eval_method": "ArithmeticEvaluator"
+    },
+    {
+      "name": "add_sub_sorl_v1_abs10_K1_100K",
+      "mode": "sorl",
+      "trainer": "v1",
+      "arch": "2L/3H/510d",
+      "dataset_size": 100000,
+      "abs_vocab": 10,
+      "K": 1,
+      "overall_accuracy": 1.0,
+      "sft_accuracy": 1.0,
+      "hard_splits": {
+        "add_C1": 1.0,
+        "add_C2": 1.0,
+        "add_C3": 1.0,
+        "add_C4": 1.0,
+        "add_C5": 1.0,
+        "add_C6": 1.0
+      },
+      "eval_method": "ArithmeticEvaluator"
+    },
+    {
+      "name": "add_sub_sorl_v1_abs10_K1_100K_1L2H256d",
+      "mode": "sorl",
+      "trainer": "v1",
+      "arch": "1L/2H/256d",
+      "dataset_size": 100000,
+      "abs_vocab": 10,
+      "K": 1,
+      "overall_accuracy": 0.3283333333333333,
+      "sft_accuracy": 0.23166666666666666,
+      "hard_splits": {
+        "add_C1": 0.74,
+        "add_C2": 0.66,
+        "add_C3": 0.38,
+        "add_C4": 0.48,
+        "add_C5": 0.44,
+        "add_C6": 0.56
+      },
+      "eval_method": "ArithmeticEvaluator"
+    },
+    {
+      "name": "add_sub_sorl_v1_abs10_K1_100K_1L3H510d",
+      "mode": "sorl",
+      "trainer": "v1",
+      "arch": "1L/3H/510d",
+      "dataset_size": 100000,
+      "abs_vocab": 10,
+      "K": 1,
+      "overall_accuracy": 0.68875,
+      "sft_accuracy": 0.62,
+      "hard_splits": {
+        "add_C1": 0.96,
+        "add_C2": 0.86,
+        "add_C3": 0.62,
+        "add_C4": 0.76,
+        "add_C5": 0.62,
+        "add_C6": 0.72
+      },
+      "eval_method": "ArithmeticEvaluator"
+    },
+    {
+      "name": "add_sub_sorl_v1_abs10_K1_100K_2L1H128d",
+      "mode": "sorl",
+      "trainer": "v1",
+      "arch": "2L/1H/128d",
+      "dataset_size": 100000,
+      "abs_vocab": 10,
+      "K": 1,
+      "overall_accuracy": 0.6870833333333334,
+      "sft_accuracy": 0.03791666666666667,
+      "hard_splits": {
+        "add_C1": 1.0,
+        "add_C2": 0.82,
+        "add_C3": 0.64,
+        "add_C4": 0.84,
+        "add_C5": 0.7,
+        "add_C6": 0.8
+      },
+      "eval_method": "ArithmeticEvaluator"
+    },
+    {
+      "name": "add_sub_sorl_v1_abs10_K1_10K",
+      "mode": "sorl",
+      "trainer": "v1",
+      "arch": "2L/3H/510d",
+      "dataset_size": 10000,
+      "abs_vocab": 10,
+      "K": 1,
+      "overall_accuracy": 0.9470833333333334,
+      "sft_accuracy": 0.7258333333333333,
+      "hard_splits": {
+        "add_C1": 1.0,
+        "add_C2": 1.0,
+        "add_C3": 1.0,
+        "add_C4": 1.0,
+        "add_C5": 0.94,
+        "add_C6": 1.0
+      },
+      "eval_method": "ArithmeticEvaluator"
+    },
+    {
+      "name": "add_sub_sorl_v1_abs10_K1_25K",
+      "mode": "sorl",
+      "trainer": "v1",
+      "arch": "2L/3H/510d",
+      "dataset_size": 25000,
+      "abs_vocab": 10,
+      "K": 1,
+      "overall_accuracy": 0.985,
+      "sft_accuracy": 0.9125,
+      "hard_splits": {
+        "add_C1": 1.0,
+        "add_C2": 0.98,
+        "add_C3": 1.0,
+        "add_C4": 1.0,
+        "add_C5": 1.0,
+        "add_C6": 1.0
+      },
+      "eval_method": "ArithmeticEvaluator"
+    },
+    {
+      "name": "add_sub_sorl_v1_abs10_K1_25K_1L2H256d",
+      "mode": "sorl",
+      "trainer": "v1",
+      "arch": "1L/2H/256d",
+      "dataset_size": 25000,
+      "abs_vocab": 10,
+      "K": 1,
+      "overall_accuracy": 0.06291666666666666,
+      "sft_accuracy": 0.011666666666666667,
+      "hard_splits": {
+        "add_C1": 0.12,
+        "add_C2": 0.02,
+        "add_C3": 0.0,
+        "add_C4": 0.0,
+        "add_C5": 0.0,
+        "add_C6": 0.0
+      },
+      "eval_method": "ArithmeticEvaluator"
+    },
+    {
+      "name": "add_sub_sorl_v1_abs10_K1_25K_1L3H510d",
+      "mode": "sorl",
+      "trainer": "v1",
+      "arch": "1L/3H/510d",
+      "dataset_size": 25000,
+      "abs_vocab": 10,
+      "K": 1,
+      "overall_accuracy": 0.5895833333333333,
+      "sft_accuracy": 0.5416666666666666,
+      "hard_splits": {
+        "add_C1": 0.96,
+        "add_C2": 0.9,
+        "add_C3": 0.58,
+        "add_C4": 0.6,
+        "add_C5": 0.62,
+        "add_C6": 0.62
+      },
+      "eval_method": "ArithmeticEvaluator"
+    },
+    {
+      "name": "add_sub_sorl_v1_abs10_K1_25K_2L1H128d",
+      "mode": "sorl",
+      "trainer": "v1",
+      "arch": "2L/1H/128d",
+      "dataset_size": 25000,
+      "abs_vocab": 10,
+      "K": 1,
+      "overall_accuracy": 0.020416666666666666,
+      "sft_accuracy": 0.0,
+      "hard_splits": {
+        "add_C1": 0.02,
+        "add_C2": 0.0,
+        "add_C3": 0.04,
+        "add_C4": 0.0,
+        "add_C5": 0.02,
+        "add_C6": 0.0
+      },
+      "eval_method": "ArithmeticEvaluator"
+    },
+    {
+      "name": "add_sub_sorl_v1_abs10_K1_50K",
+      "mode": "sorl",
+      "trainer": "v1",
+      "arch": "2L/3H/510d",
+      "dataset_size": 50000,
+      "abs_vocab": 10,
+      "K": 1,
+      "overall_accuracy": 0.9970833333333333,
+      "sft_accuracy": 0.9295833333333333,
+      "hard_splits": {
+        "add_C1": 1.0,
+        "add_C2": 1.0,
+        "add_C3": 1.0,
+        "add_C4": 1.0,
+        "add_C5": 1.0,
+        "add_C6": 1.0
+      },
+      "eval_method": "ArithmeticEvaluator"
+    },
+    {
+      "name": "add_sub_sorl_v1_abs16_100K",
+      "mode": "sorl",
+      "trainer": "v1",
+      "arch": "2L/3H/510d",
+      "dataset_size": 100000,
+      "abs_vocab": 16,
+      "K": 4,
+      "overall_accuracy": 1.0,
+      "sft_accuracy": 0.77,
+      "hard_splits": {
+        "add_C1": 1.0,
+        "add_C2": 1.0,
+        "add_C3": 1.0,
+        "add_C4": 1.0,
+        "add_C5": 1.0,
+        "add_C6": 1.0
+      },
+      "eval_method": "ArithmeticEvaluator"
+    },
+    {
+      "name": "add_sub_sorl_v1_abs16_K1_100K",
+      "mode": "sorl",
+      "trainer": "v1",
+      "arch": "2L/3H/510d",
+      "dataset_size": 100000,
+      "abs_vocab": 16,
+      "K": 1,
+      "overall_accuracy": 0.9945833333333334,
+      "sft_accuracy": 0.9145833333333333,
+      "hard_splits": {
+        "add_C1": 1.0,
+        "add_C2": 0.98,
+        "add_C3": 1.0,
+        "add_C4": 1.0,
+        "add_C5": 1.0,
+        "add_C6": 1.0
+      },
+      "eval_method": "ArithmeticEvaluator"
+    },
+    {
+      "name": "add_sub_sorl_v1_abs20_100K",
+      "mode": "sorl",
+      "trainer": "v1",
+      "arch": "2L/3H/510d",
+      "dataset_size": 100000,
+      "abs_vocab": 20,
+      "K": 4,
+      "overall_accuracy": 0.9958333333333333,
+      "sft_accuracy": 0.7966666666666666,
+      "hard_splits": {
+        "add_C1": 1.0,
+        "add_C2": 1.0,
+        "add_C3": 1.0,
+        "add_C4": 1.0,
+        "add_C5": 1.0,
+        "add_C6": 1.0
+      },
+      "eval_method": "ArithmeticEvaluator"
+    },
+    {
+      "name": "add_sub_sorl_v1_abs20_K1_100K",
+      "mode": "sorl",
+      "trainer": "v1",
+      "arch": "2L/3H/510d",
+      "dataset_size": 100000,
+      "abs_vocab": 20,
+      "K": 1,
+      "overall_accuracy": 0.9858333333333333,
+      "sft_accuracy": 0.9170833333333334,
+      "hard_splits": {
+        "add_C1": 1.0,
+        "add_C2": 1.0,
+        "add_C3": 1.0,
+        "add_C4": 1.0,
+        "add_C5": 1.0,
+        "add_C6": 1.0
+      },
+      "eval_method": "ArithmeticEvaluator"
+    },
+    {
+      "name": "add_sub_sorl_v1_abs2_100K",
+      "mode": "sorl",
+      "trainer": "v1",
+      "arch": "2L/3H/510d",
+      "dataset_size": 100000,
+      "abs_vocab": 2,
+      "K": 4,
+      "overall_accuracy": 0.99875,
+      "sft_accuracy": 0.8833333333333333,
+      "hard_splits": {
+        "add_C1": 1.0,
+        "add_C2": 1.0,
+        "add_C3": 1.0,
+        "add_C4": 1.0,
+        "add_C5": 1.0,
+        "add_C6": 1.0
+      },
+      "eval_method": "ArithmeticEvaluator"
+    },
+    {
+      "name": "add_sub_sorl_v1_abs2_K1_100K",
+      "mode": "sorl",
+      "trainer": "v1",
+      "arch": "2L/3H/510d",
+      "dataset_size": 100000,
+      "abs_vocab": 2,
+      "K": 1,
+      "overall_accuracy": 1.0,
+      "sft_accuracy": 0.9995833333333334,
+      "hard_splits": {
+        "add_C1": 1.0,
+        "add_C2": 1.0,
+        "add_C3": 1.0,
+        "add_C4": 1.0,
+        "add_C5": 1.0,
+        "add_C6": 1.0
+      },
+      "eval_method": "ArithmeticEvaluator"
+    },
+    {
+      "name": "add_sub_sorl_v1_abs30_100K",
+      "mode": "sorl",
+      "trainer": "v1",
+      "arch": "2L/3H/510d",
+      "dataset_size": 100000,
+      "abs_vocab": 30,
+      "K": 4,
+      "overall_accuracy": 1.0,
+      "sft_accuracy": 1.0,
+      "hard_splits": {
+        "add_C1": 1.0,
+        "add_C2": 1.0,
+        "add_C3": 1.0,
+        "add_C4": 1.0,
+        "add_C5": 1.0,
+        "add_C6": 1.0
+      },
+      "eval_method": "ArithmeticEvaluator"
+    },
+    {
+      "name": "add_sub_sorl_v1_abs30_100K_1L2H256d",
+      "mode": "sorl",
+      "trainer": "v1",
+      "arch": "1L/2H/256d",
+      "dataset_size": 100000,
+      "abs_vocab": 30,
+      "K": 4,
+      "overall_accuracy": 0.2925,
+      "sft_accuracy": 0.0033333333333333335,
+      "hard_splits": {
+        "add_C1": 0.48,
+        "add_C2": 0.2,
+        "add_C3": 0.22,
+        "add_C4": 0.24,
+        "add_C5": 0.32,
+        "add_C6": 0.44
+      },
+      "eval_method": "ArithmeticEvaluator"
+    },
+    {
+      "name": "add_sub_sorl_v1_abs30_100K_1L3H510d",
+      "mode": "sorl",
+      "trainer": "v1",
+      "arch": "1L/3H/510d",
+      "dataset_size": 100000,
+      "abs_vocab": 30,
+      "K": 4,
+      "overall_accuracy": 0.6125,
+      "sft_accuracy": 0.009583333333333333,
+      "hard_splits": {
+        "add_C1": 0.98,
+        "add_C2": 0.84,
+        "add_C3": 0.56,
+        "add_C4": 0.56,
+        "add_C5": 0.38,
+        "add_C6": 0.42
+      },
+      "eval_method": "ArithmeticEvaluator"
+    },
+    {
+      "name": "add_sub_sorl_v1_abs30_100K_2L1H128d",
+      "mode": "sorl",
+      "trainer": "v1",
+      "arch": "2L/1H/128d",
+      "dataset_size": 100000,
+      "abs_vocab": 30,
+      "K": 4,
+      "overall_accuracy": 0.6045833333333334,
+      "sft_accuracy": 0.00875,
+      "hard_splits": {
+        "add_C1": 0.82,
+        "add_C2": 0.74,
+        "add_C3": 0.72,
+        "add_C4": 0.68,
+        "add_C5": 0.6,
+        "add_C6": 0.62
+      },
+      "eval_method": "ArithmeticEvaluator"
+    },
+    {
+      "name": "add_sub_sorl_v1_abs30_10K",
+      "mode": "sorl",
+      "trainer": "v1",
+      "arch": "2L/3H/510d",
+      "dataset_size": 10000,
+      "abs_vocab": 30,
+      "K": 4,
+      "overall_accuracy": 0.004583333333333333,
+      "sft_accuracy": 0.007916666666666667,
+      "hard_splits": {
+        "add_C1": 0.0,
+        "add_C2": 0.0,
+        "add_C3": 0.0,
+        "add_C4": 0.0,
+        "add_C5": 0.0,
+        "add_C6": 0.0
+      },
+      "eval_method": "ArithmeticEvaluator"
+    },
+    {
+      "name": "add_sub_sorl_v1_abs30_50K",
+      "mode": "sorl",
+      "trainer": "v1",
+      "arch": "2L/3H/510d",
+      "dataset_size": 50000,
+      "abs_vocab": 30,
+      "K": 4,
+      "overall_accuracy": 0.9929166666666667,
+      "sft_accuracy": 0.6520833333333333,
+      "hard_splits": {
+        "add_C1": 1.0,
+        "add_C2": 1.0,
+        "add_C3": 1.0,
+        "add_C4": 1.0,
+        "add_C5": 1.0,
+        "add_C6": 1.0
+      },
+      "eval_method": "ArithmeticEvaluator"
+    },
+    {
+      "name": "add_sub_sorl_v1_abs30_K1_100K",
+      "mode": "sorl",
+      "trainer": "v1",
+      "arch": "2L/3H/510d",
+      "dataset_size": 100000,
+      "abs_vocab": 30,
+      "K": 1,
+      "overall_accuracy": 1.0,
+      "sft_accuracy": 1.0,
+      "hard_splits": {
+        "add_C1": 1.0,
+        "add_C2": 1.0,
+        "add_C3": 1.0,
+        "add_C4": 1.0,
+        "add_C5": 1.0,
+        "add_C6": 1.0
+      },
+      "eval_method": "ArithmeticEvaluator"
+    },
+    {
+      "name": "add_sub_sorl_v1_abs30_K1_100K_1L2H256d",
+      "mode": "sorl",
+      "trainer": "v1",
+      "arch": "1L/2H/256d",
+      "dataset_size": 100000,
+      "abs_vocab": 30,
+      "K": 1,
+      "overall_accuracy": 0.44375,
+      "sft_accuracy": 0.3279166666666667,
+      "hard_splits": {
+        "add_C1": 0.78,
+        "add_C2": 0.58,
+        "add_C3": 0.5,
+        "add_C4": 0.54,
+        "add_C5": 0.54,
+        "add_C6": 0.48
+      },
+      "eval_method": "ArithmeticEvaluator"
+    },
+    {
+      "name": "add_sub_sorl_v1_abs30_K1_100K_1L3H510d",
+      "mode": "sorl",
+      "trainer": "v1",
+      "arch": "1L/3H/510d",
+      "dataset_size": 100000,
+      "abs_vocab": 30,
+      "K": 1,
+      "overall_accuracy": 0.7229166666666667,
+      "sft_accuracy": 0.6504166666666666,
+      "hard_splits": {
+        "add_C1": 0.96,
+        "add_C2": 0.9,
+        "add_C3": 0.62,
+        "add_C4": 0.7,
+        "add_C5": 0.66,
+        "add_C6": 0.72
+      },
+      "eval_method": "ArithmeticEvaluator"
+    },
+    {
+      "name": "add_sub_sorl_v1_abs30_K1_100K_2L1H128d",
+      "mode": "sorl",
+      "trainer": "v1",
+      "arch": "2L/1H/128d",
+      "dataset_size": 100000,
+      "abs_vocab": 30,
+      "K": 1,
+      "overall_accuracy": 0.8475,
+      "sft_accuracy": 0.24333333333333335,
+      "hard_splits": {
+        "add_C1": 0.98,
+        "add_C2": 0.92,
+        "add_C3": 0.98,
+        "add_C4": 0.94,
+        "add_C5": 0.86,
+        "add_C6": 0.94
+      },
+      "eval_method": "ArithmeticEvaluator"
+    },
+    {
+      "name": "add_sub_sorl_v1_abs30_K1_10K",
+      "mode": "sorl",
+      "trainer": "v1",
+      "arch": "2L/3H/510d",
+      "dataset_size": 10000,
+      "abs_vocab": 30,
+      "K": 1,
+      "overall_accuracy": 0.96125,
+      "sft_accuracy": 0.7683333333333333,
+      "hard_splits": {
+        "add_C1": 1.0,
+        "add_C2": 1.0,
+        "add_C3": 1.0,
+        "add_C4": 1.0,
+        "add_C5": 1.0,
+        "add_C6": 1.0
+      },
+      "eval_method": "ArithmeticEvaluator"
+    },
+    {
+      "name": "add_sub_sorl_v1_abs30_K1_10K_1L2H256d",
+      "mode": "sorl",
+      "trainer": "v1",
+      "arch": "1L/2H/256d",
+      "dataset_size": 10000,
+      "abs_vocab": 30,
+      "K": 1,
+      "overall_accuracy": 0.004166666666666667,
+      "sft_accuracy": 0.00375,
+      "hard_splits": {
+        "add_C1": 0.0,
+        "add_C2": 0.0,
+        "add_C3": 0.0,
+        "add_C4": 0.0,
+        "add_C5": 0.0,
+        "add_C6": 0.0
+      },
+      "eval_method": "ArithmeticEvaluator"
+    },
+    {
+      "name": "add_sub_sorl_v1_abs30_K1_10K_1L3H510d",
+      "mode": "sorl",
+      "trainer": "v1",
+      "arch": "1L/3H/510d",
+      "dataset_size": 10000,
+      "abs_vocab": 30,
+      "K": 1,
+      "overall_accuracy": 0.5870833333333333,
+      "sft_accuracy": 0.3279166666666667,
+      "hard_splits": {
+        "add_C1": 0.78,
+        "add_C2": 0.78,
+        "add_C3": 0.56,
+        "add_C4": 0.66,
+        "add_C5": 0.72,
+        "add_C6": 0.7
+      },
+      "eval_method": "ArithmeticEvaluator"
+    },
+    {
+      "name": "add_sub_sorl_v1_abs30_K1_10K_2L1H128d",
+      "mode": "sorl",
+      "trainer": "v1",
+      "arch": "2L/1H/128d",
+      "dataset_size": 10000,
+      "abs_vocab": 30,
+      "K": 1,
+      "overall_accuracy": 0.00125,
+      "sft_accuracy": 0.0016666666666666668,
+      "hard_splits": {
+        "add_C1": 0.0,
+        "add_C2": 0.0,
+        "add_C3": 0.0,
+        "add_C4": 0.0,
+        "add_C5": 0.0,
+        "add_C6": 0.0
+      },
+      "eval_method": "ArithmeticEvaluator"
+    },
+    {
+      "name": "add_sub_sorl_v1_abs30_K1_25K",
+      "mode": "sorl",
+      "trainer": "v1",
+      "arch": "2L/3H/510d",
+      "dataset_size": 25000,
+      "abs_vocab": 30,
+      "K": 1,
+      "overall_accuracy": 1.0,
+      "sft_accuracy": 0.9766666666666667,
+      "hard_splits": {
+        "add_C1": 1.0,
+        "add_C2": 1.0,
+        "add_C3": 1.0,
+        "add_C4": 1.0,
+        "add_C5": 1.0,
+        "add_C6": 1.0
+      },
+      "eval_method": "ArithmeticEvaluator"
+    },
+    {
+      "name": "add_sub_sorl_v1_abs30_K1_50K",
+      "mode": "sorl",
+      "trainer": "v1",
+      "arch": "2L/3H/510d",
+      "dataset_size": 50000,
+      "abs_vocab": 30,
+      "K": 1,
+      "overall_accuracy": 1.0,
+      "sft_accuracy": 0.9991666666666666,
+      "hard_splits": {
+        "add_C1": 1.0,
+        "add_C2": 1.0,
+        "add_C3": 1.0,
+        "add_C4": 1.0,
+        "add_C5": 1.0,
+        "add_C6": 1.0
+      },
+      "eval_method": "ArithmeticEvaluator"
+    },
+    {
+      "name": "add_sub_sorl_v1_abs30_K1_50K_1L2H256d",
+      "mode": "sorl",
+      "trainer": "v1",
+      "arch": "1L/2H/256d",
+      "dataset_size": 50000,
+      "abs_vocab": 30,
+      "K": 1,
+      "overall_accuracy": 0.31375,
+      "sft_accuracy": 0.20166666666666666,
+      "hard_splits": {
+        "add_C1": 0.78,
+        "add_C2": 0.6,
+        "add_C3": 0.38,
+        "add_C4": 0.26,
+        "add_C5": 0.18,
+        "add_C6": 0.28
+      },
+      "eval_method": "ArithmeticEvaluator"
+    },
+    {
+      "name": "add_sub_sorl_v1_abs30_K1_50K_1L3H510d",
+      "mode": "sorl",
+      "trainer": "v1",
+      "arch": "1L/3H/510d",
+      "dataset_size": 50000,
+      "abs_vocab": 30,
+      "K": 1,
+      "overall_accuracy": 0.6758333333333333,
+      "sft_accuracy": 0.6070833333333333,
+      "hard_splits": {
+        "add_C1": 0.94,
+        "add_C2": 0.86,
+        "add_C3": 0.6,
+        "add_C4": 0.76,
+        "add_C5": 0.56,
+        "add_C6": 0.7
+      },
+      "eval_method": "ArithmeticEvaluator"
+    },
+    {
+      "name": "add_sub_sorl_v1_abs30_K1_50K_2L1H128d",
+      "mode": "sorl",
+      "trainer": "v1",
+      "arch": "2L/1H/128d",
+      "dataset_size": 50000,
+      "abs_vocab": 30,
+      "K": 1,
+      "overall_accuracy": 0.45416666666666666,
+      "sft_accuracy": 0.04875,
+      "hard_splits": {
+        "add_C1": 0.54,
+        "add_C2": 0.56,
+        "add_C3": 0.3,
+        "add_C4": 0.38,
+        "add_C5": 0.42,
+        "add_C6": 0.46
+      },
+      "eval_method": "ArithmeticEvaluator"
+    },
+    {
+      "name": "add_sub_sorl_v1_abs30_K3_100K",
+      "mode": "sorl",
+      "trainer": "v1",
+      "arch": "2L/3H/510d",
+      "dataset_size": 100000,
+      "abs_vocab": 30,
+      "K": 3,
+      "overall_accuracy": 1.0,
+      "sft_accuracy": 0.9233333333333333,
+      "hard_splits": {
+        "add_C1": 1.0,
+        "add_C2": 1.0,
+        "add_C3": 1.0,
+        "add_C4": 1.0,
+        "add_C5": 1.0,
+        "add_C6": 1.0
+      },
+      "eval_method": "ArithmeticEvaluator"
+    },
+    {
+      "name": "add_sub_sorl_v1_abs30_K3_100K_1L2H256d",
+      "mode": "sorl",
+      "trainer": "v1",
+      "arch": "1L/2H/256d",
+      "dataset_size": 100000,
+      "abs_vocab": 30,
+      "K": 3,
+      "overall_accuracy": 0.22958333333333333,
+      "sft_accuracy": 0.00375,
+      "hard_splits": {
+        "add_C1": 0.62,
+        "add_C2": 0.4,
+        "add_C3": 0.38,
+        "add_C4": 0.34,
+        "add_C5": 0.3,
+        "add_C6": 0.22
+      },
+      "eval_method": "ArithmeticEvaluator"
+    },
+    {
+      "name": "add_sub_sorl_v1_abs30_K3_100K_1L3H510d",
+      "mode": "sorl",
+      "trainer": "v1",
+      "arch": "1L/3H/510d",
+      "dataset_size": 100000,
+      "abs_vocab": 30,
+      "K": 3,
+      "overall_accuracy": 0.63375,
+      "sft_accuracy": 0.0016666666666666668,
+      "hard_splits": {
+        "add_C1": 0.96,
+        "add_C2": 0.86,
+        "add_C3": 0.64,
+        "add_C4": 0.68,
+        "add_C5": 0.66,
+        "add_C6": 0.54
+      },
+      "eval_method": "ArithmeticEvaluator"
+    },
+    {
+      "name": "add_sub_sorl_v1_abs30_K3_100K_2L1H128d",
+      "mode": "sorl",
+      "trainer": "v1",
+      "arch": "2L/1H/128d",
+      "dataset_size": 100000,
+      "abs_vocab": 30,
+      "K": 3,
+      "overall_accuracy": 0.6470833333333333,
+      "sft_accuracy": 0.005833333333333334,
+      "hard_splits": {
+        "add_C1": 0.8,
+        "add_C2": 0.72,
+        "add_C3": 0.46,
+        "add_C4": 0.56,
+        "add_C5": 0.62,
+        "add_C6": 0.76
+      },
+      "eval_method": "ArithmeticEvaluator"
+    },
+    {
+      "name": "add_sub_sorl_v1_abs30_K3_50K",
+      "mode": "sorl",
+      "trainer": "v1",
+      "arch": "2L/3H/510d",
+      "dataset_size": 50000,
+      "abs_vocab": 30,
+      "K": 3,
+      "overall_accuracy": 1.0,
+      "sft_accuracy": 0.8316666666666667,
+      "hard_splits": {
+        "add_C1": 1.0,
+        "add_C2": 1.0,
+        "add_C3": 1.0,
+        "add_C4": 1.0,
+        "add_C5": 1.0,
+        "add_C6": 1.0
+      },
+      "eval_method": "ArithmeticEvaluator"
+    },
+    {
+      "name": "add_sub_sorl_v1_abs50_100K",
+      "mode": "sorl",
+      "trainer": "v1",
+      "arch": "2L/3H/510d",
+      "dataset_size": 100000,
+      "abs_vocab": 50,
+      "K": 4,
+      "overall_accuracy": 0.9995833333333334,
+      "sft_accuracy": 0.5975,
+      "hard_splits": {
+        "add_C1": 1.0,
+        "add_C2": 1.0,
+        "add_C3": 1.0,
+        "add_C4": 1.0,
+        "add_C5": 1.0,
+        "add_C6": 1.0
+      },
+      "eval_method": "ArithmeticEvaluator"
+    },
+    {
+      "name": "add_sub_sorl_v1_abs50_50K",
+      "mode": "sorl",
+      "trainer": "v1",
+      "arch": "2L/3H/510d",
+      "dataset_size": 50000,
+      "abs_vocab": 50,
+      "K": 4,
+      "overall_accuracy": 0.9995833333333334,
+      "sft_accuracy": 0.8954166666666666,
+      "hard_splits": {
+        "add_C1": 1.0,
+        "add_C2": 1.0,
+        "add_C3": 1.0,
+        "add_C4": 1.0,
+        "add_C5": 1.0,
+        "add_C6": 1.0
+      },
+      "eval_method": "ArithmeticEvaluator"
+    },
+    {
+      "name": "add_sub_sorl_v1_abs50_K1_100K",
+      "mode": "sorl",
+      "trainer": "v1",
+      "arch": "2L/3H/510d",
+      "dataset_size": 100000,
+      "abs_vocab": 50,
+      "K": 1,
+      "overall_accuracy": 1.0,
+      "sft_accuracy": 1.0,
+      "hard_splits": {
+        "add_C1": 1.0,
+        "add_C2": 1.0,
+        "add_C3": 1.0,
+        "add_C4": 1.0,
+        "add_C5": 1.0,
+        "add_C6": 1.0
+      },
+      "eval_method": "ArithmeticEvaluator"
+    },
+    {
+      "name": "add_sub_sorl_v1_abs50_K1_50K",
+      "mode": "sorl",
+      "trainer": "v1",
+      "arch": "2L/3H/510d",
+      "dataset_size": 50000,
+      "abs_vocab": 50,
+      "K": 1,
+      "overall_accuracy": 1.0,
+      "sft_accuracy": 0.9995833333333334,
+      "hard_splits": {
+        "add_C1": 1.0,
+        "add_C2": 1.0,
+        "add_C3": 1.0,
+        "add_C4": 1.0,
+        "add_C5": 1.0,
+        "add_C6": 1.0
+      },
+      "eval_method": "ArithmeticEvaluator"
+    },
+    {
+      "name": "add_sub_sorl_v1_abs5_100K",
+      "mode": "sorl",
+      "trainer": "v1",
+      "arch": "2L/3H/510d",
+      "dataset_size": 100000,
+      "abs_vocab": 5,
+      "K": 4,
+      "overall_accuracy": 0.99875,
+      "sft_accuracy": 0.7304166666666667,
+      "hard_splits": {
+        "add_C1": 1.0,
+        "add_C2": 1.0,
+        "add_C3": 1.0,
+        "add_C4": 1.0,
+        "add_C5": 1.0,
+        "add_C6": 1.0
+      },
+      "eval_method": "ArithmeticEvaluator"
+    },
+    {
+      "name": "add_sub_sorl_v1_abs5_50K",
+      "mode": "sorl",
+      "trainer": "v1",
+      "arch": "2L/3H/510d",
+      "dataset_size": 50000,
+      "abs_vocab": 5,
+      "K": 4,
+      "overall_accuracy": 0.99875,
+      "sft_accuracy": 0.6629166666666667,
+      "hard_splits": {
+        "add_C1": 1.0,
+        "add_C2": 1.0,
+        "add_C3": 1.0,
+        "add_C4": 1.0,
+        "add_C5": 1.0,
+        "add_C6": 1.0
+      },
+      "eval_method": "ArithmeticEvaluator"
+    },
+    {
+      "name": "add_sub_sorl_v1_abs5_K1_100K",
+      "mode": "sorl",
+      "trainer": "v1",
+      "arch": "2L/3H/510d",
+      "dataset_size": 100000,
+      "abs_vocab": 5,
+      "K": 1,
+      "overall_accuracy": 1.0,
+      "sft_accuracy": 1.0,
+      "hard_splits": {
+        "add_C1": 1.0,
+        "add_C2": 1.0,
+        "add_C3": 1.0,
+        "add_C4": 1.0,
+        "add_C5": 1.0,
+        "add_C6": 1.0
+      },
+      "eval_method": "ArithmeticEvaluator"
+    },
+    {
+      "name": "add_sub_sorl_v1_abs5_K1_50K",
+      "mode": "sorl",
+      "trainer": "v1",
+      "arch": "2L/3H/510d",
+      "dataset_size": 50000,
+      "abs_vocab": 5,
+      "K": 1,
+      "overall_accuracy": 1.0,
+      "sft_accuracy": 1.0,
+      "hard_splits": {
+        "add_C1": 1.0,
+        "add_C2": 1.0,
+        "add_C3": 1.0,
+        "add_C4": 1.0,
+        "add_C5": 1.0,
+        "add_C6": 1.0
+      },
+      "eval_method": "ArithmeticEvaluator"
+    },
+    {
+      "name": "add_sub_sorl_v1_abs70_100K",
+      "mode": "sorl",
+      "trainer": "v1",
+      "arch": "2L/3H/510d",
+      "dataset_size": 100000,
+      "abs_vocab": 70,
+      "K": 4,
+      "overall_accuracy": 1.0,
+      "sft_accuracy": 0.6966666666666667,
+      "hard_splits": {
+        "add_C1": 1.0,
+        "add_C2": 1.0,
+        "add_C3": 1.0,
+        "add_C4": 1.0,
+        "add_C5": 1.0,
+        "add_C6": 1.0
+      },
+      "eval_method": "ArithmeticEvaluator"
+    },
+    {
+      "name": "add_sub_sorl_v1_abs70_K1_100K",
+      "mode": "sorl",
+      "trainer": "v1",
+      "arch": "2L/3H/510d",
+      "dataset_size": 100000,
+      "abs_vocab": 70,
+      "K": 1,
+      "overall_accuracy": 0.9991666666666666,
+      "sft_accuracy": 0.9845833333333334,
+      "hard_splits": {
+        "add_C1": 1.0,
+        "add_C2": 1.0,
+        "add_C3": 1.0,
+        "add_C4": 1.0,
+        "add_C5": 1.0,
+        "add_C6": 1.0
+      },
+      "eval_method": "ArithmeticEvaluator"
+    },
+    {
+      "name": "add_sub_sorl_v6_abs30_10K",
+      "mode": "sorl_v6",
+      "trainer": "v6",
+      "arch": "2L/3H/510d",
+      "dataset_size": 10000,
+      "abs_vocab": 30,
+      "K": 4,
+      "overall_accuracy": 0.84625,
+      "sft_accuracy": 0.0,
+      "hard_splits": {
+        "add_C1": 0.0,
+        "add_C2": 0.0,
+        "add_C3": 0.0,
+        "add_C4": 0.0,
+        "add_C5": 0.0,
+        "add_C6": 0.0
+      },
+      "eval_method": "ArithmeticEvaluator"
+    },
+    {
+      "name": "add_sub_sorl_v6_abs30_25K",
+      "mode": "sorl_v6",
+      "trainer": "v6",
+      "arch": "2L/3H/510d",
+      "dataset_size": 25000,
+      "abs_vocab": 30,
+      "K": 4,
+      "overall_accuracy": 0.7475,
+      "sft_accuracy": 0.0,
+      "hard_splits": {
+        "add_C1": 0.0,
+        "add_C2": 0.0,
+        "add_C3": 0.0,
+        "add_C4": 0.0,
+        "add_C5": 0.0,
+        "add_C6": 0.0
+      },
+      "eval_method": "ArithmeticEvaluator"
+    },
+    {
+      "name": "add_sub_sorl_v6_abs30_K1_10K",
+      "mode": "sorl_v6",
+      "trainer": "v6",
+      "arch": "2L/3H/510d",
+      "dataset_size": 10000,
+      "abs_vocab": 30,
+      "K": 1,
+      "overall_accuracy": 0.7083333333333334,
+      "sft_accuracy": 0.0,
+      "hard_splits": {
+        "add_C1": 0.0,
+        "add_C2": 0.0,
+        "add_C3": 0.0,
+        "add_C4": 0.0,
+        "add_C5": 0.0,
+        "add_C6": 0.0
+      },
+      "eval_method": "ArithmeticEvaluator"
+    },
+    {
+      "name": "add_sub_sorl_v6_abs30_K1_25K",
+      "mode": "sorl_v6",
+      "trainer": "v6",
+      "arch": "2L/3H/510d",
+      "dataset_size": 25000,
+      "abs_vocab": 30,
+      "K": 1,
+      "overall_accuracy": 0.815,
+      "sft_accuracy": 0.0,
+      "hard_splits": {
+        "add_C1": 0.0,
+        "add_C2": 0.0,
+        "add_C3": 0.0,
+        "add_C4": 0.0,
+        "add_C5": 0.0,
+        "add_C6": 0.0
+      },
+      "eval_method": "ArithmeticEvaluator"
+    },
+    {
+      "name": "add_sub_sorl_v6_abs30_K1_25K_1L3H510d",
+      "mode": "sorl_v6",
+      "trainer": "v6",
+      "arch": "1L/3H/510d",
+      "dataset_size": 25000,
+      "abs_vocab": 30,
+      "K": 1,
+      "overall_accuracy": 0.6429166666666667,
+      "sft_accuracy": 0.0,
+      "hard_splits": {
+        "add_C1": 0.0,
+        "add_C2": 0.0,
+        "add_C3": 0.0,
+        "add_C4": 0.0,
+        "add_C5": 0.0,
+        "add_C6": 0.0
+      },
+      "eval_method": "ArithmeticEvaluator"
+    },
+    {
+      "name": "add_sub_sorl_v6_abs30_K1_50K",
+      "mode": "sorl_v6",
+      "trainer": "v6",
+      "arch": "2L/3H/510d",
+      "dataset_size": 50000,
+      "abs_vocab": 30,
+      "K": 1,
+      "overall_accuracy": 0.9825,
+      "sft_accuracy": 0.0,
+      "hard_splits": {
+        "add_C1": 0.0,
+        "add_C2": 0.0,
+        "add_C3": 0.0,
+        "add_C4": 0.0,
+        "add_C5": 0.0,
+        "add_C6": 0.0
+      },
+      "eval_method": "ArithmeticEvaluator"
+    }
+  ],
+  "n_models": 78
+}

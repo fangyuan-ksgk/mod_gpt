@@ -25,7 +25,17 @@ ALL_SPLITS = [
 
 
 def fetch_all_models():
-    """Pull all models with configs and metrics from HF."""
+    """Pull VALID models from HF using the model catalog for filtering."""
+    # Load model_catalog.json to filter by status (VALID/SUPERSEDED)
+    catalog = None
+    try:
+        cat_local = hf_hub_download(MODEL_REPO, "model_catalog.json",
+                                     local_dir="/tmp/hf_dash_cache",
+                                     force_download=True)
+        catalog = {e["name"]: e for e in json.load(open(cat_local))}
+    except Exception:
+        pass
+
     api = HfApi()
     all_files = api.list_repo_files(MODEL_REPO)
     config_files = sorted([f for f in all_files if f.endswith("train_config.json")
@@ -35,6 +45,13 @@ def fetch_all_models():
     models = []
     for cf in config_files:
         subfolder = cf.rsplit("/", 1)[0]
+
+        # Skip non-VALID models if catalog is available
+        if catalog is not None:
+            cat_entry = catalog.get(subfolder, {})
+            if cat_entry.get("status", "VALID") != "VALID":
+                continue
+
         try:
             local = hf_hub_download(MODEL_REPO, cf, local_dir="/tmp/hf_dash_cache")
             config = json.load(open(local))
