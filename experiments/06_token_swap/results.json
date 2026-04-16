@@ -1,0 +1,90 @@
+{
+  "add_C3": {
+    "normal_correct": 87,
+    "swap_correct": 87,
+    "fixed": 0,
+    "broke": 0,
+    "n": 100,
+    "fix_examples": [],
+    "break_examples": []
+  },
+  "add_C4": {
+    "normal_correct": 80,
+    "swap_correct": 82,
+    "fixed": 2,
+    "broke": 0,
+    "n": 100,
+    "fix_examples": [
+      {
+        "q": "045183+528818",
+        "target": "0574001",
+        "normal": "0573001",
+        "swapped": "0574001",
+        "n_swaps": 4
+      },
+      {
+        "q": "288271+071770",
+        "target": "0360041",
+        "normal": "0350041",
+        "swapped": "0360041",
+        "n_swaps": 5
+      }
+    ],
+    "break_examples": []
+  },
+  "add_C5": {
+    "normal_correct": 82,
+    "swap_correct": 83,
+    "fixed": 1,
+    "broke": 0,
+    "n": 100,
+    "fix_examples": [
+      {
+        "q": "188748+161276",
+        "target": "0350024",
+        "normal": "0340024",
+        "swapped": "0350024",
+        "n_swaps": 5
+      }
+    ],
+    "break_examples": []
+  },
+  "add_C6": {
+    "normal_correct": 74,
+    "swap_correct": 77,
+    "fixed": 3,
+    "broke": 0,
+    "n": 100,
+    "fix_examples": [
+      {
+        "q": "459694+790306",
+        "target": "1250000",
+        "normal": "1240000",
+        "swapped": "1250000",
+        "n_swaps": 5
+      },
+      {
+        "q": "987583+052427",
+        "target": "1040010",
+        "normal": "1030010",
+        "swapped": "1040010",
+        "n_swaps": 12
+      },
+      {
+        "q": "684984+365059",
+        "target": "1050043",
+        "normal": "1040043",
+        "swapped": "1050043",
+        "n_swaps": 12
+      }
+    ],
+    "break_examples": []
+  },
+  "total": {
+    "normal_correct": 323,
+    "swap_correct": 329,
+    "fixed": 6,
+    "broke": 0,
+    "n": 400
+  }
+}
