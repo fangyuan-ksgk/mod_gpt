@@ -389,6 +389,53 @@ The claim is: SoRL tokens are *better* probing targets than any position in base
 
 ---
 
+## Current Results (2026-04-16)
+
+### Models
+
+| Model | Arch | Data | SoRL Acc | SFT Acc | Role |
+|-------|------|------|----------|---------|------|
+| `abs30_K1_10K` | 2L/3H/510d | 10K | 97.4% | 92.8% | Token analysis (saturated) |
+| `abs30_K1_100K_2L1H128d` | 2L/1H/128d | 100K | 77.0% | 22.0% | Mechanistic verification (undersized) |
+
+### Completed Experiments
+
+| # | Experiment | Script | Status |
+|---|-----------|--------|--------|
+| 03 | Token-subtask heatmap | `experiments/03_token_subtask_heatmap/run.py` | Done on both models |
+| 08 | Mechanistic verification (5 findings) | `experiments/08_mechanistic_verification/run.py` | Done on both models |
+
+### Key Findings (see `arithmetic/novel.md` for full details)
+
+1. **Sum-9 detector**: tokens with 85% sum-9 purity on standard arch (t3), 43% on undersized (t4). Externalizes Quirke's ST_n=U as an observable symbol.
+
+2. **MSB digit-sum encoding**: standard arch dedicates 10 tokens at MSB to encode raw digit sums (not subtask labels). Architecture-dependent — undersized model prioritizes LSB instead.
+
+3. **Position-locked specialization**: tokens are strictly position-bound on standard arch. Weak causal signal (98.5% swap survival) — distributional, not easily confirmed causally.
+
+4. **Cross-operation unification (CONFIRMED)**: add→sub token transplant survives at 93.5% vs 75.5% random baseline on undersized model. Carry and borrow share a mechanism.
+
+5. **LSB chain initiator (CONFIRMED, reversed)**: d0 is the most sensitive position to ablation on undersized model (93.4% vs 94.9% at MSB). The LSB token bootstraps the carry chain — it's load-bearing, not a shortcut.
+
+### What's NOT Done Yet
+
+- Phase 4: PCA + SAE comparison (baseline vs SoRL internal representations)
+- Phase 6: Feature-token mapping (SAE features ↔ SoRL tokens)
+- Phase 7: Polysemanticity analysis (vocab size vs monosemanticity)
+- Phase 8: Auto-interpretability (Juang et al. pipeline)
+- Circuit discovery (constrained EAP)
+- Probing experiments (SV_n resolution, future answer digits)
+- Ordering constraint verification
+
+### Open Questions
+
+- Why does the undersized model's LSB token matter MORE? Is it because attention in 1-head models can't propagate carry info across positions without explicit scaffolding?
+- Can we find a model size where position-locked specialization is causally verifiable (not just distributional)?
+- The sum-9 detector scales with capacity — is this because larger models have spare tokens to dedicate, or because they learn the sum-9 boundary faster?
+- abs=1 matches or beats abs=30 on accuracy for 2L/1H/128d (89% vs 77%). Single polysemantic token acts as "compute pause." This is a potential paper concern — addressed by showing abs=30 provides interpretability even if abs=1 provides accuracy.
+
+---
+
 ## Final Goal
 
 Show that arithmetic sub-mechanisms (carry circuits, borrow circuits, cascades) that appear

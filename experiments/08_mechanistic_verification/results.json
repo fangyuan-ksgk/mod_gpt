@@ -1,0 +1,841 @@
+{
+  "model": "add_sub_sorl_v1_abs30_K1_100K_2L1H128d",
+  "K": 1,
+  "n_examples": 2600,
+  "n_records": 13000,
+  "finding_1_sum9_detector": {
+    "background_sum9_rate": 0.23,
+    "tokens": [
+      {
+        "token": 4,
+        "n": 1275,
+        "sum9_count": 555,
+        "sum9_purity": 0.435
+      },
+      {
+        "token": 7,
+        "n": 926,
+        "sum9_count": 403,
+        "sum9_purity": 0.435
+      },
+      {
+        "token": 2,
+        "n": 1604,
+        "sum9_count": 690,
+        "sum9_purity": 0.43
+      },
+      {
+        "token": 9,
+        "n": 468,
+        "sum9_count": 132,
+        "sum9_purity": 0.282
+      },
+      {
+        "token": 1,
+        "n": 3047,
+        "sum9_count": 835,
+        "sum9_purity": 0.274
+      },
+      {
+        "token": 22,
+        "n": 30,
+        "sum9_count": 8,
+        "sum9_purity": 0.267
+      },
+      {
+        "token": 18,
+        "n": 114,
+        "sum9_count": 23,
+        "sum9_purity": 0.202
+      },
+      {
+        "token": 5,
+        "n": 415,
+        "sum9_count": 77,
+        "sum9_purity": 0.186
+      },
+      {
+        "token": 21,
+        "n": 122,
+        "sum9_count": 17,
+        "sum9_purity": 0.139
+      },
+      {
+        "token": 23,
+        "n": 48,
+        "sum9_count": 4,
+        "sum9_purity": 0.083
+      },
+      {
+        "token": 11,
+        "n": 322,
+        "sum9_count": 25,
+        "sum9_purity": 0.078
+      },
+      {
+        "token": 3,
+        "n": 1111,
+        "sum9_count": 79,
+        "sum9_purity": 0.071
+      },
+      {
+        "token": 6,
+        "n": 478,
+        "sum9_count": 28,
+        "sum9_purity": 0.059
+      },
+      {
+        "token": 17,
+        "n": 133,
+        "sum9_count": 7,
+        "sum9_purity": 0.053
+      },
+      {
+        "token": 16,
+        "n": 540,
+        "sum9_count": 26,
+        "sum9_purity": 0.048
+      },
+      {
+        "token": 13,
+        "n": 300,
+        "sum9_count": 14,
+        "sum9_purity": 0.047
+      },
+      {
+        "token": 12,
+        "n": 381,
+        "sum9_count": 17,
+        "sum9_purity": 0.045
+      },
+      {
+        "token": 20,
+        "n": 333,
+        "sum9_count": 12,
+        "sum9_purity": 0.036
+      },
+      {
+        "token": 8,
+        "n": 437,
+        "sum9_count": 15,
+        "sum9_purity": 0.034
+      },
+      {
+        "token": 14,
+        "n": 153,
+        "sum9_count": 5,
+        "sum9_purity": 0.033
+      },
+      {
+        "token": 10,
+        "n": 369,
+        "sum9_count": 9,
+        "sum9_purity": 0.024
+      },
+      {
+        "token": 15,
+        "n": 158,
+        "sum9_count": 3,
+        "sum9_purity": 0.019
+      },
+      {
+        "token": 19,
+        "n": 236,
+        "sum9_count": 2,
+        "sum9_purity": 0.008
+      }
+    ],
+    "top_sum9_token": {
+      "token": 4,
+      "n": 1275,
+      "sum9_count": 555,
+      "sum9_purity": 0.435
+    }
+  },
+  "finding_2_msb_encoding": {
+    "0": {
+      "n": 2600,
+      "n_tokens": 10,
+      "mean_sum_purity": 0.454,
+      "max_sum_purity": 1.0,
+      "tokens": [
+        {
+          "token": 18,
+          "n": 13,
+          "top_sum": 9,
+          "top_sum_purity": 1.0
+        },
+        {
+          "token": 2,
+          "n": 462,
+          "top_sum": 9,
+          "top_sum_purity": 0.896
+        },
+        {
+          "token": 4,
+          "n": 11,
+          "top_sum": 7,
+          "top_sum_purity": 0.727
+        },
+        {
+          "token": 10,
+          "n": 101,
+          "top_sum": 4,
+          "top_sum_purity": 0.446
+        },
+        {
+          "token": 12,
+          "n": 67,
+          "top_sum": 3,
+          "top_sum_purity": 0.358
+        },
+        {
+          "token": 5,
+          "n": 136,
+          "top_sum": 9,
+          "top_sum_purity": 0.331
+        },
+        {
+          "token": 8,
+          "n": 230,
+          "top_sum": 3,
+          "top_sum_purity": 0.287
+        },
+        {
+          "token": 1,
+          "n": 365,
+          "top_sum": 1,
+          "top_sum_purity": 0.189
+        },
+        {
+          "token": 6,
+          "n": 226,
+          "top_sum": 2,
+          "top_sum_purity": 0.159
+        },
+        {
+          "token": 3,
+          "n": 976,
+          "top_sum": 1,
+          "top_sum_purity": 0.152
+        }
+      ]
+    },
+    "1": {
+      "n": 2600,
+      "n_tokens": 20,
+      "mean_sum_purity": 0.31,
+      "max_sum_purity": 0.636,
+      "tokens": [
+        {
+          "token": 13,
+          "n": 33,
+          "top_sum": 0,
+          "top_sum_purity": 0.636
+        },
+        {
+          "token": 23,
+          "n": 15,
+          "top_sum": 0,
+          "top_sum_purity": 0.467
+        },
+        {
+          "token": 3,
+          "n": 35,
+          "top_sum": 2,
+          "top_sum_purity": 0.429
+        },
+        {
+          "token": 14,
+          "n": 24,
+          "top_sum": 6,
+          "top_sum_purity": 0.417
+        },
+        {
+          "token": 1,
+          "n": 1427,
+          "top_sum": 9,
+          "top_sum_purity": 0.368
+        },
+        {
+          "token": 18,
+          "n": 19,
+          "top_sum": 5,
+          "top_sum_purity": 0.368
+        },
+        {
+          "token": 19,
+          "n": 11,
+          "top_sum": 1,
+          "top_sum_purity": 0.364
+        },
+        {
+          "token": 20,
+          "n": 17,
+          "top_sum": 0,
+          "top_sum_purity": 0.353
+        },
+        {
+          "token": 11,
+          "n": 33,
+          "top_sum": 4,
+          "top_sum_purity": 0.333
+        },
+        {
+          "token": 17,
+          "n": 17,
+          "top_sum": 8,
+          "top_sum_purity": 0.294
+        },
+        {
+          "token": 10,
+          "n": 57,
+          "top_sum": 4,
+          "top_sum_purity": 0.281
+        },
+        {
+          "token": 21,
+          "n": 11,
+          "top_sum": 5,
+          "top_sum_purity": 0.273
+        },
+        {
+          "token": 8,
+          "n": 32,
+          "top_sum": 2,
+          "top_sum_purity": 0.25
+        },
+        {
+          "token": 16,
+          "n": 229,
+          "top_sum": 3,
+          "top_sum_purity": 0.218
+        },
+        {
+          "token": 12,
+          "n": 54,
+          "top_sum": 3,
+          "top_sum_purity": 0.204
+        },
+        {
+          "token": 7,
+          "n": 51,
+          "top_sum": 8,
+          "top_sum_purity": 0.196
+        },
+        {
+          "token": 9,
+          "n": 26,
+          "top_sum": 5,
+          "top_sum_purity": 0.192
+        },
+        {
+          "token": 5,
+          "n": 47,
+          "top_sum": 1,
+          "top_sum_purity": 0.191
+        },
+        {
+          "token": 2,
+          "n": 369,
+          "top_sum": 4,
+          "top_sum_purity": 0.19
+        },
+        {
+          "token": 6,
+          "n": 78,
+          "top_sum": 3,
+          "top_sum_purity": 0.179
+        }
+      ]
+    },
+    "2": {
+      "n": 2600,
+      "n_tokens": 21,
+      "mean_sum_purity": 0.289,
+      "max_sum_purity": 0.51,
+      "tokens": [
+        {
+          "token": 7,
+          "n": 767,
+          "top_sum": 9,
+          "top_sum_purity": 0.51
+        },
+        {
+          "token": 13,
+          "n": 23,
+          "top_sum": 0,
+          "top_sum_purity": 0.478
+        },
+        {
+          "token": 23,
+          "n": 13,
+          "top_sum": 0,
+          "top_sum_purity": 0.385
+        },
+        {
+          "token": 9,
+          "n": 350,
+          "top_sum": 9,
+          "top_sum_purity": 0.363
+        },
+        {
+          "token": 18,
+          "n": 18,
+          "top_sum": 5,
+          "top_sum_purity": 0.333
+        },
+        {
+          "token": 16,
+          "n": 117,
+          "top_sum": 2,
+          "top_sum_purity": 0.325
+        },
+        {
+          "token": 10,
+          "n": 38,
+          "top_sum": 6,
+          "top_sum_purity": 0.316
+        },
+        {
+          "token": 19,
+          "n": 94,
+          "top_sum": 8,
+          "top_sum_purity": 0.298
+        },
+        {
+          "token": 22,
+          "n": 27,
+          "top_sum": 9,
+          "top_sum_purity": 0.296
+        },
+        {
+          "token": 14,
+          "n": 49,
+          "top_sum": 5,
+          "top_sum_purity": 0.286
+        },
+        {
+          "token": 20,
+          "n": 121,
+          "top_sum": 0,
+          "top_sum_purity": 0.281
+        },
+        {
+          "token": 8,
+          "n": 37,
+          "top_sum": 1,
+          "top_sum_purity": 0.27
+        },
+        {
+          "token": 15,
+          "n": 23,
+          "top_sum": 5,
+          "top_sum_purity": 0.261
+        },
+        {
+          "token": 21,
+          "n": 62,
+          "top_sum": 9,
+          "top_sum_purity": 0.258
+        },
+        {
+          "token": 12,
+          "n": 53,
+          "top_sum": 7,
+          "top_sum_purity": 0.245
+        },
+        {
+          "token": 11,
+          "n": 113,
+          "top_sum": 6,
+          "top_sum_purity": 0.23
+        },
+        {
+          "token": 17,
+          "n": 95,
+          "top_sum": 2,
+          "top_sum_purity": 0.221
+        },
+        {
+          "token": 2,
+          "n": 217,
+          "top_sum": 0,
+          "top_sum_purity": 0.189
+        },
+        {
+          "token": 6,
+          "n": 80,
+          "top_sum": 4,
+          "top_sum_purity": 0.188
+        },
+        {
+          "token": 1,
+          "n": 194,
+          "top_sum": 8,
+          "top_sum_purity": 0.17
+        },
+        {
+          "token": 5,
+          "n": 95,
+          "top_sum": 1,
+          "top_sum_purity": 0.158
+        }
+      ]
+    },
+    "3": {
+      "n": 2600,
+      "n_tokens": 21,
+      "mean_sum_purity": 0.333,
+      "max_sum_purity": 0.6,
+      "tokens": [
+        {
+          "token": 19,
+          "n": 50,
+          "top_sum": 4,
+          "top_sum_purity": 0.6
+        },
+        {
+          "token": 8,
+          "n": 11,
+          "top_sum": 2,
+          "top_sum_purity": 0.545
+        },
+        {
+          "token": 9,
+          "n": 90,
+          "top_sum": 6,
+          "top_sum_purity": 0.489
+        },
+        {
+          "token": 17,
+          "n": 18,
+          "top_sum": 8,
+          "top_sum_purity": 0.444
+        },
+        {
+          "token": 15,
+          "n": 27,
+          "top_sum": 4,
+          "top_sum_purity": 0.444
+        },
+        {
+          "token": 4,
+          "n": 1253,
+          "top_sum": 9,
+          "top_sum_purity": 0.443
+        },
+        {
+          "token": 12,
+          "n": 70,
+          "top_sum": 0,
+          "top_sum_purity": 0.386
+        },
+        {
+          "token": 3,
+          "n": 41,
+          "top_sum": 1,
+          "top_sum_purity": 0.366
+        },
+        {
+          "token": 18,
+          "n": 22,
+          "top_sum": 5,
+          "top_sum_purity": 0.364
+        },
+        {
+          "token": 20,
+          "n": 136,
+          "top_sum": 2,
+          "top_sum_purity": 0.353
+        },
+        {
+          "token": 21,
+          "n": 32,
+          "top_sum": 7,
+          "top_sum_purity": 0.281
+        },
+        {
+          "token": 16,
+          "n": 164,
+          "top_sum": 2,
+          "top_sum_purity": 0.274
+        },
+        {
+          "token": 6,
+          "n": 55,
+          "top_sum": 2,
+          "top_sum_purity": 0.273
+        },
+        {
+          "token": 14,
+          "n": 27,
+          "top_sum": 5,
+          "top_sum_purity": 0.259
+        },
+        {
+          "token": 13,
+          "n": 169,
+          "top_sum": 4,
+          "top_sum_purity": 0.237
+        },
+        {
+          "token": 7,
+          "n": 39,
+          "top_sum": 4,
+          "top_sum_purity": 0.231
+        },
+        {
+          "token": 11,
+          "n": 68,
+          "top_sum": 7,
+          "top_sum_purity": 0.221
+        },
+        {
+          "token": 2,
+          "n": 103,
+          "top_sum": 0,
+          "top_sum_purity": 0.214
+        },
+        {
+          "token": 10,
+          "n": 46,
+          "top_sum": 6,
+          "top_sum_purity": 0.196
+        },
+        {
+          "token": 5,
+          "n": 11,
+          "top_sum": 8,
+          "top_sum_purity": 0.182
+        },
+        {
+          "token": 1,
+          "n": 159,
+          "top_sum": 8,
+          "top_sum_purity": 0.182
+        }
+      ]
+    },
+    "4": {
+      "n": 2600,
+      "n_tokens": 19,
+      "mean_sum_purity": 0.352,
+      "max_sum_purity": 0.571,
+      "tokens": [
+        {
+          "token": 23,
+          "n": 14,
+          "top_sum": 8,
+          "top_sum_purity": 0.571
+        },
+        {
+          "token": 16,
+          "n": 30,
+          "top_sum": 2,
+          "top_sum_purity": 0.533
+        },
+        {
+          "token": 21,
+          "n": 17,
+          "top_sum": 7,
+          "top_sum_purity": 0.471
+        },
+        {
+          "token": 2,
+          "n": 453,
+          "top_sum": 9,
+          "top_sum_purity": 0.422
+        },
+        {
+          "token": 18,
+          "n": 42,
+          "top_sum": 7,
+          "top_sum_purity": 0.405
+        },
+        {
+          "token": 14,
+          "n": 51,
+          "top_sum": 5,
+          "top_sum_purity": 0.392
+        },
+        {
+          "token": 10,
+          "n": 127,
+          "top_sum": 4,
+          "top_sum_purity": 0.378
+        },
+        {
+          "token": 19,
+          "n": 81,
+          "top_sum": 4,
+          "top_sum_purity": 0.346
+        },
+        {
+          "token": 12,
+          "n": 137,
+          "top_sum": 3,
+          "top_sum_purity": 0.343
+        },
+        {
+          "token": 8,
+          "n": 127,
+          "top_sum": 2,
+          "top_sum_purity": 0.339
+        },
+        {
+          "token": 3,
+          "n": 50,
+          "top_sum": 1,
+          "top_sum_purity": 0.3
+        },
+        {
+          "token": 7,
+          "n": 64,
+          "top_sum": 2,
+          "top_sum_purity": 0.297
+        },
+        {
+          "token": 15,
+          "n": 93,
+          "top_sum": 4,
+          "top_sum_purity": 0.29
+        },
+        {
+          "token": 1,
+          "n": 902,
+          "top_sum": 9,
+          "top_sum_purity": 0.287
+        },
+        {
+          "token": 6,
+          "n": 39,
+          "top_sum": 5,
+          "top_sum_purity": 0.282
+        },
+        {
+          "token": 13,
+          "n": 75,
+          "top_sum": 0,
+          "top_sum_purity": 0.28
+        },
+        {
+          "token": 20,
+          "n": 59,
+          "top_sum": 2,
+          "top_sum_purity": 0.271
+        },
+        {
+          "token": 5,
+          "n": 126,
+          "top_sum": 3,
+          "top_sum_purity": 0.254
+        },
+        {
+          "token": 11,
+          "n": 108,
+          "top_sum": 5,
+          "top_sum_purity": 0.222
+        }
+      ]
+    },
+    "5": {
+      "n": 0,
+      "n_tokens": 0,
+      "mean_sum_purity": 0,
+      "max_sum_purity": 0,
+      "tokens": []
+    },
+    "6": {
+      "n": 0,
+      "n_tokens": 0,
+      "mean_sum_purity": 0,
+      "max_sum_purity": 0,
+      "tokens": []
+    }
+  },
+  "finding_3_position_locked": {
+    "same_subtask": {
+      "survived": 6649,
+      "broke": 101,
+      "n": 6750,
+      "survive_rate": 0.985
+    },
+    "diff_subtask": {
+      "survived": 11728,
+      "broke": 339,
+      "n": 12067,
+      "survive_rate": 0.972
+    }
+  },
+  "finding_4_cross_operation": {
+    "add_to_sub": {
+      "survived": 187,
+      "n": 200,
+      "digit_correct": 1387,
+      "digit_total": 1400,
+      "survive_rate": 0.935,
+      "digit_accuracy": 0.991
+    },
+    "sub_to_add": {
+      "survived": 196,
+      "n": 200,
+      "digit_correct": 1396,
+      "digit_total": 1400,
+      "survive_rate": 0.98,
+      "digit_accuracy": 0.997
+    },
+    "random_baseline": {
+      "survived": 151,
+      "n": 200,
+      "digit_correct": 1345,
+      "digit_total": 1400,
+      "survive_rate": 0.755,
+      "digit_accuracy": 0.961
+    }
+  },
+  "finding_5_per_position_ablation": {
+    "d0": {
+      "survived": 1870,
+      "broke": 132,
+      "n": 2002,
+      "survive_rate": 0.934
+    },
+    "d1": {
+      "survived": 1875,
+      "broke": 127,
+      "n": 2002,
+      "survive_rate": 0.937
+    },
+    "d2": {
+      "survived": 1887,
+      "broke": 115,
+      "n": 2002,
+      "survive_rate": 0.943
+    },
+    "d3": {
+      "survived": 1881,
+      "broke": 121,
+      "n": 2002,
+      "survive_rate": 0.94
+    },
+    "d4": {
+      "survived": 1899,
+      "broke": 103,
+      "n": 2002,
+      "survive_rate": 0.949
+    },
+    "d5": {
+      "survived": 0,
+      "broke": 0,
+      "n": 0,
+      "survive_rate": 0.0
+    },
+    "d6": {
+      "survived": 0,
+      "broke": 0,
+      "n": 0,
+      "survive_rate": 0.0
+    }
+  }
+}
