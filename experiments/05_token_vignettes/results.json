@@ -1,0 +1,544 @@
+{
+  "model": "add_sub_sorl_v1_abs30_K1_100K_2L1H128d",
+  "K": 1,
+  "tokens": {
+    "16": {
+      "count": 540,
+      "subtask": {
+        "UC": 100,
+        "SC": 3,
+        "US": 57,
+        "SA": 3,
+        "SS": 2,
+        "MD": 161,
+        "ME": 3,
+        "UB": 61,
+        "MB": 43,
+        "UD": 107
+      },
+      "operation": {
+        "add": 165,
+        "sub": 375
+      },
+      "carry_state": {
+        "carry": 221,
+        "no_carry": 319
+      },
+      "answer_position": {
+        "1": 229,
+        "2": 117,
+        "4": 30,
+        "3": 164
+      },
+      "examples": [
+        {
+          "problem": "285869+660963=0946832",
+          "split": "add_S1",
+          "labels": [
+            "SA",
+            "UC",
+            "SC",
+            "UC",
+            "UC",
+            "UC",
+            "SC"
+          ],
+          "abs_tokens": [
+            {
+              "tok_id": 5,
+              "position": 0,
+              "subtask": "SA"
+            },
+            {
+              "tok_id": 16,
+              "position": 1,
+              "subtask": "UC"
+            }
+          ]
+        },
+        {
+          "problem": "655737+485251=1140988",
+          "split": "add_S1",
+          "labels": [
+            "UC",
+            "UC",
+            "UC",
+            "SC",
+            "SS",
+            "SA",
+            "SA"
+          ],
+          "abs_tokens": [
+            {
+              "tok_id": 2,
+              "position": 0,
+              "subtask": "UC"
+            },
+            {
+              "tok_id": 16,
+              "position": 1,
+              "subtask": "UC"
+            }
+          ]
+        },
+        {
+          "problem": "199495+165991=0365486",
+          "split": "add_S1",
+          "labels": [
+            "SA",
+            "UC",
+            "UC",
+            "UC",
+            "UC",
+            "SC",
+            "SA"
+          ],
+          "abs_tokens": [
+            {
+              "tok_id": 3,
+              "position": 0,
+              "subtask": "SA"
+            },
+            {
+              "tok_id": 16,
+              "position": 1,
+              "subtask": "UC"
+            }
+          ]
+        },
+        {
+          "problem": "554701+897795=1452496",
+          "split": "add_S1",
+          "labels": [
+            "UC",
+            "UC",
+            "UC",
+            "UC",
+            "SC",
+            "SS",
+            "SA"
+          ],
+          "abs_tokens": [
+            {
+              "tok_id": 12,
+              "position": 0,
+              "subtask": "UC"
+            },
+            {
+              "tok_id": 16,
+              "position": 1,
+              "subtask": "UC"
+            }
+          ]
+        },
+        {
+          "problem": "748697+848798=1597495",
+          "split": "add_S1",
+          "labels": [
+            "UC",
+            "SC",
+            "UC",
+            "UC",
+            "UC",
+            "UC",
+            "SC"
+          ],
+          "abs_tokens": [
+            {
+              "tok_id": 15,
+              "position": 0,
+              "subtask": "UC"
+            },
+            {
+              "tok_id": 16,
+              "position": 1,
+              "subtask": "SC"
+            }
+          ]
+        }
+      ]
+    },
+    "21": {
+      "count": 122,
+      "subtask": {
+        "SS": 1,
+        "SA": 7,
+        "SC": 8,
+        "US": 10,
+        "UC": 9,
+        "UB": 74,
+        "UD": 13
+      },
+      "operation": {
+        "add": 35,
+        "sub": 87
+      },
+      "carry_state": {
+        "no_carry": 60,
+        "carry": 62
+      },
+      "answer_position": {
+        "2": 62,
+        "1": 11,
+        "3": 32,
+        "4": 17
+      },
+      "examples": [
+        {
+          "problem": "130609+069130=0199739",
+          "split": "add_S0",
+          "labels": [
+            "SA",
+            "SA",
+            "SS",
+            "SS",
+            "SA",
+            "SA",
+            "SA"
+          ],
+          "abs_tokens": [
+            {
+              "tok_id": 3,
+              "position": 0,
+              "subtask": "SA"
+            },
+            {
+              "tok_id": 1,
+              "position": 1,
+              "subtask": "SA"
+            },
+            {
+              "tok_id": 21,
+              "position": 2,
+              "subtask": "SS"
+            }
+          ]
+        },
+        {
+          "problem": "751451+834792=1586243",
+          "split": "add_S1",
+          "labels": [
+            "UC",
+            "SC",
+            "SA",
+            "UC",
+            "UC",
+            "SC",
+            "SA"
+          ],
+          "abs_tokens": [
+            {
+              "tok_id": 10,
+              "position": 0,
+              "subtask": "UC"
+            },
+            {
+              "tok_id": 1,
+              "position": 1,
+              "subtask": "SC"
+            },
+            {
+              "tok_id": 21,
+              "position": 2,
+              "subtask": "SA"
+            }
+          ]
+        },
+        {
+          "problem": "274962+783844=1058806",
+          "split": "add_S2",
+          "labels": [
+            "UC",
+            "US",
+            "SC",
+            "UC",
+            "UC",
+            "SC",
+            "SA"
+          ],
+          "abs_tokens": [
+            {
+              "tok_id": 2,
+              "position": 0,
+              "subtask": "UC"
+            },
+            {
+              "tok_id": 16,
+              "position": 1,
+              "subtask": "US"
+            },
+            {
+              "tok_id": 21,
+              "position": 2,
+              "subtask": "SC"
+            }
+          ]
+        },
+        {
+          "problem": "242169+435338=0677507",
+          "split": "add_S2",
+          "labels": [
+            "SA",
+            "SA",
+            "SA",
+            "SA",
+            "UC",
+            "US",
+            "SC"
+          ],
+          "abs_tokens": [
+            {
+              "tok_id": 3,
+              "position": 0,
+              "subtask": "SA"
+            },
+            {
+              "tok_id": 1,
+              "position": 1,
+              "subtask": "SA"
+            },
+            {
+              "tok_id": 21,
+              "position": 2,
+              "subtask": "SA"
+            }
+          ]
+        },
+        {
+          "problem": "694541+313480=1008021",
+          "split": "add_S2",
+          "labels": [
+            "UC",
+            "US",
+            "SC",
+            "UC",
+            "US",
+            "SC",
+            "SA"
+          ],
+          "abs_tokens": [
+            {
+              "tok_id": 2,
+              "position": 0,
+              "subtask": "UC"
+            },
+            {
+              "tok_id": 1,
+              "position": 1,
+              "subtask": "US"
+            },
+            {
+              "tok_id": 21,
+              "position": 2,
+              "subtask": "SC"
+            }
+          ]
+        }
+      ]
+    },
+    "4": {
+      "count": 1275,
+      "subtask": {
+        "SA": 143,
+        "SS": 43,
+        "UC": 409,
+        "SC": 125,
+        "US": 530,
+        "MD": 18,
+        "ME": 5,
+        "UB": 2
+      },
+      "operation": {
+        "add": 1250,
+        "sub": 25
+      },
+      "carry_state": {
+        "no_carry": 813,
+        "carry": 462
+      },
+      "answer_position": {
+        "3": 1253,
+        "2": 5,
+        "1": 6,
+        "0": 11
+      },
+      "examples": [
+        {
+          "problem": "536153+051522=0587675",
+          "split": "add_S0",
+          "labels": [
+            "SA",
+            "SA",
+            "SA",
+            "SA",
+            "SA",
+            "SA",
+            "SA"
+          ],
+          "abs_tokens": [
+            {
+              "tok_id": 3,
+              "position": 0,
+              "subtask": "SA"
+            },
+            {
+              "tok_id": 2,
+              "position": 1,
+              "subtask": "SA"
+            },
+            {
+              "tok_id": 7,
+              "position": 2,
+              "subtask": "SA"
+            },
+            {
+              "tok_id": 4,
+              "position": 3,
+              "subtask": "SA"
+            }
+          ]
+        },
+        {
+          "problem": "063242+415415=0478657",
+          "split": "add_S0",
+          "labels": [
+            "SA",
+            "SA",
+            "SA",
+            "SA",
+            "SA",
+            "SA",
+            "SA"
+          ],
+          "abs_tokens": [
+            {
+              "tok_id": 3,
+              "position": 0,
+              "subtask": "SA"
+            },
+            {
+              "tok_id": 2,
+              "position": 1,
+              "subtask": "SA"
+            },
+            {
+              "tok_id": 11,
+              "position": 2,
+              "subtask": "SA"
+            },
+            {
+              "tok_id": 4,
+              "position": 3,
+              "subtask": "SA"
+            }
+          ]
+        },
+        {
+          "problem": "201533+688444=0889977",
+          "split": "add_S0",
+          "labels": [
+            "SA",
+            "SA",
+            "SA",
+            "SS",
+            "SS",
+            "SA",
+            "SA"
+          ],
+          "abs_tokens": [
+            {
+              "tok_id": 3,
+              "position": 0,
+              "subtask": "SA"
+            },
+            {
+              "tok_id": 1,
+              "position": 1,
+              "subtask": "SA"
+            },
+            {
+              "tok_id": 22,
+              "position": 2,
+              "subtask": "SA"
+            },
+            {
+              "tok_id": 4,
+              "position": 3,
+              "subtask": "SS"
+            }
+          ]
+        },
+        {
+          "problem": "561100+225579=0786679",
+          "split": "add_S0",
+          "labels": [
+            "SA",
+            "SA",
+            "SA",
+            "SA",
+            "SA",
+            "SA",
+            "SA"
+          ],
+          "abs_tokens": [
+            {
+              "tok_id": 3,
+              "position": 0,
+              "subtask": "SA"
+            },
+            {
+              "tok_id": 1,
+              "position": 1,
+              "subtask": "SA"
+            },
+            {
+              "tok_id": 11,
+              "position": 2,
+              "subtask": "SA"
+            },
+            {
+              "tok_id": 4,
+              "position": 3,
+              "subtask": "SA"
+            }
+          ]
+        },
+        {
+          "problem": "006811+492164=0498975",
+          "split": "add_S0",
+          "labels": [
+            "SA",
+            "SA",
+            "SS",
+            "SA",
+            "SS",
+            "SA",
+            "SA"
+          ],
+          "abs_tokens": [
+            {
+              "tok_id": 3,
+              "position": 0,
+              "subtask": "SA"
+            },
+            {
+              "tok_id": 1,
+              "position": 1,
+              "subtask": "SA"
+            },
+            {
+              "tok_id": 7,
+              "position": 2,
+              "subtask": "SS"
+            },
+            {
+              "tok_id": 4,
+              "position": 3,
+              "subtask": "SA"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

@@ -134,13 +134,36 @@ Training script: `train_ablate_sanity.py` with trainers from `sorl/trainer_ablat
 
 ---
 
-## Arithmetic Interpretability Study (as of 2026-04-09)
+## Arithmetic Interpretability Study (as of 2026-04-16)
 
 ### Goal
 Show that SoRL externalizes arithmetic reasoning mechanisms (carry, borrow circuits) as explicit abstraction tokens — making them directly observable without activation-level tooling. Reference: Quirke et al. "Understanding Addition and Subtraction in Transformers" (2024).
 
+### Focus Models for Interpretability
+
+| Model (on HF) | Architecture | Data | Accuracy | Role |
+|----------------|-------------|------|----------|------|
+| `add_sub_sorl_v1_abs30_K1_10K` | 2L/3H/510d (standard) | 10K fixed | 97.4% | Token distribution analysis (saturated, clean specialization) |
+| `add_sub_sorl_v1_abs30_K1_100K_2L1H128d` | 2L/1H/128d (undersized) | 100K fixed | 77.0% (SFT=22%) | **Primary causal/intervention model** — not saturated, SoRL is load-bearing |
+
+All models on HF at `thoughtworks/arithmetic-sorl`. All use fixed training data from `thoughtworks/arithmetic-sorl-data`.
+
+### Key Documents (read these)
+- **`arithmetic/novel.md`** — 5 novel findings beyond Quirke, with mechanistic verdicts
+- **`docs/interpretability_study.md`** — full study plan + current results + open questions
+- **`arithmetic/framework.md`** — infrastructure: data pipeline, model catalog, job queue
+- **`experiments/README.md`** — status of all 10 experiments
+
+### Current Findings (see `arithmetic/novel.md` for details)
+1. **Sum-9 detector** — tokens with 85% sum-9 purity (correlational)
+2. **MSB digit-sum encoding** — 10 tokens at MSB encode raw digit sums (architecture-dependent)
+3. **Position-locked specialization** — tokens bound to positions (distributional only)
+4. **Cross-operation unification** — **CONFIRMED causally** (93.5% transplant vs 75.5% random)
+5. **LSB token** — d0 most sensitive to ablation on undersized model (1.5pp, weak signal)
+6. **Surgical token swap** — wrong examples fixable by replacing misassigned tokens (exp 09/10)
+
 ### Architecture
-Tiny Qwen3 from-scratch (custom config: 2L/3H/510d, ~162M total, ~7.8M transformer params) wrapped in `SorlModelWrapper`. Tokenizer: Qwen3-0.6B (each digit/operator = 1 token, 21-token sequences).
+Tiny Qwen3 from-scratch (custom config) wrapped in `SorlModelWrapper`. Tokenizer: Qwen3-0.6B (each digit/operator = 1 token, 21-token sequences).
 
 ### Trainer
 SoRL v1 (info-gain loss). v6 (self-routing) was tried but produces 0% accuracy from scratch — not used.
@@ -162,31 +185,37 @@ arithmetic/
 ├── catalog.py                   # ModelCatalog — index HF models
 ├── hub.py                       # HuggingFace save/load
 ├── train.py                     # unified training: baseline SFT + SoRL v1
+├── novel.md                     # NEW FINDINGS beyond Quirke
+├── framework.md                 # infrastructure overview
 ├── eval_sets/                   # cached deterministic eval sets (seed=42)
 └── scripts/
     ├── gpu_queue.py             # GPU job scheduler
     ├── sweep_enriched.txt       # main 30-job sweep
-    ├── sweep_baselines_10ep.txt # 10-epoch baseline re-runs
-    ├── sweep_low_data_sorl.txt  # low-data SoRL K=1 experiments
-    ├── sweep_undersize.txt      # undersized model sweep
-    ├── auto_zipf_sweep.py       # autonomous zipf diversity pipeline
+    ├── sweep_remaining.txt      # trimmed remaining jobs
     └── reeval_hf_models.py      # re-evaluate uploaded models
-```
 
-### Documents
-- `docs/SoRL_alignment_weak_supervision.pdf` — SoRL paper
-- `docs/understanding_addition_subtraction_transformers.pdf` — Quirke et al. 2024
-- `docs/interpretability_study.md` — experiment plan
+experiments/
+├── 01_model_comparison/         # Results generated
+├── 02_vocab_scaling/            # Results generated
+├── 03_token_subtask_heatmap/    # Results generated (both models)
+├── 04_addition_hierarchy/       # Script ready
+├── 05_token_vignettes/          # Script ready
+├── 06_token_swap/               # Script ready (old pair-based)
+├── 07_causal_ablation/          # Script ready
+├── 08_mechanistic_verification/ # Results generated (both models)
+├── 09_surgical_swap/            # Results generated (undersized model)
+├── 10_blanket_swap/             # Script ready (blanket vs surgical)
+└── README.md                    # Status of all experiments
+```
 
 ### Compute
 - 3x NVIDIA RTX PRO 6000 Blackwell (96GB each)
 - With bf16+compile+batch=512: ~14 it/s on baseline, 20K steps in ~25 min
-- Sweep runs 6 concurrent experiments (2 per GPU)
 
 ### Key Design Decisions
 - **No TransformerLens** — use raw PyTorch hooks for interpretability
 - **SAE via EleutherAI sparsify** (eai-sparsify), not sae-lens — use SparseCoder directly
-- **Online data generation** (no fixed dataset) matching Quirke's approach
+- **Fixed datasets on HF** — never generate training data on the fly
 
 ---
 
