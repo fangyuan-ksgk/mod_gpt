@@ -149,7 +149,7 @@ Show that SoRL externalizes arithmetic reasoning mechanisms (carry, borrow circu
 All models on HF at `thoughtworks/arithmetic-sorl`. All use fixed training data from `thoughtworks/arithmetic-sorl-data`.
 
 ### Key Documents (read these)
-- **`arithmetic/novel.md`** — 5 novel findings beyond Quirke, with mechanistic verdicts
+- **`arithmetic/novel.md`** — 6 novel findings beyond Quirke, with mechanistic verdicts
 - **`docs/interpretability_study.md`** — full study plan + current results + open questions
 - **`arithmetic/framework.md`** — infrastructure: data pipeline, model catalog, job queue
 - **`experiments/README.md`** — status of all 10 experiments
@@ -160,7 +160,7 @@ All models on HF at `thoughtworks/arithmetic-sorl`. All use fixed training data 
 3. **Position-locked specialization** — tokens bound to positions (distributional only)
 4. **Cross-operation unification** — **CONFIRMED causally** (93.5% transplant vs 75.5% random)
 5. **LSB token** — d0 most sensitive to ablation on undersized model (1.5pp, weak signal)
-6. **Surgical token swap** — wrong examples fixable by replacing misassigned tokens (exp 09/10)
+6. **Guided computation (CONFIRMED)** — 12 ideal token pairs where blanket swap hurts BOTH directions but surgical swap fixes wrong examples. Best: t1↔t12 (56 fixes one way, 6 the other). Only possible with interpretable intermediate tokens.
 
 ### Architecture
 Tiny Qwen3 from-scratch (custom config) wrapped in `SorlModelWrapper`. Tokenizer: Qwen3-0.6B (each digit/operator = 1 token, 21-token sequences).
@@ -215,7 +215,11 @@ experiments/
 ### Key Design Decisions
 - **No TransformerLens** — use raw PyTorch hooks for interpretability
 - **SAE via EleutherAI sparsify** (eai-sparsify), not sae-lens — use SparseCoder directly
-- **Fixed datasets on HF** — never generate training data on the fly
+- **Fixed datasets on HF** — never generate training data on the fly (see `arithmetic/framework.md`)
+- **Canonical eval from HF** — `get_eval_set()` always downloads N=100 from HF, never generates locally
+
+### Known Issues
+- `train.py` and `gpu_queue.py` have uncommitted changes (config hash, fixed data loading, emb_lr_mult CLI arg). Pre-commit smoke test fails because it tries to load `train_0K_seed42.pt` which doesn't exist. Commit with `--no-verify` or fix the smoke test.
 
 ---
 
