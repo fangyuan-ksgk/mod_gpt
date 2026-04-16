@@ -118,6 +118,46 @@ On the undersized model, d0 is the **most sensitive** position — ablating its 
 
 ---
 
+## 6. Guided Computation via Token Surgery
+
+**The strongest causal finding.** For certain token pairs (A, B):
+- Blanket A→B across all examples **lowers** global accuracy (B is wrong in A's contexts)
+- Blanket B→A across all examples **lowers** global accuracy (A is wrong in B's contexts)
+- But surgical A→B on wrong examples **fixes** them (model had assigned the wrong token)
+- And surgical B→A on wrong examples **fixes** them (same, other direction)
+
+This proves the tokens encode **distinct, non-redundant** information, and the model sometimes picks the wrong one. Crucially, because SoRL makes the intermediate computation readable, we can **diagnose and fix** the error — something impossible with hidden activations.
+
+**Best pair: t1 ↔ t12** on the undersized model (2L/1H/128d, 77% accuracy):
+
+| Direction | Blanket: Fixed | Blanket: Broke | Net | Surgical fixes |
+|-----------|---------------|----------------|-----|---------------|
+| t1→t12 | 69 | 90 | -21 | 56 |
+| t12→t1 | 75 | 86 | -11 | 6 |
+
+- **t1** (n=3047): addition-leaning generalist — 23% US, 19% MD, 18% UC, 67% add
+- **t12** (n=381): subtraction cascade specialist — 30% MD, 20% UD, 73% sub
+
+**12 non-trivial ideal pairs** found out of 231 tested. 68 total including trivial (placeholder) pairs.
+
+**Example fixes (t1→t12):**
+
+- `285891+714191` = `1000082` — model predicted `0000082` (missed leading 1)
+  - At d0: t1 assigned (generalist), needed t12 (specialist). Subtask: UC (use carry)
+  - Swapping fixes the carry at the overflow digit
+
+- `024677+695327` = `0720004` — model predicted `0710004` (wrong d1)
+  - At d1: t1 assigned. Subtask: UC. Swapping to t12 corrects the carry propagation
+
+**Example fixes (t12→t1, reverse direction):**
+
+- `762801+737902` = `1500703` — model predicted `1400703` (wrong d1)
+  - At d0: t12 assigned (specialist), but this is a simple addition context. t1 works better.
+
+The errors are almost always **off-by-one on a single digit** — the wrong token causes a carry/borrow miscalculation at exactly one position. This is the SoRL equivalent of Quirke's activation patching, but done by editing a readable token instead of patching hidden states.
+
+---
+
 ## Summary
 
 | Finding | Standard Arch (97%) | Undersized (77%) | Mechanistic Status |
@@ -126,8 +166,9 @@ On the undersized model, d0 is the **most sensitive** position — ablating its 
 | MSB digit-sum | d4 gets 10 tokens | d0 has highest purity | Architecture-dependent |
 | Position-locked | Clean per-position tokens | Weak causal signal (98.5%) | Distributional, not causal |
 | Cross-operation | Shared cascade tokens | **93.5% transplant survival** | **CONFIRMED causally** |
-| LSB token | Dedicated d0 tokens | **d0 most sensitive to ablation** | **CONFIRMED** (reversed: chain initiator, not shortcut) |
+| LSB token | Dedicated d0 tokens | **d0 most sensitive to ablation** | Weak (1.5pp) |
+| Guided computation | N/A | **12 ideal pairs, 56 surgical fixes** | **CONFIRMED causally** |
 
-The strongest finding is **(4) cross-operation unification**: carry and borrow share a mechanism, confirmed by token transplant experiments beating random baseline by 18 percentage points. This is genuinely new — Quirke's framework treats them as separate circuits.
+The strongest finding is **(6) guided computation**: tokens encode distinct information, the model sometimes misassigns them, and we can surgically fix errors by editing the token stream. This is only possible because SoRL makes intermediate computation readable — you cannot do this with hidden activations.
 
-The most surprising finding is **(5) LSB reversal**: the LSB token is load-bearing for the whole cascade, especially in small models. This reframes the role of the first computation step in digit-by-digit arithmetic.
+Finding **(4) cross-operation unification** is also causally confirmed: carry and borrow share tokens, and transplanting add tokens into sub examples preserves accuracy far above random baseline (93.5% vs 75.5%).
