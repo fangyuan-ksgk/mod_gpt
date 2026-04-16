@@ -2029,15 +2029,16 @@ DATASET_REGISTRY = {
     "sciq": SciQDataset,
     # Multi-hop QA
     "hotpotqa": HotpotQADataset,
-    "strategyqa": StrategyQADataset,
+    
     # Harder reasoning benchmarks
     "mmlupro": MMLUProDataset,
     "bbh": BBHDataset,
-    "bbhlogic": BBHDataset,  # backward-compat alias
+    # "bbhlogic": BBHDataset,  # backward-compat alias
     # Reading & reasoning (proper train splits)
-    "race": RACEDataset,
-    "logiqa": LogiQADataset,
-    "medqa": MedQADataset,
+    # "race": RACEDataset,  -> saturated
+    "logiqa": LogiQADataset, # --> prune to overfitting
+    "medqa": MedQADataset, # -> prune to overfitting
+    "strategyqa": StrategyQADataset,
     "drop": DROPDataset,
     "triviaqa": TriviaQADataset,
     # Code generation
