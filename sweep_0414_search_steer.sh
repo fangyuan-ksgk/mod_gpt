@@ -10,23 +10,23 @@
 # Models (best mid-layer from prior sweep):
 #   q06 = Qwen3-0.6B  (28L, layer 14)
 #   q17 = Qwen3-1.7B  (28L, layer 14)
-#   l1  = Llama-3.2-1B (16L, layer 8)
-#   l3  = Llama-3.2-3B (28L, layer 14)
+#   l1  = Llama-3.2-1B (16L, layer 10)
+#   l3  = Llama-3.2-3B (28L, layer 16)
 #   q4b = Qwen3-4B     (36L, layer 18, LoRA r=16)
 #
-# Datasets (9):
-#   scienceqa, gsm8k, arc, commonsenseqa, mmlu, boolq, openbookqa, aqua, hotpotqa
+# Datasets (2):
+#   drop, strategyqa
 #
 # Per (model, dataset): 6 runs
 #   v6 C=4, v6 C=32, v9 joint C=4, v9 detach C=4, v9 joint C=32, v9 detach C=32
 #
 # Parts (1 per model×dataset):
-#   q06:  1-9     q17: 10-18    l1: 19-27    l3: 28-36    q4b: 37-45
+#   q06: 1-2    q17: 3-4    l1: 5-6    l3: 7-8    q4b: 9-10
 #
-# Total: 45 parts × 6 runs = 270 runs
+# Total: 10 parts × 6 runs = 60 runs
 #
 # Usage: ./sweep_0414_search_steer.sh <PART>
-#   PART=1..45  → specific model+dataset combo
+#   PART=1..10  → specific model+dataset combo
 #   PART=all    → everything (default)
 # ===========================================================================
 set -euo pipefail
@@ -45,8 +45,6 @@ N_GPUS=4
 
 # ---- Shared hyper-params ----
 LR=1e-5
-SLR="5e-2"
-SCALE=0.5
 L=4
 EPOCHS=1
 BATCH_SIZE=2
@@ -60,8 +58,6 @@ NUM_LOG=5
 NUM_ROLLOUTS=4
 SEARCH_TEMP=1.0
 ALPHA_INFO=1.0
-ALPHA_ABS=0.5
-ALPHA_ZIPF=0.01
 
 # ---- Sweep axes ----
 C_SIZES=(4 32)
@@ -77,16 +73,17 @@ LLAMA1="meta-llama/Llama-3.2-1B"
 LLAMA3="meta-llama/Llama-3.2-3B"
 QWEN4B="Qwen/Qwen3-4B"
 
-# 9 datasets in order
-DS_NAMES=(scienceqa gsm8k arc commonsenseqa mmlu boolq openbookqa aqua hotpotqa)
-DS_TAGS=(sci gsm arc csqa mmlu boolq oqa aqua hpqa)
+# 2 datasets in order
+DS_NAMES=(drop strategyqa)
+DS_TAGS=(drop stqa)
 N_DS=${#DS_NAMES[@]}
 
-declare -A P_MODEL P_MTAG P_DS P_DTAG P_LAYER P_EXTRA
+declare -A P_MODEL P_MTAG P_DS P_DTAG P_LAYER P_EXTRA P_SLR P_SCALE P_AZ P_AA
 
-# Helper to fill 9 consecutive parts for a model
+# Helper to fill N_DS consecutive parts for a model
+# fill_model START MODEL MTAG LAYER SLR SCALE AZ AA EXTRA
 fill_model() {
-  local start=$1 model=$2 mtag=$3 layer=$4 extra="$5"
+  local start=$1 model=$2 mtag=$3 layer=$4 slr=$5 scale=$6 az=$7 aa=$8 extra="${9:-}"
   for i in $(seq 0 $((N_DS-1))); do
     local p=$((start + i))
     P_MODEL[$p]="$model"
@@ -94,22 +91,28 @@ fill_model() {
     P_DS[$p]="${DS_NAMES[$i]}"
     P_DTAG[$p]="${DS_TAGS[$i]}"
     P_LAYER[$p]="$layer"
+    P_SLR[$p]="$slr"
+    P_SCALE[$p]="$scale"
+    P_AZ[$p]="$az"
+    P_AA[$p]="$aa"
     P_EXTRA[$p]="$extra"
   done
 }
 
-fill_model  1 "$QWEN06" "q06"  "14" ""
-fill_model 10 "$QWEN17" "q17"  "14" ""
-fill_model 19 "$LLAMA1" "l1"   "8"  ""
-fill_model 28 "$LLAMA3" "l3"   "14" ""
-fill_model 37 "$QWEN4B" "q4b"  "18" "--use_lora --lora_rank 16 --lora_alpha 32"
+#                     START  MODEL    MTAG  LAYER SLR   SCALE AZ   AA   EXTRA
+fill_model  1 "$QWEN06" "q06"  14    5e-2  0.5   0.1  0.5  ""
+fill_model  3 "$QWEN17" "q17"  14    5e-2  0.5   0.1  0.5  ""
+fill_model  5 "$LLAMA1" "l1"   10    1e-2  0.1   0.1  0.5  ""
+fill_model  7 "$LLAMA3" "l3"   16    1e-2  0.1   0.1  0.5  ""
+fill_model  9 "$QWEN4B" "q4b"  18    5e-2  0.5   0.1  0.5  "--use_lora --lora_rank 16 --lora_alpha 32"
 
-N_PARTS=45
+N_PARTS=10
 
 # ---- Runner ----
 run_one() {
   local mode=$1 C=$2 dataset=$3 dtag=$4 detach_flag=$5 detach_tag=$6 job_idx=$7 \
-        cur_model=$8 cur_mtag=$9 cur_layer=${10} model_extra="${11:-}"
+        cur_model=$8 cur_mtag=$9 cur_layer=${10} cur_slr=${11} cur_scale=${12} \
+        cur_az=${13} cur_aa=${14} model_extra="${15:-}"
 
   local gpu=$(( (job_idx - 1) % N_GPUS ))
   local port=$((BASE_PORT + PART_NUM * 100 + job_idx))
@@ -121,7 +124,7 @@ run_one() {
   local extra_args=""
   if [ "$mode" = "v9" ]; then
     extra_args="--num_rollouts $NUM_ROLLOUTS --search_temp $SEARCH_TEMP"
-    extra_args="$extra_args --alpha_info $ALPHA_INFO --alpha_abs $ALPHA_ABS --alpha_zipf $ALPHA_ZIPF"
+    extra_args="$extra_args --alpha_info $ALPHA_INFO --alpha_abs $cur_aa --alpha_zipf $cur_az"
     if [ "$detach_flag" = "1" ]; then
       extra_args="$extra_args --detach_routing"
     fi
@@ -137,13 +140,13 @@ run_one() {
     --dataset $dataset \
     --num_epochs $EPOCHS \
     --lr $LR \
-    --steer_lr $SLR \
+    --steer_lr $cur_slr \
     --warmup_steps $WARMUP \
     --batch_size $BATCH_SIZE \
     --gradient_accumulation_steps $GRAD_ACCUM \
     --C_SIZE $C \
     --L $L \
-    --scale $SCALE \
+    --scale $cur_scale \
     --inject_layers $cur_layer \
     --eval_every 99999 \
     --save_every 99999 \
@@ -167,22 +170,26 @@ run_part() {
   echo "--- Part ${p}/${N_PARTS}: ${cur_mtag} + ${dataset} (layer ${cur_layer}) ---"
 
   local cur_extra="${P_EXTRA[$p]}"
+  local cur_slr="${P_SLR[$p]}"
+  local cur_scale="${P_SCALE[$p]}"
+  local cur_az="${P_AZ[$p]}"
+  local cur_aa="${P_AA[$p]}"
 
   local JOB_IDX=0
   for C in "${C_SIZES[@]}"; do
     # V6 baseline
     JOB_IDX=$((JOB_IDX + 1))
-    run_one v6 $C $dataset $dtag 0 "base" $JOB_IDX $cur_model $cur_mtag $cur_layer "$cur_extra"
+    run_one v6 $C $dataset $dtag 0 "base" $JOB_IDX $cur_model $cur_mtag $cur_layer $cur_slr $cur_scale $cur_az $cur_aa "$cur_extra"
     if (( JOB_IDX % N_GPUS == 0 )); then wait; fi
 
     # V9 joint
     JOB_IDX=$((JOB_IDX + 1))
-    run_one v9 $C $dataset $dtag 0 "joint" $JOB_IDX $cur_model $cur_mtag $cur_layer "$cur_extra"
+    run_one v9 $C $dataset $dtag 0 "joint" $JOB_IDX $cur_model $cur_mtag $cur_layer $cur_slr $cur_scale $cur_az $cur_aa "$cur_extra"
     if (( JOB_IDX % N_GPUS == 0 )); then wait; fi
 
     # V9 detach
     JOB_IDX=$((JOB_IDX + 1))
-    run_one v9 $C $dataset $dtag 1 "detach" $JOB_IDX $cur_model $cur_mtag $cur_layer "$cur_extra"
+    run_one v9 $C $dataset $dtag 1 "detach" $JOB_IDX $cur_model $cur_mtag $cur_layer $cur_slr $cur_scale $cur_az $cur_aa "$cur_extra"
     if (( JOB_IDX % N_GPUS == 0 )); then wait; fi
   done
   wait
