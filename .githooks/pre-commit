@@ -23,7 +23,7 @@ echo "(This takes ~30 seconds. Skip with --no-verify if you know what you're doi
 # Run tiny baseline job
 output=$(timeout 300 python -m arithmetic.train \
     --mode baseline --ops add_sub \
-    --dataset_size 500 --num_epochs 1 \
+    --dataset_size 10000 --num_epochs 1 \
     --output_dir /tmp/smoke_precommit \
     --no_wandb 2>&1)
 exit_code=$?

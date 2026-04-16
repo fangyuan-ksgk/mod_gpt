@@ -416,6 +416,7 @@ def _parse_args():
     p.add_argument("--alpha_info_gain", type=float, default=10.0)
     p.add_argument("--alpha_abs", type=float, default=0.1)
     p.add_argument("--alpha_soft_zipf", type=float, default=1.0)
+    p.add_argument("--emb_lr_mult", type=float, default=1.0)
     # Training (shared between SFT and SoRL)
     p.add_argument("--batch_size", type=int, default=64)
     p.add_argument("--num_epochs", type=int, default=5)
@@ -467,6 +468,16 @@ def main():
     run_name += f"_{cfg.dataset_size // 1000}K"
     if cfg.n_layer != 2 or cfg.n_head != 3 or cfg.n_embd != 510:
         run_name += f"_{cfg.n_layer}L{cfg.n_head}H{cfg.n_embd}d"
+    # Append non-default hyperparams so variants don't overwrite each other
+    defaults = ArithmeticConfig()
+    if cfg.alpha_info_gain != defaults.alpha_info_gain:
+        run_name += f"_ig{cfg.alpha_info_gain:g}"
+    if cfg.alpha_abs != defaults.alpha_abs:
+        run_name += f"_abs{cfg.alpha_abs:g}"
+    if cfg.emb_lr_mult != defaults.emb_lr_mult:
+        run_name += f"_emlr{cfg.emb_lr_mult:g}"
+    if cfg.alpha_soft_zipf != defaults.alpha_soft_zipf:
+        run_name += f"_zipf{cfg.alpha_soft_zipf:g}"
 
     if not cfg.no_wandb:
         wandb.init(
@@ -512,8 +523,26 @@ def main():
             "eval_hf_repo": EVAL_HF_REPO,
         })
 
-    import subprocess, datetime
+    import subprocess, datetime, hashlib
     git_hash = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
+
+    # Config hash: deterministic fingerprint of everything that affects training output.
+    # Same hash = same training run. Different hash = needs re-run.
+    _hash_keys = sorted({
+        "mode", "ops", "dataset_size", "n_digits", "abs_vocab", "K",
+        "n_layer", "n_head", "n_embd", "num_epochs", "lr", "batch_size",
+        "weight_decay", "warmup_ratio", "beta2", "emb_lr_mult", "seed",
+        "alpha_info_gain", "alpha_abs", "alpha_soft_zipf", "alpha_ortho",
+        "alpha_contrastive", "gamma_contrastive", "num_rollouts",
+        "max_iterations", "temperature",
+    })
+    _hash_dict = {k: getattr(cfg, k, None) for k in _hash_keys}
+    _hash_dict["train_dataset"] = f"fixed_train/train_{cfg.dataset_size // 1000}K_seed42.pt"
+    _hash_dict["eval_dataset"] = f"eval_sets/{CANONICAL_EVAL_SET}"
+    config_hash = hashlib.sha256(
+        json.dumps(_hash_dict, sort_keys=True, default=str).encode()
+    ).hexdigest()[:12]
+
     manifest = {
         **{k: v for k, v in cfg.__dict__.items() if not k.startswith('_')},
         "n_params": n_params,
@@ -531,6 +560,7 @@ def main():
         "eval_final_dataset": f"eval_sets/{CANONICAL_EVAL_SET}",
         "eval_epoch_dataset": f"eval_sets/{EPOCH_EVAL_SET}",
         "eval_hf_repo": EVAL_HF_REPO,
+        "config_hash": config_hash,
     }
 
     os.makedirs(cfg.output_dir, exist_ok=True)

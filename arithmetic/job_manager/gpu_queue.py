@@ -544,10 +544,119 @@ def main():
                 return part.split("/")[-1]
         return cmd.split("--mode")[-1].strip().split()[0] if "--mode" in cmd else "job"
 
-    n_high = sum(1 for _, p in jobs if p == 0)
-    n_low = sum(1 for _, p in jobs if p == 2)
-    print(f"GPU Queue: {len(jobs)} jobs, {n_gpus} GPUs, max {max_per_gpu}/GPU")
-    print(f"  priority: {n_high} high, {len(jobs) - n_high - n_low} normal, {n_low} low")
+    # Config hash skip: check HF for models with matching config_hash.
+    # If a model exists on HF with the same hash, the job is already done.
+    def _compute_config_hash(cmd):
+        """Compute config_hash from a command string, matching train.py logic."""
+        import hashlib, shlex
+        CANONICAL_EVAL_SET = "eval_add_sub_6d_N100_seed42.json"
+        # Parse args from command
+        parts = shlex.split(cmd)
+        args = {}
+        i = 0
+        while i < len(parts):
+            if parts[i].startswith("--") and i + 1 < len(parts) and not parts[i + 1].startswith("--"):
+                key = parts[i][2:]
+                val = parts[i + 1]
+                # Try numeric conversion
+                try:
+                    val = int(val)
+                except ValueError:
+                    try:
+                        val = float(val)
+                    except ValueError:
+                        pass
+                args[key] = val
+                i += 2
+            elif parts[i].startswith("--"):
+                args[parts[i][2:]] = True
+                i += 1
+            else:
+                i += 1
+
+        # Defaults matching ArithmeticConfig / SoRLConfig
+        defaults = {
+            "mode": "baseline", "ops": "add_sub", "dataset_size": 100000,
+            "n_digits": 6, "abs_vocab": 0, "K": 4,
+            "n_layer": 2, "n_head": 3, "n_embd": 510,
+            "num_epochs": 20, "lr": 0, "batch_size": 64,
+            "weight_decay": 0.01, "warmup_ratio": 0.03, "beta2": 0.999,
+            "emb_lr_mult": 1.0, "seed": 42,
+            "alpha_info_gain": 10.0, "alpha_abs": 0.1,
+            "alpha_soft_zipf": 1.0, "alpha_ortho": 0.0,
+            "alpha_contrastive": 1.0, "gamma_contrastive": 0.5,
+            "num_rollouts": 4, "max_iterations": 2, "temperature": 1.0,
+        }
+        cfg = {k: args.get(k, v) for k, v in defaults.items()}
+
+        # Auto-scale LR (matching train.py logic)
+        if cfg["lr"] == 0:
+            n_embd = cfg["n_embd"]
+            if n_embd <= 256:
+                cfg["lr"] = 2e-5
+            elif n_embd < 510:
+                cfg["lr"] = 4e-5
+            else:
+                cfg["lr"] = 8e-5
+
+        _hash_keys = sorted(defaults.keys())
+        d = {k: cfg[k] for k in _hash_keys}
+        ds = cfg["dataset_size"]
+        d["train_dataset"] = f"fixed_train/train_{ds // 1000}K_seed42.pt"
+        d["eval_dataset"] = f"eval_sets/{CANONICAL_EVAL_SET}"
+        return hashlib.sha256(
+            json.dumps(d, sort_keys=True, default=str).encode()
+        ).hexdigest()[:12]
+
+    def _load_hf_hashes():
+        """Load config_hash values from all models on HF."""
+        try:
+            from huggingface_hub import HfApi, hf_hub_download
+            api = HfApi()
+            all_files = api.list_repo_files("thoughtworks/arithmetic-sorl")
+            config_files = [f for f in all_files if f.endswith("train_config.json")]
+            hashes = set()
+            for cf in config_files:
+                try:
+                    local = hf_hub_download(
+                        "thoughtworks/arithmetic-sorl", cf,
+                        local_dir="/tmp/hf_queue_cache",
+                    )
+                    cfg = json.load(open(local))
+                    h = cfg.get("config_hash")
+                    if h:
+                        hashes.add(h)
+                except Exception:
+                    pass
+            return hashes
+        except Exception as e:
+            print(f"  Warning: could not load HF hashes: {e}")
+            return set()
+
+    # Check HF for already-completed jobs
+    print("Checking HuggingFace for completed jobs...")
+    hf_hashes = _load_hf_hashes()
+    print(f"  Found {len(hf_hashes)} completed config hashes on HF")
+
+    # Filter jobs: skip those with matching hash on HF
+    filtered_jobs = []
+    skipped = 0
+    for cmd, priority in jobs:
+        try:
+            h = _compute_config_hash(cmd)
+            if h in hf_hashes:
+                skipped += 1
+                print(f"  SKIP (hash={h}): {extract_name(cmd)}")
+                continue
+        except Exception:
+            pass  # if hash computation fails, run the job anyway
+        filtered_jobs.append((cmd, priority))
+
+    n_high = sum(1 for _, p in filtered_jobs if p == 0)
+    n_low = sum(1 for _, p in filtered_jobs if p == 2)
+    print(f"\nGPU Queue: {len(filtered_jobs)} jobs to run ({skipped} skipped), "
+          f"{n_gpus} GPUs, max {max_per_gpu}/GPU")
+    print(f"  priority: {n_high} high, {len(filtered_jobs) - n_high - n_low} normal, {n_low} low")
     print(f"  stale_timeout={stale_timeout}s, max_retries={max_retries}")
     print()
 
@@ -555,7 +664,7 @@ def main():
         n_gpus=n_gpus, max_per_gpu=max_per_gpu,
         stale_timeout=stale_timeout, max_retries=max_retries,
     )
-    for cmd, priority in jobs:
+    for cmd, priority in filtered_jobs:
         q.submit(cmd, name=extract_name(cmd), priority=priority)
     q.wait()
     q.print_summary()
