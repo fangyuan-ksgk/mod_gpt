@@ -1,0 +1,1164 @@
+{
+  "model": "add_sub_sorl_v1_abs30_K1_100K_2L1H128d",
+  "K": 1,
+  "abs_vocab": 30,
+  "splits": [
+    "add_C4",
+    "add_C5",
+    "add_C6",
+    "sub_B3",
+    "sub_B4",
+    "sub_B5"
+  ],
+  "n_wrong": 126,
+  "n_correct": 474,
+  "per_position_fixability": {
+    "d0": {
+      "n_wrong": 126,
+      "any_fix_found": 34,
+      "fix_rate": 0.27
+    },
+    "d1": {
+      "n_wrong": 126,
+      "any_fix_found": 38,
+      "fix_rate": 0.302
+    },
+    "d2": {
+      "n_wrong": 126,
+      "any_fix_found": 39,
+      "fix_rate": 0.31
+    },
+    "d3": {
+      "n_wrong": 126,
+      "any_fix_found": 10,
+      "fix_rate": 0.079
+    },
+    "d4": {
+      "n_wrong": 126,
+      "any_fix_found": 2,
+      "fix_rate": 0.016
+    }
+  },
+  "top_swaps": [
+    {
+      "position": 1,
+      "old_token": 16,
+      "new_token": 25,
+      "fixed": 10,
+      "broke": 5,
+      "checked_correct": 49,
+      "examples": [
+        {
+          "split": "add_C4",
+          "q": "186151+063874",
+          "target": "15172015151720",
+          "pred_wrong": "15171915151720",
+          "pred_fixed": "15172015151720",
+          "position": 1,
+          "label": "UC"
+        },
+        {
+          "split": "add_C4",
+          "q": "288271+071770",
+          "target": "15182115151916",
+          "pred_wrong": "15182015151916",
+          "pred_fixed": "15182115151916",
+          "position": 1,
+          "label": "UC"
+        },
+        {
+          "split": "add_C5",
+          "q": "188748+161276",
+          "target": "15182015151719",
+          "pred_wrong": "15181915151719",
+          "pred_fixed": "15182015151719",
+          "position": 1,
+          "label": "UC"
+        },
+        {
+          "split": "add_C6",
+          "q": "459694+790306",
+          "target": "16172015151515",
+          "pred_wrong": "16171915151515",
+          "pred_fixed": "16172015151515",
+          "position": 1,
+          "label": "UC"
+        },
+        {
+          "split": "add_C6",
+          "q": "987583+052427",
+          "target": "16151915151615",
+          "pred_wrong": "16151815151615",
+          "pred_fixed": "16151915151615",
+          "position": 1,
+          "label": "US"
+        }
+      ],
+      "old_label": "UC"
+    },
+    {
+      "position": 1,
+      "old_token": 1,
+      "new_token": 26,
+      "fixed": 8,
+      "broke": 35,
+      "checked_correct": 224,
+      "examples": [
+        {
+          "split": "add_C4",
+          "q": "249226+030788",
+          "target": "15172315151619",
+          "pred_wrong": "15172215151619",
+          "pred_fixed": "15172315151619",
+          "position": 1,
+          "label": "SA"
+        },
+        {
+          "split": "add_C4",
+          "q": "228581+291482",
+          "target": "15201715152118",
+          "pred_wrong": "15201615152118",
+          "pred_fixed": "15201715152118",
+          "position": 1,
+          "label": "UC"
+        },
+        {
+          "split": "add_C4",
+          "q": "215238+144776",
+          "target": "15182115151619",
+          "pred_wrong": "15182015151619",
+          "pred_fixed": "15182115151619",
+          "position": 1,
+          "label": "SA"
+        },
+        {
+          "split": "add_C4",
+          "q": "057165+402847",
+          "target": "15192115151617",
+          "pred_wrong": "15192015151617",
+          "pred_fixed": "15192115151617",
+          "position": 1,
+          "label": "SA"
+        },
+        {
+          "split": "add_C4",
+          "q": "254406+125598",
+          "target": "15182315151519",
+          "pred_wrong": "15182215151519",
+          "pred_fixed": "15182315151519",
+          "position": 1,
+          "label": "SA"
+        }
+      ],
+      "old_label": "SA"
+    },
+    {
+      "position": 1,
+      "old_token": 1,
+      "new_token": 23,
+      "fixed": 7,
+      "broke": 52,
+      "checked_correct": 224,
+      "examples": [
+        {
+          "split": "add_C4",
+          "q": "228581+291482",
+          "target": "15201715152118",
+          "pred_wrong": "15201615152118",
+          "pred_fixed": "15201715152118",
+          "position": 1,
+          "label": "UC"
+        },
+        {
+          "split": "add_C4",
+          "q": "215238+144776",
+          "target": "15182115151619",
+          "pred_wrong": "15182015151619",
+          "pred_fixed": "15182115151619",
+          "position": 1,
+          "label": "SA"
+        },
+        {
+          "split": "add_C4",
+          "q": "017732+142269",
+          "target": "15162115151516",
+          "pred_wrong": "15162015151516",
+          "pred_fixed": "15162115151516",
+          "position": 1,
+          "label": "SA"
+        },
+        {
+          "split": "add_C6",
+          "q": "334193+675808",
+          "target": "16151615151516",
+          "pred_wrong": "16151515151516",
+          "pred_fixed": "16151615151516",
+          "position": 1,
+          "label": "US"
+        },
+        {
+          "split": "add_C6",
+          "q": "908733+891269",
+          "target": "16231515151517",
+          "pred_wrong": "16232415151517",
+          "pred_fixed": "16231515151517",
+          "position": 1,
+          "label": "UC"
+        }
+      ],
+      "old_label": "UC"
+    },
+    {
+      "position": 1,
+      "old_token": 16,
+      "new_token": 21,
+      "fixed": 7,
+      "broke": 1,
+      "checked_correct": 49,
+      "examples": [
+        {
+          "split": "add_C4",
+          "q": "288271+071770",
+          "target": "15182115151916",
+          "pred_wrong": "15182015151916",
+          "pred_fixed": "15182115151916",
+          "position": 1,
+          "label": "UC"
+        },
+        {
+          "split": "add_C5",
+          "q": "188748+161276",
+          "target": "15182015151719",
+          "pred_wrong": "15181915151719",
+          "pred_fixed": "15182015151719",
+          "position": 1,
+          "label": "UC"
+        },
+        {
+          "split": "add_C6",
+          "q": "459694+790306",
+          "target": "16172015151515",
+          "pred_wrong": "16171915151515",
+          "pred_fixed": "16172015151515",
+          "position": 1,
+          "label": "UC"
+        },
+        {
+          "split": "add_C6",
+          "q": "987583+052427",
+          "target": "16151915151615",
+          "pred_wrong": "16151815151615",
+          "pred_fixed": "16151915151615",
+          "position": 1,
+          "label": "US"
+        },
+        {
+          "split": "add_C6",
+          "q": "684984+365059",
+          "target": "16152015151918",
+          "pred_wrong": "16151915151918",
+          "pred_fixed": "16152015151918",
+          "position": 1,
+          "label": "US"
+        }
+      ],
+      "old_label": "UC"
+    },
+    {
+      "position": 0,
+      "old_token": 3,
+      "new_token": 25,
+      "fixed": 6,
+      "broke": 8,
+      "checked_correct": 140,
+      "examples": [
+        {
+          "split": "add_C4",
+          "q": "227630+072570",
+          "target": "15181515171515",
+          "pred_wrong": "15171515171515",
+          "pred_fixed": "15181515171515",
+          "position": 0,
+          "label": "SA"
+        },
+        {
+          "split": "add_C5",
+          "q": "125587+074774",
+          "target": "15171515182116",
+          "pred_wrong": "15161515182116",
+          "pred_fixed": "15171515182116",
+          "position": 0,
+          "label": "SA"
+        },
+        {
+          "split": "add_C5",
+          "q": "431236+068896",
+          "target": "15201515161817",
+          "pred_wrong": "15191515161817",
+          "pred_fixed": "15201515161817",
+          "position": 0,
+          "label": "SA"
+        },
+        {
+          "split": "add_C5",
+          "q": "404789+095227",
+          "target": "15201515151621",
+          "pred_wrong": "15191515151621",
+          "pred_fixed": "15201515151621",
+          "position": 0,
+          "label": "SA"
+        },
+        {
+          "split": "sub_B3",
+          "q": "719015-519204",
+          "target": "15162424231616",
+          "pred_wrong": "15172424231616",
+          "pred_fixed": "15162424231616",
+          "position": 0,
+          "label": "MD"
+        }
+      ],
+      "old_label": "SA"
+    },
+    {
+      "position": 0,
+      "old_token": 3,
+      "new_token": 23,
+      "fixed": 6,
+      "broke": 36,
+      "checked_correct": 140,
+      "examples": [
+        {
+          "split": "add_C4",
+          "q": "016561+083486",
+          "target": "15161515151922",
+          "pred_wrong": "15151515151922",
+          "pred_fixed": "15161515151922",
+          "position": 0,
+          "label": "SA"
+        },
+        {
+          "split": "add_C4",
+          "q": "908300+291710",
+          "target": "16171515151615",
+          "pred_wrong": "16161515151615",
+          "pred_fixed": "16171515151615",
+          "position": 0,
+          "label": "UC"
+        },
+        {
+          "split": "add_C5",
+          "q": "125587+074774",
+          "target": "15171515182116",
+          "pred_wrong": "15161515182116",
+          "pred_fixed": "15171515182116",
+          "position": 0,
+          "label": "SA"
+        },
+        {
+          "split": "add_C5",
+          "q": "431236+068896",
+          "target": "15201515161817",
+          "pred_wrong": "15191515161817",
+          "pred_fixed": "15201515161817",
+          "position": 0,
+          "label": "SA"
+        },
+        {
+          "split": "add_C5",
+          "q": "404789+095227",
+          "target": "15201515151621",
+          "pred_wrong": "15191515151621",
+          "pred_fixed": "15201515151621",
+          "position": 0,
+          "label": "SA"
+        }
+      ],
+      "old_label": "SA"
+    },
+    {
+      "position": 1,
+      "old_token": 1,
+      "new_token": 28,
+      "fixed": 6,
+      "broke": 11,
+      "checked_correct": 224,
+      "examples": [
+        {
+          "split": "add_C4",
+          "q": "307277+242725",
+          "target": "15202015151517",
+          "pred_wrong": "15201915151517",
+          "pred_fixed": "15202015151517",
+          "position": 1,
+          "label": "SA"
+        },
+        {
+          "split": "add_C4",
+          "q": "228581+291482",
+          "target": "15201715152118",
+          "pred_wrong": "15201615152118",
+          "pred_fixed": "15201715152118",
+          "position": 1,
+          "label": "UC"
+        },
+        {
+          "split": "add_C4",
+          "q": "215238+144776",
+          "target": "15182115151619",
+          "pred_wrong": "15182015151619",
+          "pred_fixed": "15182115151619",
+          "position": 1,
+          "label": "SA"
+        },
+        {
+          "split": "add_C4",
+          "q": "004288+235779",
+          "target": "15171915152122",
+          "pred_wrong": "15171815152122",
+          "pred_fixed": "15171915152122",
+          "position": 1,
+          "label": "SA"
+        },
+        {
+          "split": "add_C4",
+          "q": "017732+142269",
+          "target": "15162115151516",
+          "pred_wrong": "15162015151516",
+          "pred_fixed": "15162115151516",
+          "position": 1,
+          "label": "SA"
+        }
+      ],
+      "old_label": "SA"
+    },
+    {
+      "position": 1,
+      "old_token": 1,
+      "new_token": 24,
+      "fixed": 6,
+      "broke": 32,
+      "checked_correct": 224,
+      "examples": [
+        {
+          "split": "add_C4",
+          "q": "228581+291482",
+          "target": "15201715152118",
+          "pred_wrong": "15201615152118",
+          "pred_fixed": "15201715152118",
+          "position": 1,
+          "label": "UC"
+        },
+        {
+          "split": "add_C4",
+          "q": "215238+144776",
+          "target": "15182115151619",
+          "pred_wrong": "15182015151619",
+          "pred_fixed": "15182115151619",
+          "position": 1,
+          "label": "SA"
+        },
+        {
+          "split": "add_C4",
+          "q": "017732+142269",
+          "target": "15162115151516",
+          "pred_wrong": "15162015151516",
+          "pred_fixed": "15162115151516",
+          "position": 1,
+          "label": "SA"
+        },
+        {
+          "split": "add_C6",
+          "q": "334193+675808",
+          "target": "16151615151516",
+          "pred_wrong": "16151515151516",
+          "pred_fixed": "16151615151516",
+          "position": 1,
+          "label": "US"
+        },
+        {
+          "split": "add_C6",
+          "q": "908733+891269",
+          "target": "16231515151517",
+          "pred_wrong": "16232415151517",
+          "pred_fixed": "16231515151517",
+          "position": 1,
+          "label": "UC"
+        }
+      ],
+      "old_label": "UC"
+    },
+    {
+      "position": 1,
+      "old_token": 16,
+      "new_token": 20,
+      "fixed": 6,
+      "broke": 1,
+      "checked_correct": 49,
+      "examples": [
+        {
+          "split": "add_C4",
+          "q": "288271+071770",
+          "target": "15182115151916",
+          "pred_wrong": "15182015151916",
+          "pred_fixed": "15182115151916",
+          "position": 1,
+          "label": "UC"
+        },
+        {
+          "split": "add_C5",
+          "q": "188748+161276",
+          "target": "15182015151719",
+          "pred_wrong": "15181915151719",
+          "pred_fixed": "15182015151719",
+          "position": 1,
+          "label": "UC"
+        },
+        {
+          "split": "add_C6",
+          "q": "459694+790306",
+          "target": "16172015151515",
+          "pred_wrong": "16171915151515",
+          "pred_fixed": "16172015151515",
+          "position": 1,
+          "label": "UC"
+        },
+        {
+          "split": "add_C6",
+          "q": "987583+052427",
+          "target": "16151915151615",
+          "pred_wrong": "16151815151615",
+          "pred_fixed": "16151915151615",
+          "position": 1,
+          "label": "US"
+        },
+        {
+          "split": "add_C6",
+          "q": "684984+365059",
+          "target": "16152015151918",
+          "pred_wrong": "16151915151918",
+          "pred_fixed": "16152015151918",
+          "position": 1,
+          "label": "US"
+        }
+      ],
+      "old_label": "UC"
+    },
+    {
+      "position": 3,
+      "old_token": 4,
+      "new_token": 25,
+      "fixed": 6,
+      "broke": 7,
+      "checked_correct": 225,
+      "examples": [
+        {
+          "split": "add_C5",
+          "q": "215902+589698",
+          "target": "15231520211515",
+          "pred_wrong": "15231520201515",
+          "pred_fixed": "15231520211515",
+          "position": 3,
+          "label": "UC"
+        },
+        {
+          "split": "add_C6",
+          "q": "524669+885838",
+          "target": "16191615201522",
+          "pred_wrong": "16191615191522",
+          "pred_fixed": "16191615201522",
+          "position": 3,
+          "label": "US"
+        },
+        {
+          "split": "add_C6",
+          "q": "824633+175969",
+          "target": "16151515211517",
+          "pred_wrong": "16151515201517",
+          "pred_fixed": "16151515211517",
+          "position": 3,
+          "label": "US"
+        },
+        {
+          "split": "add_C6",
+          "q": "405843+995858",
+          "target": "16191516221516",
+          "pred_wrong": "16191516211516",
+          "pred_fixed": "16191516221516",
+          "position": 3,
+          "label": "UC"
+        },
+        {
+          "split": "add_C6",
+          "q": "778596+229907",
+          "target": "16151523201518",
+          "pred_wrong": "16151523191518",
+          "pred_fixed": "16151523201518",
+          "position": 3,
+          "label": "UC"
+        }
+      ],
+      "old_label": "UC"
+    },
+    {
+      "position": 1,
+      "old_token": 16,
+      "new_token": 24,
+      "fixed": 6,
+      "broke": 11,
+      "checked_correct": 49,
+      "examples": [
+        {
+          "split": "add_C6",
+          "q": "459694+790306",
+          "target": "16172015151515",
+          "pred_wrong": "16171915151515",
+          "pred_fixed": "16172015151515",
+          "position": 1,
+          "label": "UC"
+        },
+        {
+          "split": "add_C6",
+          "q": "987583+052427",
+          "target": "16151915151615",
+          "pred_wrong": "16151815151615",
+          "pred_fixed": "16151915151615",
+          "position": 1,
+          "label": "US"
+        },
+        {
+          "split": "sub_B4",
+          "q": "727090-507099",
+          "target": "15171624242416",
+          "pred_wrong": "15171724242416",
+          "pred_fixed": "15171624242416",
+          "position": 1,
+          "label": "MD"
+        },
+        {
+          "split": "sub_B4",
+          "q": "631104-311137",
+          "target": "15181624242122",
+          "pred_wrong": "15181724242122",
+          "pred_fixed": "15181624242122",
+          "position": 1,
+          "label": "MD"
+        },
+        {
+          "split": "sub_B4",
+          "q": "738180-308184",
+          "target": "15191724242421",
+          "pred_wrong": "15191824242421",
+          "pred_fixed": "15191724242421",
+          "position": 1,
+          "label": "MD"
+        }
+      ],
+      "old_label": "UC"
+    },
+    {
+      "position": 1,
+      "old_token": 1,
+      "new_token": 29,
+      "fixed": 6,
+      "broke": 171,
+      "checked_correct": 224,
+      "examples": [
+        {
+          "split": "add_C6",
+          "q": "334193+675808",
+          "target": "16151615151516",
+          "pred_wrong": "16151515151516",
+          "pred_fixed": "16151615151516",
+          "position": 1,
+          "label": "US"
+        },
+        {
+          "split": "add_C6",
+          "q": "908733+891269",
+          "target": "16231515151517",
+          "pred_wrong": "16232415151517",
+          "pred_fixed": "16231515151517",
+          "position": 1,
+          "label": "UC"
+        },
+        {
+          "split": "add_C6",
+          "q": "616354+393647",
+          "target": "16151615151516",
+          "pred_wrong": "16151515151516",
+          "pred_fixed": "16151615151516",
+          "position": 1,
+          "label": "US"
+        },
+        {
+          "split": "sub_B3",
+          "q": "423111-003160",
+          "target": "15191624242016",
+          "pred_wrong": "15191724242016",
+          "pred_fixed": "15191624242016",
+          "position": 1,
+          "label": "MD"
+        },
+        {
+          "split": "sub_B3",
+          "q": "711941-200943",
+          "target": "15201615242423",
+          "pred_wrong": "15201616242423",
+          "pred_fixed": "15201615242423",
+          "position": 1,
+          "label": "MD"
+        }
+      ],
+      "old_label": "US"
+    },
+    {
+      "position": 1,
+      "old_token": 1,
+      "new_token": 25,
+      "fixed": 5,
+      "broke": 6,
+      "checked_correct": 224,
+      "examples": [
+        {
+          "split": "add_C4",
+          "q": "249226+030788",
+          "target": "15172315151619",
+          "pred_wrong": "15172215151619",
+          "pred_fixed": "15172315151619",
+          "position": 1,
+          "label": "SA"
+        },
+        {
+          "split": "add_C4",
+          "q": "057165+402847",
+          "target": "15192115151617",
+          "pred_wrong": "15192015151617",
+          "pred_fixed": "15192115151617",
+          "position": 1,
+          "label": "SA"
+        },
+        {
+          "split": "sub_B3",
+          "q": "423111-003160",
+          "target": "15191624242016",
+          "pred_wrong": "15191724242016",
+          "pred_fixed": "15191624242016",
+          "position": 1,
+          "label": "MD"
+        },
+        {
+          "split": "sub_B3",
+          "q": "711941-200943",
+          "target": "15201615242423",
+          "pred_wrong": "15201616242423",
+          "pred_fixed": "15201615242423",
+          "position": 1,
+          "label": "MD"
+        },
+        {
+          "split": "sub_B5",
+          "q": "982490-288499",
+          "target": "15212418242416",
+          "pred_wrong": "15212419242416",
+          "pred_fixed": "15212418242416",
+          "position": 1,
+          "label": "UB"
+        }
+      ],
+      "old_label": "SA"
+    },
+    {
+      "position": 0,
+      "old_token": 10,
+      "new_token": 25,
+      "fixed": 5,
+      "broke": 1,
+      "checked_correct": 24,
+      "examples": [
+        {
+          "split": "add_C4",
+          "q": "564302+935812",
+          "target": "16201515161619",
+          "pred_wrong": "16191515161619",
+          "pred_fixed": "16201515161619",
+          "position": 0,
+          "label": "UC"
+        },
+        {
+          "split": "add_C4",
+          "q": "808310+791830",
+          "target": "16211515161915",
+          "pred_wrong": "16201515161915",
+          "pred_fixed": "16211515161915",
+          "position": 0,
+          "label": "UC"
+        },
+        {
+          "split": "add_C6",
+          "q": "740024+759977",
+          "target": "16201515151516",
+          "pred_wrong": "16191515151516",
+          "pred_fixed": "16201515151516",
+          "position": 0,
+          "label": "UC"
+        },
+        {
+          "split": "add_C6",
+          "q": "732745+867269",
+          "target": "16211515151619",
+          "pred_wrong": "16201515151619",
+          "pred_fixed": "16211515151619",
+          "position": 0,
+          "label": "UC"
+        },
+        {
+          "split": "sub_B4",
+          "q": "572015-072092",
+          "target": "15192424241718",
+          "pred_wrong": "15202424241718",
+          "pred_fixed": "15192424241718",
+          "position": 0,
+          "label": "MD"
+        }
+      ],
+      "old_label": "UC"
+    },
+    {
+      "position": 1,
+      "old_token": 1,
+      "new_token": 27,
+      "fixed": 5,
+      "broke": 15,
+      "checked_correct": 224,
+      "examples": [
+        {
+          "split": "add_C4",
+          "q": "215238+144776",
+          "target": "15182115151619",
+          "pred_wrong": "15182015151619",
+          "pred_fixed": "15182115151619",
+          "position": 1,
+          "label": "SA"
+        },
+        {
+          "split": "add_C4",
+          "q": "017732+142269",
+          "target": "15162115151516",
+          "pred_wrong": "15162015151516",
+          "pred_fixed": "15162115151516",
+          "position": 1,
+          "label": "SA"
+        },
+        {
+          "split": "add_C6",
+          "q": "334193+675808",
+          "target": "16151615151516",
+          "pred_wrong": "16151515151516",
+          "pred_fixed": "16151615151516",
+          "position": 1,
+          "label": "US"
+        },
+        {
+          "split": "add_C6",
+          "q": "908733+891269",
+          "target": "16231515151517",
+          "pred_wrong": "16232415151517",
+          "pred_fixed": "16231515151517",
+          "position": 1,
+          "label": "UC"
+        },
+        {
+          "split": "sub_B3",
+          "q": "423111-003160",
+          "target": "15191624242016",
+          "pred_wrong": "15191724242016",
+          "pred_fixed": "15191624242016",
+          "position": 1,
+          "label": "MD"
+        }
+      ],
+      "old_label": "SA"
+    },
+    {
+      "position": 1,
+      "old_token": 16,
+      "new_token": 6,
+      "fixed": 5,
+      "broke": 2,
+      "checked_correct": 49,
+      "examples": [
+        {
+          "split": "add_C4",
+          "q": "288271+071770",
+          "target": "15182115151916",
+          "pred_wrong": "15182015151916",
+          "pred_fixed": "15182115151916",
+          "position": 1,
+          "label": "UC"
+        },
+        {
+          "split": "add_C5",
+          "q": "188748+161276",
+          "target": "15182015151719",
+          "pred_wrong": "15181915151719",
+          "pred_fixed": "15182015151719",
+          "position": 1,
+          "label": "UC"
+        },
+        {
+          "split": "add_C6",
+          "q": "459694+790306",
+          "target": "16172015151515",
+          "pred_wrong": "16171915151515",
+          "pred_fixed": "16172015151515",
+          "position": 1,
+          "label": "UC"
+        },
+        {
+          "split": "add_C6",
+          "q": "987583+052427",
+          "target": "16151915151615",
+          "pred_wrong": "16151815151615",
+          "pred_fixed": "16151915151615",
+          "position": 1,
+          "label": "US"
+        },
+        {
+          "split": "sub_B4",
+          "q": "631104-311137",
+          "target": "15181624242122",
+          "pred_wrong": "15181724242122",
+          "pred_fixed": "15181624242122",
+          "position": 1,
+          "label": "MD"
+        }
+      ],
+      "old_label": "UC"
+    },
+    {
+      "position": 1,
+      "old_token": 16,
+      "new_token": 10,
+      "fixed": 5,
+      "broke": 2,
+      "checked_correct": 49,
+      "examples": [
+        {
+          "split": "add_C4",
+          "q": "288271+071770",
+          "target": "15182115151916",
+          "pred_wrong": "15182015151916",
+          "pred_fixed": "15182115151916",
+          "position": 1,
+          "label": "UC"
+        },
+        {
+          "split": "add_C5",
+          "q": "188748+161276",
+          "target": "15182015151719",
+          "pred_wrong": "15181915151719",
+          "pred_fixed": "15182015151719",
+          "position": 1,
+          "label": "UC"
+        },
+        {
+          "split": "add_C6",
+          "q": "459694+790306",
+          "target": "16172015151515",
+          "pred_wrong": "16171915151515",
+          "pred_fixed": "16172015151515",
+          "position": 1,
+          "label": "UC"
+        },
+        {
+          "split": "add_C6",
+          "q": "987583+052427",
+          "target": "16151915151615",
+          "pred_wrong": "16151815151615",
+          "pred_fixed": "16151915151615",
+          "position": 1,
+          "label": "US"
+        },
+        {
+          "split": "add_C6",
+          "q": "684984+365059",
+          "target": "16152015151918",
+          "pred_wrong": "16151915151918",
+          "pred_fixed": "16152015151918",
+          "position": 1,
+          "label": "US"
+        }
+      ],
+      "old_label": "UC"
+    },
+    {
+      "position": 0,
+      "old_token": 8,
+      "new_token": 25,
+      "fixed": 5,
+      "broke": 6,
+      "checked_correct": 74,
+      "examples": [
+        {
+          "split": "add_C5",
+          "q": "445685+854372",
+          "target": "16181515152022",
+          "pred_wrong": "16171515152022",
+          "pred_fixed": "16181515152022",
+          "position": 0,
+          "label": "UC"
+        },
+        {
+          "split": "sub_B3",
+          "q": "221014-021302",
+          "target": "15162424221617",
+          "pred_wrong": "15172424221617",
+          "pred_fixed": "15162424221617",
+          "position": 0,
+          "label": "MD"
+        },
+        {
+          "split": "sub_B4",
+          "q": "840534-440550",
+          "target": "15182424242319",
+          "pred_wrong": "15192424242319",
+          "pred_fixed": "15182424242319",
+          "position": 0,
+          "label": "MD"
+        },
+        {
+          "split": "sub_B4",
+          "q": "309529-129938",
+          "target": "15162224202416",
+          "pred_wrong": "15162324202416",
+          "pred_fixed": "15162224202416",
+          "position": 0,
+          "label": "MD"
+        },
+        {
+          "split": "sub_B5",
+          "q": "368011-068828",
+          "target": "15172424162318",
+          "pred_wrong": "15182424162318",
+          "pred_fixed": "15172424162318",
+          "position": 0,
+          "label": "MD"
+        }
+      ],
+      "old_label": "UC"
+    },
+    {
+      "position": 2,
+      "old_token": 17,
+      "new_token": 20,
+      "fixed": 5,
+      "broke": 1,
+      "checked_correct": 27,
+      "examples": [
+        {
+          "split": "add_C5",
+          "q": "286657+178345",
+          "target": "15192120151517",
+          "pred_wrong": "15192119151517",
+          "pred_fixed": "15192120151517",
+          "position": 2,
+          "label": "UC"
+        },
+        {
+          "split": "add_C6",
+          "q": "586386+429629",
+          "target": "16151621151620",
+          "pred_wrong": "16151620151620",
+          "pred_fixed": "16151621151620",
+          "position": 2,
+          "label": "UC"
+        },
+        {
+          "split": "add_C6",
+          "q": "355253+648749",
+          "target": "16151519151517",
+          "pred_wrong": "16151518151517",
+          "pred_fixed": "16151519151517",
+          "position": 2,
+          "label": "US"
+        },
+        {
+          "split": "add_C6",
+          "q": "375924+658077",
+          "target": "16151819151516",
+          "pred_wrong": "16151818151516",
+          "pred_fixed": "16151819151516",
+          "position": 2,
+          "label": "UC"
+        },
+        {
+          "split": "sub_B5",
+          "q": "171750-072751",
+          "target": "15152423242424",
+          "pred_wrong": "15152424242424",
+          "pred_fixed": "15152423242424",
+          "position": 2,
+          "label": "UD"
+        }
+      ],
+      "old_label": "UC"
+    },
+    {
+      "position": 2,
+      "old_token": 17,
+      "new_token": 24,
+      "fixed": 5,
+      "broke": 5,
+      "checked_correct": 27,
+      "examples": [
+        {
+          "split": "add_C5",
+          "q": "286657+178345",
+          "target": "15192120151517",
+          "pred_wrong": "15192119151517",
+          "pred_fixed": "15192120151517",
+          "position": 2,
+          "label": "UC"
+        },
+        {
+          "split": "add_C6",
+          "q": "586386+429629",
+          "target": "16151621151620",
+          "pred_wrong": "16151620151620",
+          "pred_fixed": "16151621151620",
+          "position": 2,
+          "label": "UC"
+        },
+        {
+          "split": "add_C6",
+          "q": "355253+648749",
+          "target": "16151519151517",
+          "pred_wrong": "16151518151517",
+          "pred_fixed": "16151519151517",
+          "position": 2,
+          "label": "US"
+        },
+        {
+          "split": "add_C6",
+          "q": "375924+658077",
+          "target": "16151819151516",
+          "pred_wrong": "16151818151516",
+          "pred_fixed": "16151819151516",
+          "position": 2,
+          "label": "UC"
+        },
+        {
+          "split": "add_C6",
+          "q": "142642+968359",
+          "target": "16161616151516",
+          "pred_wrong": "16161615151516",
+          "pred_fixed": "16161616151516",
+          "position": 2,
+          "label": "UC"
+        }
+      ],
+      "old_label": "UC"
+    }
+  ]
+}
