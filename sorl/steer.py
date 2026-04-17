@@ -597,7 +597,7 @@ class StackedAbstractionWrapperV9(nn.Module):
 
         # State populated by hooks during forward pass
         self._last_routing_logits = None  # (B, n_chunks, C) — abs_proj logits at src positions
-        self._last_chunk_codes = None     # (B, n_chunks)     — argmax codes actually used
+        self._last_codes = None     # (B, n_chunks)     — argmax codes actually used
         self._forced_codes = None         # set externally to override routing in next forward
         self._forward_temperature = None   # set by forward(), consumed by hook
         self._detach_routing = False      # Whether to detach training of policy model from rep
@@ -657,7 +657,7 @@ class StackedAbstractionWrapperV9(nn.Module):
                 codes = src_logits.argmax(dim=-1)  # (B, n_chunks)
 
         self._last_routing_logits = src_logits  # (B, n_chunks, C) — retains gradient
-        self._last_chunk_codes = codes.detach()  # (B, n_chunks)
+        self._last_codes = codes.detach()  # (B, n_chunks)
 
         emb = self.steering_emb[hook_idx] if self.per_layer_emb else self.steering_emb
         chunk_steer = emb(codes)  # (B, n_chunks, D)
@@ -679,7 +679,7 @@ class StackedAbstractionWrapperV9(nn.Module):
     def forward(self, input_ids, attention_mask=None, labels=None,
                 forced_codes=None, temperature=None, reduction='mean', **kwargs):
         """Forward pass. After calling, inspect:
-           - self._last_chunk_codes    (B, n_chunks)  — codes used for steering
+           - self._last_codes    (B, n_chunks)  — codes used for steering
            - self._last_routing_logits  (B, n_chunks, C) — logits (with grad) for abs_loss
 
         Args:
@@ -720,7 +720,7 @@ class StackedAbstractionWrapperV9(nn.Module):
 
         Args:
             target_codes: (B, n_chunks) int tensor of target codes from search.
-                          If None, uses self._last_chunk_codes (self-distillation).
+                          If None, uses self._last_codes (self-distillation).
         Returns:
             scalar loss, or 0 if no routing logits were captured.
         """
@@ -728,7 +728,7 @@ class StackedAbstractionWrapperV9(nn.Module):
         if logits is None:
             return torch.tensor(0.0, device=next(self.parameters()).device)
         if target_codes is None:
-            target_codes = self._last_chunk_codes
+            target_codes = self._last_codes
         return F.cross_entropy(
             logits.reshape(-1, self.C_SIZE),
             target_codes.reshape(-1),
