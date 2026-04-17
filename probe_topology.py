@@ -229,7 +229,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--repo", default="Ksgk-fy/sciqa_ckpt_20260416_0942")
     ap.add_argument("--runs", nargs="+", required=True)
-    ap.add_argument("--num-samples", type=int, default=500)
+    ap.add_argument("--num-samples", type=int, default=2000)
     ap.add_argument("--max-length", type=int, default=512)
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--dtype", choices=list(DTYPES), default="bf16")
