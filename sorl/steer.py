@@ -260,6 +260,7 @@ class StackedAbstractionWrapperV6(nn.Module):
             nn.init.zeros_(self.steering_emb.weight)
 
         self._hooks = []
+        self._last_codes = None  # (B, S) chunk-level codes from last forward
         self._register_hooks()
 
     # ---- hooks ----
@@ -315,6 +316,7 @@ class StackedAbstractionWrapperV6(nn.Module):
             steer_vecs = emb(safe_codes)          # (B, S, D)
             steer_vecs = steer_vecs * mask.unsqueeze(-1).float() * self.scale
             hidden_states = hidden_states + steer_vecs.to(hidden_states.dtype)
+            self._last_codes = chunk_codes  # expose for analysis
 
         return (hidden_states,) + rest if rest is not None else hidden_states
 
