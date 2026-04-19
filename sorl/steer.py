@@ -346,8 +346,22 @@ class StackedAbstractionWrapperV6(nn.Module):
             else:
                 pos_codes = routed.argmax(dim=-1)   # (B, S)
 
-        # Chunk-level codes
-        n_chunks = S // self.L
+        # Chunk-level codes.
+        # During prefill (_in_generate), also route the partial trailing chunk
+        # whose start position sits inside the prompt, so:
+        #   (a) its prompt-side tokens receive the correct steering, and
+        #   (b) `_decode_current_code` is the partial chunk's code, which the
+        #       remaining decode tokens in that chunk will continue to use.
+        # Restricted to code_position="first" — "last" can't route without
+        # seeing the chunk's final token.
+        n_chunks_full = S // self.L
+        has_partial = (
+            self._in_generate
+            and (S % self.L != 0)
+            and (self.code_position == "first")
+        )
+        n_chunks = n_chunks_full + (1 if has_partial else 0)
+
         if n_chunks > 0:
             chunk_codes = torch.full((B, S), -1, dtype=torch.long,
                                      device=hidden_states.device)
@@ -356,7 +370,9 @@ class StackedAbstractionWrapperV6(nn.Module):
             else:  # "first"
                 src_idx = [c * self.L for c in range(n_chunks)]
             for c, src in enumerate(src_idx):
-                chunk_codes[:, c * self.L:(c + 1) * self.L] = pos_codes[:, src:src + 1]
+                start = c * self.L
+                end = min((c + 1) * self.L, S)
+                chunk_codes[:, start:end] = pos_codes[:, src:src + 1]
 
             mask = chunk_codes >= 0
             safe_codes = chunk_codes.clamp(min=0)
@@ -751,11 +767,29 @@ class StackedAbstractionWrapperV9(nn.Module):
         else: 
             routed = self.abs_proj(hidden_states)  # (B, S, C) — gradient on policy & representation
 
-        # Chunk-source positions
-        n_chunks = S // self.L
+        # Chunk-source positions.
+        # During prefill (i.e. `_in_generate` is True), the prompt may end
+        # mid-chunk — e.g. S=6 with L=4 means chunk 0 spans 0..3 and chunk 1
+        # starts at position 4 with only 2 tokens present. We still want to
+        # route that partial chunk so:
+        #   (a) its prompt-side tokens (4..5) receive the right steering, and
+        #   (b) `_decode_current_code` carries its code forward to the
+        #       still-to-be-generated tokens (6..7) before the next boundary.
+        # Only "first" can be routed partially (its src position is c*L, which
+        # is always < S if c*L < S); "last" needs the chunk's final token
+        # which doesn't exist yet, so we skip partial chunks there.
+        n_chunks_full = S // self.L
+        has_partial = (
+            self._in_generate
+            and (S % self.L != 0)
+            and (self.code_position == "first")
+        )
+        n_chunks = n_chunks_full + (1 if has_partial else 0)
+
         if n_chunks == 0:
-            # Prefill of an empty / sub-chunk input: remember tail so the first
-            # decode step knows how many tokens until the next chunk boundary.
+            # Prefill of an empty / sub-chunk input with "last" routing, or
+            # S==0: remember tail so the first decode step knows how many
+            # tokens until the next chunk boundary.
             if self._in_generate:
                 self._decode_tail = S % self.L
             return (hidden_states,) + rest if rest is not None else hidden_states
@@ -788,8 +822,16 @@ class StackedAbstractionWrapperV9(nn.Module):
         steer_vecs = chunk_steer.unsqueeze(2).expand(-1, -1, self.L, -1)
         steer_vecs = steer_vecs.reshape(B, n_chunks * self.L, D)
 
-        # Pad tail tokens (< 1 full chunk) with zeros
-        if n_chunks * self.L < S:
+        # Align with S:
+        #   - full-chunk case (n*L == S)       → no-op
+        #   - partial-chunk case (n*L > S)     → trim trailing positions that
+        #                                         don't exist in the prompt
+        #   - sub-chunk / legacy case (n*L<S)  → zero-pad the tail (e.g. when
+        #                                         has_partial=False for "last"
+        #                                         or during training)
+        if n_chunks * self.L > S:
+            steer_vecs = steer_vecs[:, :S, :]
+        elif n_chunks * self.L < S:
             pad = steer_vecs.new_zeros(B, S - n_chunks * self.L, D)
             steer_vecs = torch.cat([steer_vecs, pad], dim=1)
 
