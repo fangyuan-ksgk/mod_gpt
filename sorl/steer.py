@@ -602,6 +602,15 @@ class StackedAbstractionWrapperV9(nn.Module):
         self._forward_temperature = None   # set by forward(), consumed by hook
         self._detach_routing = False      # Whether to detach training of policy model from rep
 
+        # ---- decode-time state (used only inside self.generate) ----
+        # During autoregressive decoding with KV cache, the hook sees S=1 per
+        # step. We maintain a rolling chunk offset + current code so that every
+        # L new tokens we re-route, and every decode step gets steered.
+        self._in_generate = False
+        self._decode_tail = 0         # 0..L-1, position within current chunk
+        self._decode_current_code = None  # (B,) long, code to apply each step
+        self._decode_codes_log = None     # list of (B,) per decoded chunk, for inspection
+
         self._hooks = []
         self._register_hooks()
 
@@ -627,6 +636,37 @@ class StackedAbstractionWrapperV9(nn.Module):
 
         B, S, D = hidden_states.shape
 
+        # ---- Decode-time path: S == 1 during autoregressive generation --------
+        # During HF generate with KV cache, the hook fires once per new token
+        # with S=1. The prefill-style chunking (n_chunks = S // L) short-circuits
+        # here, which means generated tokens never receive steering unless we
+        # handle this branch explicitly.
+        if self._in_generate and S == 1:
+            emb_mod = self.steering_emb[hook_idx] if self.per_layer_emb else self.steering_emb
+
+            # Re-route at each chunk boundary (every L generated tokens).
+            if self._decode_tail == 0:
+                routed_one = (self.abs_proj(hidden_states.detach())
+                              if self._detach_routing
+                              else self.abs_proj(hidden_states))       # (B, 1, C)
+                logits_one = routed_one[:, 0, :]                        # (B, C)
+                with torch.no_grad():
+                    code_one = logits_one.argmax(dim=-1)                # (B,)
+                self._decode_current_code = code_one
+                if self._decode_codes_log is not None:
+                    self._decode_codes_log.append(code_one.cpu())
+
+            # Apply the current chunk's steering to this single decode token.
+            if self._decode_current_code is not None:
+                steer = emb_mod(self._decode_current_code)              # (B, D)
+                hidden_states = hidden_states + (
+                    steer.unsqueeze(1) * self.scale
+                ).to(hidden_states.dtype)
+
+            # Advance within-chunk offset.
+            self._decode_tail = (self._decode_tail + 1) % self.L
+            return (hidden_states,) + rest if rest is not None else hidden_states
+
         # Routing: learned projection → logits
         if self._detach_routing: 
             routed = self.abs_proj(hidden_states.detach())  # (B, S, C) — gradient ONLY on policy/routing
@@ -636,6 +676,10 @@ class StackedAbstractionWrapperV9(nn.Module):
         # Chunk-source positions
         n_chunks = S // self.L
         if n_chunks == 0:
+            # Prefill of an empty / sub-chunk input: remember tail so the first
+            # decode step knows how many tokens until the next chunk boundary.
+            if self._in_generate:
+                self._decode_tail = S % self.L
             return (hidden_states,) + rest if rest is not None else hidden_states
 
         if self.code_position == "last":
@@ -671,6 +715,14 @@ class StackedAbstractionWrapperV9(nn.Module):
             steer_vecs = torch.cat([steer_vecs, pad], dim=1)
 
         hidden_states = hidden_states + (steer_vecs * self.scale).to(hidden_states.dtype)
+
+        # Seed decode state at end of prefill so autoregressive steps continue
+        # chunking from where the prompt left off.
+        if self._in_generate:
+            self._decode_tail = S % self.L
+            # Carry the last prompt chunk's code so any partial-tail decode
+            # tokens still receive steering before the next chunk boundary.
+            self._decode_current_code = codes[:, -1]
 
         return (hidden_states,) + rest if rest is not None else hidden_states
 
@@ -734,8 +786,29 @@ class StackedAbstractionWrapperV9(nn.Module):
             target_codes.reshape(-1),
         )
 
-    def generate(self, **kwargs):
-        return self.model.generate(**kwargs)
+    def generate(self, log_decode_codes=False, **kwargs):
+        """Generate with steering applied on every decode step.
+
+        The forward hook normally short-circuits when S < L; during KV-cached
+        generation that means every decoded token is unsteered. We flip
+        `_in_generate` so the hook takes the decode-time path: the prompt is
+        steered in the prefill pass, and each subsequent S=1 step re-uses the
+        current chunk's code, re-routing every L tokens.
+
+        Args:
+            log_decode_codes: if True, each re-routed decode chunk code is
+                appended to `self._decode_codes_log` (cpu) for inspection.
+        """
+        self._in_generate = True
+        self._decode_tail = 0
+        self._decode_current_code = None
+        self._decode_codes_log = [] if log_decode_codes else None
+        try:
+            return self.model.generate(**kwargs)
+        finally:
+            self._in_generate = False
+            self._decode_tail = 0
+            self._decode_current_code = None
 
     # ---- save / load ----
 

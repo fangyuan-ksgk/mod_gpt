@@ -371,8 +371,8 @@ def evaluate_accuracy(
     for i in range(min(num_log_samples, n)):
         samples.append({
             "idx": i,
-            "question": all_prompt_texts[i][:200],
-            "response": all_full_texts[i][len(all_prompt_texts[i]):].strip()[:300],
+            "question": all_prompt_texts[i],
+            "response": all_full_texts[i][len(all_prompt_texts[i]):].strip(),
             "gold": all_golds[i],
             "pred": all_preds[i],
             "correct": is_correct_list[i],
