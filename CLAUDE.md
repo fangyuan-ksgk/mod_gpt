@@ -31,6 +31,11 @@
 - Never add `--no_wandb` to `arithmetic/scripts/sweep_*.txt` files
 - If asked to "check step data" or "check progress", look at WandB first
 - `--no_wandb` is only acceptable for quick smoke tests or debugging, never production sweeps
+- **Always export env vars when launching the queue** — `.bash_profile` is not auto-sourced by nohup. Launch with:
+  ```
+  export WANDB_API_KEY=... && export HF_TOKEN=... && source venv/bin/activate && nohup python -m arithmetic.job_manager.gpu_queue ...
+  ```
+  Keys live in `/lambda/nfs/AmirInstance/.bash_profile`
 
 ---
 

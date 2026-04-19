@@ -495,11 +495,18 @@ def main():
         run_name = cfg.job_name
 
     if not cfg.no_wandb:
+        if not os.environ.get("WANDB_API_KEY") and not (Path.home() / ".netrc").exists():
+            raise RuntimeError(
+                "WANDB_API_KEY is not set and ~/.netrc has no wandb credentials. "
+                "Either export WANDB_API_KEY or pass --no_wandb."
+            )
         wandb.init(
             project=WANDB_PROJECT, entity=WANDB_ENTITY,
             name=run_name, config={k: v for k, v in cfg.__dict__.items() if not k.startswith('_')},
             tags=[cfg.ops, cfg.mode, f"abs{cfg.abs_vocab}", f"{cfg.dataset_size // 1000}K"],
         )
+        if wandb.run is None:
+            raise RuntimeError("wandb.init() returned no run — check API key and network connectivity.")
 
     tokenizer = AutoTokenizer.from_pretrained(TOKENIZER_NAME)
 
