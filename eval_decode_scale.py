@@ -110,9 +110,11 @@ def _eval_once(wrapper, tokenizer, val_ds, device, prompt_scale, decode_override
             wrapper, tokenizer, val_ds, device,
             num_samples=args_ns.num_samples,
             max_new_tokens=args_ns.max_new_tokens,
-            num_log_samples=0,            # NL not needed for this sweep
+            # capture NL + latent codes for every sample so downstream
+            # analysis can compare across (prompt_scale, response_scale).
+            num_log_samples=args_ns.num_samples,
             eval_batch_size=args_ns.eval_batch,
-            record_codes=False,
+            record_codes=True,
             log_fn=print if args_ns.verbose else None,
         )
     finally:
@@ -174,22 +176,47 @@ def main():
                     decode_override = None
                     cond_label = "resp=prompt"
 
-                tag = f"ps{prompt_scale:.3f}_{cond_label}"
+                tag = f"ps{prompt_scale:.3f}_{cond_label.replace('=','')}"
                 print(f"  -> {tag}")
                 result = _eval_once(wrapper, tokenizer, val_ds, device,
                                     prompt_scale, decode_override, args)
                 acc = result["accuracy"]
                 print(f"     acc={acc*100:.2f}%  ({result['correct']}/{result['total']})")
+
+                # Persist per-sample NL + latent codes for downstream analysis.
+                response_scale = 0.0 if cond == "response0" else prompt_scale
+                save_path = os.path.join(args.out_dir, f"{resolved}__{tag}.pt")
+                torch.save({
+                    "run": resolved,
+                    "mode": ckpt_args["mode"],
+                    "trained_scale": trained_scale,
+                    "prompt_scale": prompt_scale,
+                    "response_scale": response_scale,
+                    "condition": cond_label,
+                    "dataset": dataset_name,
+                    "C_SIZE": wrapper.C_SIZE,
+                    "L": wrapper.L,
+                    "inject_layers": list(wrapper.inject_layers),
+                    "ckpt_args": ckpt_args,
+                    "accuracy": acc,
+                    "correct": result["correct"],
+                    "total": result["total"],
+                    "samples": result.get("samples", []),   # question/response/gold/pred/correct
+                    "codes": result.get("codes", []),        # {prompt, response, L, pad_prefix_chunks}
+                }, save_path)
+                print(f"     saved: {save_path}")
+
                 rows.append({
                     "run": resolved,
                     "mode": ckpt_args["mode"],
                     "trained_scale": trained_scale,
                     "prompt_scale": prompt_scale,
-                    "response_scale": (0.0 if cond == "response0" else prompt_scale),
+                    "response_scale": response_scale,
                     "condition": cond_label,
                     "accuracy": acc,
                     "correct": result["correct"],
                     "total": result["total"],
+                    "file": save_path,
                 })
 
         del wrapper
