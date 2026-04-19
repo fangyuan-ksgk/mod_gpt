@@ -548,7 +548,7 @@ def main():
         "n_params": n_params,
         "run_name": run_name,
         "git_commit": git_hash,
-        "timestamp": datetime.datetime.now(datetime.UTC).isoformat(),
+        "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
         "tokenizer": TOKENIZER_NAME,
         "dataset_repo": "thoughtworks/arithmetic-sorl-data",
         "dataset_config": "add_sub_6digit" if cfg.ops == "add_sub" else "add_6digit",
