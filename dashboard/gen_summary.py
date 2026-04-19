@@ -18,6 +18,22 @@ CACHE_DIR = "/tmp/hf_dash_cache"
 
 SUMMARY_CONFIGS = [
     {
+        "label": "Standard model (2L/3H/510d) at 10K data",
+        "baseline_match": {"mode": "baseline", "ops": "add_sub", "dataset_size": 10000, "n_layer": 2, "n_head": 3, "n_embd": 510, "num_epochs": 20},
+        "sorl_match":     {"mode": "sorl",     "ops": "add_sub", "dataset_size": 10000, "n_layer": 2, "n_head": 3, "n_embd": 510, "abs_vocab": 30, "K": 1},
+        "sorl_label": "SoRL K=1 abs30",
+        "splits": ["add_S0", "add_C1", "add_C3", "add_C5", "add_C6", "sub_M0", "sub_M4"],
+        "split_labels": {
+            "add_S0": "S0 (no carry, easy)",
+            "add_C1": "C1 (1 carry)",
+            "add_C3": "C3 (3 hot carries)",
+            "add_C5": "C5 (5 hot carries)",
+            "add_C6": "C6 (6 hot carries)",
+            "sub_M0": "sub_M0 (no borrow, easy)",
+            "sub_M4": "sub_M4 (4 borrows)",
+        },
+    },
+    {
         "label": "Standard model (2L/3H/510d) at 25K data",
         "baseline_match": {"mode": "baseline", "ops": "add_sub", "dataset_size": 25000, "n_layer": 2, "n_head": 3, "n_embd": 510},
         "sorl_match":     {"mode": "sorl",     "ops": "add_sub", "dataset_size": 25000, "n_layer": 2, "n_head": 3, "n_embd": 510, "abs_vocab": 30, "K": 1},
@@ -78,6 +94,9 @@ def _entry_matches(entry, match_cfg):
         pass
 
     for k, v in match_cfg.items():
+        # num_epochs may not exist in older catalog entries — skip if missing
+        if k == "num_epochs" and entry.get(k) is None:
+            continue
         val = arch_map.get(k, entry.get(k))
         if val != v:
             return False
