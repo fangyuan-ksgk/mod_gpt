@@ -1,6 +1,21 @@
-python -m arithmetic.train --mode sorl --ops add_sub --dataset_size 10000 --abs_vocab 30 --K 1 --num_epochs 20 --n_layer 1 --n_head 2 --n_embd 256 --push_to_hub --job_name as_sorl_abs30_K1_10K_1L2H256d
-python -m arithmetic.train --mode sorl --ops add_sub --dataset_size 10000 --abs_vocab 30 --K 1 --num_epochs 20 --n_layer 1 --n_head 3 --push_to_hub --job_name as_sorl_abs30_K1_10K_1L3H510d
-python -m arithmetic.train --mode sorl --ops add_sub --dataset_size 10000 --abs_vocab 30 --K 1 --num_epochs 20 --n_layer 2 --n_head 1 --n_embd 128 --push_to_hub --job_name as_sorl_abs30_K1_10K_2L1H128d
-python -m arithmetic.train --mode sorl --ops add_sub --dataset_size 50000 --abs_vocab 30 --K 1 --num_epochs 20 --n_layer 1 --n_head 2 --n_embd 256 --push_to_hub --job_name as_sorl_abs30_K1_50K_1L2H256d
+# LR TEST FIRST — 2L/1H/128d with lr=8e-5 vs default 2e-5
+# If this performs well, requeue the rest with --lr 8e-5
+python -m arithmetic.train --mode sorl --ops add_sub --dataset_size 10000 --abs_vocab 30 --K 1 --num_epochs 20 --n_layer 2 --n_head 1 --n_embd 128 --lr 8e-5 --push_to_hub --job_name as_sorl_abs30_K1_10K_2L1H128d_lr8e5
+
+# Standard arch (2L/3H/510d)
 python -m arithmetic.train --mode sorl --ops add_sub --dataset_size 10000 --abs_vocab 30 --K 1 --num_epochs 20 --push_to_hub --job_name as_sorl_abs30_K1_10K_2L3H510d
+python -m arithmetic.train --mode baseline --ops add_sub --dataset_size 10000 --num_epochs 20 --push_to_hub --job_name as_baseline_10K_2L3H510d
+
+# Undersized arch (1L/3H/510d)
+python -m arithmetic.train --mode sorl --ops add_sub --dataset_size 10000 --abs_vocab 30 --K 1 --num_epochs 20 --n_layer 1 --n_head 3 --push_to_hub --job_name as_sorl_abs30_K1_10K_1L3H510d
 python -m arithmetic.train --mode baseline --ops add_sub --dataset_size 10000 --num_epochs 20 --n_layer 1 --n_head 3 --push_to_hub --job_name as_baseline_10K_1L3H510d
+
+# Undersized arch (1L/2H/256d)
+python -m arithmetic.train --mode sorl --ops add_sub --dataset_size 10000 --abs_vocab 30 --K 1 --num_epochs 20 --n_layer 1 --n_head 2 --n_embd 256 --lr 8e-5 --push_to_hub --job_name as_sorl_abs30_K1_10K_1L2H256d
+
+# Undersized arch (2L/1H/128d)
+python -m arithmetic.train --mode sorl --ops add_sub --dataset_size 10000 --abs_vocab 30 --K 1 --num_epochs 20 --n_layer 2 --n_head 1 --n_embd 128 --lr 8e-5 --push_to_hub --job_name as_sorl_abs30_K1_10K_2L1H128d
+python -m arithmetic.train --mode sorl --ops add_sub --dataset_size 100000 --abs_vocab 30 --K 1 --num_epochs 20 --n_layer 2 --n_head 1 --n_embd 128 --lr 8e-5 --push_to_hub --job_name as_sorl_abs30_K1_100K_2L1H128d
+
+# Larger data (most expensive — at end)
+python -m arithmetic.train --mode sorl --ops add_sub --dataset_size 50000 --abs_vocab 30 --K 1 --num_epochs 20 --n_layer 1 --n_head 2 --n_embd 256 --lr 8e-5 --push_to_hub --job_name as_sorl_abs30_K1_50K_1L2H256d
