@@ -5,6 +5,7 @@ Deployed as HF Space. Reads from thoughtworks/arithmetic-sorl model repo.
 """
 import json
 import gradio as gr
+from gen_summary import build_summary_markdown
 import pandas as pd
 import matplotlib
 matplotlib.use("Agg")
@@ -328,34 +329,7 @@ a small auxiliary vocabulary (e.g. 30 tokens) inserted at regular intervals (eve
             summary_text = gr.Markdown("Click Refresh to load.")
             queue_status = gr.Markdown("")
 
-            gr.Markdown("""### Overall Accuracy
-
-**Summary:** SoRL v1 (K=1, abs30) **never loses** to the SFT baseline. The biggest gains are
-on **hard carry/borrow cascades** — problems requiring multi-digit propagation with varied answers:
-
-**Standard model (2L/3H/510d) at 10K data:**
-
-| Split | Baseline | SoRL K=1 abs30 | Gap |
-|-------|----------|----------------|-----|
-| C3 (3 hot carries) | 78% | **100%** | **+22pp** |
-| C4 (4 hot carries) | 88% | **100%** | **+12pp** |
-| C5 (5 hot carries) | 76% | **100%** | **+24pp** |
-| C6 (6 hot carries) | 92% | **100%** | **+8pp** |
-| sub\_M4 (4 borrows) | 10% | **100%** | **+90pp** |
-
-**Undersized model (2L/1H/128d) at 100K — where both plateau below 100%:**
-
-| Split | Baseline | SoRL K=1 abs30 | Gap |
-|-------|----------|----------------|-----|
-| C3 (3 hot carries) | 28% | **98%** | **+70pp** |
-| C4 (4 hot carries) | 38% | **94%** | **+56pp** |
-| C5 (5 hot carries) | 48% | **86%** | **+38pp** |
-| C6 (6 hot carries) | 32% | **94%** | **+62pp** |
-
-Even when the model is too small to reach 100%, SoRL's abstraction tokens provide
-external scratch-pad memory that doubles or triples accuracy on hard cascades.
-See the **Results** and **Interpretability** tabs for figures and analysis.
-""")
+            summary_md = gr.Markdown(build_summary_markdown())
             main_table = gr.Dataframe(
                 headers=["Ops", "Data", "Arch", "Baseline", "SoRL", "Config", "B_hf", "S_hf", "B_wandb", "S_wandb"],
                 datatype=["str", "str", "str", "markdown", "markdown", "str", "markdown", "markdown", "markdown", "markdown"],
@@ -721,6 +695,7 @@ Abstraction tokens are integers from 1 to `abs_vocab` (0 is the placeholder befo
         summary = f"**{n_models}** models | Arch filter: {arch}"
         q_status = get_queue_status_text(n_models)
         eval_info = build_eval_info(models)
+        new_summary_md = build_summary_markdown()
 
         main_cols = ["Ops", "Data", "Arch", "Baseline", "SoRL", "Config", "B_hf", "S_hf", "B_wandb", "S_wandb"]
         main_df = df[main_cols] if all(c in df.columns for c in main_cols) else pd.DataFrame()
@@ -733,18 +708,18 @@ Abstraction tokens are integers from 1 to `abs_vocab` (0 is the placeholder befo
         model_names = sorted([m["subfolder"].removeprefix("non_enriched/") for m in models])
         model_dd_update = gr.update(choices=model_names, value=model_names[0] if model_names else "")
 
-        return models, summary, q_status, main_df, hard_df, eval_info, model_dd_update
+        return models, summary, q_status, main_df, hard_df, eval_info, model_dd_update, new_summary_md
 
     def on_detail(models, name):
         return build_detailed_splits(models, name.strip() if name else "")
 
-    all_outputs = [models_state, summary_text, queue_status, main_table, hard_table, eval_info_md, model_selector]
+    all_outputs = [models_state, summary_text, queue_status, main_table, hard_table, eval_info_md, model_selector, summary_md]
 
     refresh_btn.click(on_refresh, inputs=[arch_filter], outputs=all_outputs)
     arch_filter.change(on_refresh, inputs=[arch_filter], outputs=all_outputs)
     detail_btn.click(on_detail, inputs=[models_state, model_selector], outputs=[detail_table])
 
-    timer = gr.Timer(120)
+    timer = gr.Timer(300)
     timer.tick(on_refresh, inputs=[arch_filter], outputs=all_outputs)
     app.load(on_refresh, inputs=[arch_filter], outputs=all_outputs)
 
