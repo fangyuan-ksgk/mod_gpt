@@ -62,7 +62,8 @@ def save_model(model, config: dict, metrics: dict, subfolder: str,
         )
 
     print(f"Saved to {repo_id}/{subfolder}")
-    _register_in_catalog(api, config, metrics, subfolder, repo_id)
+    if "smoke" not in subfolder.lower() and "test" not in subfolder.lower():
+        _register_in_catalog(api, config, metrics, subfolder, repo_id)
 
 
 def _register_in_catalog(api: "HfApi", config: dict, metrics: dict,
