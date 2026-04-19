@@ -323,7 +323,7 @@ def train_sft(model, train_ds, val_ds, cfg: ArithmeticConfig, run_name, tokenize
             global_step += 1
 
             if global_step % 50 == 0:
-                print(f"step {global_step} | loss={loss.item():.4f} | lr={lr:.2e}")
+                print(f"step {global_step} | loss={loss.item():.4f} | lr={lr:.2e}", flush=True)
                 history["step"].append(global_step)
                 history["loss"].append(loss.item())
                 history["base_loss"].append(loss.item())
@@ -341,7 +341,7 @@ def train_sft(model, train_ds, val_ds, cfg: ArithmeticConfig, run_name, tokenize
                 epoch_eval = evaluator.run(K=None, eval_set_path="epoch")
                 acc = epoch_eval["summary"]["overall_accuracy"]
 
-                print(f"  --- Epoch {current_epoch}/{cfg.num_epochs}: accuracy={acc:.3f} ---")
+                print(f"  --- Epoch {current_epoch}/{cfg.num_epochs}: accuracy={acc:.3f} ---", flush=True)
                 # Log key hard splits
                 splits = epoch_eval.get("splits", {})
                 for s in ["add_S5", "add_S6", "add_C6", "sub_M5", "sub_B5"]:
