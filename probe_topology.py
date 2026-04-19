@@ -20,7 +20,7 @@ Usage:
     python probe_topology.py \\
         --repo Ksgk-fy/sciqa_ckpt_20260416_0942 \\
         --runs q06_sciqa_v6_C32_base q06_sciqa_v9_C32_detach_az0.1_aa0.5 \\
-        --num-samples 500
+        --num-samples 2000
 """
 import argparse
 import csv
@@ -43,6 +43,15 @@ from sorl.steer import StackedAbstractionWrapperV6, StackedAbstractionWrapperV9
 
 
 DTYPES = {"fp32": torch.float32, "bf16": torch.bfloat16, "fp16": torch.float16}
+
+
+def _get_transformer_layers(wrapper):
+    """Resolve transformer layer list from wrapper, handling PEFT wrapping."""
+    m = wrapper.model
+    # Unwrap PEFT → get the original HuggingFace CausalLM
+    if hasattr(m, 'base_model') and hasattr(m.base_model, 'model'):
+        m = m.base_model.model  # PeftModel → LoraModel.model → original HF model
+    return m.model.layers
 
 
 def set_seed(s):
@@ -71,16 +80,17 @@ def conditions_for(mode):
 
 
 def build_wrapper(ckpt, condition, mode, dtype, device):
-    """Build a ready-to-eval wrapper for (ckpt, condition, mode)."""
+    """Build a ready-to-eval wrapper for (ckpt, condition, mode).
+
+    Mirrors train_steer_pt.py flow:
+        base model → wrapper → (optional) LoRA wrap → update wrapper.model → load state.
+    Untrained condition skips LoRA entirely (no ckpt weights are loaded).
+    """
     args = ckpt["args"]
+    tokenizer = AutoTokenizer.from_pretrained(args["model_name"])
     model = AutoModelForCausalLM.from_pretrained(
         args["model_name"], torch_dtype=dtype
     )
-    tokenizer = AutoTokenizer.from_pretrained(args["model_name"])
-
-    # Load trained base?
-    if condition in ("trained", "trained_random_proj"):
-        model.load_state_dict(ckpt["model"])
 
     inject_layers = [int(l) for l in args["inject_layers"].split(" ")]
 
@@ -94,8 +104,31 @@ def build_wrapper(ckpt, condition, mode, dtype, device):
         L=args["L"],
     )
 
+    load_trained = condition in ("trained", "trained_random_proj")
+
+    # Apply LoRA to match checkpoint structure, only if ckpt was LoRA-trained
+    # AND we're loading trained weights. Untrained uses a clean base model.
+    if load_trained and args.get("use_lora", False):
+        from peft import LoraConfig, get_peft_model
+        lora_cfg = LoraConfig(
+            r=args["lora_rank"],
+            lora_alpha=args["lora_alpha"],
+            target_modules=args["lora_target_modules"].split(","),
+            lora_dropout=args["lora_dropout"],
+            bias="none",
+            task_type="CAUSAL_LM",
+        )
+        model = get_peft_model(model, lora_cfg)
+        wrapper.model = model
+        # NOTE: do NOT re-register hooks — the original hooks are on the same
+        # layer objects (PEFT only replaces linear submodules, not layers).
+
+    # Load trained base / adapters
+    if load_trained:
+        wrapper.model.load_state_dict(ckpt["model"])
+
     # Load steering weights according to condition
-    if condition in ("trained", "trained_random_proj"):
+    if load_trained:
         wrapper.steering_emb.load_state_dict(ckpt["steering_emb"])
         if condition == "trained" and mode == "v9" and "abs_proj" in ckpt:
             wrapper.abs_proj.load_state_dict(ckpt["abs_proj"])
@@ -115,7 +148,8 @@ def collect_records(wrapper, tokenizer, ds, n, device, inject_layer):
         h = out[0] if isinstance(out, tuple) else out
         captured[name] = h.detach()
 
-    h = wrapper.model.model.layers[inject_layer].register_forward_hook(
+    layers = _get_transformer_layers(wrapper)
+    h = layers[inject_layer].register_forward_hook(
         functools.partial(_hook, name="inject"))
 
     records = []
@@ -265,7 +299,12 @@ def main():
                 **metrics,
             })
 
+            # Incremental save — crash-safe
+            csv_path = os.path.join(args.out_dir, f"{args.tag}.csv")
+            write_csv(results, csv_path)
+
             # Free memory before next condition / checkpoint
+            wrapper.remove_hooks() if hasattr(wrapper, 'remove_hooks') else None
             del wrapper
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
@@ -274,8 +313,7 @@ def main():
     md_path = os.path.join(args.out_dir, f"{args.tag}.md")
     write_csv(results, csv_path)
     write_markdown(results, md_path, args.num_samples)
-    print(f"\nSaved: {csv_path}")
-    print(f"Saved: {md_path}")
+    print(f"\nDone. Saved: {csv_path}  {md_path}")
 
 
 if __name__ == "__main__":

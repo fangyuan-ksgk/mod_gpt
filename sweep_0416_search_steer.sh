@@ -21,9 +21,10 @@
 #   v6 C=4, v6 C=32, v9 joint C=4, v9 detach C=4, v9 joint C=32, v9 detach C=32
 #
 # Parts (1 per model×dataset):
-#   q06: 1-2    q17: 3-4    l1: 5-6    l3: 7-8    q4b: 9-10
+#   drop/stqa:    q06: 1-2    q17: 3-4    l1: 5-6    l3: 7-8    q4b: 9-10
+#   lqa/medqa/tqa: q06: 11-13  q17: 14-16  l1: 17-19
 #
-# Total: 10 parts × 6 runs = 60 runs
+# Total: 19 parts × 6 runs = 114 runs
 #
 # Usage: ./sweep_0414_search_steer.sh <PART>
 #   PART=1..10  → specific model+dataset combo
@@ -73,12 +74,12 @@ LLAMA1="meta-llama/Llama-3.2-1B"
 LLAMA3="meta-llama/Llama-3.2-3B"
 QWEN4B="Qwen/Qwen3-4B"
 
-# 2 datasets in order
+# 2 datasets in order (parts 1-10)
 DS_NAMES=(drop strategyqa)
 DS_TAGS=(drop stqa)
 N_DS=${#DS_NAMES[@]}
 
-declare -A P_MODEL P_MTAG P_DS P_DTAG P_LAYER P_EXTRA P_SLR P_SCALE P_AZ P_AA
+declare -A P_MODEL P_MTAG P_DS P_DTAG P_LAYER P_EXTRA P_SLR P_SCALE P_AZ P_AA P_EVAL
 
 # Helper to fill N_DS consecutive parts for a model
 # fill_model START MODEL MTAG LAYER SLR SCALE AZ AA EXTRA
@@ -106,7 +107,36 @@ fill_model  5 "$LLAMA1" "l1"   10    1e-2  0.1   0.1  0.5  ""
 fill_model  7 "$LLAMA3" "l3"   16    1e-2  0.1   0.1  0.5  ""
 fill_model  9 "$QWEN4B" "q4b"  18    5e-2  0.5   0.1  0.5  "--use_lora --lora_rank 16 --lora_alpha 32"
 
-N_PARTS=10
+# ---- Additional datasets: logiqa, medqa, triviaqa on q06, q17, l1 ----
+DS2_NAMES=(logiqa medqa triviaqa)
+DS2_TAGS=(lqa medqa tqa)
+DS2_EVAL=(651 1273 4000)
+N_DS2=${#DS2_NAMES[@]}
+
+fill_model_ds2() {
+  local start=$1 model=$2 mtag=$3 layer=$4 slr=$5 scale=$6 az=$7 aa=$8 extra="${9:-}"
+  for i in $(seq 0 $((N_DS2-1))); do
+    local p=$((start + i))
+    P_MODEL[$p]="$model"
+    P_MTAG[$p]="$mtag"
+    P_DS[$p]="${DS2_NAMES[$i]}"
+    P_DTAG[$p]="${DS2_TAGS[$i]}"
+    P_LAYER[$p]="$layer"
+    P_SLR[$p]="$slr"
+    P_SCALE[$p]="$scale"
+    P_AZ[$p]="$az"
+    P_AA[$p]="$aa"
+    P_EXTRA[$p]="$extra"
+    P_EVAL[$p]="${DS2_EVAL[$i]}"
+  done
+}
+
+#                          START  MODEL    MTAG  LAYER SLR   SCALE AZ   AA
+fill_model_ds2 11 "$QWEN06" "q06"  14    5e-2  0.5   0.1  0.5  ""
+fill_model_ds2 14 "$QWEN17" "q17"  14    5e-2  0.5   0.1  0.5  ""
+fill_model_ds2 17 "$LLAMA1" "l1"   10    1e-2  0.1   0.1  0.5  ""
+
+N_PARTS=19
 
 # ---- Runner ----
 run_one() {
@@ -166,8 +196,14 @@ run_part() {
   local cur_layer=${P_LAYER[$p]}
   PART_NUM=$p
 
+  # Per-part eval_samples override (for new datasets)
+  local saved_eval=$EVAL_SAMPLES
+  if [ -n "${P_EVAL[$p]:-}" ]; then
+    EVAL_SAMPLES="${P_EVAL[$p]}"
+  fi
+
   echo ""
-  echo "--- Part ${p}/${N_PARTS}: ${cur_mtag} + ${dataset} (layer ${cur_layer}) ---"
+  echo "--- Part ${p}/${N_PARTS}: ${cur_mtag} + ${dataset} (layer ${cur_layer}, eval=${EVAL_SAMPLES}) ---"
 
   local cur_extra="${P_EXTRA[$p]}"
   local cur_slr="${P_SLR[$p]}"
@@ -194,6 +230,7 @@ run_part() {
   done
   wait
 
+  EVAL_SAMPLES=$saved_eval
   echo "Part ${p} complete."
 }
 

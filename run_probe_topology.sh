@@ -4,7 +4,7 @@
 set -euo pipefail
 
 REPO="${REPO:-Ksgk-fy/sciqa_ckpt_20260416_0942}"
-N="${N:-500}"
+N="${N:-2000}"   # ScienceQA test set has 2224 samples; 2000 covers ~full set
 DTYPE="${DTYPE:-bf16}"
 TAG="${TAG:-topology_probe}"
 

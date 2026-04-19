@@ -796,7 +796,7 @@ def main():
                                      temperature=args.search_temp, reduction='none')
                     per_sample_loss = rep_out.per_sample_loss.view(B, N)
                     best_idx = per_sample_loss.argmin(dim=-1)
-                    all_codes = wrapper._last_chunk_codes.view(B, N, -1)
+                    all_codes = wrapper._last_codes.view(B, N, -1)
                     best_codes = all_codes[torch.arange(B, device=device), best_idx]
                     del rep_out
 
