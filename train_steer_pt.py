@@ -282,9 +282,22 @@ def evaluate_accuracy(
     wrapper, tokenizer, dataset, device,
     num_samples=50, max_new_tokens=128, num_log_samples=3,
     log_fn=None, eval_batch_size=16,
+    record_codes=True,
 ):
     """Batched greedy evaluation. Steering is applied if the wrapper's
-    generate() routes codes during decoding (e.g. V9's cache-aware hook)."""
+    generate() routes codes during decoding (e.g. V9's cache-aware hook).
+
+    Args:
+        record_codes: if True, capture per-sample abstract-code trajectories
+            (prompt + response) so inner-monologue behaviour can be analysed
+            post-hoc. Requires a wrapper whose generate() accepts
+            `log_decode_codes=True` (e.g. StackedAbstractionWrapperV9).
+    """
+    import inspect as _inspect
+    _supports_code_log = (
+        record_codes
+        and "log_decode_codes" in _inspect.signature(wrapper.generate).parameters
+    )
     raw_model = wrapper.model if hasattr(wrapper, 'model') else wrapper
     raw_model.eval()
     correct = 0
@@ -301,6 +314,7 @@ def evaluate_accuracy(
     all_preds = [None] * n
     all_golds = [None] * n
     all_ds_idx = [0] * n
+    all_codes = [None] * n if record_codes else None
 
     for bs_start in range(0, n, eval_batch_size):
         bs_end = min(bs_start + eval_batch_size, n)
@@ -318,13 +332,36 @@ def evaluate_accuracy(
         input_ids, attn_mask = _left_pad_prompts(prompts, pad_id)
         input_ids, attn_mask = input_ids.to(device), attn_mask.to(device)
 
-        generated = wrapper.generate(
+        gen_kwargs = dict(
             input_ids=input_ids, attention_mask=attn_mask,
             max_new_tokens=max_new_tokens, do_sample=False,
             pad_token_id=pad_id,
         )
+        if _supports_code_log:
+            gen_kwargs["log_decode_codes"] = True
+        generated = wrapper.generate(**gen_kwargs)
+
+        # Capture per-batch code trajectories (prefill + decode).
+        # `_last_codes`      : (B, n_chunks_prefill)  — codes chosen at prompt prefill
+        # `_decode_codes_log`: list of (B,) tensors   — one per L decoded tokens
+        batch_prompt_codes = None
+        batch_decode_codes = None
+        if _supports_code_log:
+            # Prefer `_last_chunk_codes` (uniform (B, n_chunks) across V6/V9).
+            # Fall back to `_last_codes` for older wrappers — V9 stored codes
+            # there directly; V6 stores per-token, which won't align but keeps
+            # backward compatibility for non-code-logging callers.
+            pc = getattr(wrapper, "_last_chunk_codes", None)
+            if pc is None:
+                pc = getattr(wrapper, "_last_codes", None)
+            if pc is not None:
+                batch_prompt_codes = pc.detach().cpu()
+            dc = getattr(wrapper, "_decode_codes_log", None)
+            if dc:
+                batch_decode_codes = torch.stack([c for c in dc], dim=1)  # (B, n_decode_chunks)
 
         max_pl = input_ids.size(1)
+        L = getattr(wrapper, "L", None)
         for j, i in enumerate(range(bs_start, bs_end)):
             pad_len = max_pl - prompt_lens[j]
             gen_ids = generated[j, pad_len:]
@@ -337,6 +374,21 @@ def evaluate_accuracy(
             efn = dataset.extract_answer_for(ds_i) if is_mixed else extract_fn
             all_preds[i] = efn(full_text)
             all_golds[i] = efn(ref_texts[j])
+
+            if record_codes:
+                # Strip chunks that sit entirely inside the left-pad region.
+                # Left-pad length = pad_len tokens → first pad_len//L chunks are pure pad.
+                pad_chunks = (pad_len // L) if L else 0
+                prompt_codes = (batch_prompt_codes[j].tolist()[pad_chunks:]
+                                if batch_prompt_codes is not None else [])
+                resp_codes = (batch_decode_codes[j].tolist()
+                              if batch_decode_codes is not None else [])
+                all_codes[i] = {
+                    "prompt": prompt_codes,
+                    "response": resp_codes,
+                    "L": L,
+                    "pad_prefix_chunks": pad_chunks,
+                }
 
     # Scoring
     is_correct_list = [False] * n
@@ -381,6 +433,8 @@ def evaluate_accuracy(
 
     raw_model.train()
     result = {"accuracy": accuracy, "correct": correct, "total": n, "samples": samples}
+    if record_codes:
+        result["codes"] = all_codes
 
     # Per-dataset breakdown for mixed datasets
     if is_mixed:

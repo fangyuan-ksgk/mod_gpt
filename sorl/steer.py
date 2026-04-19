@@ -260,7 +260,21 @@ class StackedAbstractionWrapperV6(nn.Module):
             nn.init.zeros_(self.steering_emb.weight)
 
         self._hooks = []
-        self._last_codes = None  # (B, S) chunk-level codes from last forward
+        self._last_codes = None  # (B, S) chunk-level codes from last forward (per-token, repeated within a chunk)
+        self._last_chunk_codes = None  # (B, n_chunks) per-chunk codes — mirrors V9 for analysis tooling
+
+        # ---- decode-time state (used only inside self.generate) ------------
+        # V6 was trained with prefill-only chunking; applying steering to
+        # autoregressive decode tokens is a distribution shift the model never
+        # saw, so `_decode_scale_override` defaults to 0.0 — decode-time codes
+        # are observed (and logged) but NOT injected. Flip to None (use
+        # self.scale) or any float to opt in.
+        self._in_generate = False
+        self._decode_tail = 0
+        self._decode_current_code = None
+        self._decode_codes_log = None
+        self._decode_scale_override = 0.0
+
         self._register_hooks()
 
     # ---- hooks ----
@@ -284,7 +298,41 @@ class StackedAbstractionWrapperV6(nn.Module):
             rest = None
 
         B, S, D = hidden_states.shape
+        emb = self.steering_emb[hook_idx] if self.per_layer_emb else self.steering_emb
 
+        # ---- Decode-time path: S == 1 during autoregressive generation --------
+        # V6 was trained with prefill-only chunking; we still want to observe
+        # which code the model's hidden state would route to at decode time
+        # (for inner-monologue analysis), but by default we do NOT inject —
+        # that's a distribution shift V6 never saw during training.
+        if self._in_generate and S == 1:
+            decode_scale = (self._decode_scale_override
+                            if self._decode_scale_override is not None
+                            else self.scale)
+
+            # Re-route at each chunk boundary (every L generated tokens).
+            if self._decode_tail == 0:
+                with torch.no_grad():
+                    if self._routing_dims is not None:
+                        routed_one = hidden_states[..., self._routing_dims]
+                    else:
+                        routed_one = hidden_states[..., -self.C_SIZE:]
+                    code_one = routed_one[:, 0, :].argmax(dim=-1)   # (B,)
+                self._decode_current_code = code_one
+                if self._decode_codes_log is not None:
+                    self._decode_codes_log.append(code_one.cpu())
+
+            # Apply steering only if decode_scale is nonzero (default: skip).
+            if self._decode_current_code is not None and decode_scale != 0.0:
+                steer = emb(self._decode_current_code)              # (B, D)
+                hidden_states = hidden_states + (
+                    steer.unsqueeze(1) * decode_scale
+                ).to(hidden_states.dtype)
+
+            self._decode_tail = (self._decode_tail + 1) % self.L
+            return (hidden_states,) + rest if rest is not None else hidden_states
+
+        # ---- Prefill / training path -----------------------------------------
         # Routing: select dims for code extraction
         with torch.no_grad():
             if self._routing_dims is not None:  # similar_magnitude
@@ -303,20 +351,29 @@ class StackedAbstractionWrapperV6(nn.Module):
         if n_chunks > 0:
             chunk_codes = torch.full((B, S), -1, dtype=torch.long,
                                      device=hidden_states.device)
-            for c in range(n_chunks):
-                if self.code_position == "last":
-                    src = c * self.L + self.L - 1
-                else:  # "first"
-                    src = c * self.L
+            if self.code_position == "last":
+                src_idx = [c * self.L + self.L - 1 for c in range(n_chunks)]
+            else:  # "first"
+                src_idx = [c * self.L for c in range(n_chunks)]
+            for c, src in enumerate(src_idx):
                 chunk_codes[:, c * self.L:(c + 1) * self.L] = pos_codes[:, src:src + 1]
 
             mask = chunk_codes >= 0
             safe_codes = chunk_codes.clamp(min=0)
-            emb = self.steering_emb[hook_idx] if self.per_layer_emb else self.steering_emb
             steer_vecs = emb(safe_codes)          # (B, S, D)
             steer_vecs = steer_vecs * mask.unsqueeze(-1).float() * self.scale
             hidden_states = hidden_states + steer_vecs.to(hidden_states.dtype)
-            self._last_codes = chunk_codes  # expose for analysis
+            self._last_codes = chunk_codes                         # (B, S) legacy per-token
+            self._last_chunk_codes = pos_codes[:, src_idx].detach()  # (B, n_chunks)
+
+            # Seed decode state at end of prefill so autoregressive steps
+            # continue chunking from where the prompt left off.
+            if self._in_generate:
+                self._decode_tail = S % self.L
+                self._decode_current_code = self._last_chunk_codes[:, -1]
+        elif self._in_generate:
+            # Prefill shorter than one chunk — remember offset for first decode step.
+            self._decode_tail = S % self.L
 
         return (hidden_states,) + rest if rest is not None else hidden_states
 
@@ -328,8 +385,22 @@ class StackedAbstractionWrapperV6(nn.Module):
             labels=labels, **kwargs
         )
 
-    def generate(self, **kwargs):
-        return self.model.generate(**kwargs) # -> expose abstract tokens
+    def generate(self, log_decode_codes=False, decode_scale=None, **kwargs):
+        """Run autoregressive generation with code logging.
+        """
+        self._in_generate = True
+        self._decode_tail = 0
+        self._decode_current_code = None
+        self._decode_codes_log = [] if log_decode_codes else None
+        prev_override = self._decode_scale_override
+        if decode_scale is not None:
+            self._decode_scale_override = float(decode_scale)
+        try:
+            out = self.model.generate(**kwargs)
+        finally:
+            self._in_generate = False
+            self._decode_scale_override = prev_override
+        return out
 
     # ---- save / load ----
 
@@ -610,6 +681,10 @@ class StackedAbstractionWrapperV9(nn.Module):
         self._decode_tail = 0         # 0..L-1, position within current chunk
         self._decode_current_code = None  # (B,) long, code to apply each step
         self._decode_codes_log = None     # list of (B,) per decoded chunk, for inspection
+        # None → decode uses self.scale (current behaviour). Set a float via
+        # `generate(decode_scale=...)` to override (e.g. 0.0 to read codes
+        # without injecting, symmetric with V6 defaults).
+        self._decode_scale_override = 0.0
 
         self._hooks = []
         self._register_hooks()
@@ -643,6 +718,9 @@ class StackedAbstractionWrapperV9(nn.Module):
         # handle this branch explicitly.
         if self._in_generate and S == 1:
             emb_mod = self.steering_emb[hook_idx] if self.per_layer_emb else self.steering_emb
+            decode_scale = (self._decode_scale_override
+                            if self._decode_scale_override is not None
+                            else self.scale)
 
             # Re-route at each chunk boundary (every L generated tokens).
             if self._decode_tail == 0:
@@ -657,10 +735,10 @@ class StackedAbstractionWrapperV9(nn.Module):
                     self._decode_codes_log.append(code_one.cpu())
 
             # Apply the current chunk's steering to this single decode token.
-            if self._decode_current_code is not None:
+            if self._decode_current_code is not None and decode_scale != 0.0:
                 steer = emb_mod(self._decode_current_code)              # (B, D)
                 hidden_states = hidden_states + (
-                    steer.unsqueeze(1) * self.scale
+                    steer.unsqueeze(1) * decode_scale
                 ).to(hidden_states.dtype)
 
             # Advance within-chunk offset.
@@ -702,6 +780,7 @@ class StackedAbstractionWrapperV9(nn.Module):
 
         self._last_routing_logits = src_logits  # (B, n_chunks, C) — retains gradient
         self._last_codes = codes.detach()  # (B, n_chunks)
+        self._last_chunk_codes = self._last_codes  # alias — matches V6 analysis API
 
         emb = self.steering_emb[hook_idx] if self.per_layer_emb else self.steering_emb
         chunk_steer = emb(codes)  # (B, n_chunks, D)
@@ -786,7 +865,7 @@ class StackedAbstractionWrapperV9(nn.Module):
             target_codes.reshape(-1),
         )
 
-    def generate(self, log_decode_codes=False, **kwargs):
+    def generate(self, log_decode_codes=False, decode_scale=None, **kwargs):
         """Generate with steering applied on every decode step.
 
         The forward hook normally short-circuits when S < L; during KV-cached
@@ -798,17 +877,24 @@ class StackedAbstractionWrapperV9(nn.Module):
         Args:
             log_decode_codes: if True, each re-routed decode chunk code is
                 appended to `self._decode_codes_log` (cpu) for inspection.
+            decode_scale: optional float override for decode-time injection
+                scale (leaves prefill untouched). Pass 0.0 to read codes
+                without perturbing generation. Default (None) uses self.scale.
         """
         self._in_generate = True
         self._decode_tail = 0
         self._decode_current_code = None
         self._decode_codes_log = [] if log_decode_codes else None
+        prev_override = self._decode_scale_override
+        if decode_scale is not None:
+            self._decode_scale_override = float(decode_scale)
         try:
             return self.model.generate(**kwargs)
         finally:
             self._in_generate = False
             self._decode_tail = 0
             self._decode_current_code = None
+            self._decode_scale_override = prev_override
 
     # ---- save / load ----
 
