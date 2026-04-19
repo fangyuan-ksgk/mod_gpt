@@ -21,6 +21,19 @@
 
 ---
 
+## Job Launch Rules
+
+**Always launch arithmetic training jobs WITH wandb** (do not add `--no_wandb` to sweep files).
+
+**Why:** WandB is the primary source of step-level training data. Jobs without wandb produce no observable training progress — the only way to check is tail-ing log files which are often buffered/silent.
+
+**How to apply:**
+- Never add `--no_wandb` to `arithmetic/scripts/sweep_*.txt` files
+- If asked to "check step data" or "check progress", look at WandB first
+- `--no_wandb` is only acceptable for quick smoke tests or debugging, never production sweeps
+
+---
+
 ## Presentation Feedback
 
 When presenting experiment results, always show the actual config values (e.g., `traj=1.0, abs=0.5, hinge=1.0, γ=0.5, noise`) — never use shorthand like "baseline" or "-".

@@ -1,0 +1,5 @@
+python -m arithmetic.train --mode sorl --ops add_sub --dataset_size 10000 --abs_vocab 30 --K 1 --num_epochs 10 --n_layer 1 --n_head 2 --n_embd 256 --push_to_hub --job_name as_sorl_abs30_K1_10K_1L2H256d
+python -m arithmetic.train --mode sorl --ops add_sub --dataset_size 10000 --abs_vocab 30 --K 1 --num_epochs 10 --n_layer 1 --n_head 3 --push_to_hub --job_name as_sorl_abs30_K1_10K_1L3H510d
+python -m arithmetic.train --mode sorl --ops add_sub --dataset_size 10000 --abs_vocab 30 --K 1 --num_epochs 10 --n_layer 2 --n_head 1 --n_embd 128 --push_to_hub --job_name as_sorl_abs30_K1_10K_2L1H128d
+python -m arithmetic.train --mode sorl --ops add_sub --dataset_size 50000 --abs_vocab 30 --K 1 --num_epochs 10 --n_layer 1 --n_head 2 --n_embd 256 --push_to_hub --job_name as_sorl_abs30_K1_50K_1L2H256d
+python -m arithmetic.train --mode sorl --ops add_sub --dataset_size 10000 --abs_vocab 30 --K 1 --num_epochs 10 --push_to_hub --job_name as_sorl_abs30_K1_10K_2L3H510d
