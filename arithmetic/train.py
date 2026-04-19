@@ -46,7 +46,7 @@ class ArithmeticConfig(SoRLConfig):
 
     # Training
     batch_size: int = 64
-    num_epochs: int = 5
+    num_epochs: int = 20
 
     # SoRL v1 defaults (Fangyuan's recommended)
     alpha_info_gain: float = 10.0
