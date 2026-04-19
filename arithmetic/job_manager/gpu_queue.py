@@ -615,14 +615,29 @@ def main():
         ).hexdigest()[:12]
 
     def _load_hf_hashes():
-        """Load config_hash values from all models on HF."""
+        """Load config_hash values from all VALID (non-superseded) models on HF."""
         try:
             from huggingface_hub import HfApi, hf_hub_download
             api = HfApi()
+            # Load catalog to find superseded models
+            superseded_names = set()
+            try:
+                cat_local = hf_hub_download(
+                    "thoughtworks/arithmetic-sorl", "model_catalog.json",
+                    local_dir="/tmp/hf_queue_cache",
+                )
+                catalog = json.load(open(cat_local))
+                superseded_names = {e["name"] for e in catalog if e.get("status") == "SUPERSEDED"}
+            except Exception:
+                pass
+
             all_files = api.list_repo_files("thoughtworks/arithmetic-sorl")
             config_files = [f for f in all_files if f.endswith("train_config.json")]
             hashes = set()
             for cf in config_files:
+                subfolder = cf.split("/")[0]
+                if subfolder in superseded_names:
+                    continue  # skip superseded models — allow re-running them
                 try:
                     local = hf_hub_download(
                         "thoughtworks/arithmetic-sorl", cf,
