@@ -338,15 +338,16 @@ def train_sft(model, train_ds, val_ds, cfg: ArithmeticConfig, run_name, tokenize
                 # Full per-split eval every epoch
                 from arithmetic.evaluate import ArithmeticEvaluator
                 evaluator = ArithmeticEvaluator(model, tokenizer, device=device, n_digits=cfg.n_digits)
-                epoch_eval = evaluator.run(K=None, eval_set_path="epoch")
+                eval_K = cfg.K if cfg.mode == "sorl" else None
+                epoch_eval = evaluator.run(K=eval_K, eval_set_path="epoch")
                 acc = epoch_eval["summary"]["overall_accuracy"]
 
-                print(f"  --- Epoch {current_epoch}/{cfg.num_epochs}: accuracy={acc:.3f} ---", flush=True)
+                print(f"  --- Epoch {current_epoch}/{cfg.num_epochs}: accuracy={acc:.3f} (K={eval_K}) ---", flush=True)
                 # Log key hard splits
                 splits = epoch_eval.get("splits", {})
                 for s in ["add_S5", "add_S6", "add_C6", "sub_M5", "sub_B5"]:
                     if s in splits:
-                        print(f"      {s}: {splits[s]['full_accuracy']:.0%}")
+                        print(f"      {s}: {splits[s]['full_accuracy']:.0%}", flush=True)
 
                 history.setdefault("eval_step", []).append(global_step)
                 history.setdefault("eval_epoch", []).append(current_epoch)
@@ -354,8 +355,9 @@ def train_sft(model, train_ds, val_ds, cfg: ArithmeticConfig, run_name, tokenize
 
                 if wandb.run is not None:
                     log_dict = {"eval/accuracy": acc, "eval/epoch": current_epoch}
+                    eval_prefix = "sorl" if cfg.mode == "sorl" else "sft"
                     for split_name, split_data in splits.items():
-                        log_dict[f"eval/sft/{split_name}"] = split_data["full_accuracy"]
+                        log_dict[f"eval/{eval_prefix}/{split_name}"] = split_data["full_accuracy"]
                     wandb.log(log_dict, step=global_step)
 
     return history

@@ -39,6 +39,23 @@
 
 ---
 
+## Known Data Quality Issues
+
+### Epoch eval was broken for all SoRL models trained before 2026-04-19 ~17:20
+
+**What happened:** The epoch-level eval during training used `K=None` (no abstract tokens). SoRL models that depend on abstractions showed ~0% accuracy at every epoch in training logs, wandb `eval/accuracy` curves, and `history.json`.
+
+**Impact:** 
+- All existing SoRL wandb runs in `nlp_and_interpretability/sorl-arithmetic` are tagged `broken-epoch-eval`
+- The **final accuracy** uploaded to HF is **correct** (end-of-training eval always used the right K)
+- Epoch-by-epoch progress curves in wandb are **not trustworthy** for any SoRL run before this date
+
+**Fix:** `train.py` line ~341: `eval_K = cfg.K if cfg.mode == "sorl" else None`. Applied 2026-04-19.
+
+**How to apply:** Never rely on wandb `eval/accuracy` training curves for SoRL models created before 2026-04-19. Always use the final accuracy from HF metrics.json or the model catalog.
+
+---
+
 ## Presentation Feedback
 
 When presenting experiment results, always show the actual config values (e.g., `traj=1.0, abs=0.5, hinge=1.0, γ=0.5, noise`) — never use shorthand like "baseline" or "-".

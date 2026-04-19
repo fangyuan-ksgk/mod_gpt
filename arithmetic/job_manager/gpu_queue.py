@@ -507,7 +507,7 @@ class GPUQueue:
 def main():
     """Read jobs from a file and run them."""
     if len(sys.argv) < 2:
-        print("Usage: python gpu_queue.py jobs.txt [n_gpus] [max_per_gpu] [--stale-timeout N] [--max-retries N]")
+        print("Usage: python gpu_queue.py jobs.txt [n_gpus] [max_per_gpu] [--stale-timeout N] [--max-retries N] [--force]")
         sys.exit(1)
 
     jobs_file = sys.argv[1]
@@ -517,11 +517,14 @@ def main():
     # Parse optional flags
     stale_timeout = 1800
     max_retries = 1
+    force = False
     for i, arg in enumerate(sys.argv):
         if arg == "--stale-timeout" and i + 1 < len(sys.argv):
             stale_timeout = float(sys.argv[i + 1])
         if arg == "--max-retries" and i + 1 < len(sys.argv):
             max_retries = int(sys.argv[i + 1])
+        if arg == "--force":
+            force = True
 
     # Parse jobs file with optional #PRIORITY: tags
     PRIORITY_MAP = {"HIGH": 0, "NORMAL": 1, "LOW": 2}
@@ -655,9 +658,13 @@ def main():
             return set()
 
     # Check HF for already-completed jobs
-    print("Checking HuggingFace for completed jobs...")
-    hf_hashes = _load_hf_hashes()
-    print(f"  Found {len(hf_hashes)} completed config hashes on HF")
+    if force:
+        print("--force: skipping HF hash check, all jobs will run")
+        hf_hashes = set()
+    else:
+        print("Checking HuggingFace for completed jobs...")
+        hf_hashes = _load_hf_hashes()
+        print(f"  Found {len(hf_hashes)} completed config hashes on HF")
 
     # Filter jobs: skip those with matching hash on HF
     filtered_jobs = []
