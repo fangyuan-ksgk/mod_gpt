@@ -6,9 +6,11 @@ Usage:
 
 This is the ONE command to run a sweep end-to-end:
     1. Run all jobs via gpu_queue
-    2. Run post_sweep triage (diagnose failures, retry fixable ones)
-    3. Write results to log/arithmetic.md
+    2. Delete the jobs file (sweep files are ephemeral — delete after use)
+    3. Run post_sweep triage (diagnose failures, retry fixable ones)
+    4. Write results to log/arithmetic.md
 """
+import os
 import subprocess
 import sys
 
@@ -38,17 +40,24 @@ def main():
         stderr=subprocess.STDOUT,
     )
 
-    # Step 2: Triage failures
+    # Step 2: Delete the jobs file — sweep files are ephemeral
+    try:
+        os.remove(jobs_file)
+        print(f"Deleted jobs file: {jobs_file}")
+    except Exception as e:
+        print(f"Warning: could not delete jobs file: {e}")
+
+    # Step 3: Triage failures
     print("\n" + "=" * 60)
-    print("STEP 2: Post-sweep triage")
+    print("STEP 3: Post-sweep triage")
     print("=" * 60)
     subprocess.run(
         ["python", "-m", "arithmetic.job_manager.post_sweep", log_file],
     )
 
-    # Step 3: Write results
+    # Step 4: Write results
     print("\n" + "=" * 60)
-    print("STEP 3: Writing results")
+    print("STEP 4: Writing results")
     print("=" * 60)
     try:
         from arithmetic.catalog import ModelCatalog
