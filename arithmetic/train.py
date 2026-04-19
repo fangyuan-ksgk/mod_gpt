@@ -379,12 +379,23 @@ class WandbSoRLTrainer(SoRLTrainer):
             }, step=self.history["step"][-1])
 
     def evaluate(self, eval_K=None):
-        # Use correct K so log lines and wandb show real accuracy, not K=None 0%
+        # Run full ArithmeticEvaluator (per-split) with correct K — once per epoch.
+        # Replaces the cheap base-trainer eval entirely to avoid double eval cost.
         effective_K = eval_K if eval_K is not None else getattr(self.config, "K", None)
-        result = super().evaluate(eval_K=effective_K)
-        if result and self.is_master and wandb.run is not None:
+        if not self.is_master:
+            return None
+        from arithmetic.evaluate import ArithmeticEvaluator
+        evaluator = ArithmeticEvaluator(self.raw_model, self.tokenizer,
+                                        device=str(self.device), n_digits=6)
+        epoch_eval = evaluator.run(K=effective_K, eval_set_path="epoch")
+        acc = epoch_eval["summary"]["overall_accuracy"]
+        result = {"accuracy": acc}
+        if wandb.run is not None:
             step = self.history["step"][-1] if self.history["step"] else 0
-            wandb.log({"eval/accuracy": result["accuracy"]}, step=step)
+            log_dict = {"eval/accuracy": acc}
+            for split_name, split_data in epoch_eval.get("splits", {}).items():
+                log_dict[f"eval/sorl/{split_name}"] = split_data["full_accuracy"]
+            wandb.log(log_dict, step=step)
         return result
 
 
