@@ -379,9 +379,13 @@ class WandbSoRLTrainer(SoRLTrainer):
             }, step=self.history["step"][-1])
 
     def evaluate(self, eval_K=None):
-        # Pass correct K so base-trainer log lines show real accuracy, not K=None 0%
+        # Use correct K so log lines and wandb show real accuracy, not K=None 0%
         effective_K = eval_K if eval_K is not None else getattr(self.config, "K", None)
-        return super().evaluate(eval_K=effective_K)
+        result = super().evaluate(eval_K=effective_K)
+        if result and self.is_master and wandb.run is not None:
+            step = self.history["step"][-1] if self.history["step"] else 0
+            wandb.log({"eval/accuracy": result["accuracy"]}, step=step)
+        return result
 
 
 # ── Main ────────────────────────────────────────────────────────────
