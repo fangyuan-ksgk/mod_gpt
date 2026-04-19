@@ -283,7 +283,8 @@ def evaluate_accuracy(
     num_samples=50, max_new_tokens=128, num_log_samples=3,
     log_fn=None, eval_batch_size=16,
 ):
-    """Batched greedy evaluation.  No steering during generation."""
+    """Batched greedy evaluation. Steering is applied if the wrapper's
+    generate() routes codes during decoding (e.g. V9's cache-aware hook)."""
     raw_model = wrapper.model if hasattr(wrapper, 'model') else wrapper
     raw_model.eval()
     correct = 0
