@@ -75,8 +75,10 @@ def _build_wrapper(ckpt, device):
     if tokenizer.pad_token_id is None:
         tokenizer.pad_token_id = tokenizer.eos_token_id
     D = model.config.hidden_size
-    model.load_state_dict(ckpt["model"])
 
+    # Build wrapper FIRST so its hooks attach to the underlying decoder layer
+    # objects. If LoRA is used, PEFT wraps q/k/v/o_proj submodules but leaves
+    # the layer objects themselves intact — the hooks survive the wrap.
     WrapperCls = StackedAbstractionWrapperV9 if mode == "v9" else StackedAbstractionWrapperV6
     common = dict(
         model=model, C_SIZE=args["C_SIZE"], D_MODEL=D,
@@ -93,6 +95,33 @@ def _build_wrapper(ckpt, device):
             routing_mode=args.get("routing_mode", "diagonal"),
             routing_temperature=args.get("routing_temperature", None),
         )
+
+    # Apply LoRA if the ckpt was trained with it. Detect via args flag OR by
+    # inspecting state_dict keys (fallback for older ckpts without the flag).
+    sd = ckpt["model"]
+    is_lora = bool(args.get("use_lora", False)) or any(
+        k.startswith("base_model.") for k in sd.keys()
+    )
+    if is_lora:
+        from peft import get_peft_model, LoraConfig
+        target_modules = args.get("lora_target_modules", "q_proj,k_proj,v_proj,o_proj")
+        if isinstance(target_modules, str):
+            target_modules = target_modules.split(",")
+        lora_cfg = LoraConfig(
+            r=args.get("lora_rank", 16),
+            lora_alpha=args.get("lora_alpha", 32),
+            target_modules=target_modules,
+            lora_dropout=args.get("lora_dropout", 0.05),
+            bias="none",
+            task_type="CAUSAL_LM",
+        )
+        model = get_peft_model(model, lora_cfg)
+        wrapper.model = model  # hooks stayed on the original layer objects
+        print(f"  [lora] r={lora_cfg.r} alpha={lora_cfg.lora_alpha} "
+              f"targets={target_modules}")
+
+    model.load_state_dict(sd)
+
     wrapper.steering_emb.load_state_dict(ckpt["steering_emb"])
     if mode == "v9" and "abs_proj" in ckpt:
         wrapper.abs_proj.load_state_dict(ckpt["abs_proj"])
