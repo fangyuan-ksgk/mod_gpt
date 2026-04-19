@@ -35,7 +35,7 @@
   ```
   export WANDB_API_KEY=... && export HF_TOKEN=... && source venv/bin/activate && nohup python -m arithmetic.job_manager.gpu_queue ...
   ```
-  Keys live in `/lambda/nfs/AmirInstance/.bash_profile`
+  Keys live in `/lambda/nfs/AmirInstance/.bash_profile` (Lambda). Location varies by runner — RunPod will differ. **If the file isn't found, ask the user where it is before proceeding.**
 
 ---
 
