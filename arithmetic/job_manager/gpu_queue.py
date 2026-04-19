@@ -316,8 +316,11 @@ class GPUQueue:
     def _dynamic_submit(self, cmd_str: str, name: str = ""):
         """Submit a new job to the running queue dynamically."""
         if not name:
-            # Extract name from output_dir
-            for part in cmd_str.split():
+            parts = cmd_str.split()
+            for i, part in enumerate(parts):
+                if part == "--job_name" and i + 1 < len(parts):
+                    name = parts[i + 1]
+                    break
                 if part.startswith("ckpt/sweep/"):
                     name = part.split("/")[-1]
                     break
@@ -537,9 +540,12 @@ def main():
                 continue
             jobs.append((line, current_priority))
 
-    # Extract job names from output_dir
+    # Extract job names from --job_name, output_dir, or --mode
     def extract_name(cmd):
-        for part in cmd.split():
+        parts = cmd.split()
+        for i, part in enumerate(parts):
+            if part == "--job_name" and i + 1 < len(parts):
+                return parts[i + 1]
             if part.startswith("ckpt/sweep/"):
                 return part.split("/")[-1]
         return cmd.split("--mode")[-1].strip().split()[0] if "--mode" in cmd else "job"

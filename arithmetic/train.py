@@ -128,9 +128,11 @@ class Qwen3ArithmeticDataset(Dataset):
         else:
             hf_path = f"fixed_train/train_{size_k}K_seed42.pt"
         from huggingface_hub import hf_hub_download
+        print(f"Downloading dataset: {hf_path} ...", flush=True)
         local = hf_hub_download(
             self.DATASET_REPO, hf_path, repo_type="dataset",
         )
+        print(f"Download complete: {hf_path}", flush=True)
         data = torch.load(local, weights_only=False)
         self._raw_tokens = data["tokens"]  # (N, 21) internal token IDs
         assert self._raw_tokens.shape[0] == size, \
@@ -428,6 +430,7 @@ def _parse_args():
     p.add_argument("--seed", type=int, default=42)
     # Infrastructure
     p.add_argument("--output_dir", type=str, default="ckpt/arithmetic")
+    p.add_argument("--job_name", type=str, default="")
     p.add_argument("--device", type=str, default="cuda")
     p.add_argument("--push_to_hub", action="store_true")
     p.add_argument("--no_wandb", action="store_true")
@@ -437,7 +440,16 @@ def _parse_args():
         args.abs_vocab = 0
 
     cfg = ArithmeticConfig(**{k: v for k, v in vars(args).items() if hasattr(ArithmeticConfig, k)})
-    cfg.output_dir = args.output_dir
+    if args.job_name:
+        import re
+        safe = re.sub(r"[^A-Za-z0-9_\-]", "_", args.job_name)
+        if safe != args.job_name:
+            raise ValueError(f"--job_name contains illegal characters: {args.job_name!r}. Use only [A-Za-z0-9_-].")
+    cfg.job_name = args.job_name
+    if args.job_name and args.output_dir == "ckpt/arithmetic":
+        cfg.output_dir = f"ckpt/sweep/{args.job_name}"
+    else:
+        cfg.output_dir = args.output_dir
     cfg.push_to_hub = args.push_to_hub
     cfg.no_wandb = args.no_wandb
     cfg.eval_every = max(1, cfg.dataset_size // cfg.batch_size)  # every epoch
@@ -478,6 +490,9 @@ def main():
         run_name += f"_emlr{cfg.emb_lr_mult:g}"
     if cfg.alpha_soft_zipf != defaults.alpha_soft_zipf:
         run_name += f"_zipf{cfg.alpha_soft_zipf:g}"
+
+    if getattr(cfg, "job_name", ""):
+        run_name = cfg.job_name
 
     if not cfg.no_wandb:
         wandb.init(
