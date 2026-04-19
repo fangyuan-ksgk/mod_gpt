@@ -29,7 +29,7 @@ DATASET_REPO = "thoughtworks/arithmetic-sorl-data"
 def save_model(model, config: dict, metrics: dict, subfolder: str,
                repo_id: str = MODEL_REPO):
     """
-    Save model checkpoint + config + metrics to HF Hub.
+    Save model checkpoint + config + metrics to HF Hub, then mark VALID in catalog.
 
     Args:
         model: SorlModelWrapper instance
@@ -62,6 +62,65 @@ def save_model(model, config: dict, metrics: dict, subfolder: str,
         )
 
     print(f"Saved to {repo_id}/{subfolder}")
+    _register_in_catalog(api, config, metrics, subfolder, repo_id)
+
+
+def _register_in_catalog(api: "HfApi", config: dict, metrics: dict,
+                         subfolder: str, repo_id: str):
+    """Add or update catalog entry for subfolder, marking it VALID."""
+    from huggingface_hub import hf_hub_download
+
+    # Load existing catalog
+    catalog = []
+    try:
+        local = hf_hub_download(repo_id, "model_catalog.json",
+                                local_dir="/tmp/hf_cache/arithmetic-sorl",
+                                force_download=True)
+        catalog = json.load(open(local))
+    except Exception:
+        pass
+
+    n_layer = config.get("n_layer", 2)
+    n_head  = config.get("n_head", 3)
+    n_embd  = config.get("n_embd", 510)
+    entry = {
+        "name":            subfolder,
+        "status":          "VALID",
+        "status_note":     "",
+        "mode":            config.get("mode", "unknown"),
+        "trainer_version": config.get("trainer_version", "sft" if config.get("mode") == "baseline" else "v1"),
+        "ops":             config.get("ops", "unknown"),
+        "dataset_size":    config.get("dataset_size", 0),
+        "abs_vocab":       config.get("abs_vocab", 0),
+        "K":               config.get("K", 4),
+        "arch":            f"{n_layer}L/{n_head}H/{n_embd}d",
+        "lr":              config.get("lr"),
+        "eval_method":     config.get("eval_method", "ArithmeticEvaluator"),
+        "final_accuracy":  config.get("final_accuracy"),
+        "sft_accuracy":    config.get("sft_accuracy"),
+    }
+
+    # Replace existing entry or append
+    replaced = False
+    for i, e in enumerate(catalog):
+        if e.get("name") == subfolder:
+            catalog[i] = entry
+            replaced = True
+            break
+    if not replaced:
+        catalog.append(entry)
+
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / "model_catalog.json"
+        with open(path, "w") as f:
+            json.dump(catalog, f, indent=2)
+        api.upload_file(
+            path_or_fileobj=str(path),
+            path_in_repo="model_catalog.json",
+            repo_id=repo_id,
+            commit_message=f"catalog: register {subfolder} as VALID",
+        )
+    print(f"Catalog updated: {subfolder} → VALID")
 
 
 def load_model(subfolder: str, device: str = "cuda",
