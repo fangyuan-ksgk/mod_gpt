@@ -432,7 +432,7 @@ class SoRLTrainer:
     # ------------------------------------------------------------------
     def _log(self, msg):
         if self.is_master:
-            print(msg)
+            print(msg, flush=True)
 
     # ------------------------------------------------------------------
     # Save checkpoint

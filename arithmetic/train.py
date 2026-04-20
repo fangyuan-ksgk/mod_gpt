@@ -10,6 +10,8 @@ import json
 import argparse
 import time
 import math
+import signal
+import traceback
 from dataclasses import dataclass
 import torch
 import torch.nn as nn
@@ -294,6 +296,7 @@ def train_sft(model, train_ds, val_ds, cfg: ArithmeticConfig, run_name, tokenize
     history = {"step": [], "loss": [], "base_loss": [], "lr": []}
     global_step = 0
     t_start = time.time()
+    t_epoch_start = time.time()
 
     for epoch in range(cfg.num_epochs):
         for batch in loader:
@@ -342,7 +345,12 @@ def train_sft(model, train_ds, val_ds, cfg: ArithmeticConfig, run_name, tokenize
                 epoch_eval = evaluator.run(K=eval_K, eval_set_path="epoch")
                 acc = epoch_eval["summary"]["overall_accuracy"]
 
-                print(f"  --- Epoch {current_epoch}/{cfg.num_epochs}: accuracy={acc:.3f} (K={eval_K}) ---", flush=True)
+                elapsed = time.time() - t_epoch_start
+                gpu_mem = torch.cuda.memory_allocated() / 1e9 if torch.cuda.is_available() else 0
+                total_elapsed = time.time() - t_start
+                print(f"  --- Epoch {current_epoch}/{cfg.num_epochs}: accuracy={acc:.3f} (K={eval_K})"
+                      f" | epoch={elapsed:.0f}s total={total_elapsed:.0f}s GPU={gpu_mem:.1f}GB ---", flush=True)
+                t_epoch_start = time.time()
                 # Log key hard splits
                 splits = epoch_eval.get("splits", {})
                 for s in ["add_S5", "add_S6", "add_C6", "sub_M5", "sub_B5"]:
@@ -459,7 +467,41 @@ def _parse_args():
 
 
 def main():
+    # Force line-buffered stdout so log files update in real-time even via pipes.
+    sys.stdout.reconfigure(line_buffering=True)
+
     cfg = _parse_args()
+
+    os.makedirs(cfg.output_dir, exist_ok=True)
+    crash_file = os.path.join(cfg.output_dir, "crash.txt")
+
+    def _dump_crash(exc_type, exc_val, tb):
+        msg = "".join(traceback.format_exception(exc_type, exc_val, tb))
+        print(f"\nCRASH:\n{msg}", flush=True)
+        try:
+            with open(crash_file, "w") as f:
+                import datetime as _dt
+                f.write(f"crash at {_dt.datetime.now().isoformat()}\n{msg}")
+        except Exception:
+            pass
+
+    sys.excepthook = _dump_crash
+
+    def _sigterm_handler(signum, frame):
+        import datetime as _dt
+        msg = f"SIGTERM received at {_dt.datetime.now().isoformat()}\n"
+        msg += "".join(traceback.format_stack(frame))
+        print(msg, flush=True)
+        try:
+            with open(crash_file, "w") as f:
+                f.write(msg)
+        except Exception:
+            pass
+        sys.exit(1)
+
+    signal.signal(signal.SIGTERM, _sigterm_handler)
+
+    print(f"PID {os.getpid()} | job: {getattr(cfg, 'job_name', '')} | output: {cfg.output_dir}", flush=True)
 
     # Reproducibility
     import random, numpy as np
@@ -517,18 +559,18 @@ def main():
     model = make_model(model_args, tokenizer)
     n_params = sum(p.numel() for p in model.parameters())
 
-    print(f"{'═' * 60}")
-    print(f"  {run_name}")
-    print(f"  arch: {cfg.n_layer}L/{cfg.n_head}H/{cfg.n_embd}d | params: {n_params:,}")
-    print(f"  train: {cfg.num_epochs} epochs x {cfg.dataset_size} samples, batch={cfg.batch_size}")
-    print(f"  optim: lr={cfg.lr:.1e} warmup={cfg.warmup_ratio:.0%} wd={cfg.weight_decay} beta2={cfg.beta2}")
+    print(f"{'═' * 60}", flush=True)
+    print(f"  {run_name}", flush=True)
+    print(f"  arch: {cfg.n_layer}L/{cfg.n_head}H/{cfg.n_embd}d | params: {n_params:,}", flush=True)
+    print(f"  train: {cfg.num_epochs} epochs x {cfg.dataset_size} samples, batch={cfg.batch_size}", flush=True)
+    print(f"  optim: lr={cfg.lr:.1e} warmup={cfg.warmup_ratio:.0%} wd={cfg.weight_decay} beta2={cfg.beta2}", flush=True)
     if cfg.mode == "sorl":
-        print(f"  SoRL v1: abs={cfg.abs_vocab} K={cfg.K} ig={cfg.alpha_info_gain} abs_w={cfg.alpha_abs} zipf={cfg.alpha_soft_zipf}")
+        print(f"  SoRL v1: abs={cfg.abs_vocab} K={cfg.K} ig={cfg.alpha_info_gain} abs_w={cfg.alpha_abs} zipf={cfg.alpha_soft_zipf}", flush=True)
     elif cfg.mode == "sorl_v6":
-        print(f"  SoRL v6 (self-routing): abs={cfg.abs_vocab} K={cfg.K}")
+        print(f"  SoRL v6 (self-routing): abs={cfg.abs_vocab} K={cfg.K}", flush=True)
     else:
-        print(f"  pure SFT")
-    print(f"{'═' * 60}")
+        print(f"  pure SFT", flush=True)
+    print(f"{'═' * 60}", flush=True)
 
     train_ds = Qwen3ArithmeticDataset(tokenizer, cfg.n_digits, cfg.ops, cfg.dataset_size)
     # Val set: fixed 5K, seed=123, disjoint from all train sets
@@ -620,7 +662,7 @@ def main():
         history = trainer.history
         final_acc = eval_with_recursion(model, val_ds, cfg.device, K=cfg.K, num_samples=200)
 
-    print(f"Final accuracy (random): {final_acc:.3f}")
+    print(f"Training complete! Final accuracy (random): {final_acc:.3f}", flush=True)
 
     # Full per-split eval with ArithmeticEvaluator
     from arithmetic.evaluate import ArithmeticEvaluator
@@ -668,16 +710,16 @@ def main():
         save_model(model, manifest, metrics, subfolder=run_name)
 
         # Per-job validation: verify upload is complete and correct
-        print(f"\nValidating upload: {run_name}")
+        print(f"\nValidating upload: {run_name}", flush=True)
         from arithmetic.job_manager.post_sweep import validate_uploaded_model
         issues = validate_uploaded_model(run_name)
         if issues:
-            print(f"  VALIDATION FAILED:")
+            print(f"  VALIDATION FAILED:", flush=True)
             for issue in issues:
-                print(f"    - {issue}")
+                print(f"    - {issue}", flush=True)
             sys.exit(1)  # non-zero exit → queue will retry
         else:
-            print(f"  Validation passed ✓")
+            print(f"  Validation passed ✓", flush=True)
 
         import shutil
         shutil.rmtree(cfg.output_dir, ignore_errors=True)

@@ -211,7 +211,7 @@ class GPUQueue:
             with open(job.log_file, "w") as logf:
                 proc = subprocess.Popen(
                     cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                    env={**os.environ, "CUDA_VISIBLE_DEVICES": str(gpu)},
+                    env={**os.environ, "CUDA_VISIBLE_DEVICES": str(gpu), "PYTHONUNBUFFERED": "1"},
                 )
                 job.proc = proc
 
