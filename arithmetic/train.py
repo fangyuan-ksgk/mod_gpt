@@ -398,8 +398,11 @@ class WandbSoRLTrainer(SoRLTrainer):
         epoch_eval = evaluator.run(K=effective_K, eval_set_path="epoch")
         acc = epoch_eval["summary"]["overall_accuracy"]
         result = {"accuracy": acc}
+        # Store eval in history so post_sweep validator finds eval_step
+        step = self.history["step"][-1] if self.history["step"] else 0
+        self.history.setdefault("eval_step", []).append(step)
+        self.history.setdefault("eval_accuracy", []).append(acc)
         if wandb.run is not None:
-            step = self.history["step"][-1] if self.history["step"] else 0
             log_dict = {"eval/accuracy": acc}
             for split_name, split_data in epoch_eval.get("splits", {}).items():
                 log_dict[f"eval/sorl/{split_name}"] = split_data["full_accuracy"]
