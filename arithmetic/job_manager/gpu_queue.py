@@ -504,6 +504,65 @@ class GPUQueue:
                     pass
 
 
+def _compute_config_hash(cmd):
+    """Compute config_hash from a command string, matching train.py logic."""
+    import hashlib, shlex
+    CANONICAL_EVAL_SET = "eval_add_sub_6d_N100_seed42.json"
+    parts = shlex.split(cmd)
+    args = {}
+    i = 0
+    while i < len(parts):
+        if parts[i].startswith("--") and i + 1 < len(parts) and not parts[i + 1].startswith("--"):
+            key = parts[i][2:]
+            val = parts[i + 1]
+            try:
+                val = int(val)
+            except ValueError:
+                try:
+                    val = float(val)
+                except ValueError:
+                    pass
+            args[key] = val
+            i += 2
+        elif parts[i].startswith("--"):
+            args[parts[i][2:]] = True
+            i += 1
+        else:
+            i += 1
+
+    defaults = {
+        "mode": "baseline", "ops": "add_sub", "dataset_size": 100000,
+        "n_digits": 6, "abs_vocab": 0, "K": 4,
+        "n_layer": 2, "n_head": 3, "n_embd": 510,
+        "num_epochs": 20, "lr": 0, "batch_size": 64,
+        "weight_decay": 0.01, "warmup_ratio": 0.03, "beta2": 0.999,
+        "emb_lr_mult": 1.0, "seed": 42,
+        "alpha_info_gain": 10.0, "alpha_abs": 0.1,
+        "alpha_soft_zipf": 1.0, "alpha_ortho": 0.0,
+        "alpha_contrastive": 1.0, "gamma_contrastive": 0.5,
+        "num_rollouts": 4, "max_iterations": 2, "temperature": 1.0,
+    }
+    cfg = {k: args.get(k, v) for k, v in defaults.items()}
+
+    if cfg["lr"] == 0:
+        n_embd = cfg["n_embd"]
+        if n_embd <= 256:
+            cfg["lr"] = 2e-5
+        elif n_embd < 510:
+            cfg["lr"] = 4e-5
+        else:
+            cfg["lr"] = 8e-5
+
+    _hash_keys = sorted(defaults.keys())
+    d = {k: cfg[k] for k in _hash_keys}
+    ds = cfg["dataset_size"]
+    d["train_dataset"] = f"fixed_train/train_{ds // 1000}K_seed42.pt"
+    d["eval_dataset"] = f"eval_sets/{CANONICAL_EVAL_SET}"
+    return hashlib.sha256(
+        json.dumps(d, sort_keys=True, default=str).encode()
+    ).hexdigest()[:12]
+
+
 def main():
     """Read jobs from a file and run them."""
     if len(sys.argv) < 2:
@@ -555,67 +614,6 @@ def main():
 
     # Config hash skip: check HF for models with matching config_hash.
     # If a model exists on HF with the same hash, the job is already done.
-    def _compute_config_hash(cmd):
-        """Compute config_hash from a command string, matching train.py logic."""
-        import hashlib, shlex
-        CANONICAL_EVAL_SET = "eval_add_sub_6d_N100_seed42.json"
-        # Parse args from command
-        parts = shlex.split(cmd)
-        args = {}
-        i = 0
-        while i < len(parts):
-            if parts[i].startswith("--") and i + 1 < len(parts) and not parts[i + 1].startswith("--"):
-                key = parts[i][2:]
-                val = parts[i + 1]
-                # Try numeric conversion
-                try:
-                    val = int(val)
-                except ValueError:
-                    try:
-                        val = float(val)
-                    except ValueError:
-                        pass
-                args[key] = val
-                i += 2
-            elif parts[i].startswith("--"):
-                args[parts[i][2:]] = True
-                i += 1
-            else:
-                i += 1
-
-        # Defaults matching ArithmeticConfig / SoRLConfig
-        defaults = {
-            "mode": "baseline", "ops": "add_sub", "dataset_size": 100000,
-            "n_digits": 6, "abs_vocab": 0, "K": 4,
-            "n_layer": 2, "n_head": 3, "n_embd": 510,
-            "num_epochs": 20, "lr": 0, "batch_size": 64,
-            "weight_decay": 0.01, "warmup_ratio": 0.03, "beta2": 0.999,
-            "emb_lr_mult": 1.0, "seed": 42,
-            "alpha_info_gain": 10.0, "alpha_abs": 0.1,
-            "alpha_soft_zipf": 1.0, "alpha_ortho": 0.0,
-            "alpha_contrastive": 1.0, "gamma_contrastive": 0.5,
-            "num_rollouts": 4, "max_iterations": 2, "temperature": 1.0,
-        }
-        cfg = {k: args.get(k, v) for k, v in defaults.items()}
-
-        # Auto-scale LR (matching train.py logic)
-        if cfg["lr"] == 0:
-            n_embd = cfg["n_embd"]
-            if n_embd <= 256:
-                cfg["lr"] = 2e-5
-            elif n_embd < 510:
-                cfg["lr"] = 4e-5
-            else:
-                cfg["lr"] = 8e-5
-
-        _hash_keys = sorted(defaults.keys())
-        d = {k: cfg[k] for k in _hash_keys}
-        ds = cfg["dataset_size"]
-        d["train_dataset"] = f"fixed_train/train_{ds // 1000}K_seed42.pt"
-        d["eval_dataset"] = f"eval_sets/{CANONICAL_EVAL_SET}"
-        return hashlib.sha256(
-            json.dumps(d, sort_keys=True, default=str).encode()
-        ).hexdigest()[:12]
 
     def _load_hf_hashes():
         """Load config_hash values from all VALID (non-superseded) models on HF."""
