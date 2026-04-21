@@ -1,18 +1,16 @@
 #!/bin/bash
 # ===========================================================================
-# SFT sweep — new datasets: mmlupro, strategyqa, bbhlogic
+# SFT sweep — ScienceQA, 1 epoch
 #
 # Models:
 #   q06 = Qwen3-0.6B  (28L)
 #   q17 = Qwen3-1.7B  (28L)
 #   l1  = Llama-3.2-1B (16L)
-#   l3  = Llama-3.2-3B (28L)
-#   q4b = Qwen3-4B     (36L, LoRA r=16)
 #
-# Epochs: 1 and 2
-# Datasets: mmlupro, strategyqa, bbhlogic
+# Epochs: 1
+# Datasets: scienceqa
 #
-# Total: 5 models × 3 datasets × 2 epochs = 30 runs
+# Total: 3 models × 1 dataset × 1 epoch = 3 runs
 #
 # Parts (1 per model):
 #   1=q06  2=q17  3=l1  4=l3  5=q4b
@@ -34,7 +32,7 @@ export OMP_NUM_THREADS=4
 
 MASTER_ADDR=127.0.0.1
 BASE_PORT=30100
-N_GPUS=4
+N_GPUS=1
 
 # ---- Shared config ----
 LR=1e-5
@@ -45,21 +43,21 @@ EVAL_BATCH=64
 NUM_LOG=3
 
 TIMESTAMP=$(date +%Y%m%d_%H%M)
-OUT_ROOT="./ckpt/sft_newds_${TIMESTAMP}"
+OUT_ROOT="./ckpt/sft_sciqa_${TIMESTAMP}"
 mkdir -p "$OUT_ROOT"
 
 # ---- Dataset config ----
-DATASETS=(strategyqa race logiqa medqa drop triviaqa)
-DTAGS=(sqqa race lqa medqa drop tqa)
-EVAL_SAMPLES=(687 4000 651 1273 4000 4000)
+DATASETS=(scienceqa)
+DTAGS=(sciqa)
+EVAL_SAMPLES=(2224)
 
 # ---- Model config ----
 declare -A M_MODEL M_MTAG M_EXTRA
 M_MODEL[1]="Qwen/Qwen3-0.6B";    M_MTAG[1]="q06"; M_EXTRA[1]=""
 M_MODEL[2]="Qwen/Qwen3-1.7B";    M_MTAG[2]="q17"; M_EXTRA[2]=""
 M_MODEL[3]="meta-llama/Llama-3.2-1B"; M_MTAG[3]="l1"; M_EXTRA[3]=""
-# M_MODEL[4]="meta-llama/Llama-3.2-3B"; M_MTAG[4]="l3"; M_EXTRA[4]=""
-# M_MODEL[5]="Qwen/Qwen3-4B";      M_MTAG[5]="q4b"; M_EXTRA[5]="--use_lora --lora_r 16 --lora_alpha 32"
+M_MODEL[4]="meta-llama/Llama-3.2-3B"; M_MTAG[4]="l3"; M_EXTRA[4]=""
+M_MODEL[5]="Qwen/Qwen3-4B";      M_MTAG[5]="q4b"; M_EXTRA[5]="--use_lora --lora_r 16 --lora_alpha 32"
 
 N_MODELS=3
 
@@ -109,7 +107,7 @@ run_model() {
   echo "--- Model: ${mtag} (${model}) ---"
   JOB_IDX=0
 
-  for ep in 1 2; do
+  for ep in 1; do
     for i in "${!DATASETS[@]}"; do
       run_one "$model" "$mtag" "${DATASETS[$i]}" "${DTAGS[$i]}" "$ep" "${EVAL_SAMPLES[$i]}" "$extra"
     done
@@ -121,7 +119,7 @@ run_model() {
 
 echo ""
 echo "============================================================"
-echo "SFT sweep — mmlupro / strategyqa / bbhlogic | ${TIMESTAMP}"
+echo "SFT sweep — scienceqa (1 ep) | ${TIMESTAMP}"
 echo "============================================================"
 
 if [ "$PART" = "all" ]; then
