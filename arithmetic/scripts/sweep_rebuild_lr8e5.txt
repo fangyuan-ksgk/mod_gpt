@@ -15,6 +15,7 @@ python -m arithmetic.train --mode baseline --ops add_sub --dataset_size 100000 -
 # ── Reruns: fix missing eval curves (trained before 2026-04-19 eval fix) ─────
 python -m arithmetic.train --mode sorl --ops add_sub --dataset_size 10000 --abs_vocab 30 --K 1 --num_epochs 20 --push_to_hub --job_name as_sorl_abs30_K1_10K_2L3H510d
 python -m arithmetic.train --mode sorl --ops add_sub --dataset_size 10000 --abs_vocab 30 --K 1 --num_epochs 20 --n_layer 1 --n_head 3 --push_to_hub --job_name as_sorl_abs30_K1_10K_1L3H510d
+python -m arithmetic.train --mode sorl --ops add_sub --dataset_size 10000 --abs_vocab 30 --K 1 --num_epochs 20 --n_layer 2 --n_head 1 --n_embd 128 --lr 8e-5 --push_to_hub --job_name as_sorl_abs30_K1_10K_2L1H128d
 
 # ── SoRL 25K: abs10 + abs30 (both archs) ─────────────────────────────────────
 python -m arithmetic.train --mode sorl --ops add_sub --dataset_size 25000 --abs_vocab 10 --K 1 --num_epochs 20 --n_layer 1 --n_head 2 --n_embd 256 --lr 8e-5 --push_to_hub --job_name as_sorl_abs10_K1_25K_1L2H256d
