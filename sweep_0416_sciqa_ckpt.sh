@@ -42,7 +42,7 @@ export TORCH_NCCL_HEARTBEAT_TIMEOUT_SEC=3600
 
 MASTER_ADDR=127.0.0.1
 BASE_PORT=29800
-N_GPUS=4
+N_GPUS=1
 
 # ---- Shared hyper-params ----
 LR=1e-5
