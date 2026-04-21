@@ -16,11 +16,18 @@
 #   4: l1   — v6 + v9  az=0.1,aa=0.1  (6 runs)
 #   5: l1   — v9 only  az=0.5,aa=0.5  (4 runs, v6 already in part 4)
 #   6: l3   — v6 only  (2 runs)
+#   7: l1   — v6 + v9  scale=0.001  az=0.1,aa=0.1  (6 runs)  [scale sweep]
+#   8: l1   — v6 + v9  scale=0.01   az=0.1,aa=0.1  (6 runs)  [scale sweep]
+#   9: l1   — v6 + v9  scale=0.05   az=0.1,aa=0.1  (6 runs)  [scale sweep]
 #
-# Total: 30 runs, 2 epochs each, C ∈ {4, 32}
+# Total: 48 runs, 2 epochs each, C ∈ {4, 32}
+#
+# Output tags include scale (e.g. l1_sciqa_v6_C4_base_s0.001) so
+# scale-sweep parts do not collide with part 4.
 #
 # Usage: ./sweep_0416_sciqa_ckpt.sh <PART>
-#   PART=1..6 or "all"
+#   PART=1..9 or "all"
+#   PART="7 8 9"  → run the three l1 scale-sweep parts back-to-back
 # ===========================================================================
 set -euo pipefail
 
@@ -73,8 +80,12 @@ P_MODEL[3]="Qwen/Qwen3-4B";         P_MTAG[3]="q4b";  P_LAYER[3]=19; P_SLR[3]=5e
 P_MODEL[4]="meta-llama/Llama-3.2-1B"; P_MTAG[4]="l1";  P_LAYER[4]=10; P_SLR[4]=1e-2; P_SCALE[4]=0.1; P_AZ[4]=0.1; P_AA[4]=0.1; P_EXTRA[4]="";                                          P_MODE[4]="both"
 P_MODEL[5]="meta-llama/Llama-3.2-1B"; P_MTAG[5]="l1";  P_LAYER[5]=10; P_SLR[5]=1e-2; P_SCALE[5]=0.1; P_AZ[5]=0.5; P_AA[5]=0.5; P_EXTRA[5]="";                                          P_MODE[5]="v9"
 P_MODEL[6]="meta-llama/Llama-3.2-3B"; P_MTAG[6]="l3";  P_LAYER[6]=16; P_SLR[6]=1e-2; P_SCALE[6]=0.1; P_AZ[6]=0.1; P_AA[6]=0.5; P_EXTRA[6]="";                                          P_MODE[6]="v6"
+# l1 scale sweep (smaller scale → study representation vs steering strength)
+P_MODEL[7]="meta-llama/Llama-3.2-1B"; P_MTAG[7]="l1";  P_LAYER[7]=10; P_SLR[7]=1e-2; P_SCALE[7]=0.001; P_AZ[7]=0.1; P_AA[7]=0.1; P_EXTRA[7]="";                                        P_MODE[7]="both"
+P_MODEL[8]="meta-llama/Llama-3.2-1B"; P_MTAG[8]="l1";  P_LAYER[8]=10; P_SLR[8]=1e-2; P_SCALE[8]=0.01;  P_AZ[8]=0.1; P_AA[8]=0.1; P_EXTRA[8]="";                                        P_MODE[8]="both"
+P_MODEL[9]="meta-llama/Llama-3.2-1B"; P_MTAG[9]="l1";  P_LAYER[9]=10; P_SLR[9]=1e-2; P_SCALE[9]=0.05;  P_AZ[9]=0.1; P_AA[9]=0.1; P_EXTRA[9]="";                                        P_MODE[9]="both"
 
-N_PARTS=6
+N_PARTS=9
 
 # ---- Runner ----
 run_one() {
@@ -90,7 +101,7 @@ run_one() {
   if [ "$mode" = "v9" ]; then
     alpha_tag="_az${cur_az}_aa${cur_aa}"
   fi
-  local tag="${cur_mtag}_${DTAG}_${mode}_C${C}_${detach_tag}${alpha_tag}"
+  local tag="${cur_mtag}_${DTAG}_${mode}_C${C}_${detach_tag}${alpha_tag}_s${cur_scale}"
   local out="${OUT_ROOT}/${tag}"
 
   echo "  [GPU ${gpu}] ${tag}"
@@ -196,9 +207,10 @@ echo ""
 echo "To gather results:"
 echo "  grep 'Final accuracy' ${OUT_ROOT}/*/train.log"
 echo ""
-echo "Expected output dirs:"
-echo "  q06: v6_C{4,32}_base, v9_C{4,32}_{joint,detach}_az0.1_aa0.5"
-echo "  q17: v6_C{4,32}_base, v9_C{4,32}_{joint,detach}_az0.1_aa0.5"
-echo "  q4b: v6_C{4,32}_base, v9_C{4,32}_{joint,detach}_az0.1_aa0.1"
-echo "  l1:  v6_C{4,32}_base, v9_C{4,32}_{joint,detach}_az0.1_aa0.1, v9_C{4,32}_{joint,detach}_az0.5_aa0.5"
-echo "  l3:  v6_C{4,32}_base"
+echo "Expected output dirs (tag includes _s<scale>):"
+echo "  q06: v6_C{4,32}_base_s0.5, v9_C{4,32}_{joint,detach}_az0.1_aa0.5_s0.5"
+echo "  q17: v6_C{4,32}_base_s0.5, v9_C{4,32}_{joint,detach}_az0.1_aa0.5_s0.5"
+echo "  q4b: v6_C{4,32}_base_s0.5, v9_C{4,32}_{joint,detach}_az0.1_aa0.1_s0.5"
+echo "  l1:  v6_C{4,32}_base_s0.1, v9_C{4,32}_{joint,detach}_az0.1_aa0.1_s0.1, v9_C{4,32}_{joint,detach}_az0.5_aa0.5_s0.1"
+echo "  l1 scale sweep:  v6_C{4,32}_base_s{0.001,0.01,0.05}, v9_C{4,32}_{joint,detach}_az0.1_aa0.1_s{0.001,0.01,0.05}"
+echo "  l3:  v6_C{4,32}_base_s0.1"
