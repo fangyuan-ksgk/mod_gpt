@@ -733,6 +733,108 @@ def build_hash_router_codes(
     return out
 
 
+def build_kmeans_router_codes(
+    blob,
+    tokenizer,
+    embed_weight,
+    *,
+    seed: int = 0,
+    batch_size_kmeans: int = 4096,
+    verbose: bool = True,
+):
+    """Capacity-matched null router: cluster chunk-mean token embeddings into
+    ``blob['C_SIZE']`` buckets via mini-batch k-means, then emit the cluster
+    id per chunk. Same shape as ``blob['codes']``.
+
+    This is a fair null for ``ngram_purity_sweep``:
+
+    - deterministic, input-dependent (like the learned router),
+    - has exactly ``log2(C_SIZE)`` bits of capacity per chunk (like the learned
+      router), so it cannot memorize token n-grams the way ``token_hash_router``
+      does at small windows.
+
+    Parameters
+    ----------
+    blob : dict
+        The ``decode_scale_*`` blob (must contain ``samples``, ``codes``, ``L``,
+        ``C_SIZE``).
+    tokenizer : transformers.PreTrainedTokenizer
+        Used to re-tokenize prompt / response strings.
+    embed_weight : torch.Tensor | np.ndarray
+        Token-embedding matrix of shape ``(vocab, D)`` -- typically
+        ``base_model.get_input_embeddings().weight``.
+    seed : int
+        Passed to MiniBatchKMeans.
+    batch_size_kmeans : int
+        MiniBatchKMeans batch size.
+    """
+    from sklearn.cluster import MiniBatchKMeans
+
+    samples = blob["samples"]
+    codes   = blob["codes"]
+    L       = blob["L"]
+    C_SIZE  = blob["C_SIZE"]
+
+    if hasattr(embed_weight, "detach"):
+        embed = embed_weight.detach().float().cpu().numpy()
+    else:
+        embed = np.asarray(embed_weight, dtype=np.float32)
+    D = embed.shape[1]
+
+    # ---- 1. chunk-mean embeddings for every (sample, segment, chunk) -----
+    def chunks_from_ids(ids, n_chunks):
+        """Return a (n_chunks, D) array of mean embeddings. Short chunks are
+        padded with zeros from the right."""
+        if n_chunks == 0:
+            return np.zeros((0, D), dtype=np.float32)
+        out = np.zeros((n_chunks, D), dtype=np.float32)
+        for c in range(n_chunks):
+            seg = ids[c * L:(c + 1) * L]
+            if not seg:
+                continue
+            out[c] = embed[np.asarray(seg, dtype=np.int64)].mean(axis=0)
+        return out
+
+    per_sample_vecs, per_sample_shape = [], []
+    for s, c in zip(samples, codes):
+        p_ids = tokenizer(s["question"], add_special_tokens=False)["input_ids"]
+        r_ids = tokenizer(s["response"], add_special_tokens=False)["input_ids"]
+        n_p, n_r = len(c["prompt"]), len(c["response"])
+        v_p = chunks_from_ids(p_ids, n_p)
+        v_r = chunks_from_ids(r_ids, n_r)
+        per_sample_vecs.append((v_p, v_r))
+        per_sample_shape.append((n_p, n_r))
+
+    all_vecs = np.concatenate(
+        [v for pair in per_sample_vecs for v in pair if len(v) > 0], axis=0
+    )
+    if verbose:
+        print(f"k-means: {all_vecs.shape[0]} chunks, dim={D}, K={C_SIZE}")
+
+    # ---- 2. k-means with K = C_SIZE --------------------------------------
+    km = MiniBatchKMeans(
+        n_clusters=C_SIZE,
+        random_state=seed,
+        batch_size=batch_size_kmeans,
+        n_init="auto",
+        max_iter=100,
+    )
+    km.fit(all_vecs)
+
+    # ---- 3. assign per-chunk codes ---------------------------------------
+    out = []
+    for (v_p, v_r), (n_p, n_r), c in zip(per_sample_vecs, per_sample_shape, codes):
+        p_codes = km.predict(v_p).tolist() if n_p else []
+        r_codes = km.predict(v_r).tolist() if n_r else []
+        out.append({
+            "prompt":   p_codes,
+            "response": r_codes,
+            "L":        L,
+            "pad_prefix_chunks": c.get("pad_prefix_chunks", 0),
+        })
+    return out
+
+
 # ---------------------------------------------------------------------------
 # N-gram purity sweep
 # ---------------------------------------------------------------------------
@@ -828,6 +930,178 @@ def ngram_purity_sweep(
 
     return dict(
         N=Ns, n_eligible=n_eligible, fracs=fracs_all, counts=counts_all,
-        p_null=p_null, topics=topics, total_seqs=total_seqs, mean_len=mean_len,
+        p_null=p_null, total_seqs=total_seqs, mean_len=mean_len,
+        n_buckets=n_buckets, bucket_sizes=bucket_sizes,
         purity_thresholds=list(purity_thresholds),
     )
+
+
+# ---------------------------------------------------------------------------
+# Dataset-artifact controls: response deduplication
+# ---------------------------------------------------------------------------
+
+def dedup_samples_by_response(samples, codes, *, key: str = "response"):
+    """Collapse (samples, codes) down to one entry per unique response string.
+
+    ScienceQA (and similar MC datasets that bundle a canonical lecture into
+    every question of a topic) contain large numbers of byte-identical
+    responses across different samples. Any deterministic router produces
+    identical code streams on identical tokens, which inflates n-gram
+    "purity" purely from text duplication rather than learned structure.
+
+    Use this to check whether a purity / specialization signal survives
+    when each unique response is counted once.
+
+    Parameters
+    ----------
+    samples : list[dict]
+        Entries with at least the ``key`` field (e.g. ``"response"``).
+    codes : list[dict]
+        Parallel list of code-stream entries (``{"prompt": [...],
+        "response": [...], "L": L, ...}``).
+    key : str
+        Field on each sample used for dedup. Use ``"response"`` to count
+        each distinct response once; use ``"question"`` to count each
+        distinct question once.
+
+    Returns
+    -------
+    samples_dedup : list[dict]
+    codes_dedup   : list[dict]
+    stats         : dict with keys ``n_in``, ``n_out``, ``duplicate_ratio``,
+                    ``max_duplicates`` (size of the largest collision class).
+    """
+    from collections import Counter
+
+    if len(samples) != len(codes):
+        raise ValueError(f"len(samples)={len(samples)} != len(codes)={len(codes)}")
+
+    keys = [s[key] for s in samples]
+    counts = Counter(keys)
+    seen = {}
+    for s, c in zip(samples, codes):
+        k = s[key]
+        if k not in seen:
+            seen[k] = (s, c)
+
+    samples_dedup = [v[0] for v in seen.values()]
+    codes_dedup   = [v[1] for v in seen.values()]
+    stats = dict(
+        n_in=len(samples),
+        n_out=len(samples_dedup),
+        duplicate_ratio=1.0 - len(samples_dedup) / max(1, len(samples)),
+        max_duplicates=max(counts.values()) if counts else 0,
+    )
+    return samples_dedup, codes_dedup, stats
+
+
+# ---------------------------------------------------------------------------
+# Causal ablation utilities
+# ---------------------------------------------------------------------------
+
+def find_ngram_occurrences(samples, codes, target_ngram, *, src: str = "response"):
+    """Locate every occurrence of ``target_ngram`` inside the SoRL code stream.
+
+    Returns
+    -------
+    list[tuple[int, int]]
+        Each tuple is ``(sample_list_idx, seq_start_position)``, where
+        ``sample_list_idx`` indexes into ``samples`` / ``codes`` and
+        ``seq_start_position`` is the starting chunk index within the
+        concatenated code sequence of the chosen ``src``.
+    """
+    N = len(target_ngram)
+    target = tuple(int(x) for x in target_ngram)
+    out = []
+    for i, (_, c) in enumerate(zip(samples, codes)):
+        seq = []
+        if src in ("prompt", "both"):
+            seq += list(c["prompt"])
+        if src in ("response", "both"):
+            seq += list(c["response"])
+        for j in range(len(seq) - N + 1):
+            if tuple(seq[j:j + N]) == target:
+                out.append((i, j))
+    return out
+
+
+def ngram_context_examples(
+    sample,
+    code_entry,
+    seq_position: int,
+    tokenizer,
+    L: int,
+    N: int,
+    *,
+    src: str = "response",
+    context_chunks: int = 1,
+):
+    """Decode the text chunks around one n-gram occurrence.
+
+    Returns
+    -------
+    dict with keys ``pre``, ``target``, ``post`` (all strings), plus
+    ``segment`` in {``"prompt"``, ``"response"``} indicating where the
+    n-gram lives.
+    """
+    p_ids = tokenizer(sample["question"], add_special_tokens=False)["input_ids"]
+    r_ids = tokenizer(sample["response"], add_special_tokens=False)["input_ids"]
+    n_prompt = len(code_entry["prompt"])
+
+    # Map seq_position (in the combined stream for the chosen src) back to a
+    # per-segment position and pick the right token stream.
+    if src == "prompt":
+        seg_ids, local, segment = p_ids, seq_position, "prompt"
+    elif src == "response":
+        seg_ids, local, segment = r_ids, seq_position, "response"
+    else:  # "both"
+        if seq_position < n_prompt:
+            seg_ids, local, segment = p_ids, seq_position, "prompt"
+        else:
+            seg_ids, local, segment = r_ids, seq_position - n_prompt, "response"
+
+    def decode_range(a, b):
+        a = max(0, a)
+        b = max(a, b)
+        return tokenizer.decode(seg_ids[a * L:b * L], skip_special_tokens=False)
+
+    return {
+        "pre":     decode_range(local - context_chunks, local),
+        "target":  decode_range(local, local + N),
+        "post":    decode_range(local + N, local + N + context_chunks),
+        "segment": segment,
+    }
+
+
+class ablate_steering_codes:
+    """Context manager that temporarily zeroes rows of ``wrapper.steering_emb``.
+
+    When a SoRL router emits one of the specified codes while inside this
+    context, the steering vector that gets added is zero -- the code's
+    *effect* is neutralized, but the router still picks it. This is the
+    correct ablation for a causal test of "does code ``k`` matter?".
+
+    Usage::
+
+        with ablate_steering_codes(wrapper, [3, 7, 12]):
+            evaluate(wrapper, ...)    # codes 3, 7, 12 have no steering effect
+        # embeddings are restored here
+    """
+
+    def __init__(self, wrapper, code_ids):
+        self.wrapper = wrapper
+        self.code_ids = list(code_ids)
+        self._orig = None
+
+    def __enter__(self):
+        emb = self.wrapper.steering_emb.weight.data
+        self._orig = emb.clone()
+        for k in self.code_ids:
+            emb[int(k)].zero_()
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        if self._orig is not None:
+            self.wrapper.steering_emb.weight.data.copy_(self._orig)
+        self._orig = None
+        return False
