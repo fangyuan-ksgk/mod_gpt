@@ -218,7 +218,7 @@ class TestConfigHashConsistency:
         })
         d = {k: getattr(cfg, k, None) for k in _hash_keys}
         d["train_dataset"] = f"fixed_train/train_{cfg.dataset_size // 1000}K_seed42.pt"
-        from arithmetic.datasets.addition import CANONICAL_EVAL_SET
+        from arithmetic.data.addition import CANONICAL_EVAL_SET
         d["eval_dataset"] = f"eval_sets/{CANONICAL_EVAL_SET}"
         return hashlib.sha256(
             json.dumps(d, sort_keys=True, default=str).encode()

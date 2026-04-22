@@ -590,7 +590,7 @@ def forced_sub_hot_chain(n_digits: int, target_depth: int) -> ArithmeticExample:
 
 # ── Structured eval sets ────────────────────────────────────────────
 
-EVAL_CACHE_DIR = Path("/workspace/codes/mod_gpt/arithmetic/eval_sets")
+EVAL_CACHE_DIR = Path(__file__).resolve().parent / "eval_sets"
 
 
 def _load_eval_from_disk(cache_file):

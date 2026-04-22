@@ -22,7 +22,7 @@ from collections import defaultdict
 from typing import Optional
 from pathlib import Path
 
-from arithmetic.datasets.addition import get_eval_set, ALL_LABELS
+from arithmetic.data.addition import get_eval_set, ALL_LABELS
 from arithmetic.train import QWEN3_TOKEN_MAP
 from sorl.sorl_trainer import infer_insert_mask, insert_tokens_with_padding, expand_prompt_len
 

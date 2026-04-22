@@ -21,7 +21,7 @@ from transformers import Qwen3Config, AutoTokenizer
 from sorl.sorl_wrapper import SorlModelWrapper
 from sorl.sorl_trainer import infer_insert_mask, insert_tokens_with_padding, expand_prompt_len
 from sorl.neo_utils import infer_rythmic_insert_mask, insert_tokens
-from arithmetic.datasets.addition import generate_batch, get_eval_set
+from arithmetic.data.addition import generate_batch, get_eval_set
 from arithmetic.train import (
     QWEN3_TOKEN_MAP, QWEN3_INV_MAP, TOKENIZER_NAME,
     Qwen3ArithmeticDataset, collate_fn, make_model,

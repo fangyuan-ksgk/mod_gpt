@@ -15,7 +15,7 @@ import numpy as np
 import torch
 
 from arithmetic.hub import load_model
-from arithmetic.datasets.addition import get_eval_set, ArithmeticExample
+from arithmetic.data.addition import get_eval_set, ArithmeticExample
 from arithmetic.evaluate import ArithmeticEvaluator
 
 
