@@ -3,8 +3,8 @@
 import torch, sys, json, os
 sys.path.insert(0, ".")
 
-from arithmetic.hub import load_model
-from arithmetic.evaluate import ArithmeticEvaluator
+from arithmetic.data.hub import load_model
+from arithmetic.training.evaluate import ArithmeticEvaluator
 from transformers import AutoTokenizer
 from huggingface_hub import HfApi, hf_hub_download
 

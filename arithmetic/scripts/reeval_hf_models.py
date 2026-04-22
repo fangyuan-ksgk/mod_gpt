@@ -13,9 +13,9 @@ from pathlib import Path
 from huggingface_hub import HfApi, hf_hub_download
 from transformers import AutoTokenizer
 
-from arithmetic.catalog import ModelCatalog
-from arithmetic.hub import load_model, MODEL_REPO
-from arithmetic.evaluate import ArithmeticEvaluator
+from arithmetic.job_manager.catalog import ModelCatalog
+from arithmetic.data.hub import load_model, MODEL_REPO
+from arithmetic.training.evaluate import ArithmeticEvaluator
 
 
 TOKENIZER = None

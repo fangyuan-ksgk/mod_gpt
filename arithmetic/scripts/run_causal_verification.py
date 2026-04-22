@@ -23,9 +23,9 @@ from collections import defaultdict
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from arithmetic.hub import load_model
+from arithmetic.data.hub import load_model
 from arithmetic.data.addition import get_eval_set
-from arithmetic.train import QWEN3_TOKEN_MAP, QWEN3_INV_MAP
+from arithmetic.training.train import QWEN3_TOKEN_MAP, QWEN3_INV_MAP
 from arithmetic.interp_utils.interventions import (
     token_knockout, token_shuffle, token_replace_random, get_abs_positions,
 )

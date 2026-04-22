@@ -18,7 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 import torch
 from transformers import AutoTokenizer
-from arithmetic.hub import list_models, load_model
+from arithmetic.data.hub import list_models, load_model
 from arithmetic.interp_utils.sae_trainer import SAETrainer, SAETrainerConfig, collect_activations
 
 

@@ -101,7 +101,7 @@ def run_queue(name, jobs_file, n_gpus=3, max_per_gpu=1):
 
 
 def write_results():
-    from arithmetic.catalog import ModelCatalog
+    from arithmetic.job_manager.catalog import ModelCatalog
     print("\nWriting results to log/arithmetic.md...")
     cat = ModelCatalog()
     cat.fetch(verbose=False)

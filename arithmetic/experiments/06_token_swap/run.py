@@ -19,7 +19,7 @@ import json
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
 from arithmetic.interp_utils.token_swap import run_swap_experiment, print_results
 

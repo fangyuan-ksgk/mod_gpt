@@ -14,9 +14,9 @@ from typing import Optional
 import numpy as np
 import torch
 
-from arithmetic.hub import load_model
+from arithmetic.data.hub import load_model
 from arithmetic.data.addition import get_eval_set, ArithmeticExample
-from arithmetic.evaluate import ArithmeticEvaluator
+from arithmetic.training.evaluate import ArithmeticEvaluator
 
 
 def save_results(results: dict, path: str) -> None:

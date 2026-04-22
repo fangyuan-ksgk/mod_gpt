@@ -34,7 +34,7 @@ def sweep_finished():
 def find_best_vocabs():
     """Fetch catalog and find 2 best vocab sizes from enriched SoRL add_sub models."""
     # Import here so we don't fail if catalog isn't available at import time
-    from arithmetic.catalog import ModelCatalog
+    from arithmetic.job_manager.catalog import ModelCatalog
 
     cat = ModelCatalog()
     cat.fetch(verbose=False)
@@ -264,7 +264,7 @@ def main():
 
 def write_results():
     """Fetch full catalog and write results to log/arithmetic.md."""
-    from arithmetic.catalog import ModelCatalog
+    from arithmetic.job_manager.catalog import ModelCatalog
 
     print("\nWriting results to log/arithmetic.md...")
     cat = ModelCatalog()

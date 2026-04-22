@@ -23,7 +23,7 @@ from optuna_integration.wandb import WeightsAndBiasesCallback
 from transformers import AutoTokenizer, Qwen3Config
 from sorl.sorl_wrapper import SorlModelWrapper
 from sorl.trainer_ablate import SoRLTrainer, SoRLConfig
-from arithmetic.train import (
+from arithmetic.training.train import (
     Qwen3ArithmeticDataset, collate_fn,
     eval_with_recursion, TOKENIZER_NAME,
 )

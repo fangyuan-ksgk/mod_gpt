@@ -27,11 +27,11 @@ import numpy as np
 from pathlib import Path
 from collections import defaultdict, Counter
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
-from arithmetic.hub import load_model
+from arithmetic.data.hub import load_model
 from arithmetic.data.addition import get_eval_set
-from arithmetic.train import QWEN3_TOKEN_MAP, QWEN3_INV_MAP
+from arithmetic.training.train import QWEN3_TOKEN_MAP, QWEN3_INV_MAP
 from sorl.sorl_trainer import infer_insert_mask, insert_tokens_with_padding, expand_prompt_len
 from transformers import AutoTokenizer
 

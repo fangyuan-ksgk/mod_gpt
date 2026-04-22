@@ -163,7 +163,7 @@ def collect_activations(
     Returns:
         (N, hidden_size) tensor of activations
     """
-    from arithmetic.train import Qwen3ArithmeticDataset, collate_fn
+    from arithmetic.training.train import Qwen3ArithmeticDataset, collate_fn
 
     ds = Qwen3ArithmeticDataset(tokenizer, n_digits, ops, n_batches * batch_size)
     prompt_len = ds.prompt_len
@@ -224,7 +224,7 @@ def main():
     args = p.parse_args()
 
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-    from arithmetic.hub import load_model
+    from arithmetic.data.hub import load_model
     from transformers import AutoTokenizer
 
     print(f"Loading model: {args.model_subfolder}")

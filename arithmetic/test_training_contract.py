@@ -28,7 +28,7 @@ class TestHistoryContract:
 
     def _make_trainer_with_history(self, steps=(100, 200)):
         """Build a WandbSoRLTrainer with a fake history."""
-        from arithmetic.train import WandbSoRLTrainer, ArithmeticConfig
+        from arithmetic.training.train import WandbSoRLTrainer, ArithmeticConfig
         trainer = object.__new__(WandbSoRLTrainer)
         trainer.is_master = True
         trainer.history = {
@@ -76,7 +76,7 @@ class TestHistoryContract:
 
     def test_train_sft_history_has_eval_step(self):
         """train_sft() must also write eval_step (baseline path)."""
-        from arithmetic.train import ArithmeticConfig
+        from arithmetic.training.train import ArithmeticConfig
         import torch
 
         cfg = ArithmeticConfig()
@@ -116,7 +116,7 @@ class TestHistoryContract:
             "splits": {"add_S5": {"full_accuracy": 0.0}},
         }
 
-        from arithmetic.train import train_sft
+        from arithmetic.training.train import train_sft
         with patch("arithmetic.evaluate.ArithmeticEvaluator") as MockEval, \
              patch("wandb.run", None):
             MockEval.return_value.run.return_value = fake_epoch_eval
@@ -203,7 +203,7 @@ class TestValidatorContract:
 class TestConfigHashConsistency:
 
     def _train_py_hash(self, **overrides):
-        from arithmetic.train import ArithmeticConfig
+        from arithmetic.training.train import ArithmeticConfig
         cfg = ArithmeticConfig()
         for k, v in overrides.items():
             setattr(cfg, k, v)
@@ -270,7 +270,7 @@ class TestConfigHashConsistency:
 
 class TestLRAutoScale:
     def _lr_for(self, n_embd):
-        from arithmetic.train import ArithmeticConfig
+        from arithmetic.training.train import ArithmeticConfig
         cfg = ArithmeticConfig(n_embd=n_embd)
         cfg.auto_scale_lr()
         return cfg.lr
@@ -286,7 +286,7 @@ class TestLRAutoScale:
         assert self._lr_for(128) == pytest.approx(2e-5)
 
     def test_explicit_lr_overrides_autoscale(self):
-        from arithmetic.train import ArithmeticConfig
+        from arithmetic.training.train import ArithmeticConfig
         cfg = ArithmeticConfig(n_embd=128, lr=8e-5)
         cfg.auto_scale_lr()
         assert cfg.lr == pytest.approx(8e-5), \
@@ -310,14 +310,14 @@ class TestSubprocessEnv:
 
     def test_eval_k_is_none_for_baseline(self):
         """Baseline eval must use K=None (no abstract tokens)."""
-        from arithmetic.train import ArithmeticConfig
+        from arithmetic.training.train import ArithmeticConfig
         cfg = ArithmeticConfig(mode="baseline")
         eval_K = cfg.K if cfg.mode == "sorl" else None
         assert eval_K is None
 
     def test_eval_k_is_cfg_k_for_sorl(self):
         """SoRL eval must use cfg.K, not None."""
-        from arithmetic.train import ArithmeticConfig
+        from arithmetic.training.train import ArithmeticConfig
         cfg = ArithmeticConfig(mode="sorl", K=1)
         eval_K = cfg.K if cfg.mode == "sorl" else None
         assert eval_K == 1

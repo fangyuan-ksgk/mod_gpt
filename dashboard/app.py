@@ -635,8 +635,8 @@ Code is on the [`amir/arithmetic`](https://github.com/fangyuan-ksgk/mod_gpt/tree
 
 ```python
 import torch
-from arithmetic.hub import load_model
-from arithmetic.evaluate import ArithmeticEvaluator
+from arithmetic.data.hub import load_model
+from arithmetic.training.evaluate import ArithmeticEvaluator
 from transformers import AutoTokenizer
 
 # Load model + tokenizer
@@ -652,7 +652,7 @@ evaluator.print_table(results)
 To inspect abstraction tokens on a single example:
 
 ```python
-from arithmetic.train import QWEN3_TOKEN_MAP, QWEN3_INV_MAP
+from arithmetic.training.train import QWEN3_TOKEN_MAP, QWEN3_INV_MAP
 from sorl.sorl_trainer import infer_insert_mask, insert_tokens_with_padding, expand_prompt_len
 
 base_v = model.vocab_sizes[0].item()

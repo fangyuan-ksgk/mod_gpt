@@ -12,7 +12,7 @@ are added with status=VALID, but status changes are persisted back to HF.
 
 Usage:
     # Models
-    from arithmetic.catalog import ModelCatalog
+    from arithmetic.job_manager.catalog import ModelCatalog
     cat = ModelCatalog()
     cat.fetch()                          # pull catalog + configs from HF
     cat.valid()                          # only VALID models
@@ -20,7 +20,7 @@ Usage:
     cat.push()                           # upload catalog back to HF
 
     # Data
-    from arithmetic.catalog import DataCatalog
+    from arithmetic.job_manager.catalog import DataCatalog
     dcat = DataCatalog()
     dcat.fetch()                         # pull catalog from HF
     dcat.register("eval_sets/my_new_eval.json", description="...", version="v2")

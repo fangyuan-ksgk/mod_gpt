@@ -60,7 +60,7 @@ def main():
     print("STEP 4: Writing results")
     print("=" * 60)
     try:
-        from arithmetic.catalog import ModelCatalog
+        from arithmetic.job_manager.catalog import ModelCatalog
         cat = ModelCatalog()
         cat.fetch(verbose=False)
         cat.write_results_md(f"{REPO_DIR}/log/arithmetic.md")

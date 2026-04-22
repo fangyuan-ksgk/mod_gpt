@@ -22,7 +22,7 @@ import torch
 import numpy as np
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
 OUT_DIR = Path(__file__).parent
 DEFAULT_MODEL = "add_sub_sorl_v1_abs30_K1_100K"
@@ -45,9 +45,9 @@ def main():
             data = json.load(f)
     else:
         print("No cached data from experiment 03, running analysis...")
-        from arithmetic.hub import load_model
+        from arithmetic.data.hub import load_model
         from arithmetic.data.addition import get_eval_set
-        from arithmetic.train import QWEN3_TOKEN_MAP, QWEN3_INV_MAP
+        from arithmetic.training.train import QWEN3_TOKEN_MAP, QWEN3_INV_MAP
         from sorl.sorl_trainer import infer_insert_mask, insert_tokens_with_padding, expand_prompt_len
         from transformers import AutoTokenizer
         from collections import defaultdict, Counter

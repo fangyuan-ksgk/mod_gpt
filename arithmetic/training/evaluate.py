@@ -2,7 +2,7 @@
 Arithmetic model evaluator with visualization.
 
 Usage:
-    from arithmetic.evaluate import ArithmeticEvaluator
+    from arithmetic.training.evaluate import ArithmeticEvaluator
 
     evaluator = ArithmeticEvaluator(model, tokenizer, device="cuda")
     results = evaluator.run(ops="add")          # SFT eval
