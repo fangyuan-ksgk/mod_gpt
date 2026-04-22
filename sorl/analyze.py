@@ -148,18 +148,42 @@ def load_sft_model(ckpt_path, model_name, device, *, dtype=None, verbose=True):
     sft_cfg = ckpt.get("config", {}) or {}
 
     model = AutoModelForCausalLM.from_pretrained(model_name)
-    if sft_cfg.get("use_lora", False):
+
+    sd = ckpt["model"]
+    # SFTConfig stored in ckpt["config"] does NOT carry LoRA flags (those live
+    # on argparse `args`, not on the dataclass), so fall back to sniffing the
+    # state dict: any key containing ".lora_A." means this was a PEFT/LoRA run.
+    has_lora_keys = any(".lora_A." in k for k in sd.keys())
+    use_lora = sft_cfg.get("use_lora", False) or has_lora_keys
+
+    if use_lora:
         from peft import LoraConfig, get_peft_model
-        target_modules = sft_cfg.get(
-            "lora_target_modules",
-            ["q_proj", "k_proj", "v_proj", "o_proj",
-             "gate_proj", "up_proj", "down_proj"],
-        )
+
+        # Infer targets from the state dict: take the module name right before
+        # `.lora_A.` (e.g. ".self_attn.q_proj.lora_A.default.weight" -> "q_proj").
+        inferred_targets = sorted({
+            k.split(".lora_A.")[0].split(".")[-1]
+            for k in sd.keys() if ".lora_A." in k
+        })
+        target_modules = sft_cfg.get("lora_target_modules") or inferred_targets or [
+            "q_proj", "k_proj", "v_proj", "o_proj",
+            "gate_proj", "up_proj", "down_proj",
+        ]
         if isinstance(target_modules, str):
             target_modules = target_modules.split(",")
+
+        # Infer rank from a lora_A weight shape: [r, in_features].
+        inferred_r = None
+        for k, v in sd.items():
+            if ".lora_A." in k and hasattr(v, "shape") and v.ndim == 2:
+                inferred_r = int(v.shape[0])
+                break
+        r = sft_cfg.get("lora_r", sft_cfg.get("lora_rank", inferred_r or 16))
+        lora_alpha = sft_cfg.get("lora_alpha", 2 * r)
+
         lora_cfg = LoraConfig(
-            r=sft_cfg.get("lora_r", sft_cfg.get("lora_rank", 16)),
-            lora_alpha=sft_cfg.get("lora_alpha", 32),
+            r=r,
+            lora_alpha=lora_alpha,
             lora_dropout=sft_cfg.get("lora_dropout", 0.0),
             target_modules=target_modules,
             bias="none",
@@ -167,10 +191,11 @@ def load_sft_model(ckpt_path, model_name, device, *, dtype=None, verbose=True):
         )
         model = get_peft_model(model, lora_cfg)
         if verbose:
-            print(f"SFT LoRA: r={lora_cfg.r} alpha={lora_cfg.lora_alpha} "
+            src = "cfg" if sft_cfg.get("use_lora", False) else "sniffed from state_dict"
+            print(f"SFT LoRA ({src}): r={lora_cfg.r} alpha={lora_cfg.lora_alpha} "
                   f"targets={target_modules}")
 
-    model.load_state_dict(ckpt["model"])
+    model.load_state_dict(sd)
     model = model.to(device)
     if dtype is not None:
         model = model.to(dtype=dtype)
@@ -835,6 +860,166 @@ def build_kmeans_router_codes(
     return out
 
 
+def build_kmeans_hidden_router_codes(
+    blob,
+    tokenizer,
+    model,
+    device,
+    *,
+    layer_idx: int,
+    pool: str = "mean",        # "mean" | "first" | "last"
+    seed: int = 0,
+    batch_size: int = 2,
+    batch_size_kmeans: int = 4096,
+    dtype: torch.dtype | None = None,
+    verbose: bool = True,
+):
+    """Capacity-matched null router using **contextual hidden states**.
+
+    Unlike :func:`build_kmeans_router_codes` (which clusters chunk-mean *input*
+    embeddings and is therefore a bag-of-tokens baseline), this null forwards
+    each sample through ``model`` and clusters chunk vectors taken from
+    ``hidden_states[layer_idx]`` -- the same layer the learned router reads.
+
+    It is the fair null for the claim "SoRL codes encode context beyond the
+    local lexical content": both routers see identical inputs, identical
+    contextual hidden states, and have identical capacity
+    (``K = blob['C_SIZE']`` centroids -> log2(C_SIZE) bits per chunk). The
+    only difference is the routing head: k-means nearest-centroid vs. the
+    learned linear projection.
+
+    Parameters
+    ----------
+    blob : dict
+        ``decode_scale_*`` blob (``samples``, ``codes``, ``L``, ``C_SIZE``).
+    tokenizer : transformers.PreTrainedTokenizer
+    model : nn.Module
+        The model whose hidden states the router reads. Typically the base
+        (or SFT) model that the SoRL wrapper steers, since V9 routing is
+        defined on top of frozen base activations.
+    device : torch.device
+    layer_idx : int
+        Layer whose hidden states to cluster on. Should match the wrapper's
+        ``inject_layers[0]`` (e.g. 14 for Qwen3-0.6B).
+    pool : {"mean", "first", "last"}
+        How to reduce each ``L``-sized chunk to a single vector. ``"mean"``
+        matches the learned router's sensitivity to the whole chunk;
+        ``"first"``/``"last"`` match V9's ``code_position``.
+    batch_size : int
+        Forward-pass batch size (over samples).
+    """
+    from sklearn.cluster import MiniBatchKMeans
+    from tqdm.auto import tqdm
+
+    samples = blob["samples"]
+    codes   = blob["codes"]
+    L       = blob["L"]
+    C_SIZE  = blob["C_SIZE"]
+
+    assert pool in {"mean", "first", "last"}, f"pool={pool!r}"
+
+    model.eval()
+    if dtype is not None:
+        model = model.to(dtype=dtype)
+
+    # ---- 1. forward each sample, collect per-chunk hidden vectors -------
+    per_sample_vecs = []   # list[(v_p, v_r)] with v_* shape (n_chunks, D)
+    per_sample_shape = []  # list[(n_p, n_r)]
+
+    pbar = tqdm(range(0, len(samples), batch_size),
+                desc="km-hidden fwd", disable=not verbose)
+    D = None
+    with torch.no_grad():
+        for start in pbar:
+            batch = samples[start:start + batch_size]
+            batch_codes = codes[start:start + batch_size]
+
+            # Tokenize prompt+response jointly so contextual states reflect
+            # the full sequence the router sees.
+            enc_ids, enc_lens_p, enc_lens_r = [], [], []
+            for s in batch:
+                p_ids = tokenizer(s["question"], add_special_tokens=False)["input_ids"]
+                r_ids = tokenizer(s["response"], add_special_tokens=False)["input_ids"]
+                enc_ids.append(p_ids + r_ids)
+                enc_lens_p.append(len(p_ids))
+                enc_lens_r.append(len(r_ids))
+
+            max_len = max(len(x) for x in enc_ids)
+            pad_id = tokenizer.pad_token_id or tokenizer.eos_token_id or 0
+            input_ids = torch.full((len(enc_ids), max_len), pad_id,
+                                   dtype=torch.long, device=device)
+            attn      = torch.zeros_like(input_ids)
+            for i, ids in enumerate(enc_ids):
+                input_ids[i, :len(ids)] = torch.tensor(ids, dtype=torch.long,
+                                                       device=device)
+                attn[i, :len(ids)] = 1
+
+            out = model(input_ids=input_ids, attention_mask=attn,
+                        output_hidden_states=True)
+            h = out.hidden_states[layer_idx].float().cpu().numpy()  # (B, T, D)
+            if D is None:
+                D = h.shape[-1]
+
+            for i, (c, n_p_tok, n_r_tok) in enumerate(
+                    zip(batch_codes, enc_lens_p, enc_lens_r)):
+                h_p = h[i, :n_p_tok]                       # (n_p_tok, D)
+                h_r = h[i, n_p_tok:n_p_tok + n_r_tok]      # (n_r_tok, D)
+
+                n_p = len(c["prompt"])
+                n_r = len(c["response"])
+
+                def _reduce(h_seg, n_chunks):
+                    if n_chunks == 0:
+                        return np.zeros((0, D), dtype=np.float32)
+                    out = np.zeros((n_chunks, D), dtype=np.float32)
+                    for cc in range(n_chunks):
+                        seg = h_seg[cc * L:(cc + 1) * L]
+                        if seg.shape[0] == 0:
+                            continue
+                        if pool == "mean":
+                            out[cc] = seg.mean(axis=0)
+                        elif pool == "first":
+                            out[cc] = seg[0]
+                        else:   # "last"
+                            out[cc] = seg[-1]
+                    return out
+
+                v_p = _reduce(h_p, n_p)
+                v_r = _reduce(h_r, n_r)
+                per_sample_vecs.append((v_p, v_r))
+                per_sample_shape.append((n_p, n_r))
+
+    all_vecs = np.concatenate(
+        [v for pair in per_sample_vecs for v in pair if len(v) > 0], axis=0
+    )
+    if verbose:
+        print(f"k-means (hidden layer={layer_idx}, pool={pool}): "
+              f"{all_vecs.shape[0]} chunks, dim={D}, K={C_SIZE}")
+
+    # ---- 2. k-means with K = C_SIZE --------------------------------------
+    km = MiniBatchKMeans(
+        n_clusters=C_SIZE,
+        random_state=seed,
+        batch_size=batch_size_kmeans,
+        n_init="auto",
+        max_iter=100,
+    )
+    km.fit(all_vecs)
+
+    # ---- 3. assign per-chunk codes ---------------------------------------
+    out = []
+    for (v_p, v_r), (n_p, n_r), c in zip(per_sample_vecs, per_sample_shape, codes):
+        p_codes = km.predict(v_p).tolist() if n_p else []
+        r_codes = km.predict(v_r).tolist() if n_r else []
+        out.append({
+            "prompt":   p_codes,
+            "response": r_codes,
+            "L":        L,
+            "pad_prefix_chunks": c.get("pad_prefix_chunks", 0),
+        })
+    return out
+
+
 # ---------------------------------------------------------------------------
 # N-gram purity sweep
 # ---------------------------------------------------------------------------
@@ -930,8 +1115,8 @@ def ngram_purity_sweep(
 
     return dict(
         N=Ns, n_eligible=n_eligible, fracs=fracs_all, counts=counts_all,
-        p_null=p_null, total_seqs=total_seqs, mean_len=mean_len,
-        n_buckets=n_buckets, bucket_sizes=bucket_sizes,
+        p_null=p_null, topics=topics, topic_sizes=topic_sizes,
+        total_seqs=total_seqs, mean_len=mean_len,
         purity_thresholds=list(purity_thresholds),
     )
 
@@ -1105,3 +1290,441 @@ class ablate_steering_codes:
             self.wrapper.steering_emb.weight.data.copy_(self._orig)
         self._orig = None
         return False
+
+
+# ---------------------------------------------------------------------------
+# Full purity report + harvest of topic-specialized n-grams / codes
+# ---------------------------------------------------------------------------
+
+def purity_sweep_report(
+    samples,
+    codes,
+    val_ds,
+    *,
+    src: str = "response",
+    n_grams=(1, 2, 3, 4, 5),
+    top_k: int = 8,
+    min_topic_seqs: int = 5,
+    min_gram_count_in_topic: int = 5,
+    min_gram_count_global: int = 30,
+    purity_thresholds=(0.50, 0.75, 0.90, 1.00),
+    harvest_purity: float = 0.90,
+    harvest_min_count: int = 10,
+    harvest_N=(1, 2, 3),
+    verbose: bool = True,
+    plot: bool = True,
+    run_label: str | None = None,
+    accuracy: float | None = None,
+):
+    """End-to-end purity analysis: per-topic PMI top-K, purity threshold sweep
+    (with plot), and harvest of topic-specialized n-grams + the codes that
+    participate in them.
+
+    Returns dict with ``sweep_rows``, ``topic_ngrams`` (topic -> set[tuple]),
+    ``topic_codes`` (topic -> set[int]), plus per-N Counters.
+    """
+    from collections import Counter, defaultdict
+
+    topic_by_idx = {s["idx"]: val_ds.dataset[s["idx"]].get("topic", "unknown")
+                    for s in samples}
+    topic_seqs = defaultdict(list)
+    for s, c in zip(samples, codes):
+        t = topic_by_idx[s["idx"]]
+        seq = []
+        if src in ("prompt", "both"):   seq += list(c["prompt"])
+        if src in ("response", "both"): seq += list(c["response"])
+        if seq:
+            topic_seqs[t].append(seq)
+
+    topics = sorted(t for t, seqs in topic_seqs.items() if len(seqs) >= min_topic_seqs)
+    topic_sizes = {t: len(topic_seqs[t]) for t in topics}
+    total_seqs  = sum(topic_sizes.values()) or 1
+    lengths = np.array([len(seq) for t in topics for seq in topic_seqs[t]])
+    p_null = max(topic_sizes.values()) / total_seqs
+    largest_topic = max(topic_sizes, key=topic_sizes.get)
+
+    def _ngrams(seq, n):
+        return [tuple(seq[i:i+n]) for i in range(len(seq) - n + 1)]
+
+    if verbose:
+        print(f"src={src!r}  topics kept (>= {min_topic_seqs} seqs): "
+              f"{len(topics)} / {len(topic_seqs)}")
+        if run_label is not None:
+            msg = f"run={run_label}"
+            if accuracy is not None:
+                msg += f"  acc={accuracy*100:.2f}%"
+            print(msg)
+        print(f"sequences kept: {total_seqs}")
+        print(f"inner-monologue length:  mean={lengths.mean():.1f}  "
+              f"median={np.median(lengths):.0f}  min={lengths.min()}  "
+              f"max={lengths.max()}  "
+              f"p5/p95=({np.percentile(lengths,5):.0f},{np.percentile(lengths,95):.0f})")
+        print(f"null-baseline purity = max topic share = "
+              f"{p_null*100:.1f}%  (argmax topic: {largest_topic}, n={topic_sizes[largest_topic]})")
+
+    sweep_rows = []
+    per_N = {}   # N -> (global_ct, topic_ct, best_topic_of, best_count_of)
+    for N in n_grams:
+        global_ct = Counter()
+        topic_ct  = {t: Counter() for t in topics}
+        for t in topics:
+            for seq in topic_seqs[t]:
+                g = _ngrams(seq, N)
+                topic_ct[t].update(g)
+                global_ct.update(g)
+        total_topic = {t: sum(topic_ct[t].values()) for t in topics}
+        total_global = sum(global_ct.values()) or 1
+
+        if verbose:
+            print("\n" + "=" * 78)
+            print(f"  {N}-grams  |  per-topic top-{top_k} by PMI  "
+                  f"(min count in topic = {min_gram_count_in_topic})")
+            print("=" * 78)
+            for t in topics:
+                rows = []
+                for g, c_t in topic_ct[t].items():
+                    if c_t < min_gram_count_in_topic: continue
+                    p_t = c_t / total_topic[t]
+                    p_g = global_ct[g] / total_global
+                    pmi = float(np.log(p_t / p_g))
+                    rows.append((g, c_t, int(global_ct[g]), pmi, float(np.exp(pmi))))
+                rows.sort(key=lambda r: -r[3])
+                if not rows: continue
+                print(f"\n  [{t}]  ({topic_sizes[t]} seqs, {total_topic[t]} {N}-grams)")
+                print(f"    {'gram':<26s} {'in_topic':>9s} {'global':>7s} "
+                      f"{'in/gl%':>7s} {'PMI':>6s} {'lift':>7s}")
+                for g, c_t, c_g, pmi, lift in rows[:top_k]:
+                    frac = (c_t / c_g * 100.0) if c_g > 0 else 0.0
+                    print(f"    {str(g):<26s} {c_t:>9d} {c_g:>7d} "
+                          f"{frac:>6.1f}% {pmi:>+6.2f} {lift:>6.2f}x")
+
+        best_topic_of, best_count_of = {}, {}
+        for t in topics:
+            for g, c_t in topic_ct[t].items():
+                if c_t > best_count_of.get(g, -1):
+                    best_count_of[g] = c_t
+                    best_topic_of[g] = t
+        eligible = [g for g, cg in global_ct.items() if cg >= min_gram_count_global]
+        fracs, counts = [], []
+        for thr in purity_thresholds:
+            k = sum(1 for g in eligible if best_count_of[g] / global_ct[g] >= thr)
+            counts.append(k)
+            fracs.append(k / len(eligible) if eligible else 0.0)
+        sweep_rows.append((N, len(eligible), fracs, counts))
+        per_N[N] = (global_ct, topic_ct, best_topic_of, best_count_of)
+
+        if verbose:
+            print(f"\n  -- {N}-gram purity threshold crossings  "
+                  f"(denom = {len(eligible)} grams with global >= {min_gram_count_global}) --")
+            print("    " + "".join(f"  >={int(p*100):>3d}%" for p in purity_thresholds))
+            print("    " + "".join(f"  {c:>5d}" for c in counts))
+            print("    " + "".join(f"  {f*100:>4.1f}%" for f in fracs))
+
+    if verbose:
+        print("\n" + "=" * 78)
+        print(f"  purity sweep vs N  (null baseline = {p_null*100:.1f}%)")
+        print("=" * 78)
+        print(f"  {'N':>3s}  {'eligible':>9s}  " +
+              "  ".join(f">={int(p*100):>3d}%" for p in purity_thresholds))
+        for N, n_elig, fracs, _ in sweep_rows:
+            print(f"  {N:>3d}  {n_elig:>9d}  " +
+                  "  ".join(f"{f*100:>4.1f}%" for f in fracs))
+
+    if plot and sweep_rows:
+        Ns_plot = [r[0] for r in sweep_rows]
+        fig, ax = plt.subplots(figsize=(7.0, 4.6))
+        for j, thr in enumerate(purity_thresholds):
+            ys = [sweep_rows[i][2][j] * 100 for i in range(len(sweep_rows))]
+            ax.plot(Ns_plot, ys, "o-", label=f"purity ≥ {int(thr*100)}%")
+        ax.set_xlabel("n-gram order  N")
+        ax.set_ylabel("% of eligible n-grams")
+        ax.set_xticks(Ns_plot)
+        ax.set_title(
+            "N-gram inner-monologue purity vs N\n"
+            "purity = in-topic count / global count   "
+            f"(mean len = {lengths.mean():.1f}, {total_seqs} seqs, {len(topics)} topics)",
+            fontsize=10,
+        )
+        ax.grid(alpha=0.3)
+        leg = ax.legend(loc="upper left", fontsize=9,
+                        title=f"null purity = {p_null*100:.1f}%", title_fontsize=9)
+        leg._legend_box.align = "left"
+        plt.tight_layout()
+        plt.show()
+
+    # harvest topic-specialized n-grams + participating codes
+    topic_ngrams = {t: set() for t in topics}
+    topic_codes  = {t: set() for t in topics}
+    for N in harvest_N:
+        if N not in per_N: continue
+        global_ct, _, best_topic_of, best_count_of = per_N[N]
+        for g, cg in global_ct.items():
+            if cg < harvest_min_count: continue
+            t = best_topic_of.get(g)
+            if t is None: continue
+            if best_count_of[g] / cg < harvest_purity: continue
+            topic_ngrams[t].add(g)
+            for code in g:
+                topic_codes[t].add(int(code))
+
+    if verbose:
+        print("\n" + "=" * 78)
+        print(f"  harvested topic-specialized n-grams  "
+              f"(purity >= {harvest_purity}, count >= {harvest_min_count}, "
+              f"N in {tuple(harvest_N)})")
+        print("=" * 78)
+        for t in sorted(topic_ngrams, key=lambda x: -len(topic_ngrams[x])):
+            print(f"  {t:<28s}  #ngrams={len(topic_ngrams[t]):>3d}   "
+                  f"#codes={len(topic_codes[t]):>3d}   codes={sorted(topic_codes[t])}")
+
+    return dict(
+        topics=topics, topic_sizes=topic_sizes, total_seqs=total_seqs,
+        mean_len=float(lengths.mean()) if lengths.size else 0.0,
+        p_null=p_null, sweep_rows=sweep_rows, per_N=per_N,
+        topic_ngrams=topic_ngrams, topic_codes=topic_codes,
+        purity_thresholds=list(purity_thresholds),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Per-topic causal ablation eval on ScienceQA
+# ---------------------------------------------------------------------------
+
+def run_topic_ablation_eval(
+    wrapper,
+    val_ds,
+    tokenizer,
+    samples,
+    topic_codes,
+    *,
+    device,
+    run_name: str,
+    c_size: int,
+    cache_dir: str | None = None,
+    max_new_tokens: int = 128,
+    eval_n: int | None = None,
+    n_random_ctrl: int = 2,
+    ctrl_seed: int = 0,
+    verbose: bool = True,
+):
+    """For each topic t, ablate its harvested codes, re-evaluate the full
+    SciQA val set, and report per-topic accuracy deltas vs baseline. Adds
+    same-size random-code controls. Caches per-(label, n) to ``cache_dir``.
+
+    Returns dict with ``base_res``, ``topic_ablation`` (t -> res),
+    ``ctrl_ablation`` (trial -> (codes, res)).
+    """
+    import os, json, re, time
+    from tqdm.auto import tqdm
+
+    ANS_RE = re.compile(r"\b([A-D])\b")
+    def parse_mc(text):
+        m = ANS_RE.findall(text); return m[-1] if m else None
+
+    gold_by_idx = {s["idx"]: s["gold"] for s in samples}
+    topic_by_idx_full = {i: val_ds.dataset[i].get("topic", "unknown")
+                         for i in range(len(val_ds))}
+    eval_n = len(val_ds) if eval_n is None else min(eval_n, len(val_ds))
+    eval_indices = list(range(eval_n))
+
+    cache_dir = cache_dir or f"log/analysis_out/ablate_topic/{run_name}"
+    os.makedirs(cache_dir, exist_ok=True)
+
+    @torch.no_grad()
+    def _eval_full(label, desc=""):
+        cache_path = os.path.join(cache_dir, f"{label}.json")
+        if os.path.exists(cache_path):
+            with open(cache_path) as f:
+                cached = json.load(f)
+            if cached.get("n") == len(eval_indices):
+                return cached
+        preds, correct = {}, {}
+        wrapper.eval()
+        for s_idx in tqdm(eval_indices, desc=desc or label, leave=False):
+            item = val_ds[s_idx]
+            plen = int(item["prompt_len"])
+            ii = item["input_ids"][:plen].unsqueeze(0).to(device)
+            am = item["attention_mask"][:plen].unsqueeze(0).to(device)
+            out = wrapper.generate(
+                input_ids=ii, attention_mask=am,
+                max_new_tokens=max_new_tokens, do_sample=False,
+                pad_token_id=tokenizer.pad_token_id,
+            )
+            text = tokenizer.decode(out[0, plen:], skip_special_tokens=True)
+            pred = parse_mc(text)
+            gold = gold_by_idx.get(s_idx)
+            preds[str(s_idx)]   = pred
+            correct[str(s_idx)] = int(pred is not None and gold is not None and pred == gold)
+        res = {"label": label, "n": len(eval_indices), "preds": preds, "correct": correct}
+        with open(cache_path, "w") as f:
+            json.dump(res, f)
+        return res
+
+    def _per_topic_acc(res):
+        by_t = {}
+        for s_idx in eval_indices:
+            t = topic_by_idx_full[s_idx]
+            c, tot = by_t.get(t, (0, 0))
+            by_t[t] = (c + res["correct"][str(s_idx)], tot + 1)
+        out = {t: (c, tot, c / max(tot, 1)) for t, (c, tot) in by_t.items()}
+        total_c = sum(c for c, _, _ in out.values())
+        total_n = sum(tot for _, tot, _ in out.values())
+        return out, total_c / max(total_n, 1)
+
+    if verbose:
+        print(f"Evaluating {len(eval_indices)} samples × "
+              f"(1 baseline + {len(topic_codes)} topics + {n_random_ctrl} random) "
+              f"= {(1 + len(topic_codes) + n_random_ctrl) * len(eval_indices)} decodes")
+        print(f"Cache dir: {cache_dir}\n")
+
+    t0 = time.time()
+    base_res = _eval_full("baseline", desc="baseline")
+    base_per_t, base_acc = _per_topic_acc(base_res)
+    if verbose:
+        print(f"[baseline]  acc={base_acc*100:.2f}%   ({time.time()-t0:.0f}s)")
+
+    topic_order = sorted(topic_codes.keys(), key=lambda t: -len(topic_codes[t]))
+    topic_ablation = {}
+    for t in topic_order:
+        codes_abl = sorted(topic_codes[t])
+        safe_t = re.sub(r"\W+", "_", t)[:40]
+        label  = f"ablate_topic__{safe_t}"
+        tt0 = time.time()
+        with ablate_steering_codes(wrapper, codes_abl):
+            res = _eval_full(label, desc=f"ablate {t[:20]} (|K|={len(codes_abl)})")
+        topic_ablation[t] = res
+        per_t, acc = _per_topic_acc(res)
+        if verbose:
+            own = (per_t.get(t, (0,0,0))[2] - base_per_t.get(t, (0,0,0))[2]) * 100
+            print(f"[ablate {t[:25]:<25s}]  |K|={len(codes_abl):>3d}  "
+                  f"overall={acc*100:.2f}% (Δ={(acc-base_acc)*100:+.2f})  "
+                  f"own-topic Δ={own:+.2f}pp  ({time.time()-tt0:.0f}s)")
+
+    rng = np.random.default_rng(ctrl_seed)
+    ctrl_ablation = {}
+    sizes = [len(topic_codes[t]) for t in topic_order]
+    ctrl_size = int(np.median(sizes)) if sizes else 4
+    for trial in range(n_random_ctrl):
+        rnd = sorted(rng.choice(c_size, size=ctrl_size, replace=False).tolist())
+        label = f"ablate_random_seed{ctrl_seed}_trial{trial}_K{ctrl_size}"
+        tt0 = time.time()
+        with ablate_steering_codes(wrapper, rnd):
+            res = _eval_full(label, desc=f"random trial {trial}")
+        ctrl_ablation[f"trial{trial}"] = (rnd, res)
+        if verbose:
+            per_t, acc = _per_topic_acc(res)
+            print(f"[random trial {trial}  K={rnd}]  overall={acc*100:.2f}%  "
+                  f"(Δ={(acc-base_acc)*100:+.2f})  ({time.time()-tt0:.0f}s)")
+
+    eval_topics = sorted({topic_by_idx_full[i] for i in eval_indices})
+    if verbose:
+        print("\n" + "=" * 110)
+        print(f"  Per-eval-topic accuracy under each ablation  (Δ vs baseline, pp)")
+        print("=" * 110)
+        hdr = "  ablated_topic ↓ / eval_topic →".ljust(36) + \
+              "  ".join(f"{t[:10]:>10s}" for t in eval_topics) + "   overall"
+        print(hdr)
+        print("  " + "-" * (len(hdr) - 2))
+        base_row = "  " + f"{'(baseline %)':<34s}"
+        for et in eval_topics:
+            base_row += f"  {base_per_t.get(et, (0,0,0))[2]*100:>8.1f}"
+        base_row += f"   {base_acc*100:>6.1f}"
+        print(base_row)
+        for t in topic_order:
+            per_t, acc = _per_topic_acc(topic_ablation[t])
+            row = "  " + f"ablate {t[:28]:<28s}"
+            for et in eval_topics:
+                d = (per_t.get(et, (0,0,0))[2] - base_per_t.get(et, (0,0,0))[2]) * 100
+                mark = "*" if et == t else " "
+                row += f" {mark}{d:>+8.1f}"
+            row += f"   {(acc-base_acc)*100:>+6.1f}"
+            print(row)
+        if ctrl_ablation:
+            ctrl_per_t = {}
+            for _, (_, res) in ctrl_ablation.items():
+                per_t, _ = _per_topic_acc(res)
+                for et, (_, _, a) in per_t.items():
+                    ctrl_per_t.setdefault(et, []).append(a)
+            ctrl_acc = float(np.mean([_per_topic_acc(res)[1]
+                                      for _, (_, res) in ctrl_ablation.items()]))
+            row = "  " + f"{'random control (mean)':<34s}"
+            for et in eval_topics:
+                d = (np.mean(ctrl_per_t.get(et, [0.0])) - base_per_t.get(et, (0,0,0))[2]) * 100
+                row += f"  {d:>+8.1f}"
+            row += f"   {(ctrl_acc-base_acc)*100:>+6.1f}"
+            print(row)
+
+        print("\n" + "=" * 70)
+        print("  Specificity check: own-topic Δ vs other-topic Δ (pp)")
+        print("=" * 70)
+        print(f"  {'topic':<28s} {'|K|':>4s} {'own Δ':>8s} {'others Δ':>9s}  {'diff':>7s}")
+        diffs = []
+        for t in topic_order:
+            per_t, _ = _per_topic_acc(topic_ablation[t])
+            own = (per_t.get(t, (0,0,0))[2] - base_per_t.get(t, (0,0,0))[2]) * 100
+            others = [(per_t.get(et, (0,0,0))[2] - base_per_t.get(et, (0,0,0))[2]) * 100
+                      for et in eval_topics if et != t and et in per_t]
+            oth = float(np.mean(others)) if others else 0.0
+            diffs.append(own - oth)
+            print(f"  {t[:28]:<28s} {len(topic_codes[t]):>4d} {own:>+7.1f} "
+                  f"{oth:>+8.1f}  {own-oth:>+7.1f}")
+        if diffs:
+            print("-" * 70)
+            print(f"  mean own-minus-others Δ across topics: {np.mean(diffs):+.2f} pp")
+
+    return dict(base_res=base_res, base_acc=base_acc,
+                topic_ablation=topic_ablation, ctrl_ablation=ctrl_ablation)
+
+
+# ---------------------------------------------------------------------------
+# Effective-rank / participation-ratio report on a dict of representations
+# ---------------------------------------------------------------------------
+
+def effective_rank_report(reps: dict, names=("base", "sft", "steered"),
+                          verbose: bool = True):
+    """Participation ratio and spectral effective rank (exp of entropy of
+    normalized eigenvalues of the covariance) for each representation matrix.
+    Returns dict of per-model metrics.
+    """
+    def _spectrum(X):
+        Xc = X - X.mean(0, keepdims=True)
+        s = np.linalg.svd(Xc, compute_uv=False).astype(np.float64)
+        return (s ** 2) / max(1, Xc.shape[0] - 1)
+
+    def _pr(ev):  return float(ev.sum() ** 2 / (ev ** 2).sum())
+
+    def _erank(ev):
+        p = ev / ev.sum(); p = p[p > 0]
+        return float(np.exp(-(p * np.log(p)).sum()))
+
+    SPEC = {n: _spectrum(reps[n]) for n in names}
+    D = reps[names[0]].shape[1]
+    out = {}
+    for n in names:
+        ev = SPEC[n]; cum = np.cumsum(ev) / ev.sum()
+        out[n] = dict(pr=_pr(ev), erank=_erank(ev),
+                      top1=float(cum[0]), top10=float(cum[min(9,len(cum)-1)]),
+                      top50=float(cum[min(49,len(cum)-1)]))
+
+    if verbose:
+        print(f"ambient dim D = {D}")
+        print(f"\n  {'model':<10s} {'PR':>8s} {'PR/D':>6s}  {'eRank':>8s} "
+              f"{'eRank/D':>8s}  {'top1 var%':>10s} {'top10 var%':>11s} {'top50 var%':>11s}")
+        print("  " + "-" * 74)
+        for n in names:
+            m = out[n]
+            print(f"  {n:<10s} {m['pr']:>8.2f} {m['pr']/D:>6.3f}  "
+                  f"{m['erank']:>8.2f} {m['erank']/D:>8.3f}  "
+                  f"{m['top1']*100:>9.1f}% {m['top10']*100:>10.1f}% "
+                  f"{m['top50']*100:>10.1f}%")
+        if len(names) >= 3:
+            a, b, c = names[:3]
+            print(f"\n  PR     : {a}→{b} ×{out[b]['pr']/out[a]['pr']:.2f}   "
+                  f"{a}→{c} ×{out[c]['pr']/out[a]['pr']:.2f}   "
+                  f"{b}→{c} ×{out[c]['pr']/out[b]['pr']:.2f}")
+            print(f"  eRank  : {a}→{b} ×{out[b]['erank']/out[a]['erank']:.2f}   "
+                  f"{a}→{c} ×{out[c]['erank']/out[a]['erank']:.2f}   "
+                  f"{b}→{c} ×{out[c]['erank']/out[b]['erank']:.2f}")
+
+    out["D"] = D
+    return out
