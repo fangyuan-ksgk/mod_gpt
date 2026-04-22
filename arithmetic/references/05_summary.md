@@ -19,4 +19,8 @@ An automated pipeline using LLMs can generate and evaluate natural language expl
 
 ## Relevance to This Study
 
-Directly relevant to the SAE component of this study (`arithmetic/interp_utils/sae_trainer.py`). The automated explanation pipeline is a template for how we could assign natural language descriptions to our abstract tokens. Intervention scoring (causal, not correlational) aligns with our own causal verification approach — both reject pure correlation in favor of intervention evidence. The finding that SAE latents are more interpretable than neurons supports using SAEs as a comparison baseline for SoRL token interpretability.
+Paulo et al. provide the methodological template for making SoRL feature interpretation systematic rather than ad hoc:
+
+- **H: Apply automated explanation pipeline to SoRL abstract tokens.** Our current token analysis (subtask correlation heatmaps, vignettes) is manual and example-driven. Paulo's pipeline — LLM generates candidate explanations, scores them via activation/intervention correlation — could be adapted to abstract tokens: present the model with token activation patterns across examples, ask an LLM to name the feature, then score via intervention (does forcing the token produce the predicted behavior?).
+- **H: Intervention scoring is directly applicable.** Their intervention scoring evaluates whether activating a feature causally produces the predicted effect — exactly what our surgical swap (finding 6) does. Framing our experiments in these terms makes the methodology more rigorous and comparable.
+- **H: SoRL tokens should score higher on interpretability metrics than SAE latents on the same model.** SAEs extract features post-hoc; SoRL trains them in. If SoRL tokens yield higher explanation quality scores under Paulo's metrics, it is evidence that structured training produces more interpretable representations than post-hoc decomposition.

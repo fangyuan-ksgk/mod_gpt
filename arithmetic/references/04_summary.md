@@ -19,4 +19,8 @@ Internal activations in language models encode enough information to detect arit
 
 ## Relevance to This Study
 
-Complementary to our approach: this paper reads arithmetic correctness from hidden activations; we externalize intermediate computation as explicit tokens. Both confirm that arithmetic structure is represented internally in transformers. The probing methodology (linear probes on hidden states) is a useful baseline for comparing what activation-level vs token-level interpretability can recover.
+Sun et al. do two things we want to match and extend with SoRL:
+
+- **H: SoRL token forcing ≈ selective re-prompting.** Their re-prompting targets steps where probes predict errors. SoRL's surgical token swap (finding 6) is an analogue: forcing a corrected abstract token at inference time fixes wrong answers. We should demonstrate this more systematically — framed as "token forcing" rather than just swap analysis.
+- **H: SoRL representations admit high-quality linear probes.** Their probes decode both the model's predicted answer and the correct answer from hidden states. We should run equivalent probes on SoRL abstract token representations and on baseline hidden states, and compare probe accuracy. The prediction: SoRL tokens are *more probeable* than baseline activations at the same position, because they are trained to encode subtask-relevant structure explicitly.
+- **H: Probe quality correlates with token specialization.** Models with higher token subtask purity (exp 03 heatmap) should yield better probes — this ties the two lines of evidence together.
