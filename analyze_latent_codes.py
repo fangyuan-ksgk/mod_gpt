@@ -1,7 +1,8 @@
 """
-Systematic latent-code extraction for trained SoRL-V9 runs.
+Systematic latent-code extraction for trained SoRL-V9 runs,
+plus per-sample correctness evaluation for plain SFT checkpoints.
 
-For every (run, scale) pair we:
+For every SoRL (run, scale) pair we:
   1. Load the trained V9 checkpoint (backbone + steering_emb + abs_proj).
   2. Override wrapper.scale to the requested value.
   3. Run `evaluate_accuracy` on the validation set of the run's training
@@ -10,18 +11,32 @@ For every (run, scale) pair we:
         - Latent codes: {prompt: [...], response: [...]} (one code per L tokens)
   4. Persist a single .pt per (run, scale) under ./analysis_out/codes/.
 
-Downstream analysis (code-usage histograms, prompt/response alignment,
-clustering, etc.) then consumes these files without re-running generation.
+For every SFT run we:
+  1. Load the HF CausalLM checkpoint (local dir or HF hub repo id).
+  2. Run `evaluate_accuracy` (no codes) on the given dataset.
+  3. Persist the same-shape result minus `codes` under the same out_dir.
 
-Usage:
+Downstream analysis (code-usage histograms, prompt/response alignment,
+clustering, per-sample correctness cross-tabs, etc.) then consumes these
+files without re-running generation.
+
+Usage (SoRL):
     python analyze_latent_codes.py \
         --repo Ksgk-fy/sciqa_ckpt_20260416_0942 \
         --runs q06_sciqa_v9_C32_detach_az0.1_aa0.5 q06_sciqa_v9_C32_base \
         --scales 0.0 0.1 trained \
         --num_samples 500 --eval_batch 16 --max_new_tokens 256
 
+Usage (SFT, local and/or HF hub):
+    python analyze_latent_codes.py \
+        --sft_local ./ckpt/sft_sciqa_.../l1_sciqa_ep1 \
+        --sft_hf user/sft_sciqa_l1_ep1 \
+        --sft_dataset scienceqa \
+        --num_samples 500 --eval_batch 16 --max_new_tokens 256
+
+Both can be combined in a single invocation.
 `trained` expands to the scale stored in the ckpt's args.
-Local ckpts are also supported via --local_runs <path.pt> ... .
+Local SoRL ckpts are also supported via --local_runs <path.pt> ... .
 """
 
 import argparse
@@ -94,6 +109,34 @@ def _parse_layers(val):
     return [int(x) for x in str(val).split(",") if x.strip()]
 
 
+def _load_sft(spec: str, kind: str, device: str, base_model_fallback: str | None = None):
+    """Load an SFT checkpoint.
+
+    spec : local dir path  (kind="local")  or  HF repo id  (kind="hf")
+    Returns (model, tokenizer, run_name).
+    """
+    if kind == "local":
+        path = spec
+        run_name = Path(path).name or Path(path).stem
+    elif kind == "hf":
+        path = spec
+        run_name = spec.replace("/", "__")
+    else:
+        raise ValueError(f"unknown sft kind {kind!r}")
+
+    model = AutoModelForCausalLM.from_pretrained(path, torch_dtype=torch.float32)
+    try:
+        tokenizer = AutoTokenizer.from_pretrained(path)
+    except Exception:
+        if not base_model_fallback:
+            raise
+        tokenizer = AutoTokenizer.from_pretrained(base_model_fallback)
+    if tokenizer.pad_token_id is None:
+        tokenizer.pad_token_id = tokenizer.eos_token_id
+    model = model.to(device).eval()
+    return model, tokenizer, run_name
+
+
 def _eval_at_scale(wrapper, tokenizer, val_ds, device, scale, args_ns):
     """Override wrapper.scale, run evaluate_accuracy, return result dict."""
     prev_scale = wrapper.scale
@@ -136,6 +179,18 @@ def main():
                    help="Override ckpt's max_length for the dataset.")
     p.add_argument("--out_dir", type=str, default="./analysis_out/codes")
     p.add_argument("--verbose", action="store_true")
+
+    # -- SFT branch --------------------------------------------------------
+    p.add_argument("--sft_hf", nargs="*", default=[],
+                   help="HF hub repo ids to evaluate as plain SFT CausalLMs.")
+    p.add_argument("--sft_local", nargs="*", default=[],
+                   help="Local paths to SFT HF CausalLM dirs.")
+    p.add_argument("--sft_dataset", type=str, default=None,
+                   help="Dataset for SFT eval (required if any --sft_* given).")
+    p.add_argument("--sft_max_length", type=int, default=512)
+    p.add_argument("--sft_tokenizer_fallback", type=str, default=None,
+                   help="Base-model id to load the tokenizer from if the SFT "
+                        "checkpoint dir has no tokenizer files.")
     args = p.parse_args()
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -148,8 +203,14 @@ def main():
     for path in args.local_runs:
         tasks.append((path, None))
 
-    if not tasks:
-        raise SystemExit("No runs given. Pass --runs <name>... (with --repo) or --local_runs <path>...")
+    sft_tasks = [("local", s) for s in args.sft_local] + [("hf", s) for s in args.sft_hf]
+    if not tasks and not sft_tasks:
+        raise SystemExit(
+            "No runs given. Pass --runs <name>... (with --repo) or --local_runs <path>...\n"
+            "or --sft_local <dir> / --sft_hf <repo_id> (with --sft_dataset <name>)."
+        )
+    if sft_tasks and not args.sft_dataset:
+        raise SystemExit("--sft_dataset is required when evaluating SFT checkpoints.")
 
     summary = []
     for local_path, run_name in tasks:
@@ -219,14 +280,68 @@ def main():
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
 
+    # ---- SFT checkpoints --------------------------------------------------
+    for kind, spec in sft_tasks:
+        print(f"\n=== SFT [{kind}] {spec} ===")
+        model, tokenizer, run_name = _load_sft(
+            spec, kind, device, base_model_fallback=args.sft_tokenizer_fallback)
+        val_ds = get_dataset(args.sft_dataset, split="test",
+                             tokenizer=tokenizer, max_length=args.sft_max_length)
+        print(f"  dataset: {args.sft_dataset} (|val|={len(val_ds)})")
+
+        result = evaluate_accuracy(
+            model, tokenizer, val_ds, device,
+            num_samples=args.num_samples,
+            max_new_tokens=args.max_new_tokens,
+            num_log_samples=args.num_samples,  # log every sample
+            eval_batch_size=args.eval_batch,
+            record_codes=False,
+            log_fn=print if args.verbose else None,
+        )
+
+        out = {
+            "run": run_name,
+            "mode": "sft",
+            "kind": kind,
+            "ckpt_path": spec,
+            "dataset": args.sft_dataset,
+            "accuracy": result["accuracy"],
+            "correct": result["correct"],
+            "total": result["total"],
+            "samples": result["samples"],
+        }
+        if "per_dataset" in result:
+            out["per_dataset"] = result["per_dataset"]
+
+        fname = f"{run_name}__sft.pt"
+        save_path = os.path.join(args.out_dir, fname)
+        torch.save(out, save_path)
+        print(f"  saved: {save_path}   acc={result['accuracy']*100:.2f}%  "
+              f"({result['correct']}/{result['total']})")
+        summary.append({
+            "run": run_name, "mode": "sft", "kind": kind,
+            "accuracy": result["accuracy"],
+            "correct": result["correct"],
+            "total": result["total"],
+            "file": save_path,
+        })
+
+        del model
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
     # Write a compact JSON index for convenience.
     index_path = os.path.join(args.out_dir, "index.json")
     with open(index_path, "w") as f:
         json.dump(summary, f, indent=2)
     print(f"\n=== done. index: {index_path} ===")
     for s in summary:
-        print(f"  {s['run']:<55s}  scale={s['scale']:.3f}  "
-              f"acc={s['accuracy']*100:.2f}%  ({s['correct']}/{s['total']})")
+        if s.get("mode") == "sft":
+            print(f"  {s['run']:<55s}  [sft]              "
+                  f"acc={s['accuracy']*100:.2f}%  ({s['correct']}/{s['total']})")
+        else:
+            print(f"  {s['run']:<55s}  scale={s['scale']:.3f}  "
+                  f"acc={s['accuracy']*100:.2f}%  ({s['correct']}/{s['total']})")
 
 
 if __name__ == "__main__":
