@@ -18,8 +18,6 @@ Grokking — the delayed generalization that occurs long after training loss pla
 
 ## Relevance to This Study
 
-Establishes that small transformers learn clean, reverse-engineerable algorithms for arithmetic. Our study has so far verified Quirke's carry/borrow circuits through SoRL tokens — but **Nanda's specific findings (Fourier/trig basis, three training phases, grokking dynamics) have not been verified through SoRL at all**. This is a secondary hypothesis:
+Nanda's Fourier/trig basis findings have **not been verified through SoRL** — only Quirke's carry/borrow circuits have. This is a key secondary hypothesis:
 
-- **H: Do SoRL abstract tokens reflect Fourier-basis structure?** Nanda's model represents numbers as rotations; our position-locked tokens suggest a different inductive bias. Worth checking whether the abstract token sequence across positions encodes Fourier components or is purely positional.
-- **H: Does SoRL grokking follow the same three phases?** Token specialization may map onto circuit formation; token stability onto cleanup. Training curves could be reanalyzed through this lens.
-- **H: Do Nanda's progress measures predict SoRL generalization?** If abstract token entropy or abs_loss tracks the circuit formation phase, it could serve as an early training signal.
+- **H: Do SoRL abstract tokens recover Fourier-basis structure?** Nanda shows transformers represent numbers as rotations on a circle via discrete Fourier transforms. If SoRL abstract tokens encode the same Fourier components (detectable via DFT over token embeddings across examples), it suggests SoRL is externalizing the same underlying algorithm. If not — if tokens are purely positional/carry-based — it tells us SoRL converges to Quirke's circuits rather than Nanda's, which is itself a meaningful finding about which representation the training procedure favors.
