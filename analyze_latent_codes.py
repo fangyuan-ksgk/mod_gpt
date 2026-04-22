@@ -112,25 +112,58 @@ def _parse_layers(val):
 def _load_sft(spec: str, kind: str, device: str, base_model_fallback: str | None = None):
     """Load an SFT checkpoint.
 
-    spec : local dir path  (kind="local")  or  HF repo id  (kind="hf")
+    Accepts three layouts:
+      (1) HF-style directory (local or hub) with config.json + weights.
+      (2) Local directory containing `final.pt` in our custom format
+          ({"args": {"model_name": ...}, "model": state_dict}).
+      (3) Direct path to a .pt file in the same custom format.
+
+    spec : local dir/file path (kind="local") or HF repo id (kind="hf")
     Returns (model, tokenizer, run_name).
     """
     if kind == "local":
-        path = spec
-        run_name = Path(path).name or Path(path).stem
+        p = Path(spec)
+        run_name = p.stem if p.is_file() else (p.name or p.stem)
     elif kind == "hf":
-        path = spec
         run_name = spec.replace("/", "__")
     else:
         raise ValueError(f"unknown sft kind {kind!r}")
 
-    model = AutoModelForCausalLM.from_pretrained(path, torch_dtype=torch.float32)
-    try:
-        tokenizer = AutoTokenizer.from_pretrained(path)
-    except Exception:
-        if not base_model_fallback:
-            raise
-        tokenizer = AutoTokenizer.from_pretrained(base_model_fallback)
+    # --- resolve: is this our custom .pt format, or HF-style? -----------
+    pt_path = None
+    if kind == "local":
+        p = Path(spec)
+        if p.is_file() and p.suffix == ".pt":
+            pt_path = p
+        elif p.is_dir() and (p / "final.pt").exists() and not (p / "config.json").exists():
+            pt_path = p / "final.pt"
+
+    if pt_path is not None:
+        ckpt = torch.load(pt_path, map_location="cpu", weights_only=False)
+        a = ckpt.get("args", {}) or {}
+        base_name = a.get("model_name") or base_model_fallback
+        if not base_name:
+            raise ValueError(
+                f"{pt_path} has no args['model_name']; pass "
+                "--sft_tokenizer_fallback <base_model_id> to resolve."
+            )
+        model = AutoModelForCausalLM.from_pretrained(base_name, torch_dtype=torch.float32)
+        sd = ckpt["model"]
+        missing, unexpected = model.load_state_dict(sd, strict=False)
+        if missing or unexpected:
+            print(f"  [load_state_dict] missing={len(missing)} unexpected={len(unexpected)}")
+        tokenizer = AutoTokenizer.from_pretrained(base_name)
+    else:
+        # HF-style dir or hub repo
+        path = spec
+        model = AutoModelForCausalLM.from_pretrained(path, torch_dtype=torch.float32)
+        try:
+            tokenizer = AutoTokenizer.from_pretrained(path)
+        except Exception:
+            if not base_model_fallback:
+                raise
+            tokenizer = AutoTokenizer.from_pretrained(base_model_fallback)
+
     if tokenizer.pad_token_id is None:
         tokenizer.pad_token_id = tokenizer.eos_token_id
     model = model.to(device).eval()
