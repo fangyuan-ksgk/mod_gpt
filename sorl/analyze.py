@@ -8,7 +8,9 @@ from __future__ import annotations
 
 import textwrap
 
+import numpy as np
 import torch
+import torch.nn.functional as F
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 from matplotlib.patches import FancyBboxPatch, Circle, PathPatch
@@ -65,7 +67,6 @@ def load_steered_model(
     tokenizer = AutoTokenizer.from_pretrained(args["model_name"])
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
-    model.load_state_dict(ckpt["model"])
     D_MODEL = model.config.hidden_size
 
     # ---- steering wrapper -----------------------------------------------
@@ -81,6 +82,25 @@ def load_steered_model(
         scale=args["scale"],
         L=args["L"],
     )
+
+    # Apply LoRA to match ckpt structure if training used it
+    if args.get("use_lora", False):
+        from peft import LoraConfig, get_peft_model
+        lora_cfg = LoraConfig(
+            r=args["lora_rank"],
+            lora_alpha=args["lora_alpha"],
+            target_modules=args["lora_target_modules"].split(","),
+            lora_dropout=args["lora_dropout"],
+            bias="none",
+            task_type="CAUSAL_LM",
+        )
+        model = get_peft_model(model, lora_cfg)
+        wrapper.model = model
+        if verbose:
+            print(f"LoRA: rank={args['lora_rank']} alpha={args['lora_alpha']} "
+                  f"targets={args['lora_target_modules']}")
+
+    wrapper.model.load_state_dict(ckpt["model"])
     wrapper.steering_emb.load_state_dict(ckpt["steering_emb"])
     if args["mode"] == "v9" and "abs_proj" in ckpt:
         wrapper.abs_proj.load_state_dict(ckpt["abs_proj"])
@@ -97,6 +117,67 @@ def load_steered_model(
             print(f"  abs_proj: {tuple(wrapper.abs_proj.weight.shape)}")
 
     return wrapper, tokenizer, args
+
+
+def load_sft_model(ckpt_path, model_name, device, *, dtype=None, verbose=True):
+    """Load an SFT checkpoint saved by ``train_sft_pt.py``.
+
+    Handles both full-finetune and LoRA runs. The LoRA config is pulled from
+    ``ckpt["config"]`` (the ``cfg.__dict__`` stored at save time). Returns
+    ``None`` if ``ckpt_path`` is falsy / missing.
+
+    Parameters
+    ----------
+    ckpt_path : str
+        Path to ``final.pt`` (or any SFT ckpt). Pass ``""`` / ``None`` to skip.
+    model_name : str
+        HF repo id for the base model (e.g. ``args["model_name"]``).
+    device : str
+        Where to place the final model.
+    dtype : torch.dtype | None
+        Cast the loaded model to this dtype if given.
+    """
+    import os
+
+    if not ckpt_path or not os.path.exists(ckpt_path):
+        if verbose:
+            print(f"No SFT ckpt at {ckpt_path!r}; skipping.")
+        return None
+
+    ckpt = torch.load(ckpt_path, map_location="cpu", weights_only=False)
+    sft_cfg = ckpt.get("config", {}) or {}
+
+    model = AutoModelForCausalLM.from_pretrained(model_name)
+    if sft_cfg.get("use_lora", False):
+        from peft import LoraConfig, get_peft_model
+        target_modules = sft_cfg.get(
+            "lora_target_modules",
+            ["q_proj", "k_proj", "v_proj", "o_proj",
+             "gate_proj", "up_proj", "down_proj"],
+        )
+        if isinstance(target_modules, str):
+            target_modules = target_modules.split(",")
+        lora_cfg = LoraConfig(
+            r=sft_cfg.get("lora_r", sft_cfg.get("lora_rank", 16)),
+            lora_alpha=sft_cfg.get("lora_alpha", 32),
+            lora_dropout=sft_cfg.get("lora_dropout", 0.0),
+            target_modules=target_modules,
+            bias="none",
+            task_type="CAUSAL_LM",
+        )
+        model = get_peft_model(model, lora_cfg)
+        if verbose:
+            print(f"SFT LoRA: r={lora_cfg.r} alpha={lora_cfg.lora_alpha} "
+                  f"targets={target_modules}")
+
+    model.load_state_dict(ckpt["model"])
+    model = model.to(device)
+    if dtype is not None:
+        model = model.to(dtype=dtype)
+    model.eval()
+    if verbose:
+        print(f"Loaded SFT ckpt: {ckpt_path}")
+    return model
 
 
 # ---------------------------------------------------------------------------
@@ -288,3 +369,465 @@ def visualize_inner_monologue(record, tokenizer, L, C_SIZE=None,
 
     plt.tight_layout()
     return fig
+
+
+# ---------------------------------------------------------------------------
+# Steering-vector diagnostics
+# ---------------------------------------------------------------------------
+
+def steering_vector_cosine(wrapper, verbose: bool = True):
+    """Mean pairwise cosine similarity between rows of ``wrapper.steering_emb``.
+
+    Returns
+    -------
+    avg_cos : float
+        Mean cos-sim over the upper triangle (excluding the diagonal).
+    cos_sim : torch.Tensor
+        Full ``(C_SIZE, C_SIZE)`` cosine-similarity matrix (on CPU).
+    """
+    w = wrapper.steering_emb.weight.detach()
+    w_norm = F.normalize(w, dim=-1)
+    cos_sim = (w_norm @ w_norm.T).cpu()
+    mask = torch.triu(torch.ones_like(cos_sim, dtype=torch.bool), diagonal=1)
+    avg_cos = cos_sim[mask].mean().item()
+    if verbose:
+        print(f"Avg pairwise cosine similarity: {avg_cos:.4f}")
+    return avg_cos, cos_sim
+
+
+def steering_magnitude_report(
+    wrapper,
+    val_ds,
+    device: str | None = None,
+    *,
+    layer: int | None = None,
+    n_ex: int = 32,
+    skip: int = 4,
+    verbose: bool = True,
+):
+    """Report the relative magnitude of the steering perturbation vs the
+    hidden state at the inject layer.
+
+    Measures ``||emb[k]|| * scale`` against the unsteered ``||h||`` at
+    ``wrapper.inject_layers[layer]``, averaged over ``n_ex`` eval examples
+    (dropping the first ``skip`` tokens of each sequence to avoid BOS-ish
+    outliers).
+
+    Parameters
+    ----------
+    wrapper : StackedAbstractionWrapperV*
+        A loaded SoRL wrapper.
+    val_ds : Dataset
+        Any dataset yielding dicts with ``input_ids`` and ``attention_mask``
+        (e.g. ``ScienceQADataset``).
+    device : str | None
+        Where to run the forward passes.  Defaults to the wrapper's device.
+    layer : int | None
+        Index into ``wrapper.inject_layers``; defaults to the first injection
+        layer.
+    n_ex : int
+        Number of sequences to average over.
+    skip : int
+        Number of leading tokens to drop per sequence.
+    verbose : bool
+        Print a formatted summary.
+
+    Returns
+    -------
+    stats : dict
+        Keys: ``emb_norms``, ``eff_norms``, ``h_norms`` (np.ndarray),
+        ``scale``, ``layer``, ``ratio_mean``, ``ratio_max``.
+    """
+    if device is None:
+        device = next(wrapper.parameters()).device
+    if layer is None:
+        layer = int(wrapper.inject_layers[0])
+
+    # ---- 1. steering-embedding norms ---------------------------------------
+    with torch.no_grad():
+        emb = wrapper.steering_emb.weight.detach().float().cpu().numpy()
+    emb_norms = np.linalg.norm(emb, axis=1)
+    scale = float(wrapper.scale)
+    eff_norms = emb_norms * scale
+
+    # ---- 2. hidden-state norms at the inject layer (scale=0) ---------------
+    cap = {}
+
+    def _hook(_, __, out):
+        cap["h"] = (out[0] if isinstance(out, tuple) else out).detach()
+
+    handle = wrapper.model.model.layers[layer].register_forward_hook(_hook)
+    orig_scale = wrapper.scale
+    wrapper.scale = 0.0
+    h_norms_list = []
+    try:
+        for i in range(min(n_ex, len(val_ds))):
+            s = val_ds[i]
+            ii = s["input_ids"].unsqueeze(0).to(device)
+            am = s["attention_mask"].unsqueeze(0).to(device)
+            with torch.no_grad():
+                _ = wrapper(input_ids=ii, attention_mask=am)
+            S = int(am[0].sum().item())
+            hn = cap["h"][0, skip:S].float().cpu().numpy()
+            h_norms_list.append(np.linalg.norm(hn, axis=1))
+    finally:
+        wrapper.scale = orig_scale
+        handle.remove()
+
+    h_norms = np.concatenate(h_norms_list)
+    ratio_mean = float(eff_norms.mean() / h_norms.mean())
+    ratio_max = float(eff_norms.max() / h_norms.mean())
+
+    if verbose:
+        print(f"steering embedding (C={emb.shape[0]}, D={emb.shape[1]}):")
+        print(f"  ||emb[k]||           mean={emb_norms.mean():.3f}  "
+              f"median={np.median(emb_norms):.3f}  "
+              f"min={emb_norms.min():.3f}  max={emb_norms.max():.3f}")
+        print(f"  scale                {scale}")
+        print(f"  ||emb[k]||*scale     mean={eff_norms.mean():.3f}  "
+              f"median={np.median(eff_norms):.3f}  "
+              f"max={eff_norms.max():.3f}")
+        print(f"\nhidden-state ||h|| at layer {layer} "
+              f"(skipping first {skip}, across {n_ex} seqs):")
+        print(f"  mean={h_norms.mean():.3f}  median={np.median(h_norms):.3f}  "
+              f"5/95 pct=({np.percentile(h_norms, 5):.3f}, "
+              f"{np.percentile(h_norms, 95):.3f})")
+        print("\n--- relative magnitude of steering perturbation ---")
+        print(f"  mean ||Δh_steer|| / mean ||h||  =  {ratio_mean*100:.2f}%")
+        print(f"  max  ||Δh_steer|| / mean ||h||  =  {ratio_max*100:.2f}%")
+        if ratio_mean < 0.02:
+            print("  → steering is <2% of ||h||; visual effects will be tiny.")
+            print("    try increasing wrapper.scale, or steering more layers.")
+
+    return dict(
+        emb_norms=emb_norms,
+        eff_norms=eff_norms,
+        h_norms=h_norms,
+        scale=scale,
+        layer=layer,
+        ratio_mean=ratio_mean,
+        ratio_max=ratio_max,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Representation extraction (last-prompt-token hidden states)
+# ---------------------------------------------------------------------------
+
+def extract_last_prompt_token_reps(
+    model,
+    val_ds,
+    device,
+    *,
+    indices=None,
+    batch_size: int = 4,
+    layer_idx: int = -1,
+    tag: str = "",
+):
+    """Extract the hidden state at ``prompt_len - 1`` from ``hidden_states[layer_idx]``
+    for each sample in ``val_ds[indices]``.
+
+    Returns
+    -------
+    reps   : np.ndarray of shape (N, D)
+    topics : np.ndarray of shape (N,)
+    """
+    from tqdm.auto import tqdm
+
+    if indices is None:
+        indices = list(range(len(val_ds)))
+
+    model.eval()
+    reps, topics = [], []
+    with torch.no_grad():
+        for start in tqdm(range(0, len(indices), batch_size), desc=tag or "extract"):
+            batch_idx = indices[start:start + batch_size]
+            items = [val_ds[i] for i in batch_idx]
+            input_ids = torch.stack([it["input_ids"]      for it in items]).to(device)
+            attn      = torch.stack([it["attention_mask"] for it in items]).to(device)
+            plens     = torch.tensor([int(it["prompt_len"]) for it in items],
+                                     device=device)
+            out = model(input_ids=input_ids, attention_mask=attn,
+                        output_hidden_states=True)
+            h = out.hidden_states[layer_idx]
+            gather_at = (plens - 1).clamp(min=0).view(-1, 1, 1).expand(-1, 1, h.size(-1))
+            vec = h.gather(1, gather_at).squeeze(1).float().cpu().numpy()
+            reps.append(vec)
+            topics.extend([val_ds.dataset[i].get("topic", "unknown")
+                           for i in batch_idx])
+    return np.concatenate(reps, 0), np.array(topics)
+
+
+def build_reps(
+    models: dict,
+    val_ds,
+    device,
+    *,
+    n_eval: int | None = None,
+    batch_size: int = 4,
+    layer_idx: int = -1,
+    min_size_topic: int = 20,
+    cast_to_dtype: torch.dtype | None = None,
+    verbose: bool = True,
+):
+    """Run ``extract_last_prompt_token_reps`` for each model and bundle the
+    results used by the effective-rank / linear-probe cells.
+
+    Parameters
+    ----------
+    models : dict[str, nn.Module]
+        e.g. ``{"base": base_model, "sft": sft_model, "steered": wrapper}``.
+    val_ds : Dataset
+        Must expose ``__len__``, ``__getitem__`` yielding dicts with
+        ``input_ids``, ``attention_mask``, ``prompt_len``, and an underlying
+        ``.dataset[i]["topic"]`` field for topic grouping.
+    n_eval : int | None
+        Number of samples to use (default: full ``val_ds``).
+    cast_to_dtype : torch.dtype | None
+        If given, cast every model to ``(device, cast_to_dtype)`` in place
+        before extraction.  Handy when the steered wrapper uses bf16 and
+        base/sft were loaded fp32.
+
+    Returns
+    -------
+    reps  : dict[str, np.ndarray]    # one (N, D) cloud per model
+    topics: np.ndarray               # (N,) topic labels
+    keep  : dict[str, np.ndarray]    # topic -> indices (only those with
+                                     #   >= min_size_topic members)
+    """
+    from collections import defaultdict
+
+    if n_eval is None:
+        n_eval = len(val_ds)
+    n_eval  = min(n_eval, len(val_ds))
+    indices = list(range(n_eval))
+    if verbose:
+        print(f"Eval: {n_eval} / {len(val_ds)} samples")
+
+    if cast_to_dtype is not None:
+        for m in models.values():
+            m.to(device=device, dtype=cast_to_dtype).eval()
+    else:
+        for m in models.values():
+            m.eval()
+
+    reps = {}
+    topics = None
+    for name, m in models.items():
+        if verbose:
+            print(f"Extracting {name:<8s} representations ...")
+        r, t = extract_last_prompt_token_reps(
+            m, val_ds, device,
+            indices=indices, batch_size=batch_size,
+            layer_idx=layer_idx, tag=name,
+        )
+        reps[name] = r
+        if topics is None:
+            topics = t
+
+    groups = defaultdict(list)
+    for i, t in enumerate(topics):
+        groups[t].append(i)
+    keep = {t: np.asarray(v) for t, v in groups.items() if len(v) >= min_size_topic}
+    if verbose:
+        print(f"Topics kept (n >= {min_size_topic}): {len(keep)}")
+
+    return reps, topics, keep
+
+
+# ---------------------------------------------------------------------------
+# Null-baseline routers for n-gram purity analysis
+# ---------------------------------------------------------------------------
+
+_FNV_OFFSET = np.uint64(14695981039346656037)
+_FNV_PRIME  = np.uint64(1099511628211)
+
+
+def token_hash_router(
+    token_ids,
+    L: int,
+    C_SIZE: int,
+    *,
+    n_chunks: int | None = None,
+    window: int = 3,
+    seed: int = 0,
+):
+    """Deterministic, *input-dependent* router that hashes the last ``window``
+    token IDs inside each length-``L`` chunk to a code in ``[0, C_SIZE)``.
+
+    This is the strongest cheap null for n-gram purity analysis:
+    any code stream produced by this router can only reflect surface
+    token co-occurrence, not learned structure.
+
+    Parameters
+    ----------
+    token_ids : sequence of int
+        Token IDs of the chunk stream (e.g. prompt ids or response ids).
+    L : int
+        Chunk length in tokens (must match the real router's L).
+    C_SIZE : int
+        Codebook size.
+    n_chunks : int | None
+        If given, force output length to exactly ``n_chunks`` (truncate or
+        pad with hashes of the trailing tokens). Otherwise ``len(ids) // L``.
+    window : int
+        How many trailing tokens of each chunk to feed the hash.
+    seed : int
+        Mixes into the hash so independent seeds give independent baselines.
+    """
+    rng_mix = np.uint64(seed * 0x9E3779B97F4A7C15 + 1)
+    c_size = np.uint64(C_SIZE)
+    ids = list(token_ids)
+    N = len(ids)
+    auto = n_chunks if n_chunks is not None else N // L
+
+    codes = []
+    for c in range(auto):
+        end = min((c + 1) * L, N)
+        start = max(0, end - window)
+        h = _FNV_OFFSET
+        for tid in ids[start:end]:
+            h ^= np.uint64(int(tid) & 0xFFFFFFFFFFFFFFFF)
+            h *= _FNV_PRIME
+        h ^= rng_mix
+        codes.append(int(h % c_size))
+    return codes
+
+
+def build_hash_router_codes(
+    blob,
+    tokenizer,
+    *,
+    window: int = 3,
+    seed: int = 0,
+):
+    """Re-emit a ``codes`` list with the same shape as ``blob['codes']``,
+    using :func:`token_hash_router` on the prompts and responses.
+
+    Returned list is a drop-in replacement for ``blob['codes']`` in the
+    n-gram purity cell.
+    """
+    samples = blob["samples"]
+    codes   = blob["codes"]
+    L       = blob["L"]
+    C_SIZE  = blob["C_SIZE"]
+
+    out = []
+    for s, c in zip(samples, codes):
+        p_ids = tokenizer(s["question"], add_special_tokens=False)["input_ids"]
+        r_ids = tokenizer(s["response"], add_special_tokens=False)["input_ids"]
+        p_codes = token_hash_router(
+            p_ids, L=L, C_SIZE=C_SIZE,
+            n_chunks=len(c["prompt"]), window=window, seed=seed,
+        )
+        r_codes = token_hash_router(
+            r_ids, L=L, C_SIZE=C_SIZE,
+            n_chunks=len(c["response"]), window=window, seed=seed,
+        )
+        out.append({
+            "prompt":   p_codes,
+            "response": r_codes,
+            "L":        L,
+            "pad_prefix_chunks": c.get("pad_prefix_chunks", 0),
+        })
+    return out
+
+
+# ---------------------------------------------------------------------------
+# N-gram purity sweep
+# ---------------------------------------------------------------------------
+
+def ngram_purity_sweep(
+    samples,
+    codes,
+    val_ds,
+    *,
+    src: str = "response",
+    n_grams=(1, 2, 3, 4, 5),
+    min_topic_seqs: int = 5,
+    min_gram_count_global: int = 30,
+    purity_thresholds=(0.50, 0.75, 0.90, 1.00),
+):
+    """Compute, for each ``N`` in ``n_grams``, the fraction of *eligible*
+    N-grams (count >= ``min_gram_count_global``) that cross each purity
+    threshold, where purity = max-topic-count / global-count.
+
+    Returns
+    -------
+    dict with keys:
+        ``N``           : list[int]
+        ``n_eligible``  : list[int]          # per N
+        ``fracs``       : list[list[float]]  # per N, one per threshold
+        ``counts``      : list[list[int]]    # per N, one per threshold
+        ``p_null``      : float              # max-topic-share baseline
+        ``topics``      : list[str]
+        ``total_seqs``  : int
+        ``mean_len``    : float
+    """
+    from collections import Counter, defaultdict
+
+    topic_by_idx = {s["idx"]: val_ds.dataset[s["idx"]].get("topic", "unknown")
+                    for s in samples}
+
+    topic_seqs = defaultdict(list)
+    for s, c in zip(samples, codes):
+        t = topic_by_idx[s["idx"]]
+        seq = []
+        if src in ("prompt", "both"):   seq += list(c["prompt"])
+        if src in ("response", "both"): seq += list(c["response"])
+        if seq:
+            topic_seqs[t].append(seq)
+
+    topics = sorted(t for t, seqs in topic_seqs.items()
+                    if len(seqs) >= min_topic_seqs)
+    topic_sizes = {t: len(topic_seqs[t]) for t in topics}
+    total_seqs  = sum(topic_sizes.values())
+    if total_seqs == 0:
+        return dict(N=list(n_grams), n_eligible=[0]*len(n_grams),
+                    fracs=[[0.0]*len(purity_thresholds)]*len(n_grams),
+                    counts=[[0]*len(purity_thresholds)]*len(n_grams),
+                    p_null=0.0, topics=[], total_seqs=0, mean_len=0.0)
+    p_null = max(topic_sizes.values()) / total_seqs
+    lengths = [len(seq) for t in topics for seq in topic_seqs[t]]
+    mean_len = float(np.mean(lengths)) if lengths else 0.0
+
+    def ngrams_of(seq, n):
+        return [tuple(seq[i:i+n]) for i in range(len(seq) - n + 1)]
+
+    Ns, n_eligible, fracs_all, counts_all = [], [], [], []
+    for N in n_grams:
+        global_ct = Counter()
+        topic_ct  = {t: Counter() for t in topics}
+        for t in topics:
+            for seq in topic_seqs[t]:
+                g = ngrams_of(seq, N)
+                topic_ct[t].update(g)
+                global_ct.update(g)
+
+        best_count_of = {}
+        for t in topics:
+            for g, c_t in topic_ct[t].items():
+                if c_t > best_count_of.get(g, -1):
+                    best_count_of[g] = c_t
+
+        eligible = [g for g, cg in global_ct.items()
+                    if cg >= min_gram_count_global]
+        n_elig = len(eligible)
+
+        fracs, counts = [], []
+        for thr in purity_thresholds:
+            k = sum(1 for g in eligible
+                    if best_count_of[g] / global_ct[g] >= thr)
+            counts.append(k)
+            fracs.append(k / n_elig if n_elig else 0.0)
+
+        Ns.append(N)
+        n_eligible.append(n_elig)
+        fracs_all.append(fracs)
+        counts_all.append(counts)
+
+    return dict(
+        N=Ns, n_eligible=n_eligible, fracs=fracs_all, counts=counts_all,
+        p_null=p_null, topics=topics, total_seqs=total_seqs, mean_len=mean_len,
+        purity_thresholds=list(purity_thresholds),
+    )
