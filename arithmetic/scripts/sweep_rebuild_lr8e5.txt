@@ -14,7 +14,14 @@ python -m arithmetic.train --mode sorl --ops add_sub --dataset_size 50000 --abs_
 python -m arithmetic.train --mode sorl --ops add_sub --dataset_size 50000 --abs_vocab 30 --K 1 --num_epochs 20 --n_layer 2 --n_head 1 --n_embd 128 --lr 8e-5 --alpha_abs 0.5 --push_to_hub --job_name as_sorl_abs30_K1_50K_2L1H128d_abs0p5
 python -m arithmetic.train --mode sorl --ops add_sub --dataset_size 50000 --abs_vocab 30 --K 1 --num_epochs 20 --n_layer 2 --n_head 1 --n_embd 128 --lr 8e-5 --alpha_info_gain 5.0 --push_to_hub --job_name as_sorl_abs30_K1_50K_2L1H128d_ig5
 
+# ── 2L/1H/128d: fill data efficiency curve (75K and 150K) ────────────────────
+python -m arithmetic.train --mode baseline --ops add_sub --dataset_size 75000 --num_epochs 20 --n_layer 2 --n_head 1 --n_embd 128 --lr 8e-5 --push_to_hub --job_name as_baseline_75K_2L1H128d
+python -m arithmetic.train --mode sorl --ops add_sub --dataset_size 75000 --abs_vocab 30 --K 1 --num_epochs 20 --n_layer 2 --n_head 1 --n_embd 128 --lr 8e-5 --push_to_hub --job_name as_sorl_abs30_K1_75K_2L1H128d
+python -m arithmetic.train --mode baseline --ops add_sub --dataset_size 150000 --num_epochs 20 --n_layer 2 --n_head 1 --n_embd 128 --lr 8e-5 --push_to_hub --job_name as_baseline_150K_2L1H128d
+python -m arithmetic.train --mode sorl --ops add_sub --dataset_size 150000 --abs_vocab 30 --K 1 --num_epochs 20 --n_layer 2 --n_head 1 --n_embd 128 --lr 8e-5 --push_to_hub --job_name as_sorl_abs30_K1_150K_2L1H128d
+
 # ── SoRL 100K ─────────────────────────────────────────────────────────────────
+python -m arithmetic.train --mode sorl --ops add_sub --dataset_size 100000 --abs_vocab 30 --K 1 --num_epochs 20 --n_layer 1 --n_head 3 --n_embd 510 --lr 8e-5 --push_to_hub --job_name as_sorl_abs30_K1_100K_1L3H510d
 python -m arithmetic.train --mode sorl --ops add_sub --dataset_size 100000 --abs_vocab 1 --K 1 --num_epochs 20 --n_layer 1 --n_head 2 --n_embd 256 --lr 8e-5 --push_to_hub --job_name as_sorl_abs1_K1_100K_1L2H256d
 python -m arithmetic.train --mode sorl --ops add_sub --dataset_size 100000 --abs_vocab 2 --K 1 --num_epochs 20 --n_layer 2 --n_head 1 --n_embd 128 --lr 8e-5 --push_to_hub --job_name as_sorl_abs2_K1_100K_2L1H128d
 python -m arithmetic.train --mode sorl --ops add_sub --dataset_size 100000 --abs_vocab 5 --K 1 --num_epochs 20 --n_layer 2 --n_head 1 --n_embd 128 --lr 8e-5 --push_to_hub --job_name as_sorl_abs5_K1_100K_2L1H128d

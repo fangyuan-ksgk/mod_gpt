@@ -1,16 +1,16 @@
 # Causal Ablation
 
-**Model:** `add_sub_sorl_v1_abs30_K1_100K_2L1H128d`
+**Model:** `add_sub_sorl_v1_abs30_K1_100K`
 **Eval set:** canonical N=100 from HuggingFace
 
 ## Overall
 
 | Intervention | Accuracy | Delta |
 |--------------|----------|-------|
-| baseline | 0.0% | +0.0% |
-| knockout | 0.0% | +0.0% |
-| shuffle | 0.0% | +0.0% |
-| random | 0.0% | +0.0% |
+| baseline | 100.0% | +0.0% |
+| knockout | 0.0% | -100.0% |
+| shuffle | 66.7% | -33.3% |
+| random | 68.9% | -31.1% |
 
 ![Causal Ablation](fig_causal_ablation.png)
 

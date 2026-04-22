@@ -1,26 +1,26 @@
 {
   "model": "add_sub_sorl_v1_abs30_K1_100K",
   "K": 1,
-  "n_examples": 4400,
+  "n_examples": 2600,
   "baseline": {
-    "correct": 4400,
-    "total": 4400,
+    "correct": 2600,
+    "total": 2600,
     "accuracy": 1.0
   },
   "knockout": {
     "correct": 0,
-    "total": 4400,
+    "total": 2600,
     "accuracy": 0.0
   },
   "shuffle": {
-    "correct": 2949,
-    "total": 4400,
-    "accuracy": 0.6702272727272728
+    "correct": 1733,
+    "total": 2600,
+    "accuracy": 0.6665384615384615
   },
   "random": {
-    "correct": 3030,
-    "total": 4400,
-    "accuracy": 0.6886363636363636
+    "correct": 1791,
+    "total": 2600,
+    "accuracy": 0.6888461538461539
   },
   "per_split": {
     "add_S0": {
@@ -31,10 +31,10 @@
         "accuracy": 0.0
       },
       "shuffle": {
-        "accuracy": 0.69
+        "accuracy": 0.68
       },
       "random": {
-        "accuracy": 0.765
+        "accuracy": 0.71
       }
     },
     "add_S1": {
@@ -45,10 +45,10 @@
         "accuracy": 0.0
       },
       "shuffle": {
-        "accuracy": 0.74
+        "accuracy": 0.66
       },
       "random": {
-        "accuracy": 0.77
+        "accuracy": 0.78
       }
     },
     "add_S2": {
@@ -59,10 +59,10 @@
         "accuracy": 0.0
       },
       "shuffle": {
-        "accuracy": 0.8
+        "accuracy": 0.83
       },
       "random": {
-        "accuracy": 0.815
+        "accuracy": 0.79
       }
     },
     "add_S3": {
@@ -73,10 +73,10 @@
         "accuracy": 0.0
       },
       "shuffle": {
-        "accuracy": 0.845
+        "accuracy": 0.85
       },
       "random": {
-        "accuracy": 0.81
+        "accuracy": 0.77
       }
     },
     "add_S4": {
@@ -87,10 +87,10 @@
         "accuracy": 0.0
       },
       "shuffle": {
-        "accuracy": 0.825
+        "accuracy": 0.85
       },
       "random": {
-        "accuracy": 0.765
+        "accuracy": 0.68
       }
     },
     "add_S5": {
@@ -101,10 +101,10 @@
         "accuracy": 0.0
       },
       "shuffle": {
-        "accuracy": 0.335
+        "accuracy": 0.32
       },
       "random": {
-        "accuracy": 0.175
+        "accuracy": 0.23
       }
     },
     "add_S6": {
@@ -115,10 +115,10 @@
         "accuracy": 0.0
       },
       "shuffle": {
-        "accuracy": 0.445
+        "accuracy": 0.5
       },
       "random": {
-        "accuracy": 0.135
+        "accuracy": 0.12
       }
     },
     "add_random": {
@@ -132,7 +132,35 @@
         "accuracy": 0.75
       },
       "random": {
-        "accuracy": 0.79
+        "accuracy": 0.775
+      }
+    },
+    "add_C1": {
+      "baseline": {
+        "accuracy": 1.0
+      },
+      "knockout": {
+        "accuracy": 0.0
+      },
+      "shuffle": {
+        "accuracy": 0.54
+      },
+      "random": {
+        "accuracy": 0.59
+      }
+    },
+    "add_C2": {
+      "baseline": {
+        "accuracy": 1.0
+      },
+      "knockout": {
+        "accuracy": 0.0
+      },
+      "shuffle": {
+        "accuracy": 0.54
+      },
+      "random": {
+        "accuracy": 0.69
       }
     },
     "add_C3": {
@@ -143,10 +171,10 @@
         "accuracy": 0.0
       },
       "shuffle": {
-        "accuracy": 0.575
+        "accuracy": 0.52
       },
       "random": {
-        "accuracy": 0.595
+        "accuracy": 0.58
       }
     },
     "add_C4": {
@@ -157,10 +185,10 @@
         "accuracy": 0.0
       },
       "shuffle": {
-        "accuracy": 0.575
+        "accuracy": 0.63
       },
       "random": {
-        "accuracy": 0.635
+        "accuracy": 0.7
       }
     },
     "add_C5": {
@@ -171,10 +199,10 @@
         "accuracy": 0.0
       },
       "shuffle": {
-        "accuracy": 0.625
+        "accuracy": 0.64
       },
       "random": {
-        "accuracy": 0.65
+        "accuracy": 0.69
       }
     },
     "add_C6": {
@@ -185,10 +213,10 @@
         "accuracy": 0.0
       },
       "shuffle": {
-        "accuracy": 0.815
+        "accuracy": 0.81
       },
       "random": {
-        "accuracy": 0.735
+        "accuracy": 0.75
       }
     },
     "sub_M0": {
@@ -199,10 +227,10 @@
         "accuracy": 0.0
       },
       "shuffle": {
-        "accuracy": 0.68
+        "accuracy": 0.67
       },
       "random": {
-        "accuracy": 0.705
+        "accuracy": 0.72
       }
     },
     "sub_M1": {
@@ -213,10 +241,10 @@
         "accuracy": 0.0
       },
       "shuffle": {
-        "accuracy": 0.78
+        "accuracy": 0.67
       },
       "random": {
-        "accuracy": 0.75
+        "accuracy": 0.74
       }
     },
     "sub_M2": {
@@ -227,10 +255,10 @@
         "accuracy": 0.0
       },
       "shuffle": {
-        "accuracy": 0.77
+        "accuracy": 0.73
       },
       "random": {
-        "accuracy": 0.82
+        "accuracy": 0.75
       }
     },
     "sub_M3": {
@@ -241,10 +269,10 @@
         "accuracy": 0.0
       },
       "shuffle": {
-        "accuracy": 0.765
+        "accuracy": 0.81
       },
       "random": {
-        "accuracy": 0.81
+        "accuracy": 0.84
       }
     },
     "sub_M4": {
@@ -255,10 +283,10 @@
         "accuracy": 0.0
       },
       "shuffle": {
-        "accuracy": 0.535
+        "accuracy": 0.66
       },
       "random": {
-        "accuracy": 0.665
+        "accuracy": 0.7
       }
     },
     "sub_M5": {
@@ -269,10 +297,10 @@
         "accuracy": 0.0
       },
       "shuffle": {
-        "accuracy": 0.605
+        "accuracy": 0.54
       },
       "random": {
-        "accuracy": 0.795
+        "accuracy": 0.78
       }
     },
     "sub_random": {
@@ -283,10 +311,10 @@
         "accuracy": 0.0
       },
       "shuffle": {
-        "accuracy": 0.73
+        "accuracy": 0.77
       },
       "random": {
-        "accuracy": 0.715
+        "accuracy": 0.77
       }
     },
     "sub_B3": {
@@ -297,10 +325,10 @@
         "accuracy": 0.0
       },
       "shuffle": {
-        "accuracy": 0.535
+        "accuracy": 0.61
       },
       "random": {
-        "accuracy": 0.685
+        "accuracy": 0.69
       }
     },
     "sub_B4": {
@@ -311,10 +339,10 @@
         "accuracy": 0.0
       },
       "shuffle": {
-        "accuracy": 0.61
+        "accuracy": 0.54
       },
       "random": {
-        "accuracy": 0.725
+        "accuracy": 0.7
       }
     },
     "sub_B5": {
@@ -325,10 +353,10 @@
         "accuracy": 0.0
       },
       "shuffle": {
-        "accuracy": 0.715
+        "accuracy": 0.69
       },
       "random": {
-        "accuracy": 0.84
+        "accuracy": 0.82
       }
     }
   }

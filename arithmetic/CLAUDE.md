@@ -2,10 +2,10 @@
 
 Results placeholders in `log/arithmetic.md` use `<!-- PLACEHOLDER: description -->`. Fill these in when results become available.
 
-**Start here:** Read [`MEMORY.md`](MEMORY.md) first for current session state and what to do next.
-Also check [`TODO.md`](TODO.md) for the task backlog.
-**Before launching any sweep:** Run [`AUDIT.md`](AUDIT.md) checklist. Every past queue restart was caused by skipping this.
-**For interpretability:** Focus on C-splits (C1-C6, hot carries with varied answers), NOT S-splits (S5/S6 have degenerate `1000000` answers where baseline can shortcut). See `on_shortcuts.md`.
+**Start here:** Read [`docs/MEMORY.md`](docs/MEMORY.md) first for current session state and what to do next.
+Also check [`docs/TODO.md`](docs/TODO.md) for the task backlog.
+**Before launching any sweep:** Run [`docs/AUDIT.md`](docs/AUDIT.md) checklist. Every past queue restart was caused by skipping this.
+**For interpretability:** Focus on C-splits (C1-C6, hot carries with varied answers), NOT S-splits (S5/S6 have degenerate `1000000` answers where baseline can shortcut). See `docs/on_shortcuts.md`.
 
 ## Eval Sets
 
@@ -196,13 +196,13 @@ Run all model training first, confirm uploads, then run SAEs separately.
 2. Verify symlinks: `~/.claude` → `/workspace/.sorl_claude`, `~/codes/mod_gpt` → `/workspace/codes/mod_gpt`
 3. Check background jobs: `nvidia-smi`, `ps aux | grep arithmetic`
 4. Set wandb key if needed (user will provide)
-5. Check `TODO.md` for pending work
+5. Check `docs/TODO.md` for pending work
 
 Logs saved to `/workspace/sorl_logs/`.
 
 ## TODOs
 
-Check [`TODO.md`](TODO.md) periodically for status.
+Check [`docs/TODO.md`](docs/TODO.md) periodically for status.
 
 ## Caches & Persistent Storage
 
