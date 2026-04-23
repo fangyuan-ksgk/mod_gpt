@@ -66,7 +66,7 @@ def _generate(wrapper, tokenizer, bii, bam, T, decode_scale, max_new_tokens):
     return [tokenizer.decode(row, skip_special_tokens=True) for row in gen]
 
 
-def run_mode(mode, wrapper, tokenizer, val_ds, golds, s_idxs, args, out_fh, device):
+def run_mode(mode, wrapper, tokenizer, val_ds, golds, metas, s_idxs, args, out_fh, device):
     """Run one mode over all samples. Streams records to out_fh."""
     pad_id = tokenizer.pad_token_id if tokenizer.pad_token_id is not None else 0
     orig_scale = float(wrapper.scale)
@@ -122,14 +122,16 @@ def run_mode(mode, wrapper, tokenizer, val_ds, golds, s_idxs, args, out_fh, devi
                 ok = int(pred is not None and gd is not None and pred == gd)
                 correct += ok
                 total += 1
-                out_fh.write(json.dumps({
+                rec = {
                     "sample_idx": int(si),
                     "gold": gd,
                     "mode": mode,
                     "pred": pred,
                     "correct": ok,
                     "text": txt,
-                }) + "\n")
+                }
+                rec.update(metas[si])   # topic / subject / category / skill
+                out_fh.write(json.dumps(rec) + "\n")
             out_fh.flush()
     finally:
         if ctx is not None:
@@ -170,11 +172,14 @@ def main():
         val_ds = ScienceQADataset(split="test", tokenizer=tokenizer, max_length=512)
         N = min(args.num_samples, len(val_ds))
         s_idxs = list(range(N))
-        # cache gold letters once (avoids rebuilding full text per sample)
+        # cache gold letters + per-sample metadata for topic breakdowns.
         golds = []
+        metas = {}
+        _META_KEYS = ("topic", "subject", "category", "skill")
         for si in s_idxs:
             ex = val_ds.dataset[si]
             golds.append(chr(ord("A") + int(ex["answer"])))
+            metas[si] = {k: ex.get(k) for k in _META_KEYS}
 
         run_accs = {}
         for mode in args.modes:
@@ -186,7 +191,7 @@ def main():
             t0 = time.time()
             with fp.open("w") as fh:
                 c, t = run_mode(mode, wrapper, tokenizer, val_ds, golds,
-                                s_idxs, args, fh, device)
+                                metas, s_idxs, args, fh, device)
             acc = c / max(t, 1)
             dt = time.time() - t0
             print(f"     mode={mode:<13s}  acc={acc*100:5.2f}%  "
