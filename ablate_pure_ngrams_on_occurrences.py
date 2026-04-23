@@ -9,7 +9,7 @@ For each high-purity n-gram harvested by `purity_sweep_report`:
   4. stream results to JSONL + print per-pattern accuracy summary
 
 Usage:
-    python scripts/ablate_pure_ngrams_on_occurrences.py \
+    python ablate_pure_ngrams_on_occurrences.py \
         --run l1_sciqa_v9_C32_detach_az0.5_aa0.5 \
         --repo Ksgk-fy/sciqa_ckpt_20260416_1452 \
         --decode-scale 0.3 --n-random 5
