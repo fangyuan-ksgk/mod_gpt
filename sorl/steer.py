@@ -740,11 +740,16 @@ class StackedAbstractionWrapperV9(nn.Module):
                 for pat in self._ablate_ngrams:
                     N = len(pat)
                     if len(hist) >= N and tuple(hist[-N:]) == pat:
-                        fixed = (self._ablate_replacements or {}).get(pat)
-                        if fixed is not None and int(fixed) != c:
-                            new = int(fixed)
+                        reps = self._ablate_replacements or {}
+                        has_fixed = pat in reps and reps[pat] is not None
+                        if has_fixed:
+                            # Deterministic swap to the requested code.
+                            # If it equals c, this is a no-op (no random fallback).
+                            new = int(reps[pat])
+                            if new == c:
+                                break
                         else:
-                            # draw uniformly over codebook \ {c}
+                            # Random replacement: draw uniformly over codebook \ {c}.
                             r = self._ablate_rng.randint(0, self.C_SIZE - 2)
                             new = r if r < c else r + 1
                         codes[b, k] = new
