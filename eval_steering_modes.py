@@ -93,10 +93,13 @@ def run_mode(mode, wrapper, tokenizer, val_ds, golds, s_idxs, args, out_fh, devi
         ctx = ablate_router_ngrams(wrapper, patterns, seed=int(args.seed))
     elif mode == "ablate_codes":
         # Full steering, but random-swap only the specified codes on commit.
+        # exclude_mutual=True so e.g. ablating {5, 15} never swaps 5->15 or 15->5
+        # (otherwise they'd keep feeding each other).
         wrapper.scale = orig_scale
         decode_scale = orig_scale
         patterns = [(int(c),) for c in args.ablate_codes]
-        ctx = ablate_router_ngrams(wrapper, patterns, seed=int(args.seed))
+        ctx = ablate_router_ngrams(wrapper, patterns, seed=int(args.seed),
+                                   exclude_mutual=True)
     else:
         raise ValueError(mode)
 
@@ -148,7 +151,7 @@ def main():
     ap.add_argument("--num-samples", type=int, default=1000,
                     help="Number of ScienceQA test samples to evaluate (from start).")
     ap.add_argument("--batch-size", type=int, default=8)
-    ap.add_argument("--max-new-tokens", type=int, default=256)
+    ap.add_argument("--max-new-tokens", type=int, default=512)
     ap.add_argument("--seed", type=int, default=0,
                     help="Seed used for random-code replacement in mode=random_codes.")
     ap.add_argument("--out-dir", default="analysis_out/steering_modes")

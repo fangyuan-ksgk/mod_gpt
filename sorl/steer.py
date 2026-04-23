@@ -713,6 +713,7 @@ class StackedAbstractionWrapperV9(nn.Module):
         self._ablate_ngrams = None
         self._ablate_replacements = None  # dict[tuple -> int|None]; None → random
         self._ablate_rng = None
+        self._ablate_exclude = None  # set[int] of codes never drawn as random replacement
         self._ablate_history = {}   # batch_idx -> list[int]
         self._ablate_hits = []      # [(phase, batch_idx, chunk_idx, old, new)]
 
@@ -749,9 +750,16 @@ class StackedAbstractionWrapperV9(nn.Module):
                             if new == c:
                                 break
                         else:
-                            # Random replacement: draw uniformly over codebook \ {c}.
-                            r = self._ablate_rng.randint(0, self.C_SIZE - 2)
-                            new = r if r < c else r + 1
+                            # Random replacement: draw uniformly over
+                            # codebook \ ({c} ∪ self._ablate_exclude).
+                            excl = self._ablate_exclude or set()
+                            forbidden = excl | {c}
+                            allowed = [i for i in range(self.C_SIZE)
+                                       if i not in forbidden]
+                            if not allowed:
+                                # Degenerate (everything forbidden): keep c.
+                                break
+                            new = self._ablate_rng.choice(allowed)
                         codes[b, k] = new
                         hist[-1] = new
                         self._ablate_hits.append((phase, b, len(hist) - 1, c, new))

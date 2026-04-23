@@ -1328,7 +1328,8 @@ class ablate_router_ngrams:
     undefined — not supported here.
     """
 
-    def __init__(self, wrapper, patterns, *, seed=0):
+    def __init__(self, wrapper, patterns, *, seed=0, exclude=None,
+                 exclude_mutual=False):
         self.wrapper = wrapper
         if isinstance(patterns, dict):
             items = [(tuple(int(c) for c in p), (None if v is None else int(v)))
@@ -1339,6 +1340,15 @@ class ablate_router_ngrams:
             self.patterns = [tuple(int(c) for c in p) for p in patterns]
             self.replacements = {}  # all random
         self.seed = seed
+        # Build exclusion set. If `exclude_mutual`, every code appearing in any
+        # unigram pattern is also forbidden as a random replacement, so e.g.
+        # ablating {(5,), (15,)} never swaps 5 -> 15 or 15 -> 5.
+        excl = set(int(c) for c in (exclude or ()))
+        if exclude_mutual:
+            for p in self.patterns:
+                if len(p) == 1:
+                    excl.add(int(p[0]))
+        self.exclude = excl
         self._prev = None
         self.hits = None  # populated on exit as a list snapshot
 
@@ -1346,10 +1356,12 @@ class ablate_router_ngrams:
         import random
         w = self.wrapper
         self._prev = (w._ablate_ngrams, w._ablate_replacements,
-                      w._ablate_rng, w._ablate_history, w._ablate_hits)
+                      w._ablate_rng, w._ablate_exclude,
+                      w._ablate_history, w._ablate_hits)
         w._ablate_ngrams = list(self.patterns)
         w._ablate_replacements = dict(self.replacements)
         w._ablate_rng = random.Random(self.seed)
+        w._ablate_exclude = set(self.exclude)
         w._ablate_history = {}
         w._ablate_hits = []
         return self
@@ -1359,7 +1371,8 @@ class ablate_router_ngrams:
         self.hits = list(w._ablate_hits)
         self.history = dict(w._ablate_history)
         (w._ablate_ngrams, w._ablate_replacements,
-         w._ablate_rng, w._ablate_history, w._ablate_hits) = self._prev
+         w._ablate_rng, w._ablate_exclude,
+         w._ablate_history, w._ablate_hits) = self._prev
         self._prev = None
         return False
 

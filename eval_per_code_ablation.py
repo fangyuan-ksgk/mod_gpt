@@ -84,7 +84,7 @@ def main():
     ap.add_argument("--run", default="q06_sciqa_v9_C32_detach_az0.1_aa0.5")
     ap.add_argument("--num-samples", type=int, default=200)
     ap.add_argument("--batch-size", type=int, default=8)
-    ap.add_argument("--max-new-tokens", type=int, default=256)
+    ap.add_argument("--max-new-tokens", type=int, default=512)
     ap.add_argument("--codes", nargs="*", type=int, default=None,
                     help="Optional subset of codes to sweep (default: all).")
     ap.add_argument("--seed", type=int, default=0)
