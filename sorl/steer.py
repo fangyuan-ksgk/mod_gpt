@@ -702,8 +702,56 @@ class StackedAbstractionWrapperV9(nn.Module):
         # without injecting, symmetric with V6 defaults).
         self._decode_scale_override = 0.0
 
+        # ---- n-gram ablation patch state (opt-in, used by analyze helpers) ----
+        # self._ablate_ngrams: list[tuple[int,...]] of code-sequences to veto.
+        # Whenever the router's rolling history of committed codes ends with
+        # one of these patterns, the final code is replaced with either:
+        #   - the fixed replacement from self._ablate_replacements[pattern]
+        #     if that entry is an int, else
+        #   - a uniformly random codebook id != the matched code
+        # before the steering lookup.
+        self._ablate_ngrams = None
+        self._ablate_replacements = None  # dict[tuple -> int|None]; None → random
+        self._ablate_rng = None
+        self._ablate_history = {}   # batch_idx -> list[int]
+        self._ablate_hits = []      # [(phase, batch_idx, chunk_idx, old, new)]
+
         self._hooks = []
         self._register_hooks()
+
+    # ---- n-gram ablation patch ----
+
+    def _ablate_patch_codes(self, codes, phase):
+        """In-place swap of codes that complete any pattern in
+        ``self._ablate_ngrams``. Called immediately after argmax in both
+        the prefill and decode branches of ``_steering_hook``.
+
+        codes: (B, nc) long on self's device.
+        phase: "prefill" or "decode" (recorded in hits for diagnostics).
+        """
+        if not self._ablate_ngrams:
+            return codes
+        B, nc = codes.shape
+        for b in range(B):
+            hist = self._ablate_history.setdefault(b, [])
+            for k in range(nc):
+                c = int(codes[b, k].item())
+                hist.append(c)
+                for pat in self._ablate_ngrams:
+                    N = len(pat)
+                    if len(hist) >= N and tuple(hist[-N:]) == pat:
+                        fixed = (self._ablate_replacements or {}).get(pat)
+                        if fixed is not None and int(fixed) != c:
+                            new = int(fixed)
+                        else:
+                            # draw uniformly over codebook \ {c}
+                            r = self._ablate_rng.randint(0, self.C_SIZE - 2)
+                            new = r if r < c else r + 1
+                        codes[b, k] = new
+                        hist[-1] = new
+                        self._ablate_hits.append((phase, b, len(hist) - 1, c, new))
+                        break
+        return codes
 
     # ---- hooks ----
 
@@ -746,6 +794,10 @@ class StackedAbstractionWrapperV9(nn.Module):
                 logits_one = routed_one[:, 0, :]                        # (B, C)
                 with torch.no_grad():
                     code_one = logits_one.argmax(dim=-1)                # (B,)
+                # n-gram ablation patch (no-op unless ablate state populated)
+                code_one = self._ablate_patch_codes(
+                    code_one.unsqueeze(1), phase="decode"
+                ).squeeze(1)
                 self._decode_current_code = code_one
                 if self._decode_codes_log is not None:
                     self._decode_codes_log.append(code_one.cpu())
@@ -811,6 +863,9 @@ class StackedAbstractionWrapperV9(nn.Module):
         else:
             with torch.no_grad():
                 codes = src_logits.argmax(dim=-1)  # (B, n_chunks)
+
+        # n-gram ablation patch (no-op unless ablate state populated)
+        codes = self._ablate_patch_codes(codes, phase="prefill")
 
         self._last_routing_logits = src_logits  # (B, n_chunks, C) — retains gradient
         self._last_codes = codes.detach()  # (B, n_chunks)

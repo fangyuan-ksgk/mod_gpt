@@ -1292,6 +1292,78 @@ class ablate_steering_codes:
         return False
 
 
+class ablate_router_ngrams:
+    """Context manager that activates the in-hook n-gram patch in
+    ``_steering_hook``. Whenever the router's rolling history of committed
+    codes ends with any pattern in ``patterns``, the completing code is
+    replaced (in place, right after argmax). Works for BOTH prefill and
+    decode branches, so decode-time completions are caught too.
+
+    The replacement is either a caller-specified fixed code or a uniformly
+    random draw from ``codebook \\ {matched_code}``:
+
+    Parameters
+    ----------
+    patterns : list[tuple[int,...]] | dict[tuple[int,...], int|None]
+        - list: every pattern is ablated with a random replacement.
+        - dict: keys are patterns, values are the replacement code to use
+          (an int → deterministic swap to that code), or ``None`` → fall
+          back to random. Mix both: ``{(17,): 28, (6,): None}``.
+    seed : int
+        RNG seed used for any pattern whose replacement is random.
+
+    Usage::
+
+        # random replacement
+        with ablate_router_ngrams(wrapper, [(17,)], seed=0) as tr: ...
+
+        # fixed swap: 17 → 28
+        with ablate_router_ngrams(wrapper, {(17,): 28}) as tr: ...
+
+        # mixed: 17 → 28 fixed, 6 → random
+        with ablate_router_ngrams(wrapper, {(17,): 28, (6,): None}) as tr: ...
+
+    Assumes a single inject layer (the default). With multiple inject
+    layers the per-layer argmax can disagree, so history/branching is
+    undefined — not supported here.
+    """
+
+    def __init__(self, wrapper, patterns, *, seed=0):
+        self.wrapper = wrapper
+        if isinstance(patterns, dict):
+            items = [(tuple(int(c) for c in p), (None if v is None else int(v)))
+                     for p, v in patterns.items()]
+            self.patterns = [p for p, _ in items]
+            self.replacements = {p: v for p, v in items}
+        else:
+            self.patterns = [tuple(int(c) for c in p) for p in patterns]
+            self.replacements = {}  # all random
+        self.seed = seed
+        self._prev = None
+        self.hits = None  # populated on exit as a list snapshot
+
+    def __enter__(self):
+        import random
+        w = self.wrapper
+        self._prev = (w._ablate_ngrams, w._ablate_replacements,
+                      w._ablate_rng, w._ablate_history, w._ablate_hits)
+        w._ablate_ngrams = list(self.patterns)
+        w._ablate_replacements = dict(self.replacements)
+        w._ablate_rng = random.Random(self.seed)
+        w._ablate_history = {}
+        w._ablate_hits = []
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        w = self.wrapper
+        self.hits = list(w._ablate_hits)
+        self.history = dict(w._ablate_history)
+        (w._ablate_ngrams, w._ablate_replacements,
+         w._ablate_rng, w._ablate_history, w._ablate_hits) = self._prev
+        self._prev = None
+        return False
+
+
 # ---------------------------------------------------------------------------
 # Full purity report + harvest of topic-specialized n-grams / codes
 # ---------------------------------------------------------------------------
