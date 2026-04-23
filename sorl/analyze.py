@@ -1365,6 +1365,175 @@ class ablate_router_ngrams:
 
 
 # ---------------------------------------------------------------------------
+# Large-scale random-swap ablation sweep over high-purity n-grams
+# ---------------------------------------------------------------------------
+
+def ablation_sweep(
+    wrapper,
+    tokenizer,
+    val_ds,
+    samples,
+    purity_report,
+    *,
+    top_k=(10, 10),              # (top_unigrams, top_bigrams). Use 0 to skip an N.
+    min_count=10,
+    min_purity=0.60,
+    prompts_per_pattern=20,      # # of in-topic prompts sampled per pattern
+    offtopic_per_pattern=10,     # # of off-topic prompts (selectivity control)
+    decode_scale=None,           # None → use wrapper.scale
+    max_new_tokens=200,
+    seeds=(0, 1, 2),             # random-swap seeds per (pattern, prompt)
+    out_path="ablation_sweep.jsonl",
+    verbose=True,
+):
+    """Random-swap ablation sweep for topic-pure n-grams.
+
+    For each high-purity 1-gram / 2-gram harvested from ``purity_report``:
+      - sample ``prompts_per_pattern`` in-topic prompts + ``offtopic_per_pattern``
+        off-topic prompts from ``samples``;
+      - for each prompt, run once plain (reused as the shared control) and
+        once per seed in ``seeds`` with the pattern random-swapped;
+      - write a JSONL record per (pattern, prompt, seed) with plain/ablated
+        text, full code sequences, hits, and a matching-prefix token length
+        ("lcp_tokens") for quick divergence scoring.
+
+    Parameters
+    ----------
+    top_k : tuple[int, int]
+        How many top-purity unigrams / bigrams (by purity then count).
+    min_count, min_purity : filters applied before ranking.
+    seeds : iterable[int]
+        Random seeds forwarded to :class:`ablate_router_ngrams` for the swap.
+        Use e.g. ``(0, 1, 2, 3, 4)`` for 5 random replacements per prompt.
+    out_path : str | Path
+        Destination JSONL file. Parent dirs are created if missing.
+
+    Returns
+    -------
+    pathlib.Path to the written JSONL file.
+    """
+    import json, random
+    from pathlib import Path
+    import torch
+
+    if decode_scale is None:
+        decode_scale = float(wrapper.scale)
+
+    per_N = purity_report["per_N"]
+    patterns = []
+    for N, k in zip((1, 2), top_k):
+        if not k or N not in per_N:
+            continue
+        global_ct, _, best_topic, best_count = per_N[N]
+        cands = sorted(
+            [(g, best_topic[g], best_count[g] / cg, cg)
+             for g, cg in global_ct.items()
+             if cg >= min_count and best_count[g] / cg >= min_purity],
+            key=lambda r: (-r[2], -r[3]),
+        )[:k]
+        for g, t, p, c in cands:
+            patterns.append({"pattern": tuple(int(x) for x in g),
+                             "N": N, "topic": t,
+                             "purity": float(p), "count": int(c)})
+    if verbose:
+        n1 = sum(1 for p in patterns if p["N"] == 1)
+        n2 = sum(1 for p in patterns if p["N"] == 2)
+        print(f"[sweep] selected {len(patterns)} patterns  ({n1} unigrams + {n2} bigrams)  "
+              f"min_count={min_count}  min_purity={min_purity}")
+
+    # prompt pool grouped by topic
+    def topic_of(idx):
+        it = val_ds.dataset[idx] if hasattr(val_ds, "dataset") else val_ds[idx]
+        return it.get("topic", "unknown") if hasattr(it, "get") else "unknown"
+    all_idxs = [int(s["idx"]) for s in samples]
+    pool_by_topic = {}
+    for i in all_idxs:
+        pool_by_topic.setdefault(topic_of(i), []).append(i)
+
+    rng = random.Random(12345)
+    device = next(wrapper.model.parameters()).device
+
+    out_path = Path(out_path)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    n_records = 0
+
+    def _run(gen_kw):
+        """Generate once; return (gen_ids: list[int], full_codes: list[int], text: str)."""
+        out = wrapper.generate(
+            log_decode_codes=True, decode_scale=decode_scale, **gen_kw)
+        plen = gen_kw["input_ids"].shape[1]
+        gen = out[0, plen:]
+        prefill = wrapper._last_codes
+        dec_log = wrapper._decode_codes_log or []
+        decode = (torch.stack(dec_log, 1)
+                  if dec_log else prefill.new_zeros(prefill.size(0), 0))
+        full = torch.cat([prefill, decode.to(prefill.device)], 1)[0].tolist()
+        return gen.tolist(), full, tokenizer.decode(gen, skip_special_tokens=True)
+
+    with out_path.open("w") as fh:
+        for pi, pmeta in enumerate(patterns):
+            pat = pmeta["pattern"]
+            topic = pmeta["topic"]
+            intopic = list(pool_by_topic.get(topic, []))
+            offtopic = [i for i in all_idxs if i not in set(intopic)]
+            rng.shuffle(intopic); rng.shuffle(offtopic)
+            intopic = intopic[:prompts_per_pattern]
+            offtopic = offtopic[:offtopic_per_pattern]
+            prompts = [(i, True) for i in intopic] + [(i, False) for i in offtopic]
+            if verbose:
+                print(f"[sweep {pi+1}/{len(patterns)}] pattern={pat}  topic={topic}  "
+                      f"purity={pmeta['purity']:.2f}  n_prompts={len(prompts)}")
+            for s_idx, in_topic in prompts:
+                item = val_ds[s_idx]
+                plen = int(item["prompt_len"])
+                ii = item["input_ids"][:plen].unsqueeze(0).to(device)
+                am = item["attention_mask"][:plen].unsqueeze(0).to(device)
+                gen_kw = dict(
+                    input_ids=ii, attention_mask=am,
+                    max_new_tokens=max_new_tokens,
+                    do_sample=False,
+                    pad_token_id=tokenizer.pad_token_id,
+                )
+                plain_gen, plain_codes, plain_text = _run(gen_kw)
+                for seed in seeds:
+                    with ablate_router_ngrams(wrapper, [pat], seed=int(seed)) as tr:
+                        abl_gen, abl_codes, abl_text = _run(gen_kw)
+                    lcp = 0
+                    for a, b in zip(plain_gen, abl_gen):
+                        if a != b: break
+                        lcp += 1
+                    rec = {
+                        "pattern": list(pat),
+                        "pattern_N": pmeta["N"],
+                        "pattern_topic": topic,
+                        "pattern_purity": pmeta["purity"],
+                        "pattern_count": pmeta["count"],
+                        "prompt_idx": int(s_idx),
+                        "prompt_topic": topic_of(s_idx),
+                        "in_topic": bool(in_topic),
+                        "seed": int(seed),
+                        "decode_scale": float(decode_scale),
+                        "prompt_len": plen,
+                        "gen_tokens": len(plain_gen),
+                        "lcp_tokens": lcp,
+                        "n_hits": len(tr.hits),
+                        "hits": tr.hits,
+                        "plain_text": plain_text,
+                        "ablated_text": abl_text,
+                        "plain_codes": plain_codes,
+                        "ablated_codes": abl_codes,
+                    }
+                    fh.write(json.dumps(rec) + "\n")
+                    fh.flush()
+                    n_records += 1
+            if verbose:
+                print(f"    → cumulative records: {n_records}")
+    if verbose:
+        print(f"[sweep] done. wrote {n_records} records to {out_path}")
+    return out_path
+
+
+# ---------------------------------------------------------------------------
 # Full purity report + harvest of topic-specialized n-grams / codes
 # ---------------------------------------------------------------------------
 
