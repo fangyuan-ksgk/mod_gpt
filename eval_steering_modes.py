@@ -91,6 +91,12 @@ def run_mode(mode, wrapper, tokenizer, val_ds, golds, s_idxs, args, out_fh, devi
         # unigram patterns: match EVERY committed code -> random swap.
         patterns = [(int(c),) for c in range(wrapper.C_SIZE)]
         ctx = ablate_router_ngrams(wrapper, patterns, seed=int(args.seed))
+    elif mode == "ablate_codes":
+        # Full steering, but random-swap only the specified codes on commit.
+        wrapper.scale = orig_scale
+        decode_scale = orig_scale
+        patterns = [(int(c),) for c in args.ablate_codes]
+        ctx = ablate_router_ngrams(wrapper, patterns, seed=int(args.seed))
     else:
         raise ValueError(mode)
 
@@ -136,7 +142,9 @@ def main():
     ap.add_argument("--runs", nargs="+", default=DEFAULT_RUNS)
     ap.add_argument("--modes", nargs="+",
                     default=["plain", "prompt_steered", "steered", "random_codes"],
-                    choices=["plain", "prompt_steered", "steered", "random_codes"])
+                    choices=["plain", "prompt_steered", "steered", "random_codes", "ablate_codes"])
+    ap.add_argument("--ablate-codes", nargs="+", type=int, default=[5, 15],
+                    help="Codes to random-swap for mode=ablate_codes. Default: 5 15.")
     ap.add_argument("--num-samples", type=int, default=1000,
                     help="Number of ScienceQA test samples to evaluate (from start).")
     ap.add_argument("--batch-size", type=int, default=8)
@@ -167,7 +175,10 @@ def main():
 
         run_accs = {}
         for mode in args.modes:
-            fp = out_dir / f"{run}__{mode}.jsonl"
+            tag = mode
+            if mode == "ablate_codes":
+                tag = "ablate_" + "_".join(str(c) for c in args.ablate_codes)
+            fp = out_dir / f"{run}__{tag}.jsonl"
             print(f"  -> {fp}")
             t0 = time.time()
             with fp.open("w") as fh:
@@ -177,7 +188,8 @@ def main():
             dt = time.time() - t0
             print(f"     mode={mode:<13s}  acc={acc*100:5.2f}%  "
                   f"({c}/{t}, {dt:.0f}s)")
-            run_accs[mode] = dict(correct=c, total=t, acc=acc, path=str(fp))
+            run_accs[tag] = dict(correct=c, total=t, acc=acc, path=str(fp),
+                                 mode=mode)
 
         summary.append({"run": run, "modes": run_accs,
                         "orig_scale": float(wargs["scale"]),
@@ -193,14 +205,22 @@ def main():
                    "seed": args.seed, "results": summary}, f, indent=2)
 
     # ---- print compact table ----
-    print("\n" + "=" * 90)
-    print(f"{'run':<44s} {'plain':>9s} {'prompt':>9s} {'steered':>9s} {'random':>9s}")
-    print("-" * 90)
+    # dynamic header: every unique tag across runs.
+    all_tags = []
+    for r in summary:
+        for t in r["modes"].keys():
+            if t not in all_tags:
+                all_tags.append(t)
+    print("\n" + "=" * (44 + 11 * len(all_tags)))
+    header = f"{'run':<44s}" + "".join(f" {t[:10]:>10s}" for t in all_tags)
+    print(header)
+    print("-" * len(header))
     for r in summary:
         m = r["modes"]
-        def _a(k): return f"{m[k]['acc']*100:5.2f}%" if k in m else "   -   "
-        print(f"{r['run']:<44s} {_a('plain'):>9s} {_a('prompt_steered'):>9s} "
-              f"{_a('steered'):>9s} {_a('random_codes'):>9s}")
+        row = f"{r['run']:<44s}"
+        for t in all_tags:
+            row += f" {m[t]['acc']*100:9.2f}%" if t in m else "     -     "
+        print(row)
     print(f"\n[steering-modes] summary -> {summary_path}")
 
 
