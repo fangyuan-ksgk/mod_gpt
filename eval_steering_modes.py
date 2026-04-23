@@ -76,6 +76,11 @@ def run_mode(mode, wrapper, tokenizer, val_ds, golds, s_idxs, args, out_fh, devi
         wrapper.scale = 0.0
         decode_scale = 0.0
         ctx = None
+    elif mode == "prompt_steered":
+        # Prefill-time steering only (on the prompt); decode unsteered.
+        wrapper.scale = orig_scale
+        decode_scale = 0.0
+        ctx = None
     elif mode == "steered":
         wrapper.scale = orig_scale
         decode_scale = orig_scale
@@ -130,8 +135,8 @@ def main():
     ap.add_argument("--repo", default="Ksgk-fy/sciqa_ckpt_20260416_0942")
     ap.add_argument("--runs", nargs="+", default=DEFAULT_RUNS)
     ap.add_argument("--modes", nargs="+",
-                    default=["plain", "steered", "random_codes"],
-                    choices=["plain", "steered", "random_codes"])
+                    default=["plain", "prompt_steered", "steered", "random_codes"],
+                    choices=["plain", "prompt_steered", "steered", "random_codes"])
     ap.add_argument("--num-samples", type=int, default=1000,
                     help="Number of ScienceQA test samples to evaluate (from start).")
     ap.add_argument("--batch-size", type=int, default=8)
@@ -188,14 +193,14 @@ def main():
                    "seed": args.seed, "results": summary}, f, indent=2)
 
     # ---- print compact table ----
-    print("\n" + "=" * 78)
-    print(f"{'run':<44s} {'plain':>9s} {'steered':>9s} {'random':>9s}")
-    print("-" * 78)
+    print("\n" + "=" * 90)
+    print(f"{'run':<44s} {'plain':>9s} {'prompt':>9s} {'steered':>9s} {'random':>9s}")
+    print("-" * 90)
     for r in summary:
         m = r["modes"]
         def _a(k): return f"{m[k]['acc']*100:5.2f}%" if k in m else "   -   "
-        print(f"{r['run']:<44s} {_a('plain'):>9s} {_a('steered'):>9s} "
-              f"{_a('random_codes'):>9s}")
+        print(f"{r['run']:<44s} {_a('plain'):>9s} {_a('prompt_steered'):>9s} "
+              f"{_a('steered'):>9s} {_a('random_codes'):>9s}")
     print(f"\n[steering-modes] summary -> {summary_path}")
 
 

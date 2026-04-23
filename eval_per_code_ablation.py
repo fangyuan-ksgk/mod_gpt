@@ -24,7 +24,7 @@ Usage:
 python eval_per_code_ablation.py \
     --repo Ksgk-fy/sciqa_ckpt_20260416_0942 \
     --run q06_sciqa_v9_C32_detach_az0.1_aa0.5 \
-    --num-samples 200 --batch-size 8 --seed 0
+    --num-samples 2000 --batch-size 16 --seed 0
 """
 from __future__ import annotations
 
