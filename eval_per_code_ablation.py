@@ -60,15 +60,41 @@ def _left_pad_batch(val_ds, s_idxs, pad_id, device):
 
 @torch.no_grad()
 def _gen_batch(wrapper, tokenizer, bii, bam, T, decode_scale, max_new):
+    """Generate and capture per-sample router code trajectories.
+
+    Returns:
+        texts:          list of decoded generation strings, length B
+        prefill_codes:  list of list[int], one per sample — codes committed
+                        over the prefill chunks (shape ~ ceil(T/L) each)
+        decode_codes:   list of list[int], one per sample — codes committed
+                        at each decode chunk boundary
+    """
     out = wrapper.generate(
         input_ids=bii, attention_mask=bam,
         max_new_tokens=max_new,
         do_sample=False,
         pad_token_id=tokenizer.pad_token_id,
         decode_scale=decode_scale,
+        log_decode_codes=True,
     )
     gen = out[:, T:]
-    return [tokenizer.decode(row, skip_special_tokens=True) for row in gen]
+    texts = [tokenizer.decode(row, skip_special_tokens=True) for row in gen]
+
+    # Prefill codes: (B, n_prefill_chunks).  Decode log: list of (B,) tensors.
+    pre = getattr(wrapper, "_last_codes", None)
+    dec_log = getattr(wrapper, "_decode_codes_log", None) or []
+    B = bii.shape[0]
+    if pre is None:
+        prefill_codes = [[] for _ in range(B)]
+    else:
+        prefill_codes = pre.detach().cpu().tolist()
+    if dec_log:
+        import torch as _t
+        dec_mat = _t.stack([c.view(-1) for c in dec_log], dim=1)  # (B, n_dec)
+        decode_codes = dec_mat.cpu().tolist()
+    else:
+        decode_codes = [[] for _ in range(B)]
+    return texts, prefill_codes, decode_codes
 
 
 def _classify(base_ok, abl_ok):
@@ -120,9 +146,11 @@ def main():
     with base_path.open("w") as fh:
         for ch in tqdm(chunks, desc="baseline"):
             bii, bam, T = _left_pad_batch(val_ds, ch, pad_id, device)
-            texts = _gen_batch(wrapper, tokenizer, bii, bam, T,
-                               decode_scale, args.max_new_tokens)
-            for si, txt in zip(ch, texts):
+            texts, pre_codes, dec_codes = _gen_batch(
+                wrapper, tokenizer, bii, bam, T,
+                decode_scale, args.max_new_tokens)
+            for b, si in enumerate(ch):
+                txt = texts[b]
                 pred = extract(txt)
                 gd = golds[si]
                 ok = int(pred is not None and pred == gd)
@@ -131,6 +159,8 @@ def main():
                 fh.write(json.dumps({
                     "sample_idx": si, "topic": topics[si], "gold": gd,
                     "pred": pred, "correct": ok, "text": txt,
+                    "prefill_codes": pre_codes[b],
+                    "decode_codes":  dec_codes[b],
                 }) + "\n")
     base_acc = sum(base_correct) / N
     print(f"  baseline acc = {base_acc*100:.2f}%  ({sum(base_correct)}/{N})")
@@ -149,9 +179,11 @@ def main():
                 bii, bam, T = _left_pad_batch(val_ds, ch, pad_id, device)
                 with ablate_router_ngrams(wrapper, [(int(c),)],
                                           seed=int(args.seed) + c):
-                    texts = _gen_batch(wrapper, tokenizer, bii, bam, T,
-                                       decode_scale, args.max_new_tokens)
-                for si, txt in zip(ch, texts):
+                    texts, pre_codes, dec_codes = _gen_batch(
+                        wrapper, tokenizer, bii, bam, T,
+                        decode_scale, args.max_new_tokens)
+                for b, si in enumerate(ch):
+                    txt = texts[b]
                     pred = extract(txt)
                     gd = golds[si]
                     ok = int(pred is not None and pred == gd)
@@ -160,11 +192,13 @@ def main():
                     topic_counts[topics[si]][c][outcome] += 1
                     fh.write(json.dumps({
                         "sample_idx": si, "topic": topics[si], "gold": gd,
-                        "code": c, "pred": pred, "correct": ok,
+                        "ablated_code": c, "pred": pred, "correct": ok,
                         "baseline_pred": base_preds[si],
                         "baseline_correct": int(base_correct[si]),
                         "outcome": outcome,
                         "text": txt,
+                        "prefill_codes": pre_codes[b],
+                        "decode_codes":  dec_codes[b],
                     }) + "\n")
     print(f"[sweep] wall={time.time()-t0:.0f}s  ->  {abl_path}")
 
