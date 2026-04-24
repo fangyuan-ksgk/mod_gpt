@@ -25,10 +25,10 @@ BASELINE_DIR="log/steering_modes"
 
 # rows: "<repo>|<run>"
 RUNS=(
-  "${REPO_Q}|q06_sciqa_v9_C32_detach_az0.1_aa0.5"
-  "${REPO_Q}|q17_sciqa_v9_C32_detach_az0.1_aa0.5"
-  "${REPO_Q}|q4b_sciqa_v9_C32_detach_az0.1_aa0.1"
-  "${REPO_L}|l1_sciqa_v9_C32_detach_az0.5_aa0.5"
+  # "${REPO_Q}|q06_sciqa_v9_C32_detach_az0.1_aa0.5"
+  # "${REPO_Q}|q17_sciqa_v9_C32_detach_az0.1_aa0.5"
+  # "${REPO_Q}|q4b_sciqa_v9_C32_detach_az0.1_aa0.1"
+  # "${REPO_L}|l1_sciqa_v9_C32_detach_az0.5_aa0.5"
   "${REPO_L}|l3_sciqa_v6_C32_base"
 )
 
