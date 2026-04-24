@@ -147,9 +147,17 @@ def main():
     ap.add_argument("--runs", nargs="+", default=DEFAULT_RUNS)
     ap.add_argument("--modes", nargs="+",
                     default=["plain", "prompt_steered", "steered", "random_codes"],
-                    choices=["plain", "prompt_steered", "steered", "random_codes", "ablate_codes"])
+                    choices=["plain", "prompt_steered", "steered", "random_codes",
+                             "ablate_codes", "ablate_each"])
     ap.add_argument("--ablate-codes", nargs="+", type=int, default=[5, 15],
                     help="Codes to random-swap for mode=ablate_codes. Default: 5 15.")
+    ap.add_argument("--ablate-each", nargs="+", type=int, default=[],
+                    help="For mode=ablate_each, ablate each listed code in a separate "
+                         "pass (one code at a time). Used for every run unless overridden "
+                         "by --ablate-each-per-run.")
+    ap.add_argument("--ablate-each-per-run", nargs="+", default=[],
+                    help="Per-run override for --ablate-each. Format: run_name=c1,c2,c3. "
+                         "Example: q06_..=1,5,0 q17_..=0,3,1 q4b_..=9,0,1")
     ap.add_argument("--num-samples", type=int, default=1000,
                     help="Number of ScienceQA test samples to evaluate (from start).")
     ap.add_argument("--batch-size", type=int, default=8)
@@ -162,6 +170,14 @@ def main():
     device = "cuda" if torch.cuda.is_available() else "cpu"
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
+
+    # parse --ablate-each-per-run: list of "run=c1,c2" -> dict[run] -> [c1, c2]
+    per_run_each = {}
+    for spec in args.ablate_each_per_run:
+        if "=" not in spec:
+            raise ValueError(f"--ablate-each-per-run expects run=c1,c2,...  got {spec!r}")
+        run_name, codes_str = spec.split("=", 1)
+        per_run_each[run_name.strip()] = [int(c) for c in codes_str.split(",") if c.strip()]
 
     summary = []
     for run in args.runs:
@@ -182,7 +198,24 @@ def main():
             metas[si] = {k: ex.get(k) for k in _META_KEYS}
 
         run_accs = {}
+        # expand ablate_each into N ablate_codes passes (one code per pass).
+        expanded_modes = []
         for mode in args.modes:
+            if mode == "ablate_each":
+                codes = per_run_each.get(run, args.ablate_each)
+                if not codes:
+                    print(f"  [warn] ablate_each requested but no codes for run={run}; skipping")
+                    continue
+                for c in codes:
+                    expanded_modes.append(("ablate_codes", [int(c)]))
+            else:
+                expanded_modes.append((mode, None))
+
+        for mode, override_codes in expanded_modes:
+            # temporarily override args.ablate_codes for this pass
+            saved = args.ablate_codes
+            if override_codes is not None:
+                args.ablate_codes = override_codes
             tag = mode
             if mode == "ablate_codes":
                 tag = "ablate_" + "_".join(str(c) for c in args.ablate_codes)
@@ -194,10 +227,12 @@ def main():
                                 metas, s_idxs, args, fh, device)
             acc = c / max(t, 1)
             dt = time.time() - t0
-            print(f"     mode={mode:<13s}  acc={acc*100:5.2f}%  "
+            print(f"     mode={mode:<13s} tag={tag:<18s}  acc={acc*100:5.2f}%  "
                   f"({c}/{t}, {dt:.0f}s)")
             run_accs[tag] = dict(correct=c, total=t, acc=acc, path=str(fp),
-                                 mode=mode)
+                                 mode=mode, ablate_codes=list(args.ablate_codes)
+                                 if mode == "ablate_codes" else None)
+            args.ablate_codes = saved
 
         summary.append({"run": run, "modes": run_accs,
                         "orig_scale": float(wargs["scale"]),
