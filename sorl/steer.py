@@ -275,7 +275,56 @@ class StackedAbstractionWrapperV6(nn.Module):
         self._decode_codes_log = None
         self._decode_scale_override = 0.0
 
+        # ---- n-gram ablation patch state (opt-in, used by analyze helpers) ----
+        # Mirror of V9's interface so `ablate_router_ngrams(...)` works on V6.
+        self._ablate_ngrams = None
+        self._ablate_replacements = None
+        self._ablate_rng = None
+        self._ablate_exclude = None
+        self._ablate_history = {}
+        self._ablate_hits = []
+
         self._register_hooks()
+
+    # ---- n-gram ablation patch ----
+
+    def _ablate_patch_codes(self, codes, phase):
+        """In-place swap of codes that complete any pattern in
+        ``self._ablate_ngrams``. Mirror of V9's implementation.
+
+        codes: (B, nc) long on self's device.
+        phase: "prefill" or "decode" (recorded in hits for diagnostics).
+        """
+        if not self._ablate_ngrams:
+            return codes
+        B, nc = codes.shape
+        for b in range(B):
+            hist = self._ablate_history.setdefault(b, [])
+            for k in range(nc):
+                c = int(codes[b, k].item())
+                hist.append(c)
+                for pat in self._ablate_ngrams:
+                    N = len(pat)
+                    if len(hist) >= N and tuple(hist[-N:]) == pat:
+                        reps = self._ablate_replacements or {}
+                        has_fixed = pat in reps and reps[pat] is not None
+                        if has_fixed:
+                            new = int(reps[pat])
+                            if new == c:
+                                break
+                        else:
+                            excl = self._ablate_exclude or set()
+                            forbidden = excl | {c}
+                            allowed = [i for i in range(self.C_SIZE)
+                                       if i not in forbidden]
+                            if not allowed:
+                                break
+                            new = self._ablate_rng.choice(allowed)
+                        codes[b, k] = new
+                        hist[-1] = new
+                        self._ablate_hits.append((phase, b, len(hist) - 1, c, new))
+                        break
+        return codes
 
     # ---- hooks ----
 
@@ -318,6 +367,10 @@ class StackedAbstractionWrapperV6(nn.Module):
                     else:
                         routed_one = hidden_states[..., -self.C_SIZE:]
                     code_one = routed_one[:, 0, :].argmax(dim=-1)   # (B,)
+                # n-gram ablation patch (no-op unless ablate state populated)
+                code_one = self._ablate_patch_codes(
+                    code_one.unsqueeze(1), phase="decode"
+                ).squeeze(1)
                 self._decode_current_code = code_one
                 if self._decode_codes_log is not None:
                     self._decode_codes_log.append(code_one.cpu())
@@ -369,10 +422,17 @@ class StackedAbstractionWrapperV6(nn.Module):
                 src_idx = [c * self.L + self.L - 1 for c in range(n_chunks)]
             else:  # "first"
                 src_idx = [c * self.L for c in range(n_chunks)]
-            for c, src in enumerate(src_idx):
+
+            # Per-chunk codes (B, n_chunks). Apply ablation patch here so that
+            # both the steering injection below and `_last_chunk_codes` reflect
+            # the swap.
+            chunk_pos_codes = pos_codes[:, src_idx].contiguous()
+            chunk_pos_codes = self._ablate_patch_codes(chunk_pos_codes, phase="prefill")
+
+            for c in range(n_chunks):
                 start = c * self.L
                 end = min((c + 1) * self.L, S)
-                chunk_codes[:, start:end] = pos_codes[:, src:src + 1]
+                chunk_codes[:, start:end] = chunk_pos_codes[:, c:c + 1]
 
             mask = chunk_codes >= 0
             safe_codes = chunk_codes.clamp(min=0)
@@ -380,7 +440,7 @@ class StackedAbstractionWrapperV6(nn.Module):
             steer_vecs = steer_vecs * mask.unsqueeze(-1).float() * self.scale
             hidden_states = hidden_states + steer_vecs.to(hidden_states.dtype)
             self._last_codes = chunk_codes                         # (B, S) legacy per-token
-            self._last_chunk_codes = pos_codes[:, src_idx].detach()  # (B, n_chunks)
+            self._last_chunk_codes = chunk_pos_codes.detach()      # (B, n_chunks)
 
             # Seed decode state at end of prefill so autoregressive steps
             # continue chunking from where the prompt left off.
