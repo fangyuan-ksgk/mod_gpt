@@ -32,9 +32,7 @@
 
     :: Llama + SciQA | we might need slr < 5e-2, llama is sensitive to change in representation
 
-    :: ScienceQA - position bias
-
-                                                                            
+    :: ScienceQA - position bias                                                    
 
 #### SoRL (v9 per-layer steering) |
     ┌────────────┬────────┬────────┬────────┬────────┬────────┬────────┬────────┬────────┬──────────┐
@@ -43,10 +41,16 @@
     ├────────────┼────────┼────────┼────────┼────────┼────────┼────────┼────────┼────────┼──────────┤
     │ Qwen3-0.6B │   48.4 │  55.3  │   62.2 │   -    │  66.4  │   -    │   -    │   -    │    -     │
     │ Qwen3-1.7B │   65.7 │  64.1  │   78.1 │   -    │  78.4  │   -    │   -    │   -    │    -     │
-    │ Llama-1B   │   -    │  -     │   -    │   -    │   -    │   -    │   -    │   -    │    -     │
-    │ Llama-3B   │   -    │  -     │   -    │   -    │   -    │   -    │   -    │   -    │    -     │
-    │ Qwen3-4B   │   -    │  -     │   -    │   -    │   -    │   -    │   -    │   -    │    -     │
+    │ Llama-1B   │   10.0 │  34.0  │   26.6 │   -    │  66.3  │   -    │   -    │   -    │    -     │
+    │ Llama-3B   │   38.7 │  58.6  │   70.9 │   -    │  80.0  │   -    │   -    │   -    │    -     │
+    │ Qwen3-4B   │   81.3 │  63.9  │   83.7 │   -    │   -    │   -    │   -    │   -    │    -     │
     └────────────┴────────┴────────┴────────┴────────┴────────┴────────┴────────┴────────┴──────────┘
+
+    [Observation]. We need to heavily tune for llama config (!)
+    [Observation]. Missing qwen4B perf, missing mmlu, hotpotqa, boolq, obookqa, aqua 
+
+
+
     :: GSM8K untuned, currently: C=32, L=4, layer=14, scale=0.5, slr=5e-2
     :: SciQA untuned, currently: C=32, L=4, layer=14, scale=0.5, slr=5e-2
 

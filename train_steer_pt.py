@@ -96,6 +96,11 @@ def parse_args():
     p.add_argument("--eval_samples", type=int, default=1300)
     p.add_argument("--eval_batch_size", type=int, default=64)
     p.add_argument("--max_new_tokens", type=int, default=256)
+    p.add_argument("--eval_decode_scale", type=float, default=None,
+                   help="Decode-time steering scale at eval. Default (None) = use "
+                        "wrapper.scale (i.e. steering ON during decode, matching "
+                        "training distribution). Pass 0.0 to recover legacy "
+                        "prefill-only eval; pass any float to override.")
     p.add_argument("--log_samples_every", type=int, default=200)
     p.add_argument("--num_log_samples", type=int, default=3)
     p.add_argument("--output_dir", type=str, default="./ckpt/steer_pt")
@@ -283,6 +288,7 @@ def evaluate_accuracy(
     num_samples=50, max_new_tokens=128, num_log_samples=3,
     log_fn=None, eval_batch_size=16,
     record_codes=True,
+    decode_scale=None,
 ):
     """Batched greedy evaluation. Steering is applied if the wrapper's
     generate() routes codes during decoding (e.g. V9's cache-aware hook).
@@ -339,6 +345,13 @@ def evaluate_accuracy(
         )
         if _supports_code_log:
             gen_kwargs["log_decode_codes"] = True
+        # Plumb decode-time steering scale to wrappers that accept it (V6/V9).
+        # Default (decode_scale=None inside wrapper) keeps the wrapper's own
+        # `_decode_scale_override` (which V6/V9 default to 0.0 — prefill-only).
+        # Pass the trained scale to enable decode-time steering at eval.
+        if (decode_scale is not None
+                and "decode_scale" in _inspect.signature(wrapper.generate).parameters):
+            gen_kwargs["decode_scale"] = float(decode_scale)
         generated = wrapper.generate(**gen_kwargs)
 
         # Capture per-batch code trajectories (prefill + decode).
@@ -752,12 +765,19 @@ def main():
         # Hooks are registered on raw_model's layers, so steering stays active.
         prev_model = wrapper.model
         wrapper.model = raw_model
+        # Resolve decode-time eval scale: None → wrapper.scale (steering ON
+        # during decode at the training scale). User can opt out via
+        # `--eval_decode_scale 0.0` to recover legacy prefill-only eval.
+        eval_dec_scale = (args.eval_decode_scale
+                          if args.eval_decode_scale is not None
+                          else float(wrapper.scale))
         result = evaluate_accuracy(
             wrapper, tokenizer, val_ds, device,
             num_samples=args.eval_samples,
             max_new_tokens=args.max_new_tokens,
             num_log_samples=args.num_log_samples,
             log_fn=log, eval_batch_size=args.eval_batch_size,
+            decode_scale=eval_dec_scale,
         )
         wrapper.model = prev_model
         return result
