@@ -51,13 +51,17 @@ mkdir -p "$OUT_ROOT"
 
 # ---- Model config (matches sweep_eval_sft.sh) ----
 declare -A M_MODEL M_MTAG M_EXTRA
-M_MODEL[1]="Qwen/Qwen3-0.6B";          M_MTAG[1]="q06"; M_EXTRA[1]="--use_lora --lora_r 16 --lora_alpha 32"
-M_MODEL[2]="Qwen/Qwen3-1.7B";          M_MTAG[2]="q17"; M_EXTRA[2]="--use_lora --lora_r 16 --lora_alpha 32"
-M_MODEL[3]="meta-llama/Llama-3.2-1B";  M_MTAG[3]="l1";  M_EXTRA[3]="--use_lora --lora_r 16 --lora_alpha 32"
-M_MODEL[4]="meta-llama/Llama-3.2-3B";  M_MTAG[4]="l3";  M_EXTRA[4]="--use_lora --lora_r 16 --lora_alpha 32"
-M_MODEL[5]="Qwen/Qwen3-4B";            M_MTAG[5]="q4b"; M_EXTRA[5]="--use_lora --lora_r 16 --lora_alpha 32"
+# NOTE: pause-token and token-assorted baselines use FULL fine-tuning on the
+# four smaller models (matches the SFT/SoRL main-table setup). Only Qwen3-4B
+# uses LoRA, for memory reasons. Do NOT add --use_lora to the smaller models
+# here, or the comparison vs. SFT/SoRL becomes unfair.
+M_MODEL[1]="Qwen/Qwen3-0.6B";          M_MTAG[1]="q06"; M_EXTRA[1]=""
+M_MODEL[2]="Qwen/Qwen3-1.7B";          M_MTAG[2]="q17"; M_EXTRA[2]=""
+M_MODEL[3]="meta-llama/Llama-3.2-1B";  M_MTAG[3]="l1";  M_EXTRA[3]=""
+M_MODEL[4]="meta-llama/Llama-3.2-3B";  M_MTAG[4]="l3";  M_EXTRA[4]=""
+# M_MODEL[5]="Qwen/Qwen3-4B";            M_MTAG[5]="q4b"; M_EXTRA[5]="--use_lora --lora_r 16 --lora_alpha 32"
 
-N_MODELS=5
+N_MODELS=4
 
 JOB_IDX=0
 
