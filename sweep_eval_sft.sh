@@ -96,6 +96,7 @@ run_one() {
     --eval_samples $eval_s \
     --eval_batch_size $EVAL_BATCH \
     --num_log_samples $NUM_LOG \
+    --log_samples_every 99999 \
     --log_every 10 \
     --output_dir $out $model_extra &
 
