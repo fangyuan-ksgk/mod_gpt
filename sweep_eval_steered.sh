@@ -75,12 +75,18 @@ C_SIZE=32
 L_CHUNK=4
 DETACH_FLAG="--detach_routing"
 
+# Number of search rollouts per training step.
+# Override at invocation time, e.g.:
+#   NUM_ROLLOUTS=1 ./sweep_eval_steered.sh all   # ablation: no "select-best"
+#   NUM_ROLLOUTS=8 ./sweep_eval_steered.sh all   # main-table setting
+NUM_ROLLOUTS=${NUM_ROLLOUTS:-8}
+
 # Eval-time decode steering: empty → use wrapper.scale (i.e. trained scale,
 # decode steering ON). Set to "0.0" to recover legacy prefill-only eval.
 EVAL_DECODE_SCALE=""
 
 TIMESTAMP=$(date +%Y%m%d_%H%M)
-OUT_ROOT="./ckpt/sorl_eval_steered_${TIMESTAMP}"
+OUT_ROOT="./ckpt/sorl_eval_steered_N${NUM_ROLLOUTS}_${TIMESTAMP}"
 mkdir -p "$OUT_ROOT"
 
 # ---- Part → (model, dataset) mapping ----
@@ -128,7 +134,7 @@ for P in "${PARTS[@]}"; do
   gpu=$(( (JOB_IDX - 1) % N_GPUS ))
   port=$((BASE_PORT + P))
 
-  tag="${mtag}_${dtag}_v9_C${C_SIZE}_L${L_CHUNK}_layer${layer}"
+  tag="${mtag}_${dtag}_v9_C${C_SIZE}_L${L_CHUNK}_N${NUM_ROLLOUTS}_layer${layer}"
   out="${OUT_ROOT}/${tag}"
 
   echo ""
@@ -163,6 +169,7 @@ for P in "${PARTS[@]}"; do
       --inject_layers $layer
       --alpha_zipf $azipf
       --alpha_abs $aabs
+      --num_rollouts $NUM_ROLLOUTS
       $DETACH_FLAG
       --eval_every 99999
       --save_every 99999
