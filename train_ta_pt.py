@@ -120,6 +120,7 @@ def parse_args():
                             "winogrande", "boolq", "openbookqa",
                             "commonsenseqa", "mmlu",
                             "aqua", "math", "scienceqa", "hotpotqa",
+                            "strategyqa",
                             "mbpp", "humaneval", "livecodebench",
                             "codecontests", "deepmind_code_contests",
                             "wildifeval", "xlam"])
@@ -128,6 +129,7 @@ def parse_args():
         "arc": 256, "hellaswag": 512, "winogrande": 256,
         "boolq": 1024, "openbookqa": 768, "commonsenseqa": 256, "mmlu": 256,
         "aqua": 1024, "scienceqa": 512, "hotpotqa": 512,
+        "strategyqa": 64,
         "humaneval": 1024, "mbpp": 1024, "livecodebench": 1024, "codecontests": 1024, "deepmind_code_contests": 2048,
         "wildifeval": 2048, "xlam": 1024,
     }
@@ -136,6 +138,7 @@ def parse_args():
         "arc": 64, "hellaswag": 64, "winogrande": 64,
         "boolq": 32, "openbookqa": 128, "commonsenseqa": 64, "mmlu": 64,
         "aqua": 768, "scienceqa": 256, "hotpotqa": 64,
+        "strategyqa": 64,
         "humaneval": 256, "mbpp": 256, "livecodebench": 256, "codecontests": 512, "deepmind_code_contests": 1024,
         "wildifeval": 256, "xlam": 256,
     }
