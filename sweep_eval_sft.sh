@@ -52,7 +52,7 @@ mkdir -p "$OUT_ROOT"
 # left to the trainer's per-dataset default (gsm/sci=512, csqa=256, stra=64).
 DATASETS=(gsm8k        commonsenseqa  scienceqa  strategyqa)
 DTAGS=(   gsm          csqa           sciqa      stra)
-EVAL_SAMPLES=(1319     1221           2017       229)
+EVAL_SAMPLES=(1319     1221           2017       687)
 MAX_NEW=( 512          320            512        320)
 
 # ---- Model config (1 per part — matches reference) ----
