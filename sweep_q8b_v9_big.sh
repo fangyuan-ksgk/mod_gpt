@@ -2,14 +2,13 @@
 # ============================================================================
 # Qwen3-8B × DLR (v9) × bigger sweep
 #
-# Three independent blocks (toggle via $1):
-#   A) Layer fine-grain sweep   : layers {15,16,17,19,20,21} × 4 datasets
-#                                  (fills gaps between the L14/L18/L22 prior)
-#   B) Steering-LR sweep        : best (layer,dataset) combos × slr ∈ {1e-1, 5e-2}
-#   C) Chunk-size (L) sweep     : best (layer,dataset) combos × L   ∈ {1, 8}
+# Three independent blocks (toggle via $1). sci is dropped (L22 already known).
+#   A) Layer fine-grain sweep   : layers {15,16,17,19,20,21} × {gsm,stra,csqa} = 18 runs
+#   B) Steering-LR sweep        : best (layer,dataset) × slr ∈ {1e-1, 5e-2}    = 6 runs
+#   C) Chunk-size (L) sweep     : best (layer,dataset) × L   ∈ {1, 8}          = 6 runs
 #
-# Best (layer, dataset) combos are taken from the prior 3-layer sweep:
-#   csqa@L22, gsm@L18, sci@L22, stra@L14
+# Best (layer, dataset) combos from the prior 3-layer sweep:
+#   csqa@L22, gsm@L18, stra@L14
 #
 # Fairness fixes vs sweep_q8b_v9.sh:
 #   - num_rollouts: 1 -> 4   (matches default in train_steer_pt.py)
@@ -19,10 +18,10 @@
 # Hardware: 2× 80G; 8B+LoRA+seq_len=1024 fits 1 GPU per job, 2 jobs in parallel.
 #
 # Usage:
-#   bash sweep_q8b_v9_big.sh A         # layer fine-grain (24 runs)
-#   bash sweep_q8b_v9_big.sh B         # steer-lr sweep    (8 runs)
-#   bash sweep_q8b_v9_big.sh C         # L sweep           (8 runs)
-#   bash sweep_q8b_v9_big.sh all       # A + B + C        (40 runs)
+#   bash sweep_q8b_v9_big.sh A         # layer fine-grain (18 runs)
+#   bash sweep_q8b_v9_big.sh B         # steer-lr sweep    (6 runs)
+#   bash sweep_q8b_v9_big.sh C         # L sweep           (6 runs)
+#   bash sweep_q8b_v9_big.sh all       # A + B + C        (30 runs)
 #   DRY=dry bash sweep_q8b_v9_big.sh A # print-only
 # ============================================================================
 set -euo pipefail
