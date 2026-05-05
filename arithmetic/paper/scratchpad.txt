@@ -78,10 +78,8 @@ See Appendix \ref{app:arithmetic} further details on SORL interpretability, incl
 \end{table}
 
 \paragraph{Setup.}
-All interpretability analyses use model
-\texttt{add\_sub\_sorl\_v1\_abs30\_K1\_100K\_2L1H128d}
-(\texttt{2L/1H/128d}, 2 layers, 1 head, hidden size 128; trained on 100K examples),
-evaluated on 2{,}600 held-out problems across 26 splits.
+All interpretability analyses use a 2-layer, 1-head, 128-dimensional transformer
+trained on 100K examples, evaluated on 2{,}600 held-out problems across 26 splits.
 This model achieves 95.5\% accuracy with \sorl{} abstraction tokens and 0.1\% without; making it the clearest test-bed for causal analysis.
 All results are reproducible from the released code.
 
