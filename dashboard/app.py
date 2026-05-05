@@ -269,6 +269,9 @@ LATEX_TABLE_UNDERSIZED = r"""% tab:undersized-wins — SoRL vs SFT on undersized
 LATEX_APPENDIX = r"""\section{Arithmetic case study: interpretability analysis}
 \label{app:arithmetic}
 
+Full performance results across all architectures and data sizes are in
+Table~\ref{tab:undersized-wins} (\S\ref{app:performance}).
+
 \begin{table}[h]
   \centering\small
   \setlength{\tabcolsep}{6pt}
