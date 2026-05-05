@@ -208,7 +208,7 @@ Three patterns are notable:
 
 \begin{figure}[h]
   \centering
-  \includegraphics[width=0.95\linewidth]{experiments/03_token_subtask_heatmap/fig_token_subtask.pdf}
+  \includegraphics[width=0.95\linewidth]{Styles/figures/fig_token_subtask.pdf}
   \caption{Token--subtask heatmap for \texttt{2L/1H/128d} (100K).
     Each cell shows $P(\text{subtask} \mid \text{token})$ — the fraction of that token's
     occurrences that fall into each Quirke subtask — over 2{,}600 held-out examples across
