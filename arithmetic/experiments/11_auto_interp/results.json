@@ -10,5 +10,2752 @@
     "add_random",
     "sub_random"
   ],
-  "tokens": []
+  "tokens": [
+    {
+      "token_id": 0,
+      "n_occurrences": 396,
+      "mean_confidence": 0.9998259305953979,
+      "top_subtask": "UC",
+      "top_subtask_purity": 0.4696969696969697,
+      "subtask_counts": {
+        "US": 82,
+        "SC": 25,
+        "SA": 25,
+        "UC": 186,
+        "MB": 23,
+        "UB": 16,
+        "MD": 38,
+        "SS": 1
+      },
+      "top_examples": [
+        {
+          "problem": "058532+259482",
+          "split": "add_C4",
+          "answer_pos": 4,
+          "token_id": 0,
+          "subtask": "US",
+          "carry": "carry",
+          "sum_mod10": 9,
+          "confidence": 0.999946117401123
+        },
+        {
+          "problem": "503246+778173",
+          "split": "add_random",
+          "answer_pos": 4,
+          "token_id": 0,
+          "subtask": "UC",
+          "carry": "no_carry",
+          "sum_mod10": 3,
+          "confidence": 0.9999451637268066
+        },
+        {
+          "problem": "105941+998470",
+          "split": "add_C5",
+          "answer_pos": 4,
+          "token_id": 0,
+          "subtask": "UC",
+          "carry": "carry",
+          "sum_mod10": 3,
+          "confidence": 0.9999023675918579
+        },
+        {
+          "problem": "691248+971373",
+          "split": "add_random",
+          "answer_pos": 4,
+          "token_id": 0,
+          "subtask": "UC",
+          "carry": "carry",
+          "sum_mod10": 5,
+          "confidence": 0.9998804330825806
+        },
+        {
+          "problem": "017333+086687",
+          "split": "add_C5",
+          "answer_pos": 4,
+          "token_id": 0,
+          "subtask": "US",
+          "carry": "carry",
+          "sum_mod10": 9,
+          "confidence": 0.9998576641082764
+        },
+        {
+          "problem": "188748+161276",
+          "split": "add_C5",
+          "answer_pos": 4,
+          "token_id": 0,
+          "subtask": "US",
+          "carry": "carry",
+          "sum_mod10": 9,
+          "confidence": 0.9998526573181152
+        },
+        {
+          "problem": "129042+408274",
+          "split": "add_random",
+          "answer_pos": 4,
+          "token_id": 0,
+          "subtask": "UC",
+          "carry": "no_carry",
+          "sum_mod10": 2,
+          "confidence": 0.99981290102005
+        },
+        {
+          "problem": "781832+524485",
+          "split": "add_random",
+          "answer_pos": 4,
+          "token_id": 0,
+          "subtask": "UC",
+          "carry": "carry",
+          "sum_mod10": 2,
+          "confidence": 0.9997360110282898
+        },
+        {
+          "problem": "158632+958389",
+          "split": "add_C6",
+          "answer_pos": 4,
+          "token_id": 0,
+          "subtask": "US",
+          "carry": "carry",
+          "sum_mod10": 9,
+          "confidence": 0.9996801614761353
+        },
+        {
+          "problem": "211736+268674",
+          "split": "add_C4",
+          "answer_pos": 4,
+          "token_id": 0,
+          "subtask": "UC",
+          "carry": "no_carry",
+          "sum_mod10": 3,
+          "confidence": 0.9996458292007446
+        }
+      ],
+      "interpretation": "Token t0 marks the tens digit position in addition problems, regardless of carry state or sum value."
+    },
+    {
+      "token_id": 1,
+      "n_occurrences": 410,
+      "mean_confidence": 0.9864177644252777,
+      "top_subtask": "UC",
+      "top_subtask_purity": 0.2975609756097561,
+      "subtask_counts": {
+        "UC": 122,
+        "SA": 39,
+        "SC": 28,
+        "US": 59,
+        "UB": 92,
+        "UD": 11,
+        "MB": 12,
+        "MD": 42,
+        "SS": 5
+      },
+      "top_examples": [
+        {
+          "problem": "696879+928630",
+          "split": "add_random",
+          "answer_pos": 4,
+          "token_id": 1,
+          "subtask": "UC",
+          "carry": "carry",
+          "sum_mod10": 4,
+          "confidence": 0.9960314631462097
+        },
+        {
+          "problem": "883685+786015",
+          "split": "add_random",
+          "answer_pos": 4,
+          "token_id": 1,
+          "subtask": "UC",
+          "carry": "carry",
+          "sum_mod10": 6,
+          "confidence": 0.9924474954605103
+        },
+        {
+          "problem": "955434+054162",
+          "split": "add_random",
+          "answer_pos": 4,
+          "token_id": 1,
+          "subtask": "SA",
+          "carry": "carry",
+          "sum_mod10": 5,
+          "confidence": 0.9916400909423828
+        },
+        {
+          "problem": "045370+747131",
+          "split": "add_random",
+          "answer_pos": 4,
+          "token_id": 1,
+          "subtask": "UC",
+          "carry": "no_carry",
+          "sum_mod10": 4,
+          "confidence": 0.9872083067893982
+        },
+        {
+          "problem": "355978+799632",
+          "split": "add_random",
+          "answer_pos": 4,
+          "token_id": 1,
+          "subtask": "UC",
+          "carry": "carry",
+          "sum_mod10": 5,
+          "confidence": 0.9851176738739014
+        },
+        {
+          "problem": "662597+007946",
+          "split": "add_C4",
+          "answer_pos": 1,
+          "token_id": 1,
+          "subtask": "SA",
+          "carry": "carry",
+          "sum_mod10": 6,
+          "confidence": 0.9849837422370911
+        },
+        {
+          "problem": "866380+033137",
+          "split": "add_random",
+          "answer_pos": 4,
+          "token_id": 1,
+          "subtask": "UC",
+          "carry": "carry",
+          "sum_mod10": 4,
+          "confidence": 0.9846864938735962
+        },
+        {
+          "problem": "517145+992957",
+          "split": "add_C6",
+          "answer_pos": 4,
+          "token_id": 1,
+          "subtask": "UC",
+          "carry": "carry",
+          "sum_mod10": 0,
+          "confidence": 0.9829074740409851
+        },
+        {
+          "problem": "070339+059768",
+          "split": "add_C5",
+          "answer_pos": 4,
+          "token_id": 1,
+          "subtask": "UC",
+          "carry": "carry",
+          "sum_mod10": 0,
+          "confidence": 0.9810478687286377
+        },
+        {
+          "problem": "142587+068630",
+          "split": "add_C4",
+          "answer_pos": 4,
+          "token_id": 1,
+          "subtask": "UC",
+          "carry": "carry",
+          "sum_mod10": 1,
+          "confidence": 0.9781070351600647
+        }
+      ],
+      "interpretation": "This token routes to the fourth digit position during addition when a carry from the previous position must be incorporated."
+    },
+    {
+      "token_id": 2,
+      "n_occurrences": 211,
+      "mean_confidence": 0.9874902188777923,
+      "top_subtask": "UC",
+      "top_subtask_purity": 0.6966824644549763,
+      "subtask_counts": {
+        "UC": 147,
+        "SA": 46,
+        "SC": 6,
+        "ME": 2,
+        "MD": 9,
+        "MB": 1
+      },
+      "top_examples": [
+        {
+          "problem": "278852+824171",
+          "split": "add_C5",
+          "answer_pos": 0,
+          "token_id": 2,
+          "subtask": "UC",
+          "carry": "no_carry",
+          "sum_mod10": 0,
+          "confidence": 0.9905273914337158
+        },
+        {
+          "problem": "233498+868745",
+          "split": "add_C6",
+          "answer_pos": 0,
+          "token_id": 2,
+          "subtask": "UC",
+          "carry": "carry",
+          "sum_mod10": 0,
+          "confidence": 0.9900133609771729
+        },
+        {
+          "problem": "266806+933194",
+          "split": "add_C6",
+          "answer_pos": 0,
+          "token_id": 2,
+          "subtask": "UC",
+          "carry": "carry",
+          "sum_mod10": 0,
+          "confidence": 0.9895480871200562
+        },
+        {
+          "problem": "295060+810998",
+          "split": "add_random",
+          "answer_pos": 0,
+          "token_id": 2,
+          "subtask": "UC",
+          "carry": "no_carry",
+          "sum_mod10": 0,
+          "confidence": 0.9882161021232605
+        },
+        {
+          "problem": "313129+785529",
+          "split": "add_random",
+          "answer_pos": 0,
+          "token_id": 2,
+          "subtask": "UC",
+          "carry": "carry",
+          "sum_mod10": 0,
+          "confidence": 0.9878283739089966
+        },
+        {
+          "problem": "217390+982661",
+          "split": "add_C5",
+          "answer_pos": 0,
+          "token_id": 2,
+          "subtask": "UC",
+          "carry": "no_carry",
+          "sum_mod10": 0,
+          "confidence": 0.9871540665626526
+        },
+        {
+          "problem": "215501+994512",
+          "split": "add_C4",
+          "answer_pos": 0,
+          "token_id": 2,
+          "subtask": "UC",
+          "carry": "no_carry",
+          "sum_mod10": 0,
+          "confidence": 0.9856566190719604
+        },
+        {
+          "problem": "211150+824861",
+          "split": "add_random",
+          "answer_pos": 0,
+          "token_id": 2,
+          "subtask": "UC",
+          "carry": "no_carry",
+          "sum_mod10": 0,
+          "confidence": 0.9854985475540161
+        },
+        {
+          "problem": "214711+952665",
+          "split": "add_random",
+          "answer_pos": 0,
+          "token_id": 2,
+          "subtask": "UC",
+          "carry": "no_carry",
+          "sum_mod10": 0,
+          "confidence": 0.9852525591850281
+        },
+        {
+          "problem": "299642+806385",
+          "split": "add_C5",
+          "answer_pos": 0,
+          "token_id": 2,
+          "subtask": "UC",
+          "carry": "no_carry",
+          "sum_mod10": 0,
+          "confidence": 0.9852070808410645
+        }
+      ],
+      "interpretation": "Token t2 outputs the ones digit (0) when adding two numbers whose ones digits sum to 10 or more."
+    },
+    {
+      "token_id": 3,
+      "n_occurrences": 465,
+      "mean_confidence": 0.9365082085132599,
+      "top_subtask": "UC",
+      "top_subtask_purity": 0.44086021505376344,
+      "subtask_counts": {
+        "UC": 205,
+        "US": 145,
+        "SC": 31,
+        "SA": 72,
+        "UD": 3,
+        "SS": 9
+      },
+      "top_examples": [
+        {
+          "problem": "255916+543496",
+          "split": "add_random",
+          "answer_pos": 3,
+          "token_id": 3,
+          "subtask": "UC",
+          "carry": "no_carry",
+          "sum_mod10": 8,
+          "confidence": 0.9456157088279724
+        },
+        {
+          "problem": "352205+688995",
+          "split": "add_C6",
+          "answer_pos": 3,
+          "token_id": 3,
+          "subtask": "UC",
+          "carry": "carry",
+          "sum_mod10": 0,
+          "confidence": 0.9432126879692078
+        },
+        {
+          "problem": "644331+254756",
+          "split": "add_random",
+          "answer_pos": 3,
+          "token_id": 3,
+          "subtask": "UC",
+          "carry": "no_carry",
+          "sum_mod10": 8,
+          "confidence": 0.9394879341125488
+        },
+        {
+          "problem": "534557+404499",
+          "split": "add_random",
+          "answer_pos": 3,
+          "token_id": 3,
+          "subtask": "UC",
+          "carry": "no_carry",
+          "sum_mod10": 8,
+          "confidence": 0.9387577772140503
+        },
+        {
+          "problem": "517396+499607",
+          "split": "add_C6",
+          "answer_pos": 3,
+          "token_id": 3,
+          "subtask": "UC",
+          "carry": "carry",
+          "sum_mod10": 6,
+          "confidence": 0.9373496174812317
+        },
+        {
+          "problem": "586386+429629",
+          "split": "add_C6",
+          "answer_pos": 3,
+          "token_id": 3,
+          "subtask": "UC",
+          "carry": "carry",
+          "sum_mod10": 5,
+          "confidence": 0.9368154406547546
+        },
+        {
+          "problem": "150424+499976",
+          "split": "add_C5",
+          "answer_pos": 3,
+          "token_id": 3,
+          "subtask": "US",
+          "carry": "carry",
+          "sum_mod10": 9,
+          "confidence": 0.9350097179412842
+        },
+        {
+          "problem": "967504+464307",
+          "split": "add_random",
+          "answer_pos": 3,
+          "token_id": 3,
+          "subtask": "SC",
+          "carry": "carry",
+          "sum_mod10": 1,
+          "confidence": 0.9308806657791138
+        },
+        {
+          "problem": "448910+561340",
+          "split": "add_C4",
+          "answer_pos": 3,
+          "token_id": 3,
+          "subtask": "US",
+          "carry": "carry",
+          "sum_mod10": 9,
+          "confidence": 0.9292649030685425
+        },
+        {
+          "problem": "257730+638556",
+          "split": "add_random",
+          "answer_pos": 3,
+          "token_id": 3,
+          "subtask": "UC",
+          "carry": "carry",
+          "sum_mod10": 5,
+          "confidence": 0.9286876320838928
+        }
+      ],
+      "interpretation": "Token t3 routes to the hundreds position (d3) when processing carries from the tens column in addition."
+    },
+    {
+      "token_id": 4,
+      "n_occurrences": 244,
+      "mean_confidence": 0.8058856964111328,
+      "top_subtask": "UC",
+      "top_subtask_purity": 0.4344262295081967,
+      "subtask_counts": {
+        "UC": 106,
+        "SC": 13,
+        "SA": 8,
+        "US": 7,
+        "UD": 20,
+        "UB": 38,
+        "ME": 17,
+        "MB": 4,
+        "MD": 30,
+        "SS": 1
+      },
+      "top_examples": [
+        {
+          "problem": "962635+352277",
+          "split": "add_random",
+          "answer_pos": 0,
+          "token_id": 4,
+          "subtask": "UC",
+          "carry": "carry",
+          "sum_mod10": 0,
+          "confidence": 0.8640374541282654
+        },
+        {
+          "problem": "967504+464307",
+          "split": "add_random",
+          "answer_pos": 0,
+          "token_id": 4,
+          "subtask": "UC",
+          "carry": "carry",
+          "sum_mod10": 0,
+          "confidence": 0.8312476277351379
+        },
+        {
+          "problem": "933750+467310",
+          "split": "add_C4",
+          "answer_pos": 0,
+          "token_id": 4,
+          "subtask": "UC",
+          "carry": "no_carry",
+          "sum_mod10": 0,
+          "confidence": 0.8171806931495667
+        },
+        {
+          "problem": "999200+451802",
+          "split": "add_C4",
+          "answer_pos": 0,
+          "token_id": 4,
+          "subtask": "UC",
+          "carry": "no_carry",
+          "sum_mod10": 0,
+          "confidence": 0.8125594854354858
+        },
+        {
+          "problem": "994126+428879",
+          "split": "add_random",
+          "answer_pos": 0,
+          "token_id": 4,
+          "subtask": "UC",
+          "carry": "carry",
+          "sum_mod10": 0,
+          "confidence": 0.8071195483207703
+        },
+        {
+          "problem": "050792+979298",
+          "split": "add_C6",
+          "answer_pos": 0,
+          "token_id": 4,
+          "subtask": "UC",
+          "carry": "carry",
+          "sum_mod10": 0,
+          "confidence": 0.8055747747421265
+        },
+        {
+          "problem": "472276+439117",
+          "split": "add_random",
+          "answer_pos": 4,
+          "token_id": 4,
+          "subtask": "SA",
+          "carry": "carry",
+          "sum_mod10": 3,
+          "confidence": 0.7952715158462524
+        },
+        {
+          "problem": "466797+934313",
+          "split": "add_C6",
+          "answer_pos": 4,
+          "token_id": 4,
+          "subtask": "UC",
+          "carry": "carry",
+          "sum_mod10": 0,
+          "confidence": 0.7848758101463318
+        },
+        {
+          "problem": "602491+246902",
+          "split": "add_random",
+          "answer_pos": 4,
+          "token_id": 4,
+          "subtask": "SC",
+          "carry": "no_carry",
+          "sum_mod10": 3,
+          "confidence": 0.7801400423049927
+        },
+        {
+          "problem": "910992+208969",
+          "split": "add_random",
+          "answer_pos": 0,
+          "token_id": 4,
+          "subtask": "UC",
+          "carry": "carry",
+          "sum_mod10": 0,
+          "confidence": 0.7608500123023987
+        }
+      ],
+      "interpretation": "Token t4 routes to positions where the sum of digits equals zero, typically when a carry must be processed."
+    },
+    {
+      "token_id": 5,
+      "n_occurrences": 108,
+      "mean_confidence": 0.9312467038631439,
+      "top_subtask": "MD",
+      "top_subtask_purity": 0.6481481481481481,
+      "subtask_counts": {
+        "UC": 11,
+        "US": 8,
+        "ME": 15,
+        "MD": 70,
+        "UD": 1,
+        "SS": 1,
+        "MB": 2
+      },
+      "top_examples": [
+        {
+          "problem": "474656-024658",
+          "split": "sub_M4",
+          "answer_pos": 0,
+          "token_id": 5,
+          "subtask": "MD",
+          "carry": "carry",
+          "sum_mod10": 0,
+          "confidence": 0.9510071873664856
+        },
+        {
+          "problem": "692285-192445",
+          "split": "sub_M3",
+          "answer_pos": 0,
+          "token_id": 5,
+          "subtask": "MD",
+          "carry": "no_carry",
+          "sum_mod10": 0,
+          "confidence": 0.9431094527244568
+        },
+        {
+          "problem": "662434-412032",
+          "split": "sub_random",
+          "answer_pos": 3,
+          "token_id": 5,
+          "subtask": "ME",
+          "carry": "carry",
+          "sum_mod10": 4,
+          "confidence": 0.94245845079422
+        },
+        {
+          "problem": "433576-323094",
+          "split": "sub_random",
+          "answer_pos": 3,
+          "token_id": 5,
+          "subtask": "ME",
+          "carry": "carry",
+          "sum_mod10": 6,
+          "confidence": 0.940261721611023
+        },
+        {
+          "problem": "685955-185970",
+          "split": "sub_M4",
+          "answer_pos": 0,
+          "token_id": 5,
+          "subtask": "MD",
+          "carry": "no_carry",
+          "sum_mod10": 0,
+          "confidence": 0.9347293376922607
+        },
+        {
+          "problem": "457951-079158",
+          "split": "sub_random",
+          "answer_pos": 0,
+          "token_id": 5,
+          "subtask": "MD",
+          "carry": "carry",
+          "sum_mod10": 0,
+          "confidence": 0.9335967898368835
+        },
+        {
+          "problem": "487550-057557",
+          "split": "sub_M4",
+          "answer_pos": 0,
+          "token_id": 5,
+          "subtask": "MD",
+          "carry": "carry",
+          "sum_mod10": 0,
+          "confidence": 0.9335825443267822
+        },
+        {
+          "problem": "098526+032999",
+          "split": "add_C5",
+          "answer_pos": 3,
+          "token_id": 5,
+          "subtask": "UC",
+          "carry": "carry",
+          "sum_mod10": 0,
+          "confidence": 0.9286146759986877
+        },
+        {
+          "problem": "410824-000825",
+          "split": "sub_M4",
+          "answer_pos": 0,
+          "token_id": 5,
+          "subtask": "MD",
+          "carry": "carry",
+          "sum_mod10": 0,
+          "confidence": 0.9202121496200562
+        },
+        {
+          "problem": "489465-035669",
+          "split": "sub_random",
+          "answer_pos": 0,
+          "token_id": 5,
+          "subtask": "MD",
+          "carry": "carry",
+          "sum_mod10": 0,
+          "confidence": 0.8848947286605835
+        }
+      ],
+      "interpretation": "Token t5 routes cases where the ones digit result is 0, spanning multiple subtasks and operations."
+    },
+    {
+      "token_id": 6,
+      "n_occurrences": 511,
+      "mean_confidence": 0.8841783702373505,
+      "top_subtask": "UC",
+      "top_subtask_purity": 0.2720156555772994,
+      "subtask_counts": {
+        "UC": 139,
+        "US": 73,
+        "SC": 26,
+        "UD": 53,
+        "MD": 95,
+        "ME": 9,
+        "UB": 67,
+        "SA": 31,
+        "SS": 8,
+        "MB": 10
+      },
+      "top_examples": [
+        {
+          "problem": "855207-100647",
+          "split": "sub_random",
+          "answer_pos": 0,
+          "token_id": 6,
+          "subtask": "MD",
+          "carry": "no_carry",
+          "sum_mod10": 0,
+          "confidence": 0.9058883190155029
+        },
+        {
+          "problem": "698030-618083",
+          "split": "sub_M3",
+          "answer_pos": 1,
+          "token_id": 6,
+          "subtask": "ME",
+          "carry": "carry",
+          "sum_mod10": 2,
+          "confidence": 0.8963809609413147
+        },
+        {
+          "problem": "832712-138248",
+          "split": "sub_random",
+          "answer_pos": 0,
+          "token_id": 6,
+          "subtask": "MD",
+          "carry": "carry",
+          "sum_mod10": 0,
+          "confidence": 0.8849310278892517
+        },
+        {
+          "problem": "769304+510583",
+          "split": "add_random",
+          "answer_pos": 2,
+          "token_id": 6,
+          "subtask": "SA",
+          "carry": "no_carry",
+          "sum_mod10": 7,
+          "confidence": 0.8844621777534485
+        },
+        {
+          "problem": "945627-214813",
+          "split": "sub_random",
+          "answer_pos": 0,
+          "token_id": 6,
+          "subtask": "MD",
+          "carry": "no_carry",
+          "sum_mod10": 0,
+          "confidence": 0.8815941214561462
+        },
+        {
+          "problem": "996344-260789",
+          "split": "sub_random",
+          "answer_pos": 0,
+          "token_id": 6,
+          "subtask": "MD",
+          "carry": "carry",
+          "sum_mod10": 0,
+          "confidence": 0.8795292377471924
+        },
+        {
+          "problem": "519288-502418",
+          "split": "sub_random",
+          "answer_pos": 4,
+          "token_id": 6,
+          "subtask": "MB",
+          "carry": "no_carry",
+          "sum_mod10": 6,
+          "confidence": 0.8794909715652466
+        },
+        {
+          "problem": "046275+055725",
+          "split": "add_C5",
+          "answer_pos": 2,
+          "token_id": 6,
+          "subtask": "US",
+          "carry": "carry",
+          "sum_mod10": 9,
+          "confidence": 0.8773840069770813
+        },
+        {
+          "problem": "144364+156798",
+          "split": "add_C5",
+          "answer_pos": 2,
+          "token_id": 6,
+          "subtask": "US",
+          "carry": "carry",
+          "sum_mod10": 9,
+          "confidence": 0.8760847449302673
+        },
+        {
+          "problem": "985195-238626",
+          "split": "sub_random",
+          "answer_pos": 0,
+          "token_id": 6,
+          "subtask": "MD",
+          "carry": "carry",
+          "sum_mod10": 0,
+          "confidence": 0.876038134098053
+        }
+      ],
+      "interpretation": "Token t6 routes cases where the ones digit result is 0, regardless of operation or carry state."
+    },
+    {
+      "token_id": 7,
+      "n_occurrences": 79,
+      "mean_confidence": 0.8508209884166718,
+      "top_subtask": "MD",
+      "top_subtask_purity": 0.4050632911392405,
+      "subtask_counts": {
+        "UC": 20,
+        "SC": 1,
+        "US": 3,
+        "MD": 32,
+        "MB": 7,
+        "UD": 5,
+        "ME": 4,
+        "SA": 1,
+        "UB": 6
+      },
+      "top_examples": [
+        {
+          "problem": "398247-119248",
+          "split": "sub_random",
+          "answer_pos": 0,
+          "token_id": 7,
+          "subtask": "MD",
+          "carry": "carry",
+          "sum_mod10": 0,
+          "confidence": 0.8947626948356628
+        },
+        {
+          "problem": "328416-118417",
+          "split": "sub_M4",
+          "answer_pos": 0,
+          "token_id": 7,
+          "subtask": "MD",
+          "carry": "carry",
+          "sum_mod10": 0,
+          "confidence": 0.8828264474868774
+        },
+        {
+          "problem": "566600-526680",
+          "split": "sub_M3",
+          "answer_pos": 4,
+          "token_id": 7,
+          "subtask": "UD",
+          "carry": "no_carry",
+          "sum_mod10": 2,
+          "confidence": 0.8753876686096191
+        },
+        {
+          "problem": "317208-117257",
+          "split": "sub_M4",
+          "answer_pos": 0,
+          "token_id": 7,
+          "subtask": "MD",
+          "carry": "no_carry",
+          "sum_mod10": 0,
+          "confidence": 0.8733936548233032
+        },
+        {
+          "problem": "386759-136743",
+          "split": "sub_random",
+          "answer_pos": 0,
+          "token_id": 7,
+          "subtask": "MD",
+          "carry": "no_carry",
+          "sum_mod10": 0,
+          "confidence": 0.8689481019973755
+        },
+        {
+          "problem": "304450-106451",
+          "split": "sub_M3",
+          "answer_pos": 0,
+          "token_id": 7,
+          "subtask": "MD",
+          "carry": "carry",
+          "sum_mod10": 0,
+          "confidence": 0.8419314026832581
+        },
+        {
+          "problem": "723193-421391",
+          "split": "sub_random",
+          "answer_pos": 2,
+          "token_id": 7,
+          "subtask": "ME",
+          "carry": "carry",
+          "sum_mod10": 4,
+          "confidence": 0.8352614641189575
+        },
+        {
+          "problem": "939102-912107",
+          "split": "sub_M3",
+          "answer_pos": 1,
+          "token_id": 7,
+          "subtask": "ME",
+          "carry": "carry",
+          "sum_mod10": 8,
+          "confidence": 0.8211159110069275
+        },
+        {
+          "problem": "727630-088514",
+          "split": "sub_random",
+          "answer_pos": 4,
+          "token_id": 7,
+          "subtask": "MD",
+          "carry": "carry",
+          "sum_mod10": 1,
+          "confidence": 0.8097489476203918
+        },
+        {
+          "problem": "399162-199701",
+          "split": "sub_M3",
+          "answer_pos": 0,
+          "token_id": 7,
+          "subtask": "MD",
+          "carry": "no_carry",
+          "sum_mod10": 0,
+          "confidence": 0.8048335909843445
+        }
+      ],
+      "interpretation": "Token t7 routes to positions where the result digit is 0, regardless of operation or carry state."
+    },
+    {
+      "token_id": 8,
+      "n_occurrences": 847,
+      "mean_confidence": 0.9050904750823975,
+      "top_subtask": "MD",
+      "top_subtask_purity": 0.26210153482880755,
+      "subtask_counts": {
+        "UC": 148,
+        "US": 60,
+        "SA": 42,
+        "MD": 222,
+        "UB": 182,
+        "UD": 112,
+        "ME": 18,
+        "MB": 27,
+        "SC": 29,
+        "SS": 7
+      },
+      "top_examples": [
+        {
+          "problem": "757240+275920",
+          "split": "add_C4",
+          "answer_pos": 2,
+          "token_id": 8,
+          "subtask": "UC",
+          "carry": "carry",
+          "sum_mod10": 2,
+          "confidence": 0.9234461784362793
+        },
+        {
+          "problem": "996421-617378",
+          "split": "sub_random",
+          "answer_pos": 2,
+          "token_id": 8,
+          "subtask": "UB",
+          "carry": "no_carry",
+          "sum_mod10": 0,
+          "confidence": 0.9225627183914185
+        },
+        {
+          "problem": "487550-057557",
+          "split": "sub_M4",
+          "answer_pos": 2,
+          "token_id": 8,
+          "subtask": "UB",
+          "carry": "carry",
+          "sum_mod10": 3,
+          "confidence": 0.9148608446121216
+        },
+        {
+          "problem": "357830+885381",
+          "split": "add_C5",
+          "answer_pos": 2,
+          "token_id": 8,
+          "subtask": "UC",
+          "carry": "carry",
+          "sum_mod10": 3,
+          "confidence": 0.9086161851882935
+        },
+        {
+          "problem": "489816-237183",
+          "split": "sub_random",
+          "answer_pos": 2,
+          "token_id": 8,
+          "subtask": "MD",
+          "carry": "no_carry",
+          "sum_mod10": 1,
+          "confidence": 0.9023459553718567
+        },
+        {
+          "problem": "117623-087638",
+          "split": "sub_M3",
+          "answer_pos": 2,
+          "token_id": 8,
+          "subtask": "UB",
+          "carry": "carry",
+          "sum_mod10": 9,
+          "confidence": 0.8984537124633789
+        },
+        {
+          "problem": "689004-389973",
+          "split": "sub_M3",
+          "answer_pos": 1,
+          "token_id": 8,
+          "subtask": "UB",
+          "carry": "carry",
+          "sum_mod10": 9,
+          "confidence": 0.8970780372619629
+        },
+        {
+          "problem": "999915-571662",
+          "split": "sub_random",
+          "answer_pos": 1,
+          "token_id": 8,
+          "subtask": "MD",
+          "carry": "carry",
+          "sum_mod10": 4,
+          "confidence": 0.8947539329528809
+        },
+        {
+          "problem": "708242-157036",
+          "split": "sub_random",
+          "answer_pos": 2,
+          "token_id": 8,
+          "subtask": "MB",
+          "carry": "no_carry",
+          "sum_mod10": 5,
+          "confidence": 0.8947234749794006
+        },
+        {
+          "problem": "370519-071978",
+          "split": "sub_random",
+          "answer_pos": 1,
+          "token_id": 8,
+          "subtask": "UB",
+          "carry": "carry",
+          "sum_mod10": 3,
+          "confidence": 0.8940637111663818
+        }
+      ],
+      "interpretation": "Token t8 activates when processing the tens digit (d2) across addition/subtraction with various carry/borrow states."
+    },
+    {
+      "token_id": 9,
+      "n_occurrences": 34,
+      "mean_confidence": 0.5991253018379211,
+      "top_subtask": "UC",
+      "top_subtask_purity": 0.29411764705882354,
+      "subtask_counts": {
+        "UC": 10,
+        "UD": 8,
+        "ME": 1,
+        "MB": 1,
+        "MD": 8,
+        "SA": 1,
+        "UB": 5
+      },
+      "top_examples": [
+        {
+          "problem": "837522-287586",
+          "split": "sub_M3",
+          "answer_pos": 4,
+          "token_id": 9,
+          "subtask": "UD",
+          "carry": "carry",
+          "sum_mod10": 0,
+          "confidence": 0.7085369825363159
+        },
+        {
+          "problem": "542084+813951",
+          "split": "add_random",
+          "answer_pos": 0,
+          "token_id": 9,
+          "subtask": "UC",
+          "carry": "no_carry",
+          "sum_mod10": 0,
+          "confidence": 0.6971293091773987
+        },
+        {
+          "problem": "513554-476890",
+          "split": "sub_random",
+          "answer_pos": 1,
+          "token_id": 9,
+          "subtask": "UB",
+          "carry": "carry",
+          "sum_mod10": 9,
+          "confidence": 0.6242627501487732
+        },
+        {
+          "problem": "537485+804827",
+          "split": "add_random",
+          "answer_pos": 0,
+          "token_id": 9,
+          "subtask": "UC",
+          "carry": "carry",
+          "sum_mod10": 0,
+          "confidence": 0.6031911373138428
+        },
+        {
+          "problem": "330161-110766",
+          "split": "sub_random",
+          "answer_pos": 3,
+          "token_id": 9,
+          "subtask": "UD",
+          "carry": "carry",
+          "sum_mod10": 0,
+          "confidence": 0.5824723243713379
+        },
+        {
+          "problem": "370519-071978",
+          "split": "sub_random",
+          "answer_pos": 4,
+          "token_id": 9,
+          "subtask": "UB",
+          "carry": "carry",
+          "sum_mod10": 4,
+          "confidence": 0.5803685188293457
+        },
+        {
+          "problem": "751515-701576",
+          "split": "sub_M3",
+          "answer_pos": 4,
+          "token_id": 9,
+          "subtask": "UD",
+          "carry": "no_carry",
+          "sum_mod10": 0,
+          "confidence": 0.5738846063613892
+        },
+        {
+          "problem": "581213-149976",
+          "split": "sub_random",
+          "answer_pos": 0,
+          "token_id": 9,
+          "subtask": "MD",
+          "carry": "carry",
+          "sum_mod10": 0,
+          "confidence": 0.5688223242759705
+        },
+        {
+          "problem": "667116-637176",
+          "split": "sub_M3",
+          "answer_pos": 4,
+          "token_id": 9,
+          "subtask": "UD",
+          "carry": "no_carry",
+          "sum_mod10": 2,
+          "confidence": 0.5273774862289429
+        },
+        {
+          "problem": "399162-199701",
+          "split": "sub_M3",
+          "answer_pos": 3,
+          "token_id": 9,
+          "subtask": "UD",
+          "carry": "carry",
+          "sum_mod10": 8,
+          "confidence": 0.5252075791358948
+        }
+      ],
+      "interpretation": "Token t9 routes to subtraction positions with borrow cascades, especially when result digit is zero."
+    },
+    {
+      "token_id": 10,
+      "n_occurrences": 159,
+      "mean_confidence": 0.8847495794296265,
+      "top_subtask": "UB",
+      "top_subtask_purity": 0.4088050314465409,
+      "subtask_counts": {
+        "UC": 28,
+        "US": 3,
+        "SC": 8,
+        "UD": 34,
+        "UB": 65,
+        "ME": 3,
+        "MD": 6,
+        "SA": 9,
+        "SS": 1,
+        "MB": 2
+      },
+      "top_examples": [
+        {
+          "problem": "678819-478847",
+          "split": "sub_M4",
+          "answer_pos": 4,
+          "token_id": 10,
+          "subtask": "UD",
+          "carry": "carry",
+          "sum_mod10": 6,
+          "confidence": 0.9285803437232971
+        },
+        {
+          "problem": "821323-021352",
+          "split": "sub_M4",
+          "answer_pos": 4,
+          "token_id": 10,
+          "subtask": "UD",
+          "carry": "carry",
+          "sum_mod10": 6,
+          "confidence": 0.8933896422386169
+        },
+        {
+          "problem": "546041-012777",
+          "split": "sub_random",
+          "answer_pos": 4,
+          "token_id": 10,
+          "subtask": "UB",
+          "carry": "no_carry",
+          "sum_mod10": 7,
+          "confidence": 0.8872289657592773
+        },
+        {
+          "problem": "832712-138248",
+          "split": "sub_random",
+          "answer_pos": 4,
+          "token_id": 10,
+          "subtask": "UB",
+          "carry": "carry",
+          "sum_mod10": 9,
+          "confidence": 0.8869684338569641
+        },
+        {
+          "problem": "644659-408708",
+          "split": "sub_random",
+          "answer_pos": 2,
+          "token_id": 10,
+          "subtask": "UB",
+          "carry": "carry",
+          "sum_mod10": 4,
+          "confidence": 0.8836197853088379
+        },
+        {
+          "problem": "973047-473580",
+          "split": "sub_M3",
+          "answer_pos": 4,
+          "token_id": 10,
+          "subtask": "UB",
+          "carry": "carry",
+          "sum_mod10": 5,
+          "confidence": 0.8812587857246399
+        },
+        {
+          "problem": "855312-765347",
+          "split": "sub_M3",
+          "answer_pos": 4,
+          "token_id": 10,
+          "subtask": "UD",
+          "carry": "carry",
+          "sum_mod10": 6,
+          "confidence": 0.8805156946182251
+        },
+        {
+          "problem": "949949-813984",
+          "split": "sub_random",
+          "answer_pos": 4,
+          "token_id": 10,
+          "subtask": "UD",
+          "carry": "no_carry",
+          "sum_mod10": 8,
+          "confidence": 0.8778430819511414
+        },
+        {
+          "problem": "550342-489829",
+          "split": "sub_random",
+          "answer_pos": 1,
+          "token_id": 10,
+          "subtask": "UB",
+          "carry": "no_carry",
+          "sum_mod10": 9,
+          "confidence": 0.8686966896057129
+        },
+        {
+          "problem": "799654-298583",
+          "split": "sub_random",
+          "answer_pos": 4,
+          "token_id": 10,
+          "subtask": "UB",
+          "carry": "carry",
+          "sum_mod10": 1,
+          "confidence": 0.859394371509552
+        }
+      ],
+      "interpretation": "Token t10 routes subtraction problems requiring borrow propagation at mid-to-late digit positions."
+    },
+    {
+      "token_id": 11,
+      "n_occurrences": 39,
+      "mean_confidence": 0.6341803669929504,
+      "top_subtask": "UB",
+      "top_subtask_purity": 0.38461538461538464,
+      "subtask_counts": {
+        "UC": 5,
+        "UD": 8,
+        "UB": 15,
+        "MD": 9,
+        "ME": 1,
+        "MB": 1
+      },
+      "top_examples": [
+        {
+          "problem": "786014-742386",
+          "split": "sub_random",
+          "answer_pos": 4,
+          "token_id": 11,
+          "subtask": "UB",
+          "carry": "no_carry",
+          "sum_mod10": 3,
+          "confidence": 0.7255966663360596
+        },
+        {
+          "problem": "667700-428179",
+          "split": "sub_random",
+          "answer_pos": 4,
+          "token_id": 11,
+          "subtask": "UB",
+          "carry": "no_carry",
+          "sum_mod10": 8,
+          "confidence": 0.6972817778587341
+        },
+        {
+          "problem": "489816-237183",
+          "split": "sub_random",
+          "answer_pos": 4,
+          "token_id": 11,
+          "subtask": "UB",
+          "carry": "no_carry",
+          "sum_mod10": 9,
+          "confidence": 0.6808857917785645
+        },
+        {
+          "problem": "858519-838589",
+          "split": "sub_M3",
+          "answer_pos": 4,
+          "token_id": 11,
+          "subtask": "UD",
+          "carry": "no_carry",
+          "sum_mod10": 0,
+          "confidence": 0.6472093462944031
+        },
+        {
+          "problem": "100612-000681",
+          "split": "sub_M4",
+          "answer_pos": 4,
+          "token_id": 11,
+          "subtask": "UD",
+          "carry": "carry",
+          "sum_mod10": 2,
+          "confidence": 0.6264656186103821
+        },
+        {
+          "problem": "482021-282721",
+          "split": "sub_M3",
+          "answer_pos": 3,
+          "token_id": 11,
+          "subtask": "UD",
+          "carry": "carry",
+          "sum_mod10": 4,
+          "confidence": 0.6111965775489807
+        },
+        {
+          "problem": "409611-109680",
+          "split": "sub_M4",
+          "answer_pos": 4,
+          "token_id": 11,
+          "subtask": "UD",
+          "carry": "carry",
+          "sum_mod10": 2,
+          "confidence": 0.6018631458282471
+        },
+        {
+          "problem": "883404-266577",
+          "split": "sub_random",
+          "answer_pos": 4,
+          "token_id": 11,
+          "subtask": "UB",
+          "carry": "no_carry",
+          "sum_mod10": 9,
+          "confidence": 0.5896624326705933
+        },
+        {
+          "problem": "119606-019674",
+          "split": "sub_M4",
+          "answer_pos": 4,
+          "token_id": 11,
+          "subtask": "UD",
+          "carry": "carry",
+          "sum_mod10": 2,
+          "confidence": 0.5831637978553772
+        },
+        {
+          "problem": "381612-093585",
+          "split": "sub_random",
+          "answer_pos": 4,
+          "token_id": 11,
+          "subtask": "UB",
+          "carry": "carry",
+          "sum_mod10": 1,
+          "confidence": 0.5784785151481628
+        }
+      ],
+      "interpretation": "Token t11 routes subtraction problems at the thousands position when borrowing is needed or absent."
+    },
+    {
+      "token_id": 12,
+      "n_occurrences": 211,
+      "mean_confidence": 0.5497788548469543,
+      "top_subtask": "SA",
+      "top_subtask_purity": 0.6350710900473934,
+      "subtask_counts": {
+        "SA": 134,
+        "SC": 27,
+        "UC": 20,
+        "US": 9,
+        "MD": 13,
+        "UD": 1,
+        "SS": 5,
+        "ME": 1,
+        "MB": 1
+      },
+      "top_examples": [
+        {
+          "problem": "904104+063314",
+          "split": "add_random",
+          "answer_pos": 3,
+          "token_id": 12,
+          "subtask": "SA",
+          "carry": "no_carry",
+          "sum_mod10": 7,
+          "confidence": 0.5730973482131958
+        },
+        {
+          "problem": "004288+235779",
+          "split": "add_C4",
+          "answer_pos": 0,
+          "token_id": 12,
+          "subtask": "SA",
+          "carry": "carry",
+          "sum_mod10": 0,
+          "confidence": 0.5552047491073608
+        },
+        {
+          "problem": "977262+576229",
+          "split": "add_random",
+          "answer_pos": 3,
+          "token_id": 12,
+          "subtask": "SC",
+          "carry": "carry",
+          "sum_mod10": 3,
+          "confidence": 0.5497728586196899
+        },
+        {
+          "problem": "135246+247021",
+          "split": "add_random",
+          "answer_pos": 4,
+          "token_id": 12,
+          "subtask": "SA",
+          "carry": "no_carry",
+          "sum_mod10": 2,
+          "confidence": 0.5490321516990662
+        },
+        {
+          "problem": "887240+024324",
+          "split": "add_random",
+          "answer_pos": 3,
+          "token_id": 12,
+          "subtask": "SC",
+          "carry": "carry",
+          "sum_mod10": 1,
+          "confidence": 0.5486559271812439
+        },
+        {
+          "problem": "228375+198287",
+          "split": "add_random",
+          "answer_pos": 0,
+          "token_id": 12,
+          "subtask": "SA",
+          "carry": "carry",
+          "sum_mod10": 0,
+          "confidence": 0.5476237535476685
+        },
+        {
+          "problem": "048961+156044",
+          "split": "add_C4",
+          "answer_pos": 0,
+          "token_id": 12,
+          "subtask": "SA",
+          "carry": "no_carry",
+          "sum_mod10": 0,
+          "confidence": 0.5461012125015259
+        },
+        {
+          "problem": "430359+018181",
+          "split": "add_random",
+          "answer_pos": 3,
+          "token_id": 12,
+          "subtask": "SA",
+          "carry": "no_carry",
+          "sum_mod10": 8,
+          "confidence": 0.5454685091972351
+        },
+        {
+          "problem": "076635+103467",
+          "split": "add_C4",
+          "answer_pos": 0,
+          "token_id": 12,
+          "subtask": "SA",
+          "carry": "carry",
+          "sum_mod10": 0,
+          "confidence": 0.5419133901596069
+        },
+        {
+          "problem": "317268+215567",
+          "split": "add_random",
+          "answer_pos": 0,
+          "token_id": 12,
+          "subtask": "SA",
+          "carry": "carry",
+          "sum_mod10": 0,
+          "confidence": 0.5409186482429504
+        }
+      ],
+      "interpretation": "Token t12 fires when computing digit sums that equal 0 modulo 10, particularly at position d0."
+    },
+    {
+      "token_id": 13,
+      "n_occurrences": 73,
+      "mean_confidence": 0.47327136993408203,
+      "top_subtask": "UC",
+      "top_subtask_purity": 0.2465753424657534,
+      "subtask_counts": {
+        "SA": 3,
+        "US": 10,
+        "UC": 18,
+        "SC": 4,
+        "UD": 13,
+        "UB": 12,
+        "MD": 10,
+        "ME": 2,
+        "MB": 1
+      },
+      "top_examples": [
+        {
+          "problem": "004288+235779",
+          "split": "add_C4",
+          "answer_pos": 4,
+          "token_id": 13,
+          "subtask": "US",
+          "carry": "no_carry",
+          "sum_mod10": 9,
+          "confidence": 0.5779788494110107
+        },
+        {
+          "problem": "141981+025078",
+          "split": "add_random",
+          "answer_pos": 4,
+          "token_id": 13,
+          "subtask": "US",
+          "carry": "no_carry",
+          "sum_mod10": 9,
+          "confidence": 0.5511571168899536
+        },
+        {
+          "problem": "650953-276282",
+          "split": "sub_random",
+          "answer_pos": 2,
+          "token_id": 13,
+          "subtask": "UB",
+          "carry": "no_carry",
+          "sum_mod10": 2,
+          "confidence": 0.5089181065559387
+        },
+        {
+          "problem": "131281+969971",
+          "split": "add_C5",
+          "answer_pos": 4,
+          "token_id": 13,
+          "subtask": "UC",
+          "carry": "carry",
+          "sum_mod10": 1,
+          "confidence": 0.4992908835411072
+        },
+        {
+          "problem": "548402-518338",
+          "split": "sub_random",
+          "answer_pos": 1,
+          "token_id": 13,
+          "subtask": "ME",
+          "carry": "carry",
+          "sum_mod10": 0,
+          "confidence": 0.47512057423591614
+        },
+        {
+          "problem": "445685+854372",
+          "split": "add_C5",
+          "answer_pos": 4,
+          "token_id": 13,
+          "subtask": "US",
+          "carry": "carry",
+          "sum_mod10": 9,
+          "confidence": 0.4414514899253845
+        },
+        {
+          "problem": "558081+786977",
+          "split": "add_random",
+          "answer_pos": 4,
+          "token_id": 13,
+          "subtask": "US",
+          "carry": "carry",
+          "sum_mod10": 9,
+          "confidence": 0.42935603857040405
+        },
+        {
+          "problem": "382781+469676",
+          "split": "add_random",
+          "answer_pos": 4,
+          "token_id": 13,
+          "subtask": "UC",
+          "carry": "carry",
+          "sum_mod10": 3,
+          "confidence": 0.4246971607208252
+        },
+        {
+          "problem": "252843+863222",
+          "split": "add_random",
+          "answer_pos": 4,
+          "token_id": 13,
+          "subtask": "SC",
+          "carry": "carry",
+          "sum_mod10": 0,
+          "confidence": 0.4176047146320343
+        },
+        {
+          "problem": "443151-133156",
+          "split": "sub_M4",
+          "answer_pos": 0,
+          "token_id": 13,
+          "subtask": "MD",
+          "carry": "carry",
+          "sum_mod10": 0,
+          "confidence": 0.40713876485824585
+        }
+      ],
+      "interpretation": "Token t13 identifies positions where the sum of two digits equals 9 modulo 10."
+    },
+    {
+      "token_id": 14,
+      "n_occurrences": 67,
+      "mean_confidence": 0.7315577924251556,
+      "top_subtask": "UB",
+      "top_subtask_purity": 0.4925373134328358,
+      "subtask_counts": {
+        "SA": 2,
+        "UC": 7,
+        "UB": 33,
+        "ME": 5,
+        "UD": 14,
+        "SC": 2,
+        "MB": 2,
+        "MD": 2
+      },
+      "top_examples": [
+        {
+          "problem": "524136-014569",
+          "split": "sub_random",
+          "answer_pos": 3,
+          "token_id": 14,
+          "subtask": "UD",
+          "carry": "carry",
+          "sum_mod10": 8,
+          "confidence": 0.8056323528289795
+        },
+        {
+          "problem": "753029-653073",
+          "split": "sub_M4",
+          "answer_pos": 4,
+          "token_id": 14,
+          "subtask": "UD",
+          "carry": "carry",
+          "sum_mod10": 0,
+          "confidence": 0.7633252143859863
+        },
+        {
+          "problem": "363829-347971",
+          "split": "sub_random",
+          "answer_pos": 4,
+          "token_id": 14,
+          "subtask": "UB",
+          "carry": "no_carry",
+          "sum_mod10": 7,
+          "confidence": 0.7342545390129089
+        },
+        {
+          "problem": "801055-157482",
+          "split": "sub_random",
+          "answer_pos": 3,
+          "token_id": 14,
+          "subtask": "UB",
+          "carry": "carry",
+          "sum_mod10": 8,
+          "confidence": 0.7287195920944214
+        },
+        {
+          "problem": "855207-100647",
+          "split": "sub_random",
+          "answer_pos": 4,
+          "token_id": 14,
+          "subtask": "UB",
+          "carry": "no_carry",
+          "sum_mod10": 8,
+          "confidence": 0.7225601077079773
+        },
+        {
+          "problem": "739600-366847",
+          "split": "sub_random",
+          "answer_pos": 4,
+          "token_id": 14,
+          "subtask": "UB",
+          "carry": "carry",
+          "sum_mod10": 4,
+          "confidence": 0.7219930291175842
+        },
+        {
+          "problem": "499908-363244",
+          "split": "sub_random",
+          "answer_pos": 4,
+          "token_id": 14,
+          "subtask": "UB",
+          "carry": "no_carry",
+          "sum_mod10": 1,
+          "confidence": 0.714910626411438
+        },
+        {
+          "problem": "704030-680421",
+          "split": "sub_random",
+          "answer_pos": 3,
+          "token_id": 14,
+          "subtask": "UB",
+          "carry": "no_carry",
+          "sum_mod10": 4,
+          "confidence": 0.7124674916267395
+        },
+        {
+          "problem": "541709-241743",
+          "split": "sub_M4",
+          "answer_pos": 4,
+          "token_id": 14,
+          "subtask": "UD",
+          "carry": "carry",
+          "sum_mod10": 4,
+          "confidence": 0.7066777348518372
+        },
+        {
+          "problem": "698030-618083",
+          "split": "sub_M3",
+          "answer_pos": 4,
+          "token_id": 14,
+          "subtask": "UD",
+          "carry": "no_carry",
+          "sum_mod10": 0,
+          "confidence": 0.7050372362136841
+        }
+      ],
+      "interpretation": "Token t14 routes subtraction problems involving borrow operations, particularly cascading borrows."
+    },
+    {
+      "token_id": 15,
+      "n_occurrences": 49,
+      "mean_confidence": 0.6231153428554534,
+      "top_subtask": "UC",
+      "top_subtask_purity": 0.3877551020408163,
+      "subtask_counts": {
+        "US": 17,
+        "UC": 19,
+        "MD": 8,
+        "SC": 1,
+        "UB": 3,
+        "MB": 1
+      },
+      "top_examples": [
+        {
+          "problem": "082744+047281",
+          "split": "add_C4",
+          "answer_pos": 4,
+          "token_id": 15,
+          "subtask": "US",
+          "carry": "carry",
+          "sum_mod10": 9,
+          "confidence": 0.718111515045166
+        },
+        {
+          "problem": "845247+994197",
+          "split": "add_random",
+          "answer_pos": 1,
+          "token_id": 15,
+          "subtask": "UC",
+          "carry": "carry",
+          "sum_mod10": 7,
+          "confidence": 0.7070779800415039
+        },
+        {
+          "problem": "981501+859801",
+          "split": "add_C4",
+          "answer_pos": 1,
+          "token_id": 15,
+          "subtask": "UC",
+          "carry": "no_carry",
+          "sum_mod10": 7,
+          "confidence": 0.6742587089538574
+        },
+        {
+          "problem": "631010-111018",
+          "split": "sub_M4",
+          "answer_pos": 1,
+          "token_id": 15,
+          "subtask": "MD",
+          "carry": "carry",
+          "sum_mod10": 7,
+          "confidence": 0.6259260773658752
+        },
+        {
+          "problem": "809988+953774",
+          "split": "add_random",
+          "answer_pos": 1,
+          "token_id": 15,
+          "subtask": "SC",
+          "carry": "carry",
+          "sum_mod10": 7,
+          "confidence": 0.6090397834777832
+        },
+        {
+          "problem": "832582-412583",
+          "split": "sub_M4",
+          "answer_pos": 1,
+          "token_id": 15,
+          "subtask": "MD",
+          "carry": "carry",
+          "sum_mod10": 2,
+          "confidence": 0.6037623882293701
+        },
+        {
+          "problem": "330161-110766",
+          "split": "sub_random",
+          "answer_pos": 1,
+          "token_id": 15,
+          "subtask": "MD",
+          "carry": "carry",
+          "sum_mod10": 4,
+          "confidence": 0.6037341952323914
+        },
+        {
+          "problem": "551737-288322",
+          "split": "sub_random",
+          "answer_pos": 2,
+          "token_id": 15,
+          "subtask": "UB",
+          "carry": "no_carry",
+          "sum_mod10": 3,
+          "confidence": 0.5729205012321472
+        },
+        {
+          "problem": "382781+469676",
+          "split": "add_random",
+          "answer_pos": 1,
+          "token_id": 15,
+          "subtask": "UC",
+          "carry": "carry",
+          "sum_mod10": 7,
+          "confidence": 0.5647329092025757
+        },
+        {
+          "problem": "093962+656080",
+          "split": "add_C4",
+          "answer_pos": 1,
+          "token_id": 15,
+          "subtask": "UC",
+          "carry": "carry",
+          "sum_mod10": 6,
+          "confidence": 0.5515893697738647
+        }
+      ],
+      "interpretation": "Token t15 routes to addition/subtraction positions requiring carry/borrow handling when sum mod 10 is 7 or 2."
+    },
+    {
+      "token_id": 16,
+      "n_occurrences": 160,
+      "mean_confidence": 0.49906954169273376,
+      "top_subtask": "UC",
+      "top_subtask_purity": 0.28125,
+      "subtask_counts": {
+        "SC": 4,
+        "US": 15,
+        "UC": 45,
+        "UD": 31,
+        "UB": 8,
+        "MD": 35,
+        "ME": 5,
+        "MB": 13,
+        "SS": 1,
+        "SA": 3
+      },
+      "top_examples": [
+        {
+          "problem": "894505+119571",
+          "split": "add_C4",
+          "answer_pos": 2,
+          "token_id": 16,
+          "subtask": "UC",
+          "carry": "carry",
+          "sum_mod10": 0,
+          "confidence": 0.5855557918548584
+        },
+        {
+          "problem": "286657+178345",
+          "split": "add_C5",
+          "answer_pos": 2,
+          "token_id": 16,
+          "subtask": "UC",
+          "carry": "carry",
+          "sum_mod10": 5,
+          "confidence": 0.5532175302505493
+        },
+        {
+          "problem": "443584+169466",
+          "split": "add_C5",
+          "answer_pos": 2,
+          "token_id": 16,
+          "subtask": "UC",
+          "carry": "carry",
+          "sum_mod10": 0,
+          "confidence": 0.5514208674430847
+        },
+        {
+          "problem": "636625+599586",
+          "split": "add_C6",
+          "answer_pos": 2,
+          "token_id": 16,
+          "subtask": "UC",
+          "carry": "carry",
+          "sum_mod10": 2,
+          "confidence": 0.5173834562301636
+        },
+        {
+          "problem": "972473-518407",
+          "split": "sub_random",
+          "answer_pos": 2,
+          "token_id": 16,
+          "subtask": "UB",
+          "carry": "carry",
+          "sum_mod10": 8,
+          "confidence": 0.500787079334259
+        },
+        {
+          "problem": "355978+799632",
+          "split": "add_random",
+          "answer_pos": 2,
+          "token_id": 16,
+          "subtask": "UC",
+          "carry": "carry",
+          "sum_mod10": 4,
+          "confidence": 0.46442440152168274
+        },
+        {
+          "problem": "042964+009258",
+          "split": "add_C4",
+          "answer_pos": 2,
+          "token_id": 16,
+          "subtask": "UC",
+          "carry": "carry",
+          "sum_mod10": 4,
+          "confidence": 0.45713624358177185
+        },
+        {
+          "problem": "592544+951764",
+          "split": "add_random",
+          "answer_pos": 1,
+          "token_id": 16,
+          "subtask": "UC",
+          "carry": "carry",
+          "sum_mod10": 4,
+          "confidence": 0.4544866383075714
+        },
+        {
+          "problem": "595931+857197",
+          "split": "add_random",
+          "answer_pos": 1,
+          "token_id": 16,
+          "subtask": "UC",
+          "carry": "carry",
+          "sum_mod10": 3,
+          "confidence": 0.4538249373435974
+        },
+        {
+          "problem": "546041-012777",
+          "split": "sub_random",
+          "answer_pos": 2,
+          "token_id": 16,
+          "subtask": "MD",
+          "carry": "carry",
+          "sum_mod10": 5,
+          "confidence": 0.4524584710597992
+        }
+      ],
+      "interpretation": "Token t16 routes when processing carry-dependent digit positions in addition and subtraction."
+    },
+    {
+      "token_id": 17,
+      "n_occurrences": 95,
+      "mean_confidence": 0.5779300689697265,
+      "top_subtask": "MD",
+      "top_subtask_purity": 0.4842105263157895,
+      "subtask_counts": {
+        "SA": 3,
+        "SC": 1,
+        "UC": 2,
+        "MD": 46,
+        "UD": 15,
+        "MB": 11,
+        "ME": 5,
+        "UB": 12
+      },
+      "top_examples": [
+        {
+          "problem": "559024-434507",
+          "split": "sub_random",
+          "answer_pos": 3,
+          "token_id": 17,
+          "subtask": "UB",
+          "carry": "no_carry",
+          "sum_mod10": 3,
+          "confidence": 0.6790936589241028
+        },
+        {
+          "problem": "453800+959750",
+          "split": "add_C4",
+          "answer_pos": 4,
+          "token_id": 17,
+          "subtask": "SC",
+          "carry": "carry",
+          "sum_mod10": 5,
+          "confidence": 0.6665968298912048
+        },
+        {
+          "problem": "973047-473580",
+          "split": "sub_M3",
+          "answer_pos": 3,
+          "token_id": 17,
+          "subtask": "UD",
+          "carry": "carry",
+          "sum_mod10": 6,
+          "confidence": 0.639514684677124
+        },
+        {
+          "problem": "760644-255645",
+          "split": "sub_M3",
+          "answer_pos": 2,
+          "token_id": 17,
+          "subtask": "UB",
+          "carry": "carry",
+          "sum_mod10": 1,
+          "confidence": 0.5847350358963013
+        },
+        {
+          "problem": "710122-525101",
+          "split": "sub_random",
+          "answer_pos": 2,
+          "token_id": 17,
+          "subtask": "UB",
+          "carry": "carry",
+          "sum_mod10": 3,
+          "confidence": 0.574436366558075
+        },
+        {
+          "problem": "837043-041516",
+          "split": "sub_random",
+          "answer_pos": 3,
+          "token_id": 17,
+          "subtask": "UB",
+          "carry": "no_carry",
+          "sum_mod10": 8,
+          "confidence": 0.558113694190979
+        },
+        {
+          "problem": "640741-545479",
+          "split": "sub_random",
+          "answer_pos": 2,
+          "token_id": 17,
+          "subtask": "UD",
+          "carry": "no_carry",
+          "sum_mod10": 8,
+          "confidence": 0.5264054536819458
+        },
+        {
+          "problem": "518607-218652",
+          "split": "sub_M4",
+          "answer_pos": 4,
+          "token_id": 17,
+          "subtask": "UD",
+          "carry": "carry",
+          "sum_mod10": 2,
+          "confidence": 0.5203730463981628
+        },
+        {
+          "problem": "317208-117257",
+          "split": "sub_M4",
+          "answer_pos": 4,
+          "token_id": 17,
+          "subtask": "UD",
+          "carry": "carry",
+          "sum_mod10": 4,
+          "confidence": 0.5176681280136108
+        },
+        {
+          "problem": "617638-482342",
+          "split": "sub_random",
+          "answer_pos": 2,
+          "token_id": 17,
+          "subtask": "MB",
+          "carry": "no_carry",
+          "sum_mod10": 9,
+          "confidence": 0.5123637914657593
+        }
+      ],
+      "interpretation": "Token t17 marks positions requiring borrow handling in subtraction, especially with cascading borrows."
+    },
+    {
+      "token_id": 18,
+      "n_occurrences": 211,
+      "mean_confidence": 0.4361139953136444,
+      "top_subtask": "UD",
+      "top_subtask_purity": 0.4597156398104265,
+      "subtask_counts": {
+        "UC": 25,
+        "SC": 1,
+        "US": 11,
+        "UD": 97,
+        "MD": 41,
+        "UB": 11,
+        "MB": 21,
+        "SA": 3,
+        "SS": 1
+      },
+      "top_examples": [
+        {
+          "problem": "953079-535266",
+          "split": "sub_random",
+          "answer_pos": 4,
+          "token_id": 18,
+          "subtask": "MB",
+          "carry": "no_carry",
+          "sum_mod10": 2,
+          "confidence": 0.4719550311565399
+        },
+        {
+          "problem": "415680-205682",
+          "split": "sub_M4",
+          "answer_pos": 3,
+          "token_id": 18,
+          "subtask": "UD",
+          "carry": "carry",
+          "sum_mod10": 0,
+          "confidence": 0.4573315680027008
+        },
+        {
+          "problem": "714436-514531",
+          "split": "sub_M3",
+          "answer_pos": 4,
+          "token_id": 18,
+          "subtask": "MB",
+          "carry": "carry",
+          "sum_mod10": 9,
+          "confidence": 0.4351041913032532
+        },
+        {
+          "problem": "409611-109680",
+          "split": "sub_M4",
+          "answer_pos": 3,
+          "token_id": 18,
+          "subtask": "UD",
+          "carry": "carry",
+          "sum_mod10": 8,
+          "confidence": 0.43323826789855957
+        },
+        {
+          "problem": "474656-024658",
+          "split": "sub_M4",
+          "answer_pos": 3,
+          "token_id": 18,
+          "subtask": "UD",
+          "carry": "carry",
+          "sum_mod10": 8,
+          "confidence": 0.42861485481262207
+        },
+        {
+          "problem": "385930-346935",
+          "split": "sub_M3",
+          "answer_pos": 4,
+          "token_id": 18,
+          "subtask": "UD",
+          "carry": "no_carry",
+          "sum_mod10": 8,
+          "confidence": 0.42838361859321594
+        },
+        {
+          "problem": "796967-560153",
+          "split": "sub_random",
+          "answer_pos": 4,
+          "token_id": 18,
+          "subtask": "MD",
+          "carry": "no_carry",
+          "sum_mod10": 0,
+          "confidence": 0.4269082546234131
+        },
+        {
+          "problem": "231622-131641",
+          "split": "sub_M4",
+          "answer_pos": 3,
+          "token_id": 18,
+          "subtask": "UD",
+          "carry": "carry",
+          "sum_mod10": 2,
+          "confidence": 0.42678534984588623
+        },
+        {
+          "problem": "581213-149976",
+          "split": "sub_random",
+          "answer_pos": 2,
+          "token_id": 18,
+          "subtask": "UB",
+          "carry": "carry",
+          "sum_mod10": 2,
+          "confidence": 0.4265812337398529
+        },
+        {
+          "problem": "459138-454139",
+          "split": "sub_M3",
+          "answer_pos": 4,
+          "token_id": 18,
+          "subtask": "UD",
+          "carry": "carry",
+          "sum_mod10": 2,
+          "confidence": 0.4262375831604004
+        }
+      ],
+      "interpretation": "Token t18 routes to borrow cascade (UD) and borrow-making (MB) subtasks in subtraction columns."
+    },
+    {
+      "token_id": 19,
+      "n_occurrences": 26,
+      "mean_confidence": 0.34131052196025846,
+      "top_subtask": "UC",
+      "top_subtask_purity": 0.46153846153846156,
+      "subtask_counts": {
+        "UC": 12,
+        "US": 3,
+        "UD": 1,
+        "MD": 7,
+        "MB": 3
+      },
+      "top_examples": [
+        {
+          "problem": "561802+999405",
+          "split": "add_C4",
+          "answer_pos": 1,
+          "token_id": 19,
+          "subtask": "UC",
+          "carry": "no_carry",
+          "sum_mod10": 4,
+          "confidence": 0.38268959522247314
+        },
+        {
+          "problem": "459694+790306",
+          "split": "add_C6",
+          "answer_pos": 1,
+          "token_id": 19,
+          "subtask": "UC",
+          "carry": "carry",
+          "sum_mod10": 1,
+          "confidence": 0.37268468737602234
+        },
+        {
+          "problem": "666050+899954",
+          "split": "add_C5",
+          "answer_pos": 1,
+          "token_id": 19,
+          "subtask": "UC",
+          "carry": "carry",
+          "sum_mod10": 4,
+          "confidence": 0.37034115195274353
+        },
+        {
+          "problem": "261954+599673",
+          "split": "add_C4",
+          "answer_pos": 1,
+          "token_id": 19,
+          "subtask": "UC",
+          "carry": "carry",
+          "sum_mod10": 7,
+          "confidence": 0.3505806624889374
+        },
+        {
+          "problem": "662017-162919",
+          "split": "sub_M3",
+          "answer_pos": 3,
+          "token_id": 19,
+          "subtask": "UD",
+          "carry": "carry",
+          "sum_mod10": 4,
+          "confidence": 0.3348318040370941
+        },
+        {
+          "problem": "150424+499976",
+          "split": "add_C5",
+          "answer_pos": 1,
+          "token_id": 19,
+          "subtask": "UC",
+          "carry": "carry",
+          "sum_mod10": 5,
+          "confidence": 0.3274094760417938
+        },
+        {
+          "problem": "326145+797969",
+          "split": "add_C6",
+          "answer_pos": 1,
+          "token_id": 19,
+          "subtask": "UC",
+          "carry": "carry",
+          "sum_mod10": 0,
+          "confidence": 0.3240055739879608
+        },
+        {
+          "problem": "847281-168178",
+          "split": "sub_random",
+          "answer_pos": 3,
+          "token_id": 19,
+          "subtask": "MB",
+          "carry": "carry",
+          "sum_mod10": 5,
+          "confidence": 0.3232487738132477
+        },
+        {
+          "problem": "144210+209016",
+          "split": "add_random",
+          "answer_pos": 2,
+          "token_id": 19,
+          "subtask": "UC",
+          "carry": "no_carry",
+          "sum_mod10": 4,
+          "confidence": 0.313782274723053
+        },
+        {
+          "problem": "360162+679938",
+          "split": "add_C6",
+          "answer_pos": 1,
+          "token_id": 19,
+          "subtask": "US",
+          "carry": "carry",
+          "sum_mod10": 9,
+          "confidence": 0.31353121995925903
+        }
+      ],
+      "interpretation": "Token t19 routes to addition problems at position d1 that must propagate a carry from the ones place."
+    },
+    {
+      "token_id": 20,
+      "n_occurrences": 71,
+      "mean_confidence": 0.6364528119564057,
+      "top_subtask": "UB",
+      "top_subtask_purity": 0.43661971830985913,
+      "subtask_counts": {
+        "US": 4,
+        "SA": 8,
+        "UC": 6,
+        "UD": 10,
+        "UB": 31,
+        "SC": 7,
+        "SS": 5
+      },
+      "top_examples": [
+        {
+          "problem": "830703-723998",
+          "split": "sub_random",
+          "answer_pos": 3,
+          "token_id": 20,
+          "subtask": "UB",
+          "carry": "carry",
+          "sum_mod10": 3,
+          "confidence": 0.7101407051086426
+        },
+        {
+          "problem": "398247-119248",
+          "split": "sub_random",
+          "answer_pos": 2,
+          "token_id": 20,
+          "subtask": "UB",
+          "carry": "carry",
+          "sum_mod10": 0,
+          "confidence": 0.6949461102485657
+        },
+        {
+          "problem": "926279-559332",
+          "split": "sub_random",
+          "answer_pos": 2,
+          "token_id": 20,
+          "subtask": "UB",
+          "carry": "carry",
+          "sum_mod10": 7,
+          "confidence": 0.6582366228103638
+        },
+        {
+          "problem": "615883-243998",
+          "split": "sub_random",
+          "answer_pos": 4,
+          "token_id": 20,
+          "subtask": "UB",
+          "carry": "carry",
+          "sum_mod10": 7,
+          "confidence": 0.6365889310836792
+        },
+        {
+          "problem": "807410-209415",
+          "split": "sub_M3",
+          "answer_pos": 2,
+          "token_id": 20,
+          "subtask": "UD",
+          "carry": "carry",
+          "sum_mod10": 0,
+          "confidence": 0.6349191069602966
+        },
+        {
+          "problem": "433576-323094",
+          "split": "sub_random",
+          "answer_pos": 4,
+          "token_id": 20,
+          "subtask": "UB",
+          "carry": "no_carry",
+          "sum_mod10": 5,
+          "confidence": 0.6207309365272522
+        },
+        {
+          "problem": "936551-379767",
+          "split": "sub_random",
+          "answer_pos": 2,
+          "token_id": 20,
+          "subtask": "UB",
+          "carry": "carry",
+          "sum_mod10": 0,
+          "confidence": 0.615349292755127
+        },
+        {
+          "problem": "430359+018181",
+          "split": "add_random",
+          "answer_pos": 2,
+          "token_id": 20,
+          "subtask": "SA",
+          "carry": "no_carry",
+          "sum_mod10": 4,
+          "confidence": 0.6073201894760132
+        },
+        {
+          "problem": "514764-314964",
+          "split": "sub_M3",
+          "answer_pos": 3,
+          "token_id": 20,
+          "subtask": "UD",
+          "carry": "carry",
+          "sum_mod10": 8,
+          "confidence": 0.6044242978096008
+        },
+        {
+          "problem": "513554-476890",
+          "split": "sub_random",
+          "answer_pos": 3,
+          "token_id": 20,
+          "subtask": "UB",
+          "carry": "carry",
+          "sum_mod10": 9,
+          "confidence": 0.5818719267845154
+        }
+      ],
+      "interpretation": "Token t20 routes subtraction problems with borrows, especially at positions d2-d4."
+    },
+    {
+      "token_id": 21,
+      "n_occurrences": 25,
+      "mean_confidence": 0.3371300369501114,
+      "top_subtask": "UD",
+      "top_subtask_purity": 0.36,
+      "subtask_counts": {
+        "UC": 7,
+        "US": 4,
+        "UD": 9,
+        "SS": 1,
+        "SA": 1,
+        "UB": 2,
+        "MD": 1
+      },
+      "top_examples": [
+        {
+          "problem": "997760+085385",
+          "split": "add_C5",
+          "answer_pos": 1,
+          "token_id": 21,
+          "subtask": "US",
+          "carry": "carry",
+          "sum_mod10": 9,
+          "confidence": 0.4029281437397003
+        },
+        {
+          "problem": "685955-185970",
+          "split": "sub_M4",
+          "answer_pos": 3,
+          "token_id": 21,
+          "subtask": "UD",
+          "carry": "carry",
+          "sum_mod10": 0,
+          "confidence": 0.3404640555381775
+        },
+        {
+          "problem": "524802-024810",
+          "split": "sub_M4",
+          "answer_pos": 3,
+          "token_id": 21,
+          "subtask": "UD",
+          "carry": "carry",
+          "sum_mod10": 8,
+          "confidence": 0.3401513397693634
+        },
+        {
+          "problem": "591839-541849",
+          "split": "sub_M3",
+          "answer_pos": 3,
+          "token_id": 21,
+          "subtask": "UD",
+          "carry": "carry",
+          "sum_mod10": 2,
+          "confidence": 0.3395461142063141
+        },
+        {
+          "problem": "119690+213868",
+          "split": "add_random",
+          "answer_pos": 2,
+          "token_id": 21,
+          "subtask": "UC",
+          "carry": "carry",
+          "sum_mod10": 2,
+          "confidence": 0.329084187746048
+        },
+        {
+          "problem": "677918-377952",
+          "split": "sub_M4",
+          "answer_pos": 3,
+          "token_id": 21,
+          "subtask": "UD",
+          "carry": "carry",
+          "sum_mod10": 4,
+          "confidence": 0.3275391459465027
+        },
+        {
+          "problem": "799334-399343",
+          "split": "sub_M4",
+          "answer_pos": 2,
+          "token_id": 21,
+          "subtask": "UD",
+          "carry": "carry",
+          "sum_mod10": 8,
+          "confidence": 0.32672348618507385
+        },
+        {
+          "problem": "489021+772074",
+          "split": "add_random",
+          "answer_pos": 2,
+          "token_id": 21,
+          "subtask": "UC",
+          "carry": "no_carry",
+          "sum_mod10": 5,
+          "confidence": 0.3244328796863556
+        },
+        {
+          "problem": "226942-016943",
+          "split": "sub_M4",
+          "answer_pos": 3,
+          "token_id": 21,
+          "subtask": "UD",
+          "carry": "carry",
+          "sum_mod10": 2,
+          "confidence": 0.32072100043296814
+        },
+        {
+          "problem": "409611-109680",
+          "split": "sub_M4",
+          "answer_pos": 2,
+          "token_id": 21,
+          "subtask": "UD",
+          "carry": "carry",
+          "sum_mod10": 0,
+          "confidence": 0.31971001625061035
+        }
+      ],
+      "interpretation": "Token t21 routes to cascade subtraction steps where a borrow propagates through multiple digits."
+    },
+    {
+      "token_id": 22,
+      "n_occurrences": 9,
+      "mean_confidence": 0.25576920641793144,
+      "top_subtask": "SC",
+      "top_subtask_purity": 0.3333333333333333,
+      "subtask_counts": {
+        "SC": 3,
+        "UC": 2,
+        "MD": 1,
+        "SA": 3
+      },
+      "top_examples": [
+        {
+          "problem": "309224+208897",
+          "split": "add_C4",
+          "answer_pos": 4,
+          "token_id": 22,
+          "subtask": "UC",
+          "carry": "no_carry",
+          "sum_mod10": 0,
+          "confidence": 0.3206922113895416
+        },
+        {
+          "problem": "904104+063314",
+          "split": "add_random",
+          "answer_pos": 4,
+          "token_id": 22,
+          "subtask": "SA",
+          "carry": "no_carry",
+          "sum_mod10": 4,
+          "confidence": 0.30753952264785767
+        },
+        {
+          "problem": "024756+707702",
+          "split": "add_random",
+          "answer_pos": 4,
+          "token_id": 22,
+          "subtask": "SC",
+          "carry": "no_carry",
+          "sum_mod10": 4,
+          "confidence": 0.2958226799964905
+        },
+        {
+          "problem": "587328+412899",
+          "split": "add_C6",
+          "answer_pos": 4,
+          "token_id": 22,
+          "subtask": "UC",
+          "carry": "carry",
+          "sum_mod10": 1,
+          "confidence": 0.2810814082622528
+        },
+        {
+          "problem": "704049+222406",
+          "split": "add_random",
+          "answer_pos": 4,
+          "token_id": 22,
+          "subtask": "SA",
+          "carry": "no_carry",
+          "sum_mod10": 4,
+          "confidence": 0.27677121758461
+        },
+        {
+          "problem": "928800+771527",
+          "split": "add_C4",
+          "answer_pos": 4,
+          "token_id": 22,
+          "subtask": "SC",
+          "carry": "carry",
+          "sum_mod10": 3,
+          "confidence": 0.26454561948776245
+        },
+        {
+          "problem": "053215+963604",
+          "split": "add_random",
+          "answer_pos": 4,
+          "token_id": 22,
+          "subtask": "SA",
+          "carry": "carry",
+          "sum_mod10": 8,
+          "confidence": 0.21105767786502838
+        },
+        {
+          "problem": "154439+618907",
+          "split": "add_random",
+          "answer_pos": 4,
+          "token_id": 22,
+          "subtask": "SC",
+          "carry": "no_carry",
+          "sum_mod10": 3,
+          "confidence": 0.2018202543258667
+        },
+        {
+          "problem": "394870-264876",
+          "split": "sub_M4",
+          "answer_pos": 0,
+          "token_id": 22,
+          "subtask": "MD",
+          "carry": "carry",
+          "sum_mod10": 0,
+          "confidence": 0.14259226620197296
+        }
+      ],
+      "interpretation": "Token t22 routes early addition positions (d4) with no carry input, regardless of sum output."
+    }
+  ]
 }

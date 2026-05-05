@@ -29,7 +29,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
 from arithmetic.data.hub import load_model
 from arithmetic.data.addition import get_eval_set
-from arithmetic.training.train import QWEN3_TOKEN_MAP, QWEN3_INV_MAP
+from arithmetic.training.train import QWEN3_TOKEN_MAP
 from sorl.sorl_trainer import infer_insert_mask, insert_tokens_with_padding, expand_prompt_len
 from transformers import AutoTokenizer
 
@@ -235,18 +235,21 @@ def main():
         for ex in examples:
             problem  = example_to_problem_str(ex)
             subtasks = ex.labels          # list[str], one per answer digit
-            # ex.tokens = full 21-token sequence (prompt=14, answer=7)
-            qwen_ids = torch.tensor(ex.tokens[:PROMPT_LEN], dtype=torch.long)
+            # ex.tokens: internal indices (0-12); map to Qwen3 IDs for full 21-token seq
+            qwen_ids = torch.tensor(
+                [QWEN3_TOKEN_MAP[t] for t in ex.tokens], dtype=torch.long
+            )
 
             try:
                 expanded, digit_abs, token_probs = run_with_confidence(
                     model, qwen_ids, K, base_v, pad_id, device
                 )
-            except Exception:
+            except Exception as e:
+                print(f"    skip ({e})")
                 continue
 
-            # st: Quirke carry state per answer digit (0/1/'U'), indexed d6→d0
-            st_list = list(ex.st) if hasattr(ex, "st") else []
+            # st: Quirke carry state, LSB first (6 elements); None for some examples
+            st_list = list(ex.st) if ex.st is not None else []
 
             for ans_pos, (abs_idx, tok_id) in digit_abs.items():
                 subtask = subtasks[ans_pos] if ans_pos < len(subtasks) else "?"
