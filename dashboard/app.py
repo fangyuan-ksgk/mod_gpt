@@ -79,14 +79,10 @@ routing being the mechanism behind the gain.
   fonttitle=\bfseries\small, title={Finding \#1},
   left=5pt, right=5pt, top=4pt, bottom=4pt]
 \small
-\sorl{} externalizes carry/borrow routing as discrete, named abstraction
-tokens — recovering the subtask taxonomy of \citet{quirke_2024_addsub_preprint}
-without any supervision on those circuits — and translates that transparency
-into measurable gains: 12/13 configurations overall, all 13 on C6,
-up to $+50$\,pp on the hardest cascades.
-The tokens are causally necessary (knockout $\to$ 0.1\%) and support
-targeted single-position interventions (27--31\% fix rate).
-Full analysis in Appendix~\ref{app:arithmetic}.
+\sorl{} outperforms \sft{} on 12/13 configurations and all 13 on C6 ($+50$\,pp),
+externalizing carry/borrow routing as named tokens that recover Quirke's
+subtask taxonomy without supervision and support targeted single-position
+interventions (27--31\% fix rate). Full analysis in Appendix~\ref{app:arithmetic}.
 \end{tcolorbox}
 """
 
@@ -423,13 +419,9 @@ Three patterns are notable:
   fonttitle=\bfseries\small, title={Finding \#2},
   left=5pt, right=5pt, top=4pt, bottom=4pt]
 \small
-\sorl{} abstraction tokens are causally necessary: knockout collapses
-accuracy from 95.5\% to 0.1\% overall, and to $\leq$3\% on the hardest
-borrow-cascade splits (M4--M5).
-Shuffle (identity-preserving, position-destroying) is more harmful than
-random on cascade splits — wrong-position tokens from the same structural
-family cause systematic carry errors, while random tokens cause broader
-incoherence.
+Tokens are causally necessary: knockout $\to$ 0.1\% accuracy.
+Shuffle hurts more than random on cascades — wrong-position tokens cause
+systematic carry errors; random tokens cause broader incoherence.
 \end{tcolorbox}
 
 % ─────────────────────────────────────────────────────────────────────────────
@@ -481,11 +473,9 @@ token \texttt{t23} is the subtraction mirror (UD, 88\%, position $d_3$).
   fonttitle=\bfseries\small, title={Finding \#3},
   left=5pt, right=5pt, top=4pt, bottom=4pt]
 \small
-\sorl{} spontaneously learns position-locked, subtask-specialised routing:
-18 of 30 codebook tokens are active; each concentrates on 1--2 of the
-10 Quirke subtasks (purity ${\geq}70\%$ for most), and each is tied to
-one or two answer positions. The codebook partitions the arithmetic
-computation into an interpretable registry of specialist tokens.
+23 of 30 codebook tokens are active; each concentrates on 1--2 Quirke
+subtasks (${\geq}70\%$ purity for most) and is locked to one or two
+answer positions.
 \end{tcolorbox}
 
 % ─────────────────────────────────────────────────────────────────────────────
@@ -517,12 +507,8 @@ single-position swap cannot resolve.
   fonttitle=\bfseries\small, title={Finding \#4},
   left=5pt, right=5pt, top=4pt, bottom=4pt]
 \small
-Token interventions enable \emph{guided computation}: replacing a single
-abstraction token in the sequence fixes a wrong prediction in 27--31\% of
-mispredicted examples at carry-heavy positions, with no weight updates
-and no access to internal activations.
-This is only possible because the tokens are a human-readable interface
-to the model's routing decisions.
+Replacing a single abstraction token fixes 27--31\% of mispredicted
+carry-heavy examples — no weight updates, no activation access required.
 \end{tcolorbox}
 
 % ─────────────────────────────────────────────────────────────────────────────
@@ -567,15 +553,10 @@ post-hoc analysis.
   fonttitle=\bfseries\small, title={Finding \#5},
   left=5pt, right=5pt, top=4pt, bottom=4pt]
 \small
-\sorl{} independently rediscovers the carry-state tri-classifier
-($\text{ST}_n \in \{0, U, 1\}$) identified by \citet{quirke_2024_addsub_preprint}
-via internal circuit analysis — with no access to ground-truth circuit labels.
-The three carry regimes map onto disjoint token clusters (e.g.\
-\texttt{t21}/\texttt{t6} for sum-9 uncertain in addition;
-\texttt{t23}/\texttt{t7} for borrow-uncertain in subtraction),
-and an analogous structure appears for subtraction borrow cascades.
-What Quirke et al.\ needed PCA of hidden activations to reveal,
-\sorl{} externalises as a readable routing token.
+\sorl{} rediscovers Quirke's carry-state tri-classifier ($\{0, U, 1\}$)
+without supervision: the three regimes map onto disjoint token clusters.
+What \citet{quirke_2024_addsub_preprint} needed PCA to reveal, \sorl{}
+externalizes as a readable routing token.
 \end{tcolorbox}
 
 % ─────────────────────────────────────────────────────────────────────────────
@@ -627,12 +608,10 @@ variable. The specialist tokens concentrate at mid-sequence positions
   fonttitle=\bfseries\small, title={Finding \#6},
   left=5pt, right=5pt, top=4pt, bottom=4pt]
 \small
-The 30-token codebook is not uniformly specialist: high-purity tokens
-(e.g.\ \texttt{t21}, 94\% US, single position) coexist with polysemantic
-fallback tokens (e.g.\ \texttt{t1}, top purity 24\%, all five positions).
-Polysemanticity concentrates at overflow positions where carry state is
-most variable; specialist tokens dominate the structured mid-sequence
-carry-propagation positions.
+Specialist tokens (\texttt{t21}: 94\% US, single position) coexist with
+polysemantic fallbacks (\texttt{t1}: 24\% purity, five positions);
+polysemanticity concentrates at overflow positions where carry state is
+most variable.
 \end{tcolorbox}
 
 % ─────────────────────────────────────────────────────────────────────────────
@@ -674,19 +653,9 @@ The full procedure is in \texttt{experiments/11\_auto\_interp/run.py}.
   fonttitle=\bfseries\small, title={Finding \#7},
   left=5pt, right=5pt, top=4pt, bottom=4pt]
 \small
-Automated interpretation (\`{a} la \citealt{bills2023language}) applied to
-the top-10 highest-confidence examples per token yields human-readable role
-descriptions that match the ground-truth Quirke subtask labels---without
-access to those labels.
-Of 23 active tokens, 8 high-confidence specialists (mean softmax
-${\geq}0.88$) receive crisp single-sentence descriptions that name the
-operation, position, and carry/borrow state
-(e.g.\ \texttt{t0}: ``marks the tens digit position in addition, regardless
-of carry state''; \texttt{t10}: ``routes subtraction requiring borrow
-propagation'').
-Polysemantic tokens (mean conf.\ ${\leq}0.50$) produce broader descriptions
-reflecting their mixed roles, confirming the specialist/polysemantic
-distinction seen in Finding~\#6.
+Automated interpretation matches Quirke labels without accessing them:
+8 high-confidence tokens (${\geq}0.88$ softmax) receive crisp role
+descriptions; polysemantic tokens (${\leq}0.50$) get appropriately vague ones.
 \end{tcolorbox}
 
 % ─────────────────────────────────────────────────────────────────────────────
