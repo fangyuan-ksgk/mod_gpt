@@ -21,7 +21,18 @@ MODEL_REPO = "thoughtworks/arithmetic-sorl"
 # LaTeX scratchpad content — edit here, copy from dashboard into Overleaf
 # ═══════════════════════════════════════════════════════════════════
 
-LATEX_ARITHMETIC_SETUP = r"""% ── Arithmetic case study: task setup + Quirke subtask definitions ──────────
+LATEX_ARITHMETIC_SETUP = r"""% ── Arithmetic case study ──────────────────────────────────────────────────
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\linewidth]{figures/fig_arithmetic_example.pdf}
+  \caption{Addition $959{,}271 + 040{,}756 = 1{,}000{,}027$ — a four-deep carry cascade.
+    Each answer-digit position is annotated with its Quirke subtask label (coloured box)
+    and the \sorl{} abstraction token assigned by the model (dashed purple box).
+    The carry chain ($d_1$--$d_5$) is highlighted; \sorl{} uses a consistent token
+    (\texttt{t2}) at cascade positions and distinct tokens elsewhere.}
+  \label{fig:arithmetic-example}
+\end{figure}
 
 \subsection{Case study: six-digit addition and subtraction}
 \label{sec:arithmetic}
@@ -47,13 +58,14 @@ each of the 23 active tokens concentrates on a narrow slice of the Quirke taxono
 This structure emerges from the info-gain loss alone, with no access to ground-truth subtask labels or carry state.
 Tokens are also causally necessary: knocking out all tokens collapses accuracy from 95.5\% to 0.1\%, confirming they carry the computation rather than merely annotating it.
 
-\textbf{Named tokens enable targeted intervention and better performance.}
+\textbf{Named tokens better fine tuning performance and interventions.}
 Because the routing codes are discrete and named, surgical model edits are possible that have no analog in standard transformers:
 swapping a single token at one answer position fixes wrong predictions
 at a 27-31\% rate on carry-heavy examples (cross-operation transplant:
 93.5\% vs.\ 75.5\% random baseline).
 Interpretability here is not merely post-hoc — it translates directly into the ability to correct the model.
-Correspondingly, \sorl{} outperforms \sft{} on 12 of 13 tested
+
+Correspondingly, finetuned \sorl{} outperforms \sft{} strongly on 12 of 13 tested
 (architecture, data-size) configurations, and on \emph{all 13} on
 the hardest 6-deep carry cascades, with gains as large as $+50$\,pp
 (Table~\ref{tab:undersized-wins}).
@@ -62,10 +74,10 @@ The margin grows with cascade depth, consistent with explicit carry/borrow routi
 \begin{tcolorbox}[colback=gray!6, colframe=gray!40,
   fonttitle=\bfseries\small, title={Finding \#1: \sorl{} increases accuracy on 6-digit arithmetic dramatically},
   left=5pt, right=5pt, top=4pt, bottom=4pt]
-\small \sorl{} increases accuracy on 6-digit arithmetic dramatically, winning by most on chard ascade splits.
+\small \sorl{} increases accuracy on 6-digit arithmetic dramatically, winning stronger on hard cascade and borrow splits.
 \end{tcolorbox}
 
-See Appendix \ref{app:arithmetic} further details on SORL interpretability, including a demonstration of auto-interp ~\citep{bills2023language_models_explain_neurons}, token specializations andpolysemantic tokens.
+See Appendix \ref{app:arithmetic} further details on SORL interpretability, including a demonstration of auto-interp ~\citep{bills2023language_models_explain_neurons}, token specializations and polysemantic tokens.
 """
 
 LATEX_FIGURE_EXAMPLE = r"""% fig_arithmetic_example.tex
@@ -254,31 +266,7 @@ LATEX_TABLE_UNDERSIZED = r"""% tab:undersized-wins — SoRL vs SFT on undersized
 \end{table}
 """
 
-LATEX_APPENDIX = r"""% ═══════════════════════════════════════════════════════════════════════════
-% APPENDIX — Arithmetic case study (Findings #2–5 + training details)
-% ═══════════════════════════════════════════════════════════════════════════
-% Paste this entire block into your appendix .tex file.
-%
-% Required packages:
-%   \usepackage{tcolorbox}
-%   \usepackage{booktabs}
-%   \usepackage{xcolor}
-%   \usepackage{multirow}
-%   \usepackage{enumitem}   % for [nosep]
-%
-% Required macros (put in preamble if not already defined):
-%   \providecommand{\sorl}{\textsc{DLR}}
-%   \providecommand{\sft}{\textsc{SFT}}
-% ═══════════════════════════════════════════════════════════════════════════
-
-% ── Finding box macro (put in preamble) ──────────────────────────────────────
-% \usepackage{tcolorbox}
-% \newcommand{\finding}[2]{%
-%   \begin{tcolorbox}[colback=gray!6,colframe=gray!40,
-%     fonttitle=\bfseries\small,title={Finding \##1},
-%     left=5pt,right=5pt,top=4pt,bottom=4pt]\small#2\end{tcolorbox}}
-
-\section{Arithmetic case study: interpretability analysis}
+LATEX_APPENDIX = r"""\section{Arithmetic case study: interpretability analysis}
 \label{app:arithmetic}
 
 \begin{table}[h]
@@ -310,13 +298,12 @@ LATEX_APPENDIX = r"""% ═══════════════════
   \label{tab:quirke-subtasks}
 \end{table}
 
-\textbf{Setup.}
+\paragraph{Setup.}
 All interpretability analyses use model
 \texttt{add\_sub\_sorl\_v1\_abs30\_K1\_100K\_2L1H128d}
 (\texttt{2L/1H/128d}, 2 layers, 1 head, hidden size 128; trained on 100K examples),
 evaluated on 2{,}600 held-out problems across 26 splits.
-This model achieves 95.5\% accuracy with \sorl{} abstraction tokens
-and 0.1\% without — making it the clearest test-bed for causal analysis.
+This model achieves 95.5\% accuracy with \sorl{} abstraction tokens and 0.1\% without; making it the clearest test-bed for causal analysis.
 Experimental code: \texttt{arithmetic/experiments/} (all results reproducible).
 
 % ─────────────────────────────────────────────────────────────────────────────
@@ -370,16 +357,13 @@ Table~\ref{tab:ablation-splits} shows per-split accuracy under each condition.
   \label{tab:ablation-splits}
 \end{table}
 
-\textbf{Commentary.}
-Knockout reduces accuracy to $\leq$2\% on every split, confirming that
-the model has offloaded computation into the routing tokens.
+\paragraph{Commentary.}
+Knockout reduces accuracy to $\leq$2\% on every split, confirming that the model has offloaded computation into the routing tokens.
 Three patterns are notable:
 
 \begin{itemize}[nosep]
   \item \textbf{Shuffle $>$ Random on easy splits.}
-    On addition S0 (no carry), shuffle yields 24\% vs.\ random's 28\%;
-    the gap is small and reflects that no single position is critical —
-    any token in any position is roughly as bad as another.
+    On addition S0 (no carry), shuffle yields 24\% vs.\ random's 28\%; the gap is small and reflects that no single position is critical - any token in any position is roughly as bad as another.
   \item \textbf{Shuffle $>$ Random on cascade splits (C3--C6).}
     On 4--6-deep carry cascades, shuffle (23--28\%) consistently
     outperforms random (13--19\%).
@@ -390,7 +374,7 @@ Three patterns are notable:
     cascade resolution impossible.
   \item \textbf{Borrow cascades are uniquely sensitive.}
     Sub-M4 (4-deep borrow) drops from 85\% baseline to 6\% under
-    shuffle and 0\% under random — a 79\,pp collapse from shuffle
+    shuffle and 0\% under random - a 79\,pp collapse from shuffle
     alone. Sub-M5 (5-deep borrow) is hardest even at baseline (57\%),
     and all ablations reduce it to $\leq$3\%, showing that deep
     borrow cascades are the single hardest regime and that \sorl{}
@@ -398,32 +382,25 @@ Three patterns are notable:
 \end{itemize}
 
 \begin{tcolorbox}[colback=gray!6, colframe=gray!40,
-  fonttitle=\bfseries\small, title={Finding \#2: Abstraction tokens are causally necessary},
+  fonttitle=\bfseries\small, title={Finding \#2},
   left=5pt, right=5pt, top=4pt, bottom=4pt]
-\small \sorl{} abstraction tokens are causally necessary for correct computation.
+\small
+\sorl{} abstraction tokens are causally necessary: knockout collapses accuracy from 95.5\% to 0.1\% overall, and to $\leq$3\% on the hardest borrow-cascade splits (M4-M5).
+Shuffle (identity-preserving, position-destroying) is more harmful than random on cascade splits - wrong-position tokens from the same structural family cause systematic carry errors, while random tokens cause broader incoherence.
 \end{tcolorbox}
 
 % ─────────────────────────────────────────────────────────────────────────────
-\subsection{Token--subtask heatmap}
+\subsection{Token-subtask heatmap}
 \label{app:heatmap}
 
-\begin{figure}[h]
-  \centering
-  \includegraphics[width=0.9\linewidth]{experiments/03_token_subtask_heatmap/fig_token_subtask.png}
-  \caption{Token--subtask heatmap for \texttt{add\_sub\_sorl\_v1\_abs30\_K1\_100K\_2L1H128d}.
-    Each cell shows $P(\text{subtask} \mid \text{token})$ over the held-out evaluation set.
-    Rows are active tokens (23 of 30 appear in eval); columns are the 10 Quirke subtask labels.
-    Tokens are sorted by dominant subtask.}
-  \label{fig:heatmap}
-\end{figure}
+% [PLACEHOLDER: insert token-subtask heatmap figure here]
+% Figure: P(subtask | token) heatmap for all active tokens × 10 subtask labels.
+% Generate with: python experiments/03_token_subtask_heatmap/run.py \
+%   -model add_sub_sorl_v1_abs30_K1_100K_2L1H128d
 
-Of the 30 tokens in the codebook, 23 appear in the held-out evaluation set.
-Each active token concentrates on a narrow slice of the subtask space:
-the dominant subtask accounts for ${\geq}70\%$ of that token's occurrences
-in the majority of cases.
-Tokens are also \emph{position-locked}: each token appears predominantly
-at one or two answer positions ($d_0$--$d_6$), rarely crossing position
-boundaries.
+Of the 30 tokens in the codebook, 18 appear in the held-out evaluation set.
+Each active token concentrates on a narrow slice of the subtask space: the dominant subtask accounts for ${\geq}70\%$ of that token's occurrences in the majority of cases.
+Tokens are also \emph{position-locked}: each token appears predominantly at one or two answer positions ($d_0$-$d_6$), rarely crossing position boundaries.
 Representative examples are shown in Table~\ref{tab:token-profiles}:
 token \texttt{t21} fires 93\% of the time on US (sum-9 cascade, addition)
 with digit sum $\equiv 9 \pmod{10}$ in 95\% of cases;
@@ -449,40 +426,34 @@ token \texttt{t23} is the subtraction mirror (UD, 88\%, position $d_3$).
 \end{table}
 
 \begin{tcolorbox}[colback=gray!6, colframe=gray!40,
-  fonttitle=\bfseries\small, title={Finding \#3: Tokens spontaneously specialize by subtask and position},
+  fonttitle=\bfseries\small, title={Finding \#3},
   left=5pt, right=5pt, top=4pt, bottom=4pt]
-\small \sorl{} tokens spontaneously specialize by subtask and position without supervision.
+\small
+\sorl{} spontaneously learns position-locked, subtask-specialised routing:
+18 of 30 codebook tokens are active; each concentrates on 1-2 of the 10 Quirke subtasks (purity ${\geq}70\%$ for most), and each is tied to one or two answer positions. The codebook partitions the arithmetic computation into an interpretable registry of specialist tokens.
 \end{tcolorbox}
 
 % ─────────────────────────────────────────────────────────────────────────────
 \subsection{Guided computation via token intervention}
 \label{app:guided}
 
-If \sorl{} tokens encode the \emph{computational route} rather than just
-the answer, swapping a token at a mispredicted position should
-\emph{fix} the prediction — without retraining, without accessing
-internal activations, and without modifying the weights.
+If \sorl{} tokens encode the \emph{computational route} rather than just the answer, swapping a token at a mispredicted position should \emph{fix} the prediction — without retraining, without accessing internal activations, and without modifying the weights.
 
 We test this with \emph{surgical swap}: for each wrong prediction,
 we try replacing the abstraction token at each answer position with
-every other token in the codebook (29 candidates $\times$ 5 positions = 145
-interventions per example) and measure how many wrong predictions become
-correct — and how many previously-correct predictions break.
+every other token in the codebook (29 candidates $\times$ 5 positions = 145 interventions per example) and measure how many wrong predictions become correct — and how many previously-correct predictions break.
 
-\textbf{Results.}
-At positions $d_0$--$d_2$ (the carry-heavy positions), a fixing swap exists
-for 27--31\% of mispredicted examples.
-The best single swap is replacing \texttt{t16} with \texttt{t25} at $d_1$:
-this fixes 10 wrong predictions while breaking only 5 correct ones
-(a 2:1 fix-to-break ratio), all on carry cascade splits (C4--C6).
-Position $d_3$ and $d_4$ are harder to fix surgically (fix rates 8\% and 2\%),
-consistent with those positions encoding longer-range carry state that a
-single-position swap cannot resolve.
+\paragraph{Results.}
+At positions $d_0$-$d_2$ (the carry-heavy positions), a fixing swap exists for 27-31\% of mispredicted examples.
+The best single swap is replacing \texttt{t16} with \texttt{t25} at $d_1$: this fixes 10 wrong predictions while breaking only 5 correct ones (a 2:1 fix-to-break ratio), all on carry cascade splits (C4-C6).
+Position $d_3$ and $d_4$ are harder to fix surgically (fix rates 8\% and 2\%), consistent with those positions encoding longer-range carry state that a single-position swap cannot resolve.
 
 \begin{tcolorbox}[colback=gray!6, colframe=gray!40,
-  fonttitle=\bfseries\small, title={Finding \#4: Single token swaps fix mispredicted carry-heavy examples},
+  fonttitle=\bfseries\small, title={Finding \#4},
   left=5pt, right=5pt, top=4pt, bottom=4pt]
-\small Single token swaps fix mispredicted carry-heavy examples, enabling targeted model correction.
+\small
+Token interventions enable \emph{guided computation}: replacing a single abstraction token in the sequence fixes a wrong prediction in 27-31\% of mispredicted examples at carry-heavy positions, with no weight updates and no access to internal activations.
+This is only possible because the tokens are a human-readable interface to the model's routing decisions.
 \end{tcolorbox}
 
 % ─────────────────────────────────────────────────────────────────────────────
@@ -490,15 +461,13 @@ single-position swap cannot resolve.
 \label{app:quirke-analogy}
 
 \citet{quirke_2024_addsub_preprint} identify, via PCA of internal
-residual-stream activations, a \emph{tri-state carry classifier} at each
-digit position $n$: the hidden state encodes which of three carry regimes
+residual-stream activations, a \emph{tri-state carry classifier} at each digit position $n$: the hidden state encodes which of three carry regimes
 applies —
 $\text{ST}_n = 0$ (digit sum $< 9$; carry cannot propagate),
 $\text{ST}_n = 1$ (digit sum $> 9$; carry will propagate), or
 $\text{ST}_n = U$ (digit sum $= 9$; carry state \emph{uncertain}, depends
 on lower positions).
-This trichotomy is the core circuit for addition; borrow cascades have
-an analogous structure for subtraction.
+This trichotomy is the core circuit for addition; borrow cascades have an analogous structure for subtraction.
 
 \sorl{} recovers the same trichotomy \emph{without access to activation
 data or ground-truth circuit labels}, purely from the info-gain training
@@ -518,15 +487,21 @@ The correspondence is visible directly in the codebook:
     tokens concentrated on SA/MD subtasks.
 \end{itemize}
 
-Crucially, Quirke et al.\ required full activation-level mechanistic
-interpretability to discover this classifier; \sorl{} surfaces it as a
-readable token in the output sequence, accessible without any
-post-hoc analysis.
+Crucially, Quirke et al.\ required full activation-level mechanistic interpretability to discover this classifier; \sorl{} surfaces it as a readable token in the output sequence, accessible without any post-hoc analysis.
 
 \begin{tcolorbox}[colback=gray!6, colframe=gray!40,
-  fonttitle=\bfseries\small, title={Finding \#5: \sorl{} rediscovers known arithmetic circuits without supervision},
+  fonttitle=\bfseries\small, title={Finding \#5},
   left=5pt, right=5pt, top=4pt, bottom=4pt]
-\small \sorl{} rediscovers known arithmetic circuits without supervision or activation access.
+\small
+\sorl{} independently rediscovers the carry-state tri-classifier
+($\text{ST}_n \in \{0, U, 1\}$) identified by \citet{quirke_2024_addsub_preprint}
+via internal circuit analysis — with no access to ground-truth circuit labels.
+The three carry regimes map onto disjoint token clusters (e.g.\
+\texttt{t21}/\texttt{t6} for sum-9 uncertain in addition;
+\texttt{t23}/\texttt{t7} for borrow-uncertain in subtraction),
+and an analogous structure appears for subtraction borrow cascades.
+What Quirke et al.\ needed PCA of hidden activations to reveal,
+\sorl{} externalises as a readable routing token.
 \end{tcolorbox}
 
 % ─────────────────────────────────────────────────────────────────────────────
@@ -535,8 +510,7 @@ post-hoc analysis.
 
 Not all codebook tokens are specialists. Table~\ref{tab:token-polysemanticity}
 contrasts the most specialist with the most polysemantic tokens.
-Token \texttt{t21} fires 94\% of the time on a single subtask (US) at a
-single position ($d_3$, addition only) — a true specialist.
+Token \texttt{t21} fires 94\% of the time on a single subtask (US) at a single position ($d_3$, addition only) — a true specialist.
 Token \texttt{t1}, by contrast, is the highest-frequency token
 ($n{=}6{,}359$, spanning all five answer positions) with no subtask
 exceeding 24\% — it acts as a general-purpose fallback, handling
@@ -561,66 +535,48 @@ whichever position and carry regime was not captured by a specialist token.
   \end{tabular}
   \caption{Specialist vs.\ polysemantic tokens.
     \textbf{Purity} = fraction of occurrences where the top subtask applies.
-    \textbf{Positions} = number of distinct answer positions ($d_0$--$d_6$)
+    \textbf{Positions} = number of distinct answer positions ($d_0$-$d_6$)
     where the token appears. \texttt{t1} is a high-frequency fallback used
     across all positions; \texttt{t21} is a pure sum-9 cascade detector.}
   \label{tab:token-polysemanticity}
 \end{table}
 
-Polysemanticity here mirrors the phenomenon described in neural network
-interpretability~\citep{elhage2022superposition}: a single token encodes
-multiple distinct roles, likely because the 30-token codebook has spare
-capacity at the overflow position ($d_0$) where carry state is most
-variable. The specialist tokens concentrate at mid-sequence positions
-($d_2$--$d_4$) where carry propagation is most structured.
+Polysemanticity here mirrors the phenomenon described in neural network interpretability~\citep{elhage2022superposition}: a single token encodes multiple distinct roles, likely because the 30-token codebook has spare capacity at the overflow position ($d_0$) where carry state is most
+variable. The specialist tokens concentrate at mid-sequence positions ($d_2$-$d_4$) where carry propagation is most structured.
 
 \begin{tcolorbox}[colback=gray!6, colframe=gray!40,
-  fonttitle=\bfseries\small, title={Finding \#6: The codebook mixes specialist and polysemantic tokens},
+  fonttitle=\bfseries\small, title={Finding \#6},
   left=5pt, right=5pt, top=4pt, bottom=4pt]
-\small The codebook mixes highly specialist tokens with polysemantic fallback tokens.
+\small
+The 30-token codebook is not uniformly specialist: high-purity tokens (e.g.\ \texttt{t21}, 94\% US, single position) coexist with polysemantic fallback tokens (e.g.\ \texttt{t1}, top purity 24\%, all five positions).
+Polysemanticity concentrates at overflow positions where carry state is most variable; specialist tokens dominate the structured mid-sequence carry-propagation positions.
 \end{tcolorbox}
 
 % ─────────────────────────────────────────────────────────────────────────────
 \subsection{Automated token interpretation}
 \label{app:autointerp}
 
-We implement a light version of the automated interpretation procedure
-of \citet{bills2023language}.
-For each active token, we collect the $N{=}10$ examples from the evaluation
-set where the model assigned it with highest softmax confidence,
+We implement a light version of the automated interpretation procedure of \citet{bills2023language}.
+For each active token, we collect the $N{=}10$ examples from the evaluation set where the model assigned it with highest softmax confidence,
 then ask \texttt{claude-haiku} to produce a one-sentence role description.
-The full procedure is in \texttt{experiments/11\_auto\_interp/run.py}.
 
-\begin{table}[h]
-  \centering\small
-  \begin{tabular}{clrp{5.5cm}}
-    \toprule
-    Token & Top subtask & Conf. & Auto-interpretation \\
-    \midrule
-    \texttt{t0} & UC (47\%) & 1.00 & Token t0 marks the tens digit position in addition problems, regardless of carry state or sum value. \\
-    \texttt{t2} & UC (70\%) & 0.99 & Token t2 outputs the ones digit (0) when adding two numbers whose ones digits sum to 10 or more. \\
-    \texttt{t1} & UC (30\%) & 0.99 & This token routes to the fourth digit position during addition when a carry from the previous position must be incorporated. \\
-    \texttt{t3} & UC (44\%) & 0.94 & Token t3 routes to the hundreds position (d3) when processing carries from the tens column in addition. \\
-    \texttt{t5} & MD (65\%) & 0.93 & Token t5 routes cases where the ones digit result is 0, spanning multiple subtasks and operations. \\
-    \texttt{t8} & MD (26\%) & 0.91 & Token t8 activates when processing the tens digit (d2) across addition/subtraction with various carry/borrow states. \\
-    \texttt{t10} & UB (41\%) & 0.88 & Token t10 routes subtraction problems requiring borrow propagation at mid-to-late digit positions. \\
-    \texttt{t6} & UC (27\%) & 0.88 & Token t6 routes cases where the ones digit result is 0, regardless of operation or carry state. \\
-    \bottomrule
-  \end{tabular}
-  \caption{Auto-interpretation of \sorl{} abstraction tokens (\`{a} la \citealt{bills2023language}).
-  For each token, the 10 examples where the model assigned it
-  with highest softmax confidence are shown to \texttt{claude-haiku},
-  which produces a one-sentence role description.
-  \textbf{Conf.}\ = mean softmax probability of the assigned token.}
-  \label{tab:auto-interp}
-\end{table}
+% [PLACEHOLDER — run experiments/11_auto_interp/run.py to generate table.tex]
+% Then paste the output of table.tex here:
+%
+% \input{experiments/11_auto_interp/table.tex}
+%
+% Expected columns: Token | Top subtask (purity) | Mean conf. | Auto-interpretation
 
 \begin{tcolorbox}[colback=gray!6, colframe=gray!40,
-  fonttitle=\bfseries\small, title={Finding \#7: Automated interpretation produces human-readable token roles},
+  fonttitle=\bfseries\small, title={Finding \#7},
   left=5pt, right=5pt, top=4pt, bottom=4pt]
-\small Automated interpretation produces human-readable role descriptions that match ground-truth subtask labels.
+\small
+Automated interpretation (\`{a} la \citealt{bills2023language}) applied to the top-10 highest-confidence examples per token produces human-readable role descriptions that match the ground-truth Quirke subtask labels, without access to those labels.
+Specialist tokens receive crisp single-sentence descriptions
+(e.g.\ ``detects sum-9 boundary in addition cascade'');
+polysemantic tokens produce broader descriptions reflecting their
+mixed roles.
 \end{tcolorbox}
-
 % ─────────────────────────────────────────────────────────────────────────────
 \subsection{Training and evaluation details}
 \label{app:training}
@@ -662,283 +618,8 @@ The full procedure is in \texttt{experiments/11\_auto\_interp/run.py}.
 \end{table}
 
 Evaluation uses fixed-length autoregressive decoding (no teacher forcing):
-the model generates answer digits $d_0 \to d_6$ using its own predictions,
-with abstraction tokens inserted via the \sorl{} search-then-recurse
-procedure (matching training). Accuracy is measured on 100 held-out
-examples per split (seed 42; \texttt{thoughtworks/arithmetic-sorl-data}).
+the model generates answer digits $d_0 \to d_6$ using its own predictions, with abstraction tokens inserted via the \sorl{} search-then-recurse procedure (matching training). Accuracy is measured on 100 held-out examples per split (seed 42; \texttt{thoughtworks/arithmetic-sorl-data}).
 """
-
-HARD_SPLITS = ["add_C4", "add_C5", "add_C6", "sub_M4", "sub_M5"]
-ALL_SPLITS = [
-    "add_S0", "add_S1", "add_S2", "add_S3", "add_S4", "add_S5", "add_S6", "add_random",
-    "add_C3", "add_C4", "add_C5", "add_C6",
-    "sub_M0", "sub_M1", "sub_M2", "sub_M3", "sub_M4", "sub_M5", "sub_random",
-    "sub_B3", "sub_B4", "sub_B5",
-]
-
-
-def fetch_all_models():
-    """Pull VALID models from HF using the model catalog for filtering."""
-    # Load model_catalog.json to filter by status (VALID/SUPERSEDED)
-    catalog = None
-    try:
-        cat_local = hf_hub_download(MODEL_REPO, "model_catalog.json",
-                                     local_dir="/tmp/hf_dash_cache",
-                                     force_download=True)
-        catalog = {e["name"]: e for e in json.load(open(cat_local))}
-    except Exception:
-        pass
-
-    api = HfApi()
-    all_files = api.list_repo_files(MODEL_REPO)
-    config_files = sorted([f for f in all_files if f.endswith("train_config.json")
-                           and not f.startswith("interp_results/")])
-    metrics_files = set(f for f in all_files if f.endswith("metrics.json"))
-
-    models = []
-    for cf in config_files:
-        subfolder = cf.rsplit("/", 1)[0]
-
-        # Skip non-VALID models if catalog is available
-        if catalog is not None:
-            cat_entry = catalog.get(subfolder, {})
-            if cat_entry.get("status", "VALID") != "VALID":
-                continue
-
-        try:
-            local = hf_hub_download(MODEL_REPO, cf, local_dir="/tmp/hf_dash_cache")
-            config = json.load(open(local))
-            metrics = {}
-            mf = f"{subfolder}/metrics.json"
-            if mf in metrics_files:
-                try:
-                    ml = hf_hub_download(MODEL_REPO, mf, local_dir="/tmp/hf_dash_cache")
-                    metrics = json.load(open(ml))
-                except Exception:
-                    pass
-            models.append({
-                "subfolder": subfolder,
-                "config": config,
-                "metrics": metrics,
-                "enriched": not subfolder.startswith("non_enriched/"),
-            })
-        except Exception:
-            pass
-    return models
-
-
-def fmt_pct(v):
-    if v is None:
-        return "—"
-    return f"{v:.0%}"
-
-
-def bold_winner(base_val, sorl_val):
-    if base_val is None and sorl_val is None:
-        return "—", "—"
-    if base_val is None:
-        return "—", f"**{sorl_val:.0%}**"
-    if sorl_val is None:
-        return f"**{base_val:.0%}**", "—"
-    b = f"{base_val:.0%}"
-    s = f"{sorl_val:.0%}"
-    if sorl_val > base_val + 0.005:
-        return b, f"**{s}**"
-    elif base_val > sorl_val + 0.005:
-        return f"**{b}**", s
-    return b, s
-
-
-def get_split_acc(metrics, eval_key, split):
-    ev = metrics.get(eval_key, {})
-    s = ev.get("splits", {}).get(split, {})
-    return s.get("full_accuracy") if s else None
-
-
-def build_comparison_table(models, arch_filter="All", enriched_only=True):
-    filtered = [m for m in models if (not enriched_only or m["enriched"])]
-    if arch_filter != "All":
-        filtered = [m for m in filtered if
-                    f"{m['config'].get('n_layer')}L/{m['config'].get('n_head')}H/{m['config'].get('n_embd')}d" == arch_filter]
-
-    baselines = {}
-    sorls = {}
-    for m in filtered:
-        cfg = m["config"]
-        ops = cfg.get("ops", "?")
-        ds = cfg.get("dataset_size", 0)
-        arch = f"{cfg.get('n_layer')}L/{cfg.get('n_head')}H/{cfg.get('n_embd')}d"
-        key = (ops, ds, arch)
-
-        if cfg.get("mode") == "baseline":
-            baselines[key] = m
-        elif cfg.get("mode") == "sorl":
-            K = cfg.get("K", 0)
-            vocab = cfg.get("abs_vocab", 0)
-            sorl_key = (ops, ds, arch, K, vocab)
-            sorls[sorl_key] = m
-
-    rows = []
-    all_keys = set()
-    for k in baselines:
-        all_keys.add(k)
-    for ops, ds, arch, K, vocab in sorls:
-        all_keys.add((ops, ds, arch))
-
-    for ops, ds, arch in sorted(all_keys):
-        base = baselines.get((ops, ds, arch))
-        base_acc = base["config"].get("final_accuracy") if base else None
-        matching_sorl = {(K, v): m for (o, d, a, K, v), m in sorls.items()
-                         if o == ops and d == ds and a == arch}
-
-        if not matching_sorl and base is None:
-            continue
-
-        ds_label = f"{ds // 1000}K"
-        raw_base_wandb = base["config"].get("wandb_url", "") if base else ""
-        base_wandb = f"[wandb]({raw_base_wandb})" if raw_base_wandb else ""
-
-        HF_BASE = "https://huggingface.co/thoughtworks/arithmetic-sorl/tree/main"
-        base_hf = f"[model]({HF_BASE}/{base['subfolder']})" if base else ""
-
-        if not matching_sorl:
-            base_hard = {s: get_split_acc(base["metrics"], "sft_eval", s) for s in HARD_SPLITS} if base else {}
-            row = {
-                "Ops": ops, "Data": ds_label, "Arch": arch,
-                "Baseline": fmt_pct(base_acc), "SoRL": "pending", "Config": "pending",
-                "B_wandb": base_wandb, "S_wandb": "pending",
-                "B_hf": base_hf, "S_hf": "pending",
-            }
-            for s in HARD_SPLITS:
-                row[f"B_{s}"] = fmt_pct(base_hard.get(s))
-                row[f"S_{s}"] = "pending"
-            rows.append(row)
-        else:
-            for (K, vocab), sorl_m in sorted(matching_sorl.items()):
-                sorl_cfg = sorl_m["config"]
-                sorl_acc = sorl_cfg.get("final_accuracy")
-                raw_sorl_wandb = sorl_cfg.get("wandb_url", "")
-                sorl_wandb = f"[wandb]({raw_sorl_wandb})" if raw_sorl_wandb else ""
-                eval_key = "sorl_eval"
-
-                sorl_hf = f"[model]({HF_BASE}/{sorl_m['subfolder']})"
-
-                b_str, s_str = bold_winner(base_acc, sorl_acc)
-                row = {
-                    "Ops": ops, "Data": ds_label, "Arch": arch,
-                    "Baseline": b_str, "SoRL": s_str,
-                    "Config": f"K={K} v={vocab}",
-                    "B_wandb": base_wandb, "S_wandb": sorl_wandb,
-                    "B_hf": base_hf, "S_hf": sorl_hf,
-                }
-                for s in HARD_SPLITS:
-                    bv = get_split_acc(base["metrics"], "sft_eval", s) if base else None
-                    sv = get_split_acc(sorl_m["metrics"], eval_key, s)
-                    b_s, s_s = bold_winner(bv, sv)
-                    row[f"B_{s}"] = b_s
-                    row[f"S_{s}"] = s_s
-                rows.append(row)
-
-    return pd.DataFrame(rows)
-
-
-def build_detailed_splits(models, model_name):
-    for m in models:
-        name = m["subfolder"].removeprefix("non_enriched/")
-        if model_name in name or name in model_name or name == model_name:
-            cfg = m["config"]
-            eval_key = "sorl_eval" if cfg.get("mode") == "sorl" else "sft_eval"
-            ev = m["metrics"].get(eval_key, {})
-            splits = ev.get("splits", {})
-            rows = []
-            for s in ALL_SPLITS:
-                if s in splits:
-                    rows.append({
-                        "Split": s,
-                        "Accuracy": fmt_pct(splits[s].get("full_accuracy")),
-                        "N": splits[s].get("n_examples", 0),
-                    })
-            return pd.DataFrame(rows) if rows else pd.DataFrame({"Split": ["No data"], "Accuracy": ["—"], "N": [0]})
-    return pd.DataFrame({"Split": ["Model not found"], "Accuracy": ["—"], "N": [0]})
-
-
-def get_queue_status_text(n_models):
-    try:
-        path = hf_hub_download(MODEL_REPO, "queue_status.json", local_dir="/tmp/hf_dash_cache")
-        with open(path) as f:
-            qs = json.load(f)
-
-        total = qs.get("total", n_models)
-        done = qs.get("done", n_models)
-        # Exclude killed jobs from failed count (exit_code -9 or 0s runtime)
-        all_jobs = qs.get("jobs", [])
-        real_failed = [j for j in all_jobs if j.get("status") == "failed"
-                       and j.get("exit_code") not in (-9, None) and j.get("elapsed", 999) > 10]
-        failed = len(real_failed)
-        running = qs.get("running", 0)
-        pending = qs.get("pending", 0)
-
-        # Adjust total to exclude killed jobs
-        killed = len([j for j in all_jobs if j.get("status") == "failed"
-                      and (j.get("exit_code") == -9 or j.get("elapsed", 999) <= 10)])
-        effective_total = total - killed
-
-        pct = done / effective_total * 100 if effective_total else 0
-        bar_len = 30
-        filled = int(bar_len * done / effective_total) if effective_total else 0
-        bar = "█" * filled + "░" * (bar_len - filled)
-        status = "COMPLETE" if done >= effective_total else "RUNNING"
-
-        lines = [
-            f"### Queue: {done}/{effective_total} done ({pct:.0f}%) — {status}",
-            f"`{bar}`",
-        ]
-        if running or pending or failed:
-            parts = []
-            if running:
-                parts.append(f"🟢 Running: {running}")
-            if pending:
-                parts.append(f"⏳ Pending: {pending}")
-            if failed:
-                parts.append(f"❌ Failed: {failed}")
-            lines.append(" | ".join(parts))
-
-        return "\n".join(lines)
-    except Exception:
-        return f"**{n_models}** models on HF"
-
-
-def build_eval_info(models):
-    n_per_split = "?"
-    n_digits = 6
-    splits = []
-    total = "?"
-    for m in models:
-        metrics = m.get("metrics", {})
-        for key in ("sft_eval", "sorl_eval"):
-            cfg = metrics.get(key, {}).get("config", {})
-            if cfg.get("n_per_split"):
-                n_per_split = cfg["n_per_split"]
-                n_digits = cfg.get("n_digits", 6)
-                total = metrics[key].get("summary", {}).get("total_examples", "?")
-                splits = list(metrics[key].get("splits", {}).keys())
-                break
-        if splits:
-            break
-
-    return f"""**Replication of [Quirke et al. 2024](https://arxiv.org/abs/2402.02619)** — \
-understanding addition and subtraction in transformers.
-
-We train tiny Qwen3 models (2L/3H/510d, ~8M transformer params) from scratch on \
-{n_digits}-digit arithmetic. SoRL v1 (info-gain loss) adds learnable "abstraction tokens" \
-every K positions.
-
-**Eval**: autoregressive (errors propagate, no teacher forcing). Fixed eval sets (seed=42, {n_per_split}/split, {total} total).
-
-[Paper](https://arxiv.org/abs/2402.02619) · \
-[Models](https://huggingface.co/thoughtworks/arithmetic-sorl) · \
-[Data](https://huggingface.co/datasets/thoughtworks/arithmetic-sorl-data) · \
-[Code](https://github.com/fangyuan-ksgk/mod_gpt/tree/amir/arithmetic)"""
 
 
 # ═══════════════════════════════════════════════════════════════════
