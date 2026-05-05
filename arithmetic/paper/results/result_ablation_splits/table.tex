@@ -1,0 +1,35 @@
+\begin{table}[h]
+  \centering\small
+  \begin{tabular}{llrrrr}
+    \toprule
+    Family & Split & Baseline & Shuffle & Random & Knockout \\
+    \midrule
+    \multirow{4}{*}{\textit{Addition (easy)}} & S0 (no carry) & 100% & 24% & 28% & 0% \\
+     & S1 & 100% & 17% & 9% & 0% \\
+     & S2 & 100% & 22% & 10% & 0% \\
+     & random & 100% & 26% & 8% & 0% \\
+    \midrule
+    \multirow{4}{*}{\textit{Addition cascade (hard)}} & C3 (3-deep) & 96% & 28% & 14% & 0% \\
+     & C4 (4-deep) & 99% & 25% & 13% & 0% \\
+     & C5 (5-deep) & 99% & 23% & 19% & 0% \\
+     & C6 (6-deep) & 97% & 27% & 15% & 0% \\
+    \midrule
+    \multirow{1}{*}{\textit{Subtraction (easy)}} & random & 100% & 46% & 12% & 0% \\
+    \midrule
+    \multirow{3}{*}{\textit{Subtraction cascade (hard)}} & M3 (3-deep borrow) & 100% & 22% & 1% & 0% \\
+     & M4 (4-deep borrow) & 85% & 6% & 0% & 0% \\
+     & M5 (5-deep borrow) & 57% & 3% & 0% & 2% \\
+    \midrule
+    \multicolumn{2}{l}{\textbf{Overall}} & \textbf{95.5%} & 26.6% & 12.3% & 0.1% \\
+    \bottomrule
+  \end{tabular}
+  \caption{Per-split causal ablation on \texttt{2L/1H/128d} (100K).
+    \textbf{Shuffle}: tokens permuted within the sequence (identity preserved,
+    position destroyed). \textbf{Random}: each token replaced by a uniform
+    draw from the codebook. \textbf{Knockout}: all tokens replaced by a fixed
+    mask. Shuffle $>$ Random on cascade splits because wrong-position tokens
+    cause systematic one-off carry errors; random tokens cause broader
+    incoherence. Sub-M5 (5-deep borrow cascade) is hardest even at baseline
+    (57\%), and all ablations collapse it to $\leq$3\%.}
+  \label{tab:ablation-splits}
+\end{table}

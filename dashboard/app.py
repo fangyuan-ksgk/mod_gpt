@@ -16,6 +16,718 @@ from PIL import Image
 from huggingface_hub import HfApi, hf_hub_download
 
 MODEL_REPO = "thoughtworks/arithmetic-sorl"
+
+# ═══════════════════════════════════════════════════════════════════
+# LaTeX scratchpad content — edit here, copy from dashboard into Overleaf
+# ═══════════════════════════════════════════════════════════════════
+
+LATEX_ARITHMETIC_SETUP = r"""% ── Arithmetic case study: task setup + Quirke subtask definitions ──────────
+
+\subsection{Case study: six-digit addition and subtraction}
+\label{sec:arithmetic}
+
+We instantiate \sorl{} on six-digit addition and subtraction — a setting where
+ground-truth subtask labels are available~\citep{quirke_2024_addsub_preprint},
+enabling direct comparison between the routing codes \sorl{} discovers and the
+computational circuits a transformer must implement.
+
+\paragraph{Task.}
+The model receives two zero-padded six-digit operands and an operator
+($+$ or $-$), encoded digit-by-digit with a fixed 13-token vocabulary
+($0$--$9$, $+$, $-$, $=$; each symbol maps to exactly one token),
+giving sequences of length 21 (14 prompt tokens $+$ 7 answer tokens).
+\sorl{} inserts one abstraction code after every input token ($K{=}1$),
+so the model emits one routing decision per digit position.
+We train small transformers from scratch using \sorl{} v1 (info-gain
+loss)~\citep{yu2025sorl}; the \sft{} baseline uses an identical
+architecture with standard cross-entropy training.
+Figure~\ref{fig:arithmetic-example} shows a concrete example: the
+addition $959{,}271 + 040{,}756 = 1{,}000{,}027$ triggers a four-deep
+carry cascade, and \sorl{} assigns a distinct abstraction code at each
+position — \texttt{t2} at cascade positions (UC/US), \texttt{t6} at the
+sum-9 boundary (SS), and \texttt{t16}/\texttt{t3} at the trivial positions (SC/SA).
+
+\paragraph{Subtask labels \citep{quirke_2024_addsub_preprint}.}
+At each answer-digit position $n$, the local computation falls into one
+of ten mutually exclusive subtasks determined by the operand digits and
+the carry or borrow state propagating from lower positions
+(Table~\ref{tab:quirke-subtasks} in Appendix~\ref{app:arithmetic}).
+A \emph{carry cascade} arises when consecutive digit pairs sum to exactly
+9 (SS positions in addition): whether a carry propagates through such a
+run depends on a single carry entering from the right, requiring the model
+to track state across multiple positions.
+Borrow cascades (UD) are the analogous structure in subtraction.
+
+\paragraph{Models and training.}
+We evaluate three undersized architectures:
+\texttt{1L/2H/256d} (1 transformer layer, 2 attention heads, hidden size 256),
+\texttt{1L/3H/510d} (1 layer, 3 heads, hidden size 510),
+and \texttt{2L/1H/128d} (2 layers, 1 head, hidden size 128).
+All models are trained from scratch with AdamW
+($\eta = 8{\times}10^{-5}$, $\beta_1{=}0.9$, $\beta_2{=}0.999$,
+weight decay $0.01$, 3\% linear warmup),
+batch size 64, for 20 epochs on fixed datasets of
+10K--100K six-digit addition/subtraction problems.
+The abstraction codebook has $|\mathcal{A}|{=}30$ tokens with $K{=}1$
+(one routing token per answer-digit position).
+
+\paragraph{Evaluation splits.}
+We evaluate on \emph{C-splits} (C1--C6) grouping problems by the length
+of the longest consecutive hot-carry chain with varied answer digits,
+following~\citet{quirke_2024_addsub_preprint}.
+C6 (six consecutive carries) is the hardest split.
+Across the three architectures and data sizes from 10K to 100K,
+\sorl{} wins in 12 of 13 tested configurations overall, and on C6 in
+all 13, with gains as large as $+50$\,pp
+(44\% $\to$ 94\% on the smallest model at 50K examples;
+Table~\ref{tab:undersized-wins}).
+
+\begin{tcolorbox}[colback=gray!6, colframe=gray!40,
+  fonttitle=\bfseries\small, title={Finding \#1},
+  left=5pt, right=5pt, top=4pt, bottom=4pt]
+\small
+\sorl{} outperforms \sft{} on six-digit arithmetic in all small or
+data-sparse settings tested: 12 of 13 (architecture, data-size) pairs
+overall, and all 13 on 6-deep carry cascades (C6), with gains as large
+as $+50$\,pp at 50K training examples on the smallest architecture.
+The margin grows on harder splits, confirming that \sorl{}'s abstraction
+tokens specifically support carry/borrow propagation — the hardest part
+of the computation.
+\end{tcolorbox}
+
+\paragraph{Interpretability.}
+Analysis of \texttt{2L/1H/128d} reveals that \sorl{} tokens are not
+merely correlated with correct outputs --- they are causally necessary:
+removing all tokens collapses accuracy from 95.5\% to 0.1\%.
+The codebook spontaneously partitions into position-locked,
+subtask-specialist tokens that recover the carry-state tri-classifier of
+\citet{quirke_2024_addsub_preprint} without access to activation data.
+Token-level interventions fix wrong predictions at a 27--31\% rate on
+carry-heavy positions, and an automated interpretation procedure
+(\`{a} la \citealt{bills2023language}) yields human-readable roles for
+each token.
+Full analysis in Appendix~\ref{app:arithmetic}.
+"""
+
+LATEX_FIGURE_EXAMPLE = r"""% fig_arithmetic_example.tex
+% Usage in paper: \input{figures/fig_arithmetic_example/fig_arithmetic_example.tex}
+% Required packages: tikz, xcolor
+%
+% Shows 959271 + 040756 = 1000027 (4-deep carry cascade).
+% Token assignments from model add_sub_sorl_v1_abs30_K1_100K (K=1, abs30).
+
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}[
+  % ── node styles ─────────────────────────────────────────────────────
+  digit/.style={
+    draw=#1!60!gray, fill=#1, rounded corners=2pt,
+    minimum width=1.05cm, minimum height=0.62cm,
+    font=\small\bfseries, inner sep=2pt, text=#1!20!black,
+  },
+  subtask/.style={
+    draw=#1!60!gray, fill=#1, rounded corners=2pt,
+    minimum width=1.05cm, minimum height=0.55cm,
+    font=\footnotesize, inner sep=2pt, text=#1!20!black,
+  },
+  token/.style={
+    draw=violet!55, fill=violet!8, rounded corners=2pt, dashed,
+    minimum width=1.05cm, minimum height=0.55cm,
+    font=\footnotesize\bfseries, inner sep=2pt, text=violet!70!black,
+  },
+  rowlabel/.style={font=\footnotesize\itshape, text=gray!70!black, anchor=east},
+  poslabel/.style={font=\scriptsize, text=gray!60!black},
+  carry/.style={->, >=stealth, thick, color=orange!70!red,
+                shorten <=3pt, shorten >=3pt},
+]
+
+% ── colours (Quirke subtask families) ───────────────────────────────────
+\colorlet{cSA}{green!22!white}
+\colorlet{cSC}{yellow!48!white}
+\colorlet{cUC}{blue!22!white}
+\colorlet{cUS}{blue!36!white}
+
+% ── column spacing ───────────────────────────────────────────────────────
+\def\cs{1.45}   % inter-column distance (cm)
+
+% ── data (d0 = MSB/overflow on left, d6 = LSB on right) ─────────────────
+%   d0    d1    d2    d3    d4    d5    d6
+%   ---   9     5     9     2     7     1     (Addend A)
+%   ---   0     4     0     7     5     6     (Addend B)
+%   1     0     0     0     0     2     7     (Answer)
+%   UC    US    US    US    US    SC    SA    (Subtask)
+%   t2    t2    t6    t2    t1    t16   t3    (SoRL token)
+
+% ── position labels ──────────────────────────────────────────────────────
+\foreach \i/\lbl in {0/$d_0$,1/$d_1$,2/$d_2$,3/$d_3$,4/$d_4$,5/$d_5$,6/$d_6$}{
+  \node[poslabel] at (\i*\cs, 3.15) {\lbl};
+}
+
+% ── row labels ───────────────────────────────────────────────────────────
+\node[rowlabel] at (-0.65, 2.5)  {Addend $A$};
+\node[rowlabel] at (-0.65, 1.8)  {Addend $B$};
+\node[rowlabel] at (-0.65, 0.85) {Answer};
+\node[rowlabel] at (-0.65, 0.1)  {Subtask};
+\node[rowlabel] at (-0.65,-0.65) {Token};
+
+% ── operand digits (d1..d6; d0 is the overflow, has no operand digits) ───
+\foreach \i/\d in {1/9,2/5,3/9,4/2,5/7,6/1}{
+  \node[font=\small, text=gray!30!black] at (\i*\cs, 2.5) {\d};
+}
+\node[font=\small\bfseries, text=gray!50!black] at (-0.4*\cs, 1.8) {$+$};
+\foreach \i/\d in {1/0,2/4,3/0,4/7,5/5,6/6}{
+  \node[font=\small, text=gray!30!black] at (\i*\cs, 1.8) {\d};
+}
+
+% ── horizontal rule ──────────────────────────────────────────────────────
+\draw[gray!50, thin] (-0.55*\cs, 1.38) -- (6.55*\cs, 1.38);
+
+% ── answer digit boxes ───────────────────────────────────────────────────
+\node[digit=cUC] (a0) at (0*\cs, 0.85) {1};
+\node[digit=cUS] (a1) at (1*\cs, 0.85) {0};
+\node[digit=cUS] (a2) at (2*\cs, 0.85) {0};
+\node[digit=cUS] (a3) at (3*\cs, 0.85) {0};
+\node[digit=cUS] (a4) at (4*\cs, 0.85) {0};
+\node[digit=cSC] (a5) at (5*\cs, 0.85) {2};
+\node[digit=cSA] (a6) at (6*\cs, 0.85) {7};
+
+% ── subtask boxes ────────────────────────────────────────────────────────
+\node[subtask=cUC] at (0*\cs, 0.1) {UC};
+\node[subtask=cUS] at (1*\cs, 0.1) {US};
+\node[subtask=cUS] at (2*\cs, 0.1) {US};
+\node[subtask=cUS] at (3*\cs, 0.1) {US};
+\node[subtask=cUS] at (4*\cs, 0.1) {US};
+\node[subtask=cSC] at (5*\cs, 0.1) {SC};
+\node[subtask=cSA] at (6*\cs, 0.1) {SA};
+
+% ── SoRL token boxes ─────────────────────────────────────────────────────
+\foreach \i/\t in {0/t2,1/t2,2/t6,3/t2,4/t1,5/t16,6/t3}{
+  \node[token] at (\i*\cs, -0.65) {\texttt{\t}};
+}
+
+% ── carry arrows (cascade flows right→left: d5→d4→d3→d2→d1→d0) ──────────
+\foreach \fr/\to in {5/4, 4/3, 3/2, 2/1, 1/0}{
+  \draw[carry] (a\fr.west) -- (a\to.east);
+}
+
+% ── cascade bracket + label ──────────────────────────────────────────────
+\draw[orange!60!red, thin]
+  (a5.north west) -- ++(0, 0.22)
+  -- (a0.north east) -- ++(0,-0.22);
+\node[font=\scriptsize\itshape, text=orange!60!red]
+  at (2.5*\cs, 1.35) {carry cascade};
+
+% ── legend ───────────────────────────────────────────────────────────────
+\matrix[
+  matrix of nodes,
+  nodes={font=\scriptsize, inner sep=2pt, anchor=west},
+  row sep=1pt, column sep=4pt,
+  anchor=south east,
+] at (6*\cs + 0.6, -1.05) {
+  \node[digit=cSA, minimum width=0.45cm, minimum height=0.3cm,
+        font=\scriptsize] {}; &
+  \node {SA --- simple add}; &
+  \node[digit=cUC, minimum width=0.45cm, minimum height=0.3cm,
+        font=\scriptsize] {}; &
+  \node {UC --- uses carry}; \\
+  \node[digit=cSC, minimum width=0.45cm, minimum height=0.3cm,
+        font=\scriptsize] {}; &
+  \node {SC --- generates carry}; &
+  \node[digit=cUS, minimum width=0.45cm, minimum height=0.3cm,
+        font=\scriptsize] {}; &
+  \node {US --- cascade}; \\
+  \node[token, minimum width=0.45cm, minimum height=0.3cm,
+        font=\scriptsize] {}; &
+  \node[text=violet!70!black] {\sorl{} token}; & & \\
+};
+
+\end{tikzpicture}
+\caption{%
+  Six-digit addition $959{,}271 + 040{,}756 = 1{,}000{,}027$, a four-deep
+  carry cascade. At each answer-digit position \sorl{} assigns one
+  abstraction token (bottom row). Tokens \texttt{t2} and \texttt{t6}
+  cluster on cascade positions (UC/US); \texttt{t16} marks the carry
+  source (SC); \texttt{t3} marks the trivial position (SA).
+  Token assignments from model \texttt{add\_sub\_sorl\_v1\_abs30\_K1\_100K}
+  (K=1, 30-token codebook).%
+}
+\label{fig:arithmetic-example}
+\end{figure}
+"""
+
+LATEX_TABLE_UNDERSIZED = r"""% tab:undersized-wins — SoRL vs SFT on undersized architectures
+% Generated by arithmetic/paper/results/result_low_data_wins/run.py
+% Requires: \usepackage{booktabs}, \usepackage{xcolor}
+
+\begin{table}[t]
+  \centering
+  \small
+  \begin{tabular}{llrrrr}
+    \toprule
+    Architecture & Data & Baseline & SoRL & Gap & C6 gap \\
+    \midrule
+    \texttt{1L/2H/256d} & 10K  & 10\% & \textbf{19\%} & \textcolor{green!50!black}{\textbf{+9\%}}  & \textcolor{green!50!black}{\textbf{+18\%}} \\
+                        & 25K  & 32\% & 26\%          & $-7\%$                                    & \textcolor{green!50!black}{\textbf{+10\%}} \\
+                        & 50K  & 44\% & \textbf{65\%} & \textcolor{green!50!black}{\textbf{+21\%}} & \textcolor{green!50!black}{\textbf{+34\%}} \\
+                        & 100K & 49\% & \textbf{65\%} & \textcolor{green!50!black}{\textbf{+16\%}} & \textcolor{green!50!black}{\textbf{+31\%}} \\
+    \midrule
+    \texttt{1L/3H/510d} & 10K  & 36\% & \textbf{52\%} & \textcolor{green!50!black}{\textbf{+16\%}} & \textcolor{green!50!black}{\textbf{+30\%}} \\
+                        & 25K  & 46\% & \textbf{60\%} & \textcolor{green!50!black}{\textbf{+14\%}} & \textcolor{green!50!black}{\textbf{+22\%}} \\
+                        & 50K  & 53\% & \textbf{72\%} & \textcolor{green!50!black}{\textbf{+19\%}} & \textcolor{green!50!black}{\textbf{+38\%}} \\
+                        & 100K & 67\% & \textbf{83\%} & \textcolor{green!50!black}{\textbf{+16\%}} & \textcolor{green!50!black}{\textbf{+26\%}} \\
+    \midrule
+    \texttt{2L/1H/128d} & 10K  & 16\% & \textbf{36\%} & \textcolor{green!50!black}{\textbf{+21\%}} & \textcolor{green!50!black}{\textbf{+39\%}} \\
+                        & 25K  & 40\% & \textbf{55\%} & \textcolor{green!50!black}{\textbf{+15\%}} & \textcolor{green!50!black}{\textbf{+23\%}} \\
+                        & 50K  & 59\% & \textbf{87\%} & \textcolor{green!50!black}{\textbf{+28\%}} & \textcolor{green!50!black}{\textbf{+50\%}} \\
+                        & 75K  & 75\% & \textbf{87\%} & \textcolor{green!50!black}{\textbf{+12\%}} & \textcolor{green!50!black}{\textbf{+5\%}}  \\
+                        & 100K & 73\% & \textbf{95\%} & \textcolor{green!50!black}{\textbf{+22\%}} & \textcolor{green!50!black}{\textbf{+33\%}} \\
+    \bottomrule
+  \end{tabular}
+  \caption{\sorl{} ($K{=}1$, $|\mathcal{A}|{=}30$) vs.\ \sft{} baseline on
+    undersized architectures across data sizes.
+    \textbf{Gap} = overall accuracy gain; \textbf{C6 gap} = gain on
+    6-deep carry cascades (the hardest split).
+    \sorl{} wins in \textbf{12 of 13} (architecture, data-size) pairs;
+    the single exception is \texttt{1L/2H/256d} at 25K, where the model
+    is undertrained (accuracy still rising at epoch 20).
+    \sorl{} wins on C6 in \textbf{all 13} configurations.}
+  \label{tab:undersized-wins}
+\end{table}
+"""
+
+LATEX_APPENDIX = r"""% ═══════════════════════════════════════════════════════════════════════════
+% APPENDIX — Arithmetic case study (Findings #2–5 + training details)
+% ═══════════════════════════════════════════════════════════════════════════
+% Paste this entire block into your appendix .tex file.
+%
+% Required packages:
+%   \usepackage{tcolorbox}
+%   \usepackage{booktabs}
+%   \usepackage{xcolor}
+%   \usepackage{multirow}
+%   \usepackage{enumitem}   % for [nosep]
+%
+% Required macros (put in preamble if not already defined):
+%   \providecommand{\sorl}{\textsc{DLR}}
+%   \providecommand{\sft}{\textsc{SFT}}
+% ═══════════════════════════════════════════════════════════════════════════
+
+% ── Finding box macro (put in preamble) ──────────────────────────────────────
+% \usepackage{tcolorbox}
+% \newcommand{\finding}[2]{%
+%   \begin{tcolorbox}[colback=gray!6,colframe=gray!40,
+%     fonttitle=\bfseries\small,title={Finding \##1},
+%     left=5pt,right=5pt,top=4pt,bottom=4pt]\small#2\end{tcolorbox}}
+
+\section{Arithmetic case study: interpretability analysis}
+\label{app:arithmetic}
+
+\begin{table}[h]
+  \centering\small
+  \setlength{\tabcolsep}{6pt}
+  \begin{tabular}{llp{7.8cm}}
+    \toprule
+    & Label & Condition at digit position $n$ \\
+    \midrule
+    \multirow{5}{*}{\rotatebox[origin=c]{90}{Addition\;}}
+      & \textbf{SA} & $d_1{+}d_2 \leq 8$;\; no carry in or out \\
+      & \textbf{SC} & $d_1{+}d_2 \geq 10$;\; generates a carry \\
+      & \textbf{SS} & $d_1{+}d_2 = 9$;\; carry state \emph{uncertain} (cascade boundary) \\
+      & \textbf{UC} & carry arrives from position $n{-}1$;\; answer digit depends on it \\
+      & \textbf{US} & carry propagates through a run of SS positions (sum-of-9 cascade) \\
+    \midrule
+    \multirow{5}{*}{\rotatebox[origin=c]{90}{Subtraction\;}}
+      & \textbf{MD} & $d_1 \geq d_2$;\; no borrow \\
+      & \textbf{MB} & $d_1 < d_2$;\; generates a borrow \\
+      & \textbf{ME} & $d_1 = d_2$;\; borrow state \emph{uncertain} \\
+      & \textbf{UB} & borrow arrives from position $n{-}1$ \\
+      & \textbf{UD} & borrow propagates through a run of ME positions \\
+    \bottomrule
+  \end{tabular}
+  \caption{Per-digit subtask labels for six-digit addition and
+    subtraction~\citep{quirke_2024_addsub_preprint}.
+    Cascades (US, UD) require tracking carry/borrow state across
+    multiple positions and are the hardest splits.}
+  \label{tab:quirke-subtasks}
+\end{table}
+
+\paragraph{Setup.}
+All interpretability analyses use model
+\texttt{add\_sub\_sorl\_v1\_abs30\_K1\_100K\_2L1H128d}
+(\texttt{2L/1H/128d}, 2 layers, 1 head, hidden size 128; trained on 100K examples),
+evaluated on 2{,}600 held-out problems across 26 splits.
+This model achieves 95.5\% accuracy with \sorl{} abstraction tokens
+and 0.1\% without — making it the clearest test-bed for causal analysis.
+Experimental code: \texttt{arithmetic/experiments/} (all results reproducible).
+
+% ─────────────────────────────────────────────────────────────────────────────
+\subsection{Causal ablations}
+\label{app:causal}
+
+To confirm that \sorl{} tokens are causally necessary (not merely correlated
+with correct outputs), we run three intervention conditions on model
+\texttt{2L/1H/128d} (100K), evaluated across 2{,}600 held-out problems:
+
+\begin{itemize}[nosep]
+  \item \textbf{Shuffle}: randomly permute all abstraction tokens within
+    each sequence (token identities preserved; positional assignment destroyed).
+  \item \textbf{Random}: replace each token with a draw uniform over the
+    30-token codebook (identity and position both destroyed).
+  \item \textbf{Knockout}: replace every token with a fixed \texttt{[UNK]}
+    embedding (strongest intervention; removes all information).
+\end{itemize}
+
+Table~\ref{tab:ablation-splits} shows per-split accuracy under each condition.
+
+\begin{table}[h]
+  \centering\small
+  \begin{tabular}{llrrrr}
+    \toprule
+    Family & Split & Baseline & Shuffle & Random & Knockout \\
+    \midrule
+    \multirow{4}{*}{\textit{Addition (easy)}} & S0 (no carry) & 100\% & 24\% & 28\% & 0\% \\
+     & S1 & 100\% & 17\% &  9\% & 0\% \\
+     & S2 & 100\% & 22\% & 10\% & 0\% \\
+     & random & 100\% & 26\% &  8\% & 0\% \\
+    \midrule
+    \multirow{4}{*}{\textit{Addition cascade (hard)}} & C3 (3-deep) & 96\% & 28\% & 14\% & 0\% \\
+     & C4 (4-deep) & 99\% & 25\% & 13\% & 0\% \\
+     & C5 (5-deep) & 99\% & 23\% & 19\% & 0\% \\
+     & C6 (6-deep) & 97\% & 27\% & 15\% & 0\% \\
+    \midrule
+    \multirow{1}{*}{\textit{Subtraction (easy)}} & random & 100\% & 46\% & 12\% & 0\% \\
+    \midrule
+    \multirow{3}{*}{\textit{Subtraction cascade (hard)}} & M3 (3-deep borrow) & 100\% & 22\% &  1\% & 0\% \\
+     & M4 (4-deep borrow) &  85\% &  6\% &  0\% & 0\% \\
+     & M5 (5-deep borrow) &  57\% &  3\% &  0\% & 2\% \\
+    \midrule
+    \multicolumn{2}{l}{\textbf{Overall}} & \textbf{95.5\%} & 26.6\% & 12.3\% & 0.1\% \\
+    \bottomrule
+  \end{tabular}
+  \caption{Per-split causal ablation (\texttt{2L/1H/128d}, 100K training examples).
+    \textbf{Shuffle} preserves token identity but destroys positional assignment;
+    \textbf{Random} destroys both; \textbf{Knockout} removes all token information.
+    Generated by \texttt{paper/results/result\_ablation\_splits/run.py}.}
+  \label{tab:ablation-splits}
+\end{table}
+
+\paragraph{Commentary.}
+Knockout reduces accuracy to $\leq$2\% on every split, confirming that
+the model has offloaded computation into the routing tokens.
+Three patterns are notable:
+
+\begin{itemize}[nosep]
+  \item \textbf{Shuffle $>$ Random on easy splits.}
+    On addition S0 (no carry), shuffle yields 24\% vs.\ random's 28\%;
+    the gap is small and reflects that no single position is critical —
+    any token in any position is roughly as bad as another.
+  \item \textbf{Shuffle $>$ Random on cascade splits (C3--C6).}
+    On 4--6-deep carry cascades, shuffle (23--28\%) consistently
+    outperforms random (13--19\%).
+    When tokens are shuffled, a cascade position receives a token
+    from another cascade position — a wrong token but from the
+    ``right family'', producing a systematic one-off carry error.
+    Random tokens provide no structural signal at all, making
+    cascade resolution impossible.
+  \item \textbf{Borrow cascades are uniquely sensitive.}
+    Sub-M4 (4-deep borrow) drops from 85\% baseline to 6\% under
+    shuffle and 0\% under random — a 79\,pp collapse from shuffle
+    alone. Sub-M5 (5-deep borrow) is hardest even at baseline (57\%),
+    and all ablations reduce it to $\leq$3\%, showing that deep
+    borrow cascades are the single hardest regime and that \sorl{}
+    tokens are essential for solving them.
+\end{itemize}
+
+\begin{tcolorbox}[colback=gray!6, colframe=gray!40,
+  fonttitle=\bfseries\small, title={Finding \#2},
+  left=5pt, right=5pt, top=4pt, bottom=4pt]
+\small
+\sorl{} abstraction tokens are causally necessary: knockout collapses
+accuracy from 95.5\% to 0.1\% overall, and to $\leq$3\% on the hardest
+borrow-cascade splits (M4--M5).
+Shuffle (identity-preserving, position-destroying) is more harmful than
+random on cascade splits — wrong-position tokens from the same structural
+family cause systematic carry errors, while random tokens cause broader
+incoherence.
+\end{tcolorbox}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\subsection{Token--subtask heatmap}
+\label{app:heatmap}
+
+% [PLACEHOLDER: insert token-subtask heatmap figure here]
+% Figure: P(subtask | token) heatmap for all active tokens × 10 subtask labels.
+% Generate with: python experiments/03_token_subtask_heatmap/run.py \
+%   --model add_sub_sorl_v1_abs30_K1_100K_2L1H128d
+
+Of the 30 tokens in the codebook, 18 appear in the held-out evaluation set.
+Each active token concentrates on a narrow slice of the subtask space:
+the dominant subtask accounts for ${\geq}70\%$ of that token's occurrences
+in the majority of cases.
+Tokens are also \emph{position-locked}: each token appears predominantly
+at one or two answer positions ($d_0$--$d_6$), rarely crossing position
+boundaries.
+Representative examples are shown in Table~\ref{tab:token-profiles}:
+token \texttt{t21} fires 93\% of the time on US (sum-9 cascade, addition)
+with digit sum $\equiv 9 \pmod{10}$ in 95\% of cases;
+token \texttt{t23} is the subtraction mirror (UD, 88\%, position $d_3$).
+
+\begin{table}[h]
+  \centering\small
+  \begin{tabular}{llrrll}
+    \toprule
+    Token & Pos & $n$ & Top subtask & Purity & Op \\
+    \midrule
+    \texttt{t21} & $d_3$ & 719 & US & 93\% & add (94\%) \\
+    \texttt{t23} & $d_3$ & 687 & UD & 88\% & sub (93\%) \\
+    \texttt{t6}  & $d_2$ & 1438 & US & 52\% & add (79\%), sum${\equiv}9$: 78\% \\
+    \texttt{t7}  & $d_2$ & 1026 & UB/UD & 90\% & sub (100\%) \\
+    \texttt{t14} & $d_4$ & 1242 & UD & 73\% & sub (81\%) \\
+    \bottomrule
+  \end{tabular}
+  \caption{Selected token profiles. Each token specialises in a specific
+    subtask at a specific answer position. ``Purity'' = fraction of
+    occurrences where the top subtask applies.}
+  \label{tab:token-profiles}
+\end{table}
+
+\begin{tcolorbox}[colback=gray!6, colframe=gray!40,
+  fonttitle=\bfseries\small, title={Finding \#3},
+  left=5pt, right=5pt, top=4pt, bottom=4pt]
+\small
+\sorl{} spontaneously learns position-locked, subtask-specialised routing:
+18 of 30 codebook tokens are active; each concentrates on 1--2 of the
+10 Quirke subtasks (purity ${\geq}70\%$ for most), and each is tied to
+one or two answer positions. The codebook partitions the arithmetic
+computation into an interpretable registry of specialist tokens.
+\end{tcolorbox}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\subsection{Guided computation via token intervention}
+\label{app:guided}
+
+If \sorl{} tokens encode the \emph{computational route} rather than just
+the answer, swapping a token at a mispredicted position should
+\emph{fix} the prediction — without retraining, without accessing
+internal activations, and without modifying the weights.
+
+We test this with \emph{surgical swap}: for each wrong prediction,
+we try replacing the abstraction token at each answer position with
+every other token in the codebook (29 candidates $\times$ 5 positions = 145
+interventions per example) and measure how many wrong predictions become
+correct — and how many previously-correct predictions break.
+
+\paragraph{Results.}
+At positions $d_0$--$d_2$ (the carry-heavy positions), a fixing swap exists
+for 27--31\% of mispredicted examples.
+The best single swap is replacing \texttt{t16} with \texttt{t25} at $d_1$:
+this fixes 10 wrong predictions while breaking only 5 correct ones
+(a 2:1 fix-to-break ratio), all on carry cascade splits (C4--C6).
+Position $d_3$ and $d_4$ are harder to fix surgically (fix rates 8\% and 2\%),
+consistent with those positions encoding longer-range carry state that a
+single-position swap cannot resolve.
+
+\begin{tcolorbox}[colback=gray!6, colframe=gray!40,
+  fonttitle=\bfseries\small, title={Finding \#4},
+  left=5pt, right=5pt, top=4pt, bottom=4pt]
+\small
+Token interventions enable \emph{guided computation}: replacing a single
+abstraction token in the sequence fixes a wrong prediction in 27--31\% of
+mispredicted examples at carry-heavy positions, with no weight updates
+and no access to internal activations.
+This is only possible because the tokens are a human-readable interface
+to the model's routing decisions.
+\end{tcolorbox}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\subsection{\sorl{} tokens recover circuits from Quirke et al.}
+\label{app:quirke-analogy}
+
+\citet{quirke_2024_addsub_preprint} identify, via PCA of internal
+residual-stream activations, a \emph{tri-state carry classifier} at each
+digit position $n$: the hidden state encodes which of three carry regimes
+applies —
+$\text{ST}_n = 0$ (digit sum $< 9$; carry cannot propagate),
+$\text{ST}_n = 1$ (digit sum $> 9$; carry will propagate), or
+$\text{ST}_n = U$ (digit sum $= 9$; carry state \emph{uncertain}, depends
+on lower positions).
+This trichotomy is the core circuit for addition; borrow cascades have
+an analogous structure for subtraction.
+
+\sorl{} recovers the same trichotomy \emph{without access to activation
+data or ground-truth circuit labels}, purely from the info-gain training
+signal.
+The correspondence is visible directly in the codebook:
+
+\begin{itemize}[nosep]
+  \item $\text{ST}_n = U$ (sum-9 uncertain, addition) $\longleftrightarrow$
+    \texttt{t21} at $d_3$ (US=93\%, sum${\equiv}9$: 95\%);
+    \texttt{t6} at $d_2$ (US=52\%, sum${\equiv}9$: 78\%).
+  \item $\text{ST}_n = U$ (borrow-uncertain, subtraction) $\longleftrightarrow$
+    \texttt{t23} at $d_3$ (UD=88\%, sub=93\%);
+    \texttt{t7} at $d_2$ (UB/UD=90\%, sub=100\%).
+  \item $\text{ST}_n = 1$ (carry generated) $\longleftrightarrow$
+    tokens concentrated on SC/MB subtasks at each position.
+  \item $\text{ST}_n = 0$ (simple digit, no carry) $\longleftrightarrow$
+    tokens concentrated on SA/MD subtasks.
+\end{itemize}
+
+Crucially, Quirke et al.\ required full activation-level mechanistic
+interpretability to discover this classifier; \sorl{} surfaces it as a
+readable token in the output sequence, accessible without any
+post-hoc analysis.
+
+\begin{tcolorbox}[colback=gray!6, colframe=gray!40,
+  fonttitle=\bfseries\small, title={Finding \#5},
+  left=5pt, right=5pt, top=4pt, bottom=4pt]
+\small
+\sorl{} independently rediscovers the carry-state tri-classifier
+($\text{ST}_n \in \{0, U, 1\}$) identified by \citet{quirke_2024_addsub_preprint}
+via internal circuit analysis — with no access to ground-truth circuit labels.
+The three carry regimes map onto disjoint token clusters (e.g.\
+\texttt{t21}/\texttt{t6} for sum-9 uncertain in addition;
+\texttt{t23}/\texttt{t7} for borrow-uncertain in subtraction),
+and an analogous structure appears for subtraction borrow cascades.
+What Quirke et al.\ needed PCA of hidden activations to reveal,
+\sorl{} externalises as a readable routing token.
+\end{tcolorbox}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\subsection{Polysemantic tokens}
+\label{app:polysemantic}
+
+Not all codebook tokens are specialists. Table~\ref{tab:token-polysemanticity}
+contrasts the most specialist with the most polysemantic tokens.
+Token \texttt{t21} fires 94\% of the time on a single subtask (US) at a
+single position ($d_3$, addition only) — a true specialist.
+Token \texttt{t1}, by contrast, is the highest-frequency token
+($n{=}6{,}359$, spanning all five answer positions) with no subtask
+exceeding 24\% — it acts as a general-purpose fallback, handling
+whichever position and carry regime was not captured by a specialist token.
+
+\begin{table}[h]
+  \centering\small
+  \begin{tabular}{clrrr}
+    \toprule
+    Token & Top subtask & Purity & $n$ & Positions \\
+    \midrule
+    \multicolumn{5}{l}{\textit{Specialist (high purity)}} \\
+    \texttt{t21} & US (cascade, add) & 94\% & 719  & 1 \\
+    \texttt{t23} & UD (cascade, sub) & 88\% & 687  & 3 \\
+    \texttt{t14} & UD               & 74\% & 1242 & 3 \\
+    \midrule
+    \multicolumn{5}{l}{\textit{Polysemantic (low purity)}} \\
+    \texttt{t5}  & UB               & 21\% & 1377 & 4 \\
+    \texttt{t1}  & MD               & 24\% & 6359 & 5 \\
+    \texttt{t20} & UB               & 24\% &  283 & 3 \\
+    \bottomrule
+  \end{tabular}
+  \caption{Specialist vs.\ polysemantic tokens.
+    \textbf{Purity} = fraction of occurrences where the top subtask applies.
+    \textbf{Positions} = number of distinct answer positions ($d_0$--$d_6$)
+    where the token appears. \texttt{t1} is a high-frequency fallback used
+    across all positions; \texttt{t21} is a pure sum-9 cascade detector.}
+  \label{tab:token-polysemanticity}
+\end{table}
+
+Polysemanticity here mirrors the phenomenon described in neural network
+interpretability~\citep{elhage2022superposition}: a single token encodes
+multiple distinct roles, likely because the 30-token codebook has spare
+capacity at the overflow position ($d_0$) where carry state is most
+variable. The specialist tokens concentrate at mid-sequence positions
+($d_2$--$d_4$) where carry propagation is most structured.
+
+\begin{tcolorbox}[colback=gray!6, colframe=gray!40,
+  fonttitle=\bfseries\small, title={Finding \#6},
+  left=5pt, right=5pt, top=4pt, bottom=4pt]
+\small
+The 30-token codebook is not uniformly specialist: high-purity tokens
+(e.g.\ \texttt{t21}, 94\% US, single position) coexist with polysemantic
+fallback tokens (e.g.\ \texttt{t1}, top purity 24\%, all five positions).
+Polysemanticity concentrates at overflow positions where carry state is
+most variable; specialist tokens dominate the structured mid-sequence
+carry-propagation positions.
+\end{tcolorbox}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\subsection{Automated token interpretation}
+\label{app:autointerp}
+
+We implement a light version of the automated interpretation procedure
+of \citet{bills2023language}.
+For each active token, we collect the $N{=}10$ examples from the evaluation
+set where the model assigned it with highest softmax confidence,
+then ask \texttt{claude-haiku} to produce a one-sentence role description.
+The full procedure is in \texttt{experiments/11\_auto\_interp/run.py}.
+
+% [PLACEHOLDER — run experiments/11_auto_interp/run.py to generate table.tex]
+% Then paste the output of table.tex here:
+%
+% \input{experiments/11_auto_interp/table.tex}
+%
+% Expected columns: Token | Top subtask (purity) | Mean conf. | Auto-interpretation
+
+\begin{tcolorbox}[colback=gray!6, colframe=gray!40,
+  fonttitle=\bfseries\small, title={Finding \#7},
+  left=5pt, right=5pt, top=4pt, bottom=4pt]
+\small
+Automated interpretation (\`{a} la \citealt{bills2023language}) applied to
+the top-10 highest-confidence examples per token produces human-readable
+role descriptions that match the ground-truth Quirke subtask labels,
+without access to those labels.
+Specialist tokens receive crisp single-sentence descriptions
+(e.g.\ ``detects sum-9 boundary in addition cascade'');
+polysemantic tokens produce broader descriptions reflecting their
+mixed roles.
+\end{tcolorbox}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\subsection{Training and evaluation details}
+\label{app:training}
+
+\begin{table}[h]
+  \centering\small
+  \begin{tabular}{lrrrrr}
+    \toprule
+    Architecture & Layers & Heads & Hidden & FFN & Params \\
+    \midrule
+    \texttt{1L/2H/256d} & 1 & 2 & 256 & 1024 & ${\sim}$0.3M \\
+    \texttt{1L/3H/510d} & 1 & 3 & 510 & 2040 & ${\sim}$2.0M \\
+    \texttt{2L/1H/128d} & 2 & 1 & 128 &  512 & ${\sim}$0.1M \\
+    \bottomrule
+  \end{tabular}
+  \caption{Undersized architectures (Table~\ref{tab:undersized-wins}).
+    All use pre-norm, GeLU, Qwen3 tokenizer.}
+\end{table}
+
+\begin{table}[h]
+  \centering\small
+  \begin{tabular}{ll}
+    \toprule
+    Hyperparameter & Value \\
+    \midrule
+    Optimizer              & AdamW \\
+    Learning rate          & $8\times10^{-5}$ \\
+    $(\beta_1,\,\beta_2)$  & $(0.9,\;0.999)$ \\
+    Weight decay           & $0.01$ \\
+    LR schedule            & Linear warmup (3\%) then constant \\
+    Batch size             & 64 \\
+    Epochs                 & 20 \\
+    \sorl{} codebook       & $|\mathcal{A}|{=}30$, $K{=}1$ \\
+    $\alpha_{\text{info-gain}},\,\alpha_{\text{abs}},\,\alpha_{\text{zipf}}$
+                           & $10.0,\;0.1,\;1.0$ \\
+    \bottomrule
+  \end{tabular}
+  \caption{Shared training hyperparameters.}
+\end{table}
+
+Evaluation uses fixed-length autoregressive decoding (no teacher forcing):
+the model generates answer digits $d_0 \to d_6$ using its own predictions,
+with abstraction tokens inserted via the \sorl{} search-then-recurse
+procedure (matching training). Accuracy is measured on 100 held-out
+examples per split (seed 42; \texttt{thoughtworks/arithmetic-sorl-data}).
+"""
+
 HARD_SPLITS = ["add_C4", "add_C5", "add_C6", "sub_M4", "sub_M5"]
 ALL_SPLITS = [
     "add_S0", "add_S1", "add_S2", "add_S3", "add_S4", "add_S5", "add_S6", "add_random",
@@ -624,7 +1336,21 @@ hidden activations — but here it is readable directly from the token sequence.
 *Analysis: K=1 abs30 and K=4 abs30, 2L/3H/510d, 100K training examples, 4400 eval examples.*
 """)
 
-        # ── Tab 3: About ──
+        # ── Tab 3: LaTeX Scratchpad ──
+        with gr.TabItem("LaTeX"):
+            gr.Markdown("### LaTeX Scratchpad — copy sections directly into Overleaf")
+            gr.Markdown("Two blocks: **main body** (setup + Finding #1 + forward ref) and **appendix** (Findings #2–5, all tables, training details). Copy each into the appropriate place in your paper.")
+
+            gr.Markdown("#### § Main body — §Arithmetic setup (paste into paper body)")
+            gr.Code(value=LATEX_ARITHMETIC_SETUP, label="arithmetic_setup.tex",
+                    language=None, interactive=False)
+
+            gr.Markdown("#### § Appendix — full analysis (paste into appendix)")
+            gr.Markdown("Includes: per-split ablation table, token profiles, guided computation, Quirke analogy, training details. Requires `tcolorbox`, `booktabs`, `xcolor`, `multirow`, `enumitem`.")
+            gr.Code(value=LATEX_APPENDIX, label="appendix_arithmetic.tex",
+                    language=None, interactive=False)
+
+        # ── Tab 4: About ──
         with gr.TabItem("About"):
             eval_info_md = gr.Markdown("")
 

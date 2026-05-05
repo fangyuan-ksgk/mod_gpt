@@ -1,0 +1,366 @@
+[
+  {
+    "arch": "1L/2H/256d",
+    "dataset_size": 10000,
+    "baseline_name": "as_baseline_10K_1L2H256d",
+    "sorl_name": "as_sorl_abs30_K1_10K_1L2H256d",
+    "splits": {
+      "overall": {
+        "baseline": 0.10230769230769231,
+        "sorl": 0.19076923076923077,
+        "gap": 0.08846153846153847
+      },
+      "add_C4": {
+        "baseline": 0.04,
+        "sorl": 0.28,
+        "gap": 0.24000000000000002
+      },
+      "add_C6": {
+        "baseline": 0.01,
+        "sorl": 0.19,
+        "gap": 0.18
+      },
+      "sub_M4": {
+        "baseline": 0.02,
+        "sorl": 0.0,
+        "gap": -0.02
+      }
+    }
+  },
+  {
+    "arch": "1L/2H/256d",
+    "dataset_size": 25000,
+    "baseline_name": "as_baseline_25K_1L2H256d",
+    "sorl_name": "as_sorl_abs30_K1_25K_1L2H256d",
+    "splits": {
+      "overall": {
+        "baseline": 0.32269230769230767,
+        "sorl": 0.255,
+        "gap": -0.06769230769230766
+      },
+      "add_C4": {
+        "baseline": 0.26,
+        "sorl": 0.29,
+        "gap": 0.02999999999999997
+      },
+      "add_C6": {
+        "baseline": 0.13,
+        "sorl": 0.23,
+        "gap": 0.1
+      },
+      "sub_M4": {
+        "baseline": 0.06,
+        "sorl": 0.11,
+        "gap": 0.05
+      }
+    }
+  },
+  {
+    "arch": "1L/2H/256d",
+    "dataset_size": 50000,
+    "baseline_name": "as_baseline_50K_1L2H256d",
+    "sorl_name": "as_sorl_abs30_K1_50K_1L2H256d",
+    "splits": {
+      "overall": {
+        "baseline": 0.4380769230769231,
+        "sorl": 0.6484615384615384,
+        "gap": 0.21038461538461534
+      },
+      "add_C4": {
+        "baseline": 0.43,
+        "sorl": 0.72,
+        "gap": 0.29
+      },
+      "add_C6": {
+        "baseline": 0.29,
+        "sorl": 0.63,
+        "gap": 0.34
+      },
+      "sub_M4": {
+        "baseline": 0.02,
+        "sorl": 0.17,
+        "gap": 0.15000000000000002
+      }
+    }
+  },
+  {
+    "arch": "1L/2H/256d",
+    "dataset_size": 100000,
+    "baseline_name": "as_baseline_100K_1L2H256d",
+    "sorl_name": "as_sorl_abs30_K1_100K_1L2H256d",
+    "splits": {
+      "overall": {
+        "baseline": 0.48538461538461536,
+        "sorl": 0.6476923076923077,
+        "gap": 0.16230769230769232
+      },
+      "add_C4": {
+        "baseline": 0.43,
+        "sorl": 0.67,
+        "gap": 0.24000000000000005
+      },
+      "add_C6": {
+        "baseline": 0.32,
+        "sorl": 0.63,
+        "gap": 0.31
+      },
+      "sub_M4": {
+        "baseline": 0.01,
+        "sorl": 0.33,
+        "gap": 0.32
+      }
+    }
+  },
+  {
+    "arch": "1L/3H/510d",
+    "dataset_size": 10000,
+    "baseline_name": "add_sub_baseline_10K_1L3H510d",
+    "sorl_name": "as_sorl_abs30_K1_10K_1L3H510d",
+    "splits": {
+      "overall": {
+        "baseline": 0.35846153846153844,
+        "sorl": 0.5184615384615384,
+        "gap": 0.15999999999999998
+      },
+      "add_C4": {
+        "baseline": 0.34,
+        "sorl": 0.66,
+        "gap": 0.32
+      },
+      "add_C6": {
+        "baseline": 0.26,
+        "sorl": 0.56,
+        "gap": 0.30000000000000004
+      },
+      "sub_M4": {
+        "baseline": 0.09,
+        "sorl": 0.1,
+        "gap": 0.010000000000000009
+      }
+    }
+  },
+  {
+    "arch": "1L/3H/510d",
+    "dataset_size": 25000,
+    "baseline_name": "add_sub_baseline_25K_1L3H510d",
+    "sorl_name": "add_sub_sorl_v1_abs30_K1_25K_1L3H510d",
+    "splits": {
+      "overall": {
+        "baseline": 0.46307692307692305,
+        "sorl": 0.6,
+        "gap": 0.13692307692307693
+      },
+      "add_C4": {
+        "baseline": 0.47,
+        "sorl": 0.5,
+        "gap": 0.030000000000000027
+      },
+      "add_C6": {
+        "baseline": 0.33,
+        "sorl": 0.55,
+        "gap": 0.22000000000000003
+      },
+      "sub_M4": {
+        "baseline": 0.07,
+        "sorl": 0.34,
+        "gap": 0.27
+      }
+    }
+  },
+  {
+    "arch": "1L/3H/510d",
+    "dataset_size": 50000,
+    "baseline_name": "add_sub_baseline_50K_1L3H510d",
+    "sorl_name": "add_sub_sorl_v1_abs30_K1_50K_1L3H510d_ig5",
+    "splits": {
+      "overall": {
+        "baseline": 0.5342307692307692,
+        "sorl": 0.7226923076923077,
+        "gap": 0.18846153846153857
+      },
+      "add_C4": {
+        "baseline": 0.49,
+        "sorl": 0.8,
+        "gap": 0.31000000000000005
+      },
+      "add_C6": {
+        "baseline": 0.42,
+        "sorl": 0.8,
+        "gap": 0.38000000000000006
+      },
+      "sub_M4": {
+        "baseline": 0.06,
+        "sorl": 0.17,
+        "gap": 0.11000000000000001
+      }
+    }
+  },
+  {
+    "arch": "1L/3H/510d",
+    "dataset_size": 100000,
+    "baseline_name": "add_sub_baseline_100K_1L3H510d",
+    "sorl_name": "as_sorl_abs30_K1_100K_1L3H510d",
+    "splits": {
+      "overall": {
+        "baseline": 0.666923076923077,
+        "sorl": 0.8292307692307692,
+        "gap": 0.16230769230769226
+      },
+      "add_C4": {
+        "baseline": 0.72,
+        "sorl": 0.84,
+        "gap": 0.12
+      },
+      "add_C6": {
+        "baseline": 0.65,
+        "sorl": 0.91,
+        "gap": 0.26
+      },
+      "sub_M4": {
+        "baseline": 0.01,
+        "sorl": 0.54,
+        "gap": 0.53
+      }
+    }
+  },
+  {
+    "arch": "2L/1H/128d",
+    "dataset_size": 10000,
+    "baseline_name": "as_baseline_10K_2L1H128d",
+    "sorl_name": "as_sorl_abs30_K1_10K_2L1H128d_lr8e5",
+    "splits": {
+      "overall": {
+        "baseline": 0.15615384615384614,
+        "sorl": 0.3638461538461538,
+        "gap": 0.20769230769230768
+      },
+      "add_C4": {
+        "baseline": 0.14,
+        "sorl": 0.34,
+        "gap": 0.2
+      },
+      "add_C6": {
+        "baseline": 0.08,
+        "sorl": 0.47,
+        "gap": 0.38999999999999996
+      },
+      "sub_M4": {
+        "baseline": 0.06,
+        "sorl": 0.17,
+        "gap": 0.11000000000000001
+      }
+    }
+  },
+  {
+    "arch": "2L/1H/128d",
+    "dataset_size": 25000,
+    "baseline_name": "as_baseline_25K_2L1H128d",
+    "sorl_name": "as_sorl_abs30_K1_25K_2L1H128d",
+    "splits": {
+      "overall": {
+        "baseline": 0.4026923076923077,
+        "sorl": 0.5523076923076923,
+        "gap": 0.1496153846153846
+      },
+      "add_C4": {
+        "baseline": 0.34,
+        "sorl": 0.52,
+        "gap": 0.18
+      },
+      "add_C6": {
+        "baseline": 0.25,
+        "sorl": 0.48,
+        "gap": 0.22999999999999998
+      },
+      "sub_M4": {
+        "baseline": 0.1,
+        "sorl": 0.07,
+        "gap": -0.03
+      }
+    }
+  },
+  {
+    "arch": "2L/1H/128d",
+    "dataset_size": 50000,
+    "baseline_name": "as_baseline_50K_2L1H128d",
+    "sorl_name": "as_sorl_abs30_K1_50K_2L1H128d_ig5",
+    "splits": {
+      "overall": {
+        "baseline": 0.5934615384615385,
+        "sorl": 0.8730769230769231,
+        "gap": 0.2796153846153846
+      },
+      "add_C4": {
+        "baseline": 0.52,
+        "sorl": 0.96,
+        "gap": 0.43999999999999995
+      },
+      "add_C6": {
+        "baseline": 0.44,
+        "sorl": 0.94,
+        "gap": 0.49999999999999994
+      },
+      "sub_M4": {
+        "baseline": 0.1,
+        "sorl": 0.57,
+        "gap": 0.47
+      }
+    }
+  },
+  {
+    "arch": "2L/1H/128d",
+    "dataset_size": 75000,
+    "baseline_name": "as_baseline_75K_2L1H128d",
+    "sorl_name": "as_sorl_abs30_K1_75K_2L1H128d",
+    "splits": {
+      "overall": {
+        "baseline": 0.7496153846153846,
+        "sorl": 0.8692307692307693,
+        "gap": 0.11961538461538468
+      },
+      "add_C4": {
+        "baseline": 0.83,
+        "sorl": 0.92,
+        "gap": 0.09000000000000008
+      },
+      "add_C6": {
+        "baseline": 0.84,
+        "sorl": 0.89,
+        "gap": 0.050000000000000044
+      },
+      "sub_M4": {
+        "baseline": 0.05,
+        "sorl": 0.72,
+        "gap": 0.6699999999999999
+      }
+    }
+  },
+  {
+    "arch": "2L/1H/128d",
+    "dataset_size": 100000,
+    "baseline_name": "as_baseline_100K_2L1H128d",
+    "sorl_name": "as_sorl_abs30_K1_100K_2L1H128d",
+    "splits": {
+      "overall": {
+        "baseline": 0.7307692307692307,
+        "sorl": 0.9546153846153846,
+        "gap": 0.22384615384615392
+      },
+      "add_C4": {
+        "baseline": 0.72,
+        "sorl": 0.99,
+        "gap": 0.27
+      },
+      "add_C6": {
+        "baseline": 0.64,
+        "sorl": 0.97,
+        "gap": 0.32999999999999996
+      },
+      "sub_M4": {
+        "baseline": 0.15,
+        "sorl": 0.85,
+        "gap": 0.7
+      }
+    }
+  }
+]
