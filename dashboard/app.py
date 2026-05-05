@@ -78,11 +78,8 @@ routing being the mechanism behind the gain.
 \begin{tcolorbox}[colback=gray!6, colframe=gray!40,
   fonttitle=\bfseries\small, title={Finding \#1},
   left=5pt, right=5pt, top=4pt, bottom=4pt]
-\small
-\sorl{} outperforms \sft{} on 12/13 configurations and all 13 on C6 ($+50$\,pp),
-externalizing carry/borrow routing as named tokens that recover Quirke's
-subtask taxonomy without supervision and support targeted single-position
-interventions (27--31\% fix rate). Full analysis in Appendix~\ref{app:arithmetic}.
+\small \sorl{} wins on 12/13 configurations overall and all 13 on C6 ($+50$\,pp),
+externalizing carry routing as named tokens that recover Quirke's taxonomy without supervision.
 \end{tcolorbox}
 """
 
@@ -418,10 +415,8 @@ Three patterns are notable:
 \begin{tcolorbox}[colback=gray!6, colframe=gray!40,
   fonttitle=\bfseries\small, title={Finding \#2},
   left=5pt, right=5pt, top=4pt, bottom=4pt]
-\small
-Tokens are causally necessary: knockout $\to$ 0.1\% accuracy.
-Shuffle hurts more than random on cascades — wrong-position tokens cause
-systematic carry errors; random tokens cause broader incoherence.
+\small Tokens are causally necessary (knockout $\to$ 0.1\%);
+shuffle hurts more than random because wrong-position tokens cause systematic carry errors.
 \end{tcolorbox}
 
 % ─────────────────────────────────────────────────────────────────────────────
@@ -472,10 +467,7 @@ token \texttt{t23} is the subtraction mirror (UD, 88\%, position $d_3$).
 \begin{tcolorbox}[colback=gray!6, colframe=gray!40,
   fonttitle=\bfseries\small, title={Finding \#3},
   left=5pt, right=5pt, top=4pt, bottom=4pt]
-\small
-23 of 30 codebook tokens are active; each concentrates on 1--2 Quirke
-subtasks (${\geq}70\%$ purity for most) and is locked to one or two
-answer positions.
+\small 23/30 tokens active; each locks to 1--2 Quirke subtasks (${\geq}70\%$ purity) and 1--2 answer positions.
 \end{tcolorbox}
 
 % ─────────────────────────────────────────────────────────────────────────────
@@ -506,9 +498,7 @@ single-position swap cannot resolve.
 \begin{tcolorbox}[colback=gray!6, colframe=gray!40,
   fonttitle=\bfseries\small, title={Finding \#4},
   left=5pt, right=5pt, top=4pt, bottom=4pt]
-\small
-Replacing a single abstraction token fixes 27--31\% of mispredicted
-carry-heavy examples — no weight updates, no activation access required.
+\small Swapping one token fixes 27--31\% of mispredicted carry-heavy examples — no weight updates needed.
 \end{tcolorbox}
 
 % ─────────────────────────────────────────────────────────────────────────────
@@ -552,11 +542,8 @@ post-hoc analysis.
 \begin{tcolorbox}[colback=gray!6, colframe=gray!40,
   fonttitle=\bfseries\small, title={Finding \#5},
   left=5pt, right=5pt, top=4pt, bottom=4pt]
-\small
-\sorl{} rediscovers Quirke's carry-state tri-classifier ($\{0, U, 1\}$)
-without supervision: the three regimes map onto disjoint token clusters.
-What \citet{quirke_2024_addsub_preprint} needed PCA to reveal, \sorl{}
-externalizes as a readable routing token.
+\small \sorl{} rediscovers the carry-state tri-classifier ($\{0,U,1\}$) unsupervised;
+what \citet{quirke_2024_addsub_preprint} needed PCA to reveal, \sorl{} externalizes as a routing token.
 \end{tcolorbox}
 
 % ─────────────────────────────────────────────────────────────────────────────
@@ -607,11 +594,8 @@ variable. The specialist tokens concentrate at mid-sequence positions
 \begin{tcolorbox}[colback=gray!6, colframe=gray!40,
   fonttitle=\bfseries\small, title={Finding \#6},
   left=5pt, right=5pt, top=4pt, bottom=4pt]
-\small
-Specialist tokens (\texttt{t21}: 94\% US, single position) coexist with
-polysemantic fallbacks (\texttt{t1}: 24\% purity, five positions);
-polysemanticity concentrates at overflow positions where carry state is
-most variable.
+\small Specialist tokens (\texttt{t21}: 94\% purity) coexist with polysemantic fallbacks (\texttt{t1}: 24\%);
+polysemanticity concentrates at the most variable overflow positions.
 \end{tcolorbox}
 
 % ─────────────────────────────────────────────────────────────────────────────
@@ -652,10 +636,8 @@ The full procedure is in \texttt{experiments/11\_auto\_interp/run.py}.
 \begin{tcolorbox}[colback=gray!6, colframe=gray!40,
   fonttitle=\bfseries\small, title={Finding \#7},
   left=5pt, right=5pt, top=4pt, bottom=4pt]
-\small
-Automated interpretation matches Quirke labels without accessing them:
-8 high-confidence tokens (${\geq}0.88$ softmax) receive crisp role
-descriptions; polysemantic tokens (${\leq}0.50$) get appropriately vague ones.
+\small Automated interpretation matches Quirke labels without accessing them:
+high-confidence specialists get crisp descriptions; polysemantic tokens get vague ones.
 \end{tcolorbox}
 
 % ─────────────────────────────────────────────────────────────────────────────
