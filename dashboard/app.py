@@ -26,97 +26,67 @@ LATEX_ARITHMETIC_SETUP = r"""% ── Arithmetic case study: task setup + Quirke
 \subsection{Case study: six-digit addition and subtraction}
 \label{sec:arithmetic}
 
-We instantiate \sorl{} on six-digit addition and subtraction to demonstrate
-a key property of the method: reasoning steps that are normally hidden inside
-attention weights become directly observable, named, and intervenable as
-discrete abstraction tokens.
-\citet{quirke_2024_addsub_preprint} provide ground-truth subtask labels for
-every digit position of this task, enabling us to ask: \emph{do the routing
-codes \sorl{} discovers correspond to the computational circuits the network
-must implement?}
-We find that they do — without any supervised signal on those circuits.
+Six-digit addition and subtraction provides a setting where the internal
+reasoning structure is known: \citet{quirke_2024_addsub_preprint} identify
+ten mutually exclusive subtask types at each answer-digit position — carry
+generation, carry use, sum-9 boundary detection, borrow cascades, and so on
+— that a transformer must implement to solve the task
+(Table~\ref{tab:quirke-subtasks}).
+This makes arithmetic an ideal testbed for the central claim of \sorl{}:
+that abstraction tokens \emph{externalize} reasoning steps, making them
+directly observable and intervenable without any activation-level tooling.
 
-\paragraph{Task.}
-The model receives two zero-padded six-digit operands and an operator
-($+$ or $-$), encoded digit-by-digit with a fixed 13-token vocabulary
-($0$--$9$, $+$, $-$, $=$; each symbol maps to exactly one token),
-giving sequences of length 21 (14 prompt tokens $+$ 7 answer tokens).
-\sorl{} inserts one abstraction code after every input token ($K{=}1$),
-so the model emits one routing decision per digit position.
-We train small transformers from scratch using \sorl{} v1 (info-gain
-loss)~\citep{yu2025sorl}; the \sft{} baseline uses an identical
-architecture with standard cross-entropy training.
-Figure~\ref{fig:arithmetic-example} shows a concrete example: the
-addition $959{,}271 + 040{,}756 = 1{,}000{,}027$ triggers a four-deep
-carry cascade, and \sorl{} assigns a distinct abstraction code at each
-position — \texttt{t2} at cascade positions (UC/US), \texttt{t6} at the
-sum-9 boundary (SS), and \texttt{t16}/\texttt{t3} at the trivial positions (SC/SA).
+\sorl{} inserts one abstraction token per answer-digit position ($K{=}1$,
+codebook size $|\mathcal{A}|{=}30$), so each routing decision is a named,
+discrete symbol emitted at generation time.
+Figure~\ref{fig:arithmetic-example} shows this concretely:
+for $959{,}271 + 040{,}756 = 1{,}000{,}027$ (a four-deep carry cascade),
+\sorl{} assigns \texttt{t2} at every cascade position (UC/US),
+\texttt{t6} at the sum-9 boundary (SS), and distinct tokens at the
+trivial positions (SC/SA) — the carry structure is readable off the token
+sequence with no probing or patching required.
+Full training and architecture details are in Appendix~\ref{app:training}.
 
-\paragraph{Subtask labels \citep{quirke_2024_addsub_preprint}.}
-At each answer-digit position $n$, the local computation falls into one
-of ten mutually exclusive subtasks determined by the operand digits and
-the carry or borrow state propagating from lower positions
-(Table~\ref{tab:quirke-subtasks} in Appendix~\ref{app:arithmetic}).
-A \emph{carry cascade} arises when consecutive digit pairs sum to exactly
-9 (SS positions in addition): whether a carry propagates through such a
-run depends on a single carry entering from the right, requiring the model
-to track state across multiple positions.
-Borrow cascades (UD) are the analogous structure in subtraction.
+\paragraph{Abstraction tokens recover known circuits without supervision.}
+Analysis of \texttt{2L/1H/128d} shows that \sorl{}'s codebook
+spontaneously partitions into subtask-specialist tokens:
+each of the 23 active tokens concentrates on a narrow slice of the
+Quirke taxonomy — dominant subtask accounts for ${\geq}70\%$ of
+occurrences for the majority of tokens — and is locked to one or two
+answer positions.
+This structure emerges from the info-gain loss alone, with no access to
+ground-truth subtask labels or carry state.
+Tokens are also causally necessary: knocking out all tokens collapses
+accuracy from 95.5\% to 0.1\%, confirming they carry the computation
+rather than merely annotating it.
 
-\paragraph{Models and training.}
-We evaluate three undersized architectures:
-\texttt{1L/2H/256d} (1 transformer layer, 2 attention heads, hidden size 256),
-\texttt{1L/3H/510d} (1 layer, 3 heads, hidden size 510),
-and \texttt{2L/1H/128d} (2 layers, 1 head, hidden size 128).
-All models are trained from scratch with AdamW
-($\eta = 8{\times}10^{-5}$, $\beta_1{=}0.9$, $\beta_2{=}0.999$,
-weight decay $0.01$, 3\% linear warmup),
-batch size 64, for 20 epochs on fixed datasets of
-10K--100K six-digit addition/subtraction problems.
-The abstraction codebook has $|\mathcal{A}|{=}30$ tokens with $K{=}1$
-(one routing token per answer-digit position).
-
-\paragraph{Transparent and controllable computation.}
-Unlike standard transformers, where carry and borrow state must be
-inferred post-hoc from internal activations, \sorl{} models \emph{emit}
-their routing decisions as inspectable tokens at generation time.
-Analysis of \texttt{2L/1H/128d} reveals that these tokens are not merely
-correlated with correct outputs --- they are causally necessary:
-knocking out all tokens collapses accuracy from 95.5\% to 0.1\%.
-The codebook spontaneously partitions into position-locked,
-subtask-specialist tokens that recover the carry-state tri-classifier of
-\citet{quirke_2024_addsub_preprint} \emph{without access to activation
-data or ground-truth labels}.
-Because the routing codes are discrete and named, targeted interventions
-are possible: swapping the token for one position while leaving all others
-intact fixes wrong predictions at a 27--31\% rate on carry-heavy examples
---- a form of model surgery unavailable in standard transformers.
-
-\paragraph{Performance.}
-We evaluate on \emph{C-splits} (C1--C6) grouping problems by the length
-of the longest consecutive hot-carry chain, following~\citet{quirke_2024_addsub_preprint}.
-Across three architectures and data sizes from 10K to 100K,
-\sorl{} wins in 12 of 13 tested configurations overall, and on C6 in
-all 13, with gains as large as $+50$\,pp
-(44\% $\to$ 94\% on the smallest model at 50K examples;
+\paragraph{Named tokens enable targeted intervention.}
+Because the routing codes are discrete and named, surgical model
+edits are possible that have no analog in standard transformers.
+Swapping a single token at one answer position — while leaving all
+others intact — fixes wrong predictions at a 27--31\% rate on
+carry-heavy examples (cross-operation transplant: 93.5\% vs.\ 75.5\%
+random baseline).
+An automated interpretation procedure (\`{a} la
+\citealt{bills2023language}) applied to the 10 highest-confidence
+examples per token produces human-readable role descriptions that
+match the Quirke labels (Appendix~\ref{app:autointerp}), providing
+an independent sanity check that the tokens mean what they appear to mean.
+\sorl{} also outperforms \sft{} on 12 of 13 tested configurations,
+with the largest gains on the hardest cascades ($+50$\,pp on C6;
 Table~\ref{tab:undersized-wins}).
-The margin grows on harder cascades, consistent with the hypothesis that
-\sorl{}'s explicit carry/borrow routing is the mechanism behind the gain.
 
 \begin{tcolorbox}[colback=gray!6, colframe=gray!40,
   fonttitle=\bfseries\small, title={Finding \#1},
   left=5pt, right=5pt, top=4pt, bottom=4pt]
 \small
-\sorl{} makes arithmetic reasoning transparent and controllable: its
-abstraction tokens recover the carry-state subtask taxonomy of
-\citet{quirke_2024_addsub_preprint} without any supervision on those
-circuits, support targeted token-level interventions (27--31\% fix rate),
-and are causally necessary for correct computation
-(knockout $\to$ 0.1\% accuracy).
-As a consequence, \sorl{} also outperforms \sft{} on 12 of 13
-(architecture, data-size) pairs, with the largest gain on the hardest
-cascades ($+50$\,pp on C6).
-Full interpretability analysis in Appendix~\ref{app:arithmetic}.
+\sorl{} externalizes the carry/borrow routing circuits identified by
+\citet{quirke_2024_addsub_preprint} as discrete, named abstraction tokens —
+without any supervision on those circuits.
+The tokens are causally necessary (knockout $\to$ 0.1\%), support
+targeted single-position interventions (27--31\% fix rate), and
+receive human-readable interpretations from an automated procedure.
+Full analysis in Appendix~\ref{app:arithmetic}.
 \end{tcolorbox}
 """
 
