@@ -83,7 +83,7 @@ All interpretability analyses use model
 (\texttt{2L/1H/128d}, 2 layers, 1 head, hidden size 128; trained on 100K examples),
 evaluated on 2{,}600 held-out problems across 26 splits.
 This model achieves 95.5\% accuracy with \sorl{} abstraction tokens and 0.1\% without; making it the clearest test-bed for causal analysis.
-Experimental code: \texttt{arithmetic/experiments/} (all results reproducible).
+All results are reproducible from the released code.
 
 % ─────────────────────────────────────────────────────────────────────────────
 \subsection{Performance: \sorl{} vs.\ \sft{} on undersized architectures}
