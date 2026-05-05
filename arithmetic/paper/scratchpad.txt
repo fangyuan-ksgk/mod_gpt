@@ -1,0 +1,43 @@
+\subsection{Case study: six-digit addition and subtraction}
+\label{sec:arithmetic}
+
+Six-digit addition and subtraction provides a setting where the internal
+reasoning structure is known: \citet{quirke_2024_addsub_preprint} identify
+ten mutually exclusive subtask types at each answer-digit position - carry generation, carry use, sum-9 boundary detection, borrow cascades, and so on - that a transformer must implement to solve the task
+(see Table~\ref{tab:quirke-subtasks} for details).
+This makes arithmetic an ideal testbed for one application of \sorl{}: that abstraction tokens may \emph{externalize} reasoning steps, making them directly observable and intervenable without any activation-level tooling.
+
+\sorl{} inserts one abstraction token per answer-digit position ($K{=}1$,
+codebook size $|\mathcal{A}|{=}30$), so each routing decision is a named, discrete symbol emitted at generation time.
+Figure~\ref{fig:arithmetic-example} shows this concretely:
+for $959{,}271 + 040{,}756 = 1{,}000{,}027$ (a four-deep carry cascade),
+\sorl{} assigns \texttt{t2} at every cascade position (UC/US),
+\texttt{t6} at the sum-9 boundary (SS), and distinct tokens at the trivial positions (SC/SA) - the carry structure is readable off the token sequence with no probing or patching required.
+Full training and architecture details are in Appendix~\ref{app:training}.
+
+\textbf{Abstraction tokens recover known circuits without supervision.}
+Analysis of \texttt{2L/1H/128d} shows that \sorl{}'s codebook
+spontaneously partitions into subtask-specialist tokens:
+each of the 23 active tokens concentrates on a narrow slice of the Quirke taxonomy - dominant subtask accounts for ${\geq}70\%$ of occurrences for the majority of tokens - and is locked to one or two answer positions.
+This structure emerges from the info-gain loss alone, with no access to ground-truth subtask labels or carry state.
+Tokens are also causally necessary: knocking out all tokens collapses accuracy from 95.5\% to 0.1\%, confirming they carry the computation rather than merely annotating it.
+
+\textbf{Named tokens enable targeted intervention and better performance.}
+Because the routing codes are discrete and named, surgical model edits are possible that have no analog in standard transformers:
+swapping a single token at one answer position fixes wrong predictions
+at a 27-31\% rate on carry-heavy examples (cross-operation transplant:
+93.5\% vs.\ 75.5\% random baseline).
+Interpretability here is not merely post-hoc — it translates directly into the ability to correct the model.
+Correspondingly, \sorl{} outperforms \sft{} on 12 of 13 tested
+(architecture, data-size) configurations, and on \emph{all 13} on
+the hardest 6-deep carry cascades, with gains as large as $+50$\,pp
+(Table~\ref{tab:undersized-wins}).
+The margin grows with cascade depth, consistent with explicit carry/borrow routing being the mechanism behind the gain.
+
+\begin{tcolorbox}[colback=gray!6, colframe=gray!40,
+  fonttitle=\bfseries\small, title={Finding \#1: \sorl{} increases accuracy on 6-digit arithmetic dramatically},
+  left=5pt, right=5pt, top=4pt, bottom=4pt]
+\small \sorl{} increases accuracy on 6-digit arithmetic dramatically, winning by most on chard ascade splits.
+\end{tcolorbox}
+
+See Appendix \ref{app:arithmetic} further details on SORL interpretability, including a demonstration of auto-interp ~\citep{bills2023language_models_explain_neurons}, token specializations andpolysemantic tokens.
