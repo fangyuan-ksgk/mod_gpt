@@ -161,11 +161,9 @@ Three patterns are notable:
 \end{itemize}
 
 \begin{tcolorbox}[colback=gray!6, colframe=gray!40,
-  fonttitle=\bfseries\small, title={Finding \#2},
+  fonttitle=\bfseries\small, title={Finding \#2: Abstraction tokens are causally necessary},
   left=5pt, right=5pt, top=4pt, bottom=4pt]
-\small
-\sorl{} abstraction tokens are causally necessary: knockout collapses accuracy from 95.5\% to 0.1\% overall, and to $\leq$3\% on the hardest borrow-cascade splits (M4-M5).
-Shuffle (identity-preserving, position-destroying) is more harmful than random on cascade splits - wrong-position tokens from the same structural family cause systematic carry errors, while random tokens cause broader incoherence.
+\small Knockout collapses accuracy from 95.5\% to 0.1\%; shuffle hurts more than random on cascades.
 \end{tcolorbox}
 
 % ─────────────────────────────────────────────────────────────────────────────
@@ -217,11 +215,9 @@ token \texttt{t23} is the subtraction mirror (UD, 88\%, position $d_3$).
 \end{table}
 
 \begin{tcolorbox}[colback=gray!6, colframe=gray!40,
-  fonttitle=\bfseries\small, title={Finding \#3},
+  fonttitle=\bfseries\small, title={Finding \#3: Tokens spontaneously specialize by subtask and position},
   left=5pt, right=5pt, top=4pt, bottom=4pt]
-\small
-\sorl{} spontaneously learns position-locked, subtask-specialised routing:
-18 of 30 codebook tokens are active; each concentrates on 1-2 of the 10 Quirke subtasks (purity ${\geq}70\%$ for most), and each is tied to one or two answer positions. The codebook partitions the arithmetic computation into an interpretable registry of specialist tokens.
+\small 23 of 30 tokens are active; each locks to 1--2 Quirke subtasks (${\geq}70\%$ purity) and 1--2 answer positions.
 \end{tcolorbox}
 
 % ─────────────────────────────────────────────────────────────────────────────
@@ -240,11 +236,9 @@ The best single swap is replacing \texttt{t16} with \texttt{t25} at $d_1$: this 
 Position $d_3$ and $d_4$ are harder to fix surgically (fix rates 8\% and 2\%), consistent with those positions encoding longer-range carry state that a single-position swap cannot resolve.
 
 \begin{tcolorbox}[colback=gray!6, colframe=gray!40,
-  fonttitle=\bfseries\small, title={Finding \#4},
+  fonttitle=\bfseries\small, title={Finding \#4: Single token swaps fix mispredicted carry-heavy examples},
   left=5pt, right=5pt, top=4pt, bottom=4pt]
-\small
-Token interventions enable \emph{guided computation}: replacing a single abstraction token in the sequence fixes a wrong prediction in 27-31\% of mispredicted examples at carry-heavy positions, with no weight updates and no access to internal activations.
-This is only possible because the tokens are a human-readable interface to the model's routing decisions.
+\small Replacing one abstraction token fixes 27--31\% of wrong predictions at carry-heavy positions, with no weight updates.
 \end{tcolorbox}
 
 % ─────────────────────────────────────────────────────────────────────────────
@@ -281,18 +275,9 @@ The correspondence is visible directly in the codebook:
 Crucially, Quirke et al.\ required full activation-level mechanistic interpretability to discover this classifier; \sorl{} surfaces it as a readable token in the output sequence, accessible without any post-hoc analysis.
 
 \begin{tcolorbox}[colback=gray!6, colframe=gray!40,
-  fonttitle=\bfseries\small, title={Finding \#5},
+  fonttitle=\bfseries\small, title={Finding \#5: \sorl{} rediscovers Quirke's circuits without supervision},
   left=5pt, right=5pt, top=4pt, bottom=4pt]
-\small
-\sorl{} independently rediscovers the carry-state tri-classifier
-($\text{ST}_n \in \{0, U, 1\}$) identified by \citet{quirke_2024_addsub_preprint}
-via internal circuit analysis — with no access to ground-truth circuit labels.
-The three carry regimes map onto disjoint token clusters (e.g.\
-\texttt{t21}/\texttt{t6} for sum-9 uncertain in addition;
-\texttt{t23}/\texttt{t7} for borrow-uncertain in subtraction),
-and an analogous structure appears for subtraction borrow cascades.
-What Quirke et al.\ needed PCA of hidden activations to reveal,
-\sorl{} externalises as a readable routing token.
+\small \sorl{} recovers the carry-state tri-classifier ($\{0,U,1\}$) unsupervised — externalizing what \citet{quirke_2024_addsub_preprint} needed PCA to reveal.
 \end{tcolorbox}
 
 % ─────────────────────────────────────────────────────────────────────────────
@@ -336,11 +321,9 @@ Polysemanticity here mirrors the phenomenon described in neural network interpre
 variable. The specialist tokens concentrate at mid-sequence positions ($d_2$-$d_4$) where carry propagation is most structured.
 
 \begin{tcolorbox}[colback=gray!6, colframe=gray!40,
-  fonttitle=\bfseries\small, title={Finding \#6},
+  fonttitle=\bfseries\small, title={Finding \#6: The codebook mixes specialist and polysemantic tokens},
   left=5pt, right=5pt, top=4pt, bottom=4pt]
-\small
-The 30-token codebook is not uniformly specialist: high-purity tokens (e.g.\ \texttt{t21}, 94\% US, single position) coexist with polysemantic fallback tokens (e.g.\ \texttt{t1}, top purity 24\%, all five positions).
-Polysemanticity concentrates at overflow positions where carry state is most variable; specialist tokens dominate the structured mid-sequence carry-propagation positions.
+\small Specialist tokens (\texttt{t21}: 94\% purity) coexist with polysemantic fallbacks (\texttt{t1}: 24\%, five positions).
 \end{tcolorbox}
 
 % ─────────────────────────────────────────────────────────────────────────────
@@ -359,14 +342,9 @@ then ask \texttt{claude-haiku} to produce a one-sentence role description.
 % Expected columns: Token | Top subtask (purity) | Mean conf. | Auto-interpretation
 
 \begin{tcolorbox}[colback=gray!6, colframe=gray!40,
-  fonttitle=\bfseries\small, title={Finding \#7},
+  fonttitle=\bfseries\small, title={Finding \#7: Automated interpretation matches ground-truth subtask labels},
   left=5pt, right=5pt, top=4pt, bottom=4pt]
-\small
-Automated interpretation (\`{a} la \citealt{bills2023language}) applied to the top-10 highest-confidence examples per token produces human-readable role descriptions that match the ground-truth Quirke subtask labels, without access to those labels.
-Specialist tokens receive crisp single-sentence descriptions
-(e.g.\ ``detects sum-9 boundary in addition cascade'');
-polysemantic tokens produce broader descriptions reflecting their
-mixed roles.
+\small High-confidence tokens get crisp role descriptions; polysemantic tokens get appropriately vague ones — without accessing ground-truth labels.
 \end{tcolorbox}
 % ─────────────────────────────────────────────────────────────────────────────
 \subsection{Training and evaluation details}
