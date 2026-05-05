@@ -393,12 +393,17 @@ Shuffle (identity-preserving, position-destroying) is more harmful than random o
 \subsection{Token-subtask heatmap}
 \label{app:heatmap}
 
-% [PLACEHOLDER: insert token-subtask heatmap figure here]
-% Figure: P(subtask | token) heatmap for all active tokens × 10 subtask labels.
-% Generate with: python experiments/03_token_subtask_heatmap/run.py \
-%   -model add_sub_sorl_v1_abs30_K1_100K_2L1H128d
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=0.95\linewidth]{experiments/03_token_subtask_heatmap/fig_token_subtask.pdf}
+  \caption{Token--subtask heatmap for \texttt{2L/1H/128d} (100K).
+    Each cell shows $P(\text{subtask} \mid \text{token})$ over 2{,}600 held-out examples.
+    Rows are the 23 active tokens (of 30); columns are the 10 Quirke subtask labels.
+    Most tokens concentrate strongly on 1--2 subtasks, confirming specialist routing.}
+  \label{fig:token-subtask}
+\end{figure}
 
-Of the 30 tokens in the codebook, 18 appear in the held-out evaluation set.
+Of the 30 tokens in the codebook, 23 appear in the held-out evaluation set.
 Each active token concentrates on a narrow slice of the subtask space: the dominant subtask accounts for ${\geq}70\%$ of that token's occurrences in the majority of cases.
 Tokens are also \emph{position-locked}: each token appears predominantly at one or two answer positions ($d_0$-$d_6$), rarely crossing position boundaries.
 Representative examples are shown in Table~\ref{tab:token-profiles}:
