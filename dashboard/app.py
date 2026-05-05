@@ -676,29 +676,7 @@ set where the model assigned it with highest softmax confidence,
 then ask \texttt{claude-haiku} to produce a one-sentence role description.
 The full procedure is in \texttt{experiments/11\_auto\_interp/run.py}.
 
-\begin{table}[h]
-  \centering\small
-  \begin{tabular}{clrp{5.5cm}}
-    \toprule
-    Token & Top subtask & Conf. & Auto-interpretation \\
-    \midrule
-    \texttt{t0} & UC (47\%) & 1.00 & Token t0 marks the tens digit position in addition problems, regardless of carry state or sum value. \\
-    \texttt{t2} & UC (70\%) & 0.99 & Token t2 outputs the ones digit (0) when adding two numbers whose ones digits sum to 10 or more. \\
-    \texttt{t1} & UC (30\%) & 0.99 & This token routes to the fourth digit position during addition when a carry from the previous position must be incorporated. \\
-    \texttt{t3} & UC (44\%) & 0.94 & Token t3 routes to the hundreds position (d3) when processing carries from the tens column in addition. \\
-    \texttt{t5} & MD (65\%) & 0.93 & Token t5 routes cases where the ones digit result is 0, spanning multiple subtasks and operations. \\
-    \texttt{t8} & MD (26\%) & 0.91 & Token t8 activates when processing the tens digit (d2) across addition/subtraction with various carry/borrow states. \\
-    \texttt{t10} & UB (41\%) & 0.88 & Token t10 routes subtraction problems requiring borrow propagation at mid-to-late digit positions. \\
-    \texttt{t6} & UC (27\%) & 0.88 & Token t6 routes cases where the ones digit result is 0, regardless of operation or carry state. \\
-    \bottomrule
-  \end{tabular}
-  \caption{Auto-interpretation of \sorl{} abstraction tokens (\`{a} la \citealt{bills2023language}).
-  For each token, the 10 examples where the model assigned it
-  with highest softmax confidence are shown to \texttt{claude-haiku},
-  which produces a one-sentence role description.
-  \textbf{Conf.}\ = mean softmax probability of the assigned token.}
-  \label{tab:auto-interp}
-\end{table}
+\input{experiments/11_auto_interp/table.tex}
 
 \begin{tcolorbox}[colback=gray!6, colframe=gray!40,
   fonttitle=\bfseries\small, title={Finding \#7},
