@@ -76,10 +76,9 @@ The margin grows with cascade depth, consistent with explicit carry/borrow
 routing being the mechanism behind the gain.
 
 \begin{tcolorbox}[colback=gray!6, colframe=gray!40,
-  fonttitle=\bfseries\small, title={Finding \#1},
+  fonttitle=\bfseries\small, title={Finding \#1: \sorl{} increases accuracy on 6-digit arithmetic dramatically},
   left=5pt, right=5pt, top=4pt, bottom=4pt]
-\small \sorl{} wins on 12/13 configurations overall and all 13 on C6 ($+50$\,pp),
-externalizing carry routing as named tokens that recover Quirke's taxonomy without supervision.
+\small \sorl{} increases accuracy on 6-digit arithmetic dramatically, winning on all cascade splits.
 \end{tcolorbox}
 """
 
@@ -413,10 +412,9 @@ Three patterns are notable:
 \end{itemize}
 
 \begin{tcolorbox}[colback=gray!6, colframe=gray!40,
-  fonttitle=\bfseries\small, title={Finding \#2},
+  fonttitle=\bfseries\small, title={Finding \#2: Abstraction tokens are causally necessary},
   left=5pt, right=5pt, top=4pt, bottom=4pt]
-\small Tokens are causally necessary (knockout $\to$ 0.1\%);
-shuffle hurts more than random because wrong-position tokens cause systematic carry errors.
+\small \sorl{} abstraction tokens are causally necessary for correct computation.
 \end{tcolorbox}
 
 % ─────────────────────────────────────────────────────────────────────────────
@@ -465,9 +463,9 @@ token \texttt{t23} is the subtraction mirror (UD, 88\%, position $d_3$).
 \end{table}
 
 \begin{tcolorbox}[colback=gray!6, colframe=gray!40,
-  fonttitle=\bfseries\small, title={Finding \#3},
+  fonttitle=\bfseries\small, title={Finding \#3: Tokens spontaneously specialize by subtask and position},
   left=5pt, right=5pt, top=4pt, bottom=4pt]
-\small 23/30 tokens active; each locks to 1--2 Quirke subtasks (${\geq}70\%$ purity) and 1--2 answer positions.
+\small \sorl{} tokens spontaneously specialize by subtask and position without supervision.
 \end{tcolorbox}
 
 % ─────────────────────────────────────────────────────────────────────────────
@@ -496,9 +494,9 @@ consistent with those positions encoding longer-range carry state that a
 single-position swap cannot resolve.
 
 \begin{tcolorbox}[colback=gray!6, colframe=gray!40,
-  fonttitle=\bfseries\small, title={Finding \#4},
+  fonttitle=\bfseries\small, title={Finding \#4: Single token swaps fix mispredicted carry-heavy examples},
   left=5pt, right=5pt, top=4pt, bottom=4pt]
-\small Swapping one token fixes 27--31\% of mispredicted carry-heavy examples — no weight updates needed.
+\small Single token swaps fix mispredicted carry-heavy examples, enabling targeted model correction.
 \end{tcolorbox}
 
 % ─────────────────────────────────────────────────────────────────────────────
@@ -540,10 +538,9 @@ readable token in the output sequence, accessible without any
 post-hoc analysis.
 
 \begin{tcolorbox}[colback=gray!6, colframe=gray!40,
-  fonttitle=\bfseries\small, title={Finding \#5},
+  fonttitle=\bfseries\small, title={Finding \#5: \sorl{} rediscovers known arithmetic circuits without supervision},
   left=5pt, right=5pt, top=4pt, bottom=4pt]
-\small \sorl{} rediscovers the carry-state tri-classifier ($\{0,U,1\}$) unsupervised;
-what \citet{quirke_2024_addsub_preprint} needed PCA to reveal, \sorl{} externalizes as a routing token.
+\small \sorl{} rediscovers known arithmetic circuits without supervision or activation access.
 \end{tcolorbox}
 
 % ─────────────────────────────────────────────────────────────────────────────
@@ -592,10 +589,9 @@ variable. The specialist tokens concentrate at mid-sequence positions
 ($d_2$--$d_4$) where carry propagation is most structured.
 
 \begin{tcolorbox}[colback=gray!6, colframe=gray!40,
-  fonttitle=\bfseries\small, title={Finding \#6},
+  fonttitle=\bfseries\small, title={Finding \#6: The codebook mixes specialist and polysemantic tokens},
   left=5pt, right=5pt, top=4pt, bottom=4pt]
-\small Specialist tokens (\texttt{t21}: 94\% purity) coexist with polysemantic fallbacks (\texttt{t1}: 24\%);
-polysemanticity concentrates at the most variable overflow positions.
+\small The codebook mixes highly specialist tokens with polysemantic fallback tokens.
 \end{tcolorbox}
 
 % ─────────────────────────────────────────────────────────────────────────────
@@ -634,10 +630,9 @@ The full procedure is in \texttt{experiments/11\_auto\_interp/run.py}.
 \end{table}
 
 \begin{tcolorbox}[colback=gray!6, colframe=gray!40,
-  fonttitle=\bfseries\small, title={Finding \#7},
+  fonttitle=\bfseries\small, title={Finding \#7: Automated interpretation produces human-readable token roles},
   left=5pt, right=5pt, top=4pt, bottom=4pt]
-\small Automated interpretation matches Quirke labels without accessing them:
-high-confidence specialists get crisp descriptions; polysemantic tokens get vague ones.
+\small Automated interpretation produces human-readable role descriptions that match ground-truth subtask labels.
 \end{tcolorbox}
 
 % ─────────────────────────────────────────────────────────────────────────────
