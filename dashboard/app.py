@@ -30,6 +30,19 @@ ten mutually exclusive subtask types at each answer-digit position - carry gener
 (see Table~\ref{tab:quirke-subtasks} for details).
 This makes arithmetic an ideal testbed for one application of \sorl{}: that abstraction tokens may \emph{externalize} reasoning steps, making them directly observable and intervenable without any activation-level tooling.
 
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\linewidth]{Styles/figures/fig_arithmetic_example.pdf}
+  \caption{Six-digit addition $959{,}271 + 040{,}756 = 1{,}000{,}027$, a four-deep
+    carry cascade. At each answer-digit position \sorl{} assigns one
+    abstraction token (bottom row). Tokens \texttt{t2} and \texttt{t6}
+    cluster on cascade positions (UC/US); \texttt{t16} marks the carry
+    source (SC); \texttt{t3} marks the trivial position (SA).
+    Token assignments from model \texttt{add\_sub\_sorl\_v1\_abs30\_K1\_100K}
+    (K=1, 30-token codebook).}
+  \label{fig:arithmetic-example}
+\end{figure}
+
 \sorl{} inserts one abstraction token per answer-digit position ($K{=}1$,
 codebook size $|\mathcal{A}|{=}30$), so each routing decision is a named, discrete symbol emitted at generation time.
 Figure~\ref{fig:arithmetic-example} shows this concretely:
@@ -65,6 +78,9 @@ The margin grows with cascade depth, consistent with explicit carry/borrow routi
 \end{tcolorbox}
 
 See Appendix \ref{app:arithmetic} further details on SORL interpretability, including a demonstration of auto-interp ~\citep{bills2023language_models_explain_neurons}, token specializations and polysemantic tokens.
+
+
+
 """
 
 
@@ -470,7 +486,6 @@ Table~\ref{tab:auto-interp} shows results for the 8 highest-confidence tokens.
 
 Evaluation uses fixed-length autoregressive decoding (no teacher forcing):
 the model generates answer digits $d_0 \to d_6$ using its own predictions, with abstraction tokens inserted via the \sorl{} search-then-recurse procedure (matching training). Accuracy is measured on 100 held-out examples per split (seed 42; \texttt{thoughtworks/arithmetic-sorl-data}).
-
 """
 
 
