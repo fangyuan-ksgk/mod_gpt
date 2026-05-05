@@ -176,9 +176,16 @@ Shuffle (identity-preserving, position-destroying) is more harmful than random o
   \centering
   \includegraphics[width=0.95\linewidth]{experiments/03_token_subtask_heatmap/fig_token_subtask.pdf}
   \caption{Token--subtask heatmap for \texttt{2L/1H/128d} (100K).
-    Each cell shows $P(\text{subtask} \mid \text{token})$ over 2{,}600 held-out examples.
-    Rows are the 23 active tokens (of 30); columns are the 10 Quirke subtask labels.
-    Most tokens concentrate strongly on 1--2 subtasks, confirming specialist routing.}
+    Each cell shows $P(\text{subtask} \mid \text{token})$ — the fraction of that token's
+    occurrences that fall into each Quirke subtask — over 2{,}600 held-out examples across
+    all addition and subtraction splits.
+    Rows are the 23 active tokens (of 30 in the codebook), sorted by dominant subtask;
+    columns are the 10 subtask labels (SA, SC, SS, UC, US for addition; MD, MB, ME, UB, UD for subtraction).
+    High values appear in narrow bands: most tokens fire predominantly on 1--2 subtasks,
+    with the highest-purity tokens (e.g.\ \texttt{t19}: UD 82\%, \texttt{t20}: UD 84\%)
+    approaching single-subtask specialization.
+    Tokens at the bottom of the heatmap (e.g.\ \texttt{t1}, \texttt{t2}) are more
+    polysemantic, spreading probability mass across multiple subtasks.}
   \label{fig:token-subtask}
 \end{figure}
 
