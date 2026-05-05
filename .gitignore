@@ -5,6 +5,7 @@ data/openweb10B/
 *.pyc
 logs/* 
 *.png
+!dashboard/static_figures/*.png
 *.bin
 results_*
 *.gif

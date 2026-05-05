@@ -603,6 +603,10 @@ At each digit position, the model must compute one of these operations
 4. These tokens correspond to Quirke's carry/borrow circuits
 """)
 
+            gr.Markdown("#### Example: 959,271 + 040,756 = 1,000,027 (4-deep carry cascade)")
+            gr.Image("static_figures/fig_arithmetic_example.png", show_label=False)
+            gr.Markdown("""Tokens **t2** and **t6** cluster on cascade positions (UC/US); **t16** marks the carry source (SC); **t3** the trivial position (SA). Token assignments emerge from info-gain training alone — no supervision about carry logic.""")
+
             gr.Markdown("""### 1. More vocabulary → higher accuracy and richer representations
 
 Increasing the abstraction vocabulary from 10 to 30 tokens improves accuracy, especially
