@@ -60,32 +60,32 @@ Tokens are also causally necessary: knocking out all tokens collapses
 accuracy from 95.5\% to 0.1\%, confirming they carry the computation
 rather than merely annotating it.
 
-\paragraph{Named tokens enable targeted intervention.}
+\paragraph{Named tokens enable targeted intervention and better performance.}
 Because the routing codes are discrete and named, surgical model
-edits are possible that have no analog in standard transformers.
-Swapping a single token at one answer position — while leaving all
-others intact — fixes wrong predictions at a 27--31\% rate on
-carry-heavy examples (cross-operation transplant: 93.5\% vs.\ 75.5\%
-random baseline).
-An automated interpretation procedure (\`{a} la
-\citealt{bills2023language}) applied to the 10 highest-confidence
-examples per token produces human-readable role descriptions that
-match the Quirke labels (Appendix~\ref{app:autointerp}), providing
-an independent sanity check that the tokens mean what they appear to mean.
-\sorl{} also outperforms \sft{} on 12 of 13 tested configurations,
-with the largest gains on the hardest cascades ($+50$\,pp on C6;
-Table~\ref{tab:undersized-wins}).
+edits are possible that have no analog in standard transformers:
+swapping a single token at one answer position fixes wrong predictions
+at a 27--31\% rate on carry-heavy examples (cross-operation transplant:
+93.5\% vs.\ 75.5\% random baseline).
+Interpretability here is not merely post-hoc — it translates directly
+into the ability to correct the model.
+Correspondingly, \sorl{} outperforms \sft{} on 12 of 13 tested
+(architecture, data-size) configurations, and on \emph{all 13} on
+the hardest 6-deep carry cascades, with gains as large as $+50$\,pp
+(Table~\ref{tab:undersized-wins}).
+The margin grows with cascade depth, consistent with explicit carry/borrow
+routing being the mechanism behind the gain.
 
 \begin{tcolorbox}[colback=gray!6, colframe=gray!40,
   fonttitle=\bfseries\small, title={Finding \#1},
   left=5pt, right=5pt, top=4pt, bottom=4pt]
 \small
-\sorl{} externalizes the carry/borrow routing circuits identified by
-\citet{quirke_2024_addsub_preprint} as discrete, named abstraction tokens —
-without any supervision on those circuits.
-The tokens are causally necessary (knockout $\to$ 0.1\%), support
-targeted single-position interventions (27--31\% fix rate), and
-receive human-readable interpretations from an automated procedure.
+\sorl{} externalizes carry/borrow routing as discrete, named abstraction
+tokens — recovering the subtask taxonomy of \citet{quirke_2024_addsub_preprint}
+without any supervision on those circuits — and translates that transparency
+into measurable gains: 12/13 configurations overall, all 13 on C6,
+up to $+50$\,pp on the hardest cascades.
+The tokens are causally necessary (knockout $\to$ 0.1\%) and support
+targeted single-position interventions (27--31\% fix rate).
 Full analysis in Appendix~\ref{app:arithmetic}.
 \end{tcolorbox}
 """
