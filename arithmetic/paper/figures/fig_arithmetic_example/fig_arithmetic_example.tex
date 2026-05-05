@@ -63,7 +63,7 @@
 \foreach \i/\d in {1/9,2/5,3/9,4/2,5/7,6/1}{
   \node[font=\small, text=gray!30!black] at (\i*\cs, 2.5) {\d};
 }
-\node[font=\small\bfseries, text=gray!50!black] at (-0.4*\cs, 1.8) {$+$};
+\node[font=\small\bfseries, text=gray!50!black] at (-0.15*\cs, 1.8) {$+$};
 \foreach \i/\d in {1/0,2/4,3/0,4/7,5/5,6/6}{
   \node[font=\small, text=gray!30!black] at (\i*\cs, 1.8) {\d};
 }
@@ -110,24 +110,24 @@
 \matrix[
   matrix of nodes,
   nodes={font=\scriptsize, inner sep=2pt, anchor=west},
-  row sep=1pt, column sep=4pt,
-  anchor=south east,
-] at (6*\cs + 0.6, -1.05) {
+  row sep=2pt, column sep=6pt,
+  anchor=north west,
+] at (0, -1.05) {
   \node[digit=cSA, minimum width=0.45cm, minimum height=0.3cm,
         font=\scriptsize] {}; &
   \node {SA — simple add}; &
-  \node[digit=cUC, minimum width=0.45cm, minimum height=0.3cm,
-        font=\scriptsize] {}; &
-  \node {UC — uses carry}; \\
   \node[digit=cSC, minimum width=0.45cm, minimum height=0.3cm,
         font=\scriptsize] {}; &
   \node {SC — generates carry}; &
+  \node[digit=cUC, minimum width=0.45cm, minimum height=0.3cm,
+        font=\scriptsize] {}; &
+  \node {UC — uses carry}; &
   \node[digit=cUS, minimum width=0.45cm, minimum height=0.3cm,
         font=\scriptsize] {}; &
-  \node {US — cascade}; \\
+  \node {US — cascade}; &
   \node[token, minimum width=0.45cm, minimum height=0.3cm,
         font=\scriptsize] {}; &
-  \node[text=violet!70!black] {\sorl{} token}; & & \\
+  \node[text=violet!70!black] {\sorl{} token}; \\
 };
 
 \end{tikzpicture}
