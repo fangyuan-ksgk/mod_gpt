@@ -47,7 +47,7 @@ trivial positions (SC/SA) — the carry structure is readable off the token
 sequence with no probing or patching required.
 Full training and architecture details are in Appendix~\ref{app:training}.
 
-\paragraph{Abstraction tokens recover known circuits without supervision.}
+\textbf{Abstraction tokens recover known circuits without supervision.}
 Analysis of \texttt{2L/1H/128d} shows that \sorl{}'s codebook
 spontaneously partitions into subtask-specialist tokens:
 each of the 23 active tokens concentrates on a narrow slice of the
@@ -60,7 +60,7 @@ Tokens are also causally necessary: knocking out all tokens collapses
 accuracy from 95.5\% to 0.1\%, confirming they carry the computation
 rather than merely annotating it.
 
-\paragraph{Named tokens enable targeted intervention and better performance.}
+\textbf{Named tokens enable targeted intervention and better performance.}
 Because the routing codes are discrete and named, surgical model
 edits are possible that have no analog in standard transformers:
 swapping a single token at one answer position fixes wrong predictions
@@ -324,7 +324,7 @@ LATEX_APPENDIX = r"""% ═══════════════════
   \label{tab:quirke-subtasks}
 \end{table}
 
-\paragraph{Setup.}
+\textbf{Setup.}
 All interpretability analyses use model
 \texttt{add\_sub\_sorl\_v1\_abs30\_K1\_100K\_2L1H128d}
 (\texttt{2L/1H/128d}, 2 layers, 1 head, hidden size 128; trained on 100K examples),
@@ -384,7 +384,7 @@ Table~\ref{tab:ablation-splits} shows per-split accuracy under each condition.
   \label{tab:ablation-splits}
 \end{table}
 
-\paragraph{Commentary.}
+\textbf{Commentary.}
 Knockout reduces accuracy to $\leq$2\% on every split, confirming that
 the model has offloaded computation into the routing tokens.
 Three patterns are notable:
@@ -483,7 +483,7 @@ every other token in the codebook (29 candidates $\times$ 5 positions = 145
 interventions per example) and measure how many wrong predictions become
 correct — and how many previously-correct predictions break.
 
-\paragraph{Results.}
+\textbf{Results.}
 At positions $d_0$--$d_2$ (the carry-heavy positions), a fixing swap exists
 for 27--31\% of mispredicted examples.
 The best single swap is replacing \texttt{t16} with \texttt{t25} at $d_1$:
