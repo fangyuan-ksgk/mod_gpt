@@ -430,17 +430,16 @@ Three patterns are notable:
 \begin{figure}[h]
   \centering
   \includegraphics[width=0.95\linewidth]{Styles/figures/fig_token_subtask.pdf}
-  \caption{Token--subtask heatmap for \texttt{2L/1H/128d} (100K).
-    Each cell shows $P(\text{subtask} \mid \text{token})$ — the fraction of that token's
-    occurrences that fall into each Quirke subtask — over 2{,}600 held-out examples across
-    all addition and subtraction splits.
-    Rows are the 23 active tokens (of 30 in the codebook), sorted by dominant subtask;
-    columns are the 10 subtask labels (SA, SC, SS, UC, US for addition; MD, MB, ME, UB, UD for subtraction).
-    High values appear in narrow bands: most tokens fire predominantly on 1--2 subtasks,
-    with the highest-purity tokens (e.g.\ \texttt{t19}: UD 82\%, \texttt{t20}: UD 84\%)
-    approaching single-subtask specialization.
-    Tokens at the bottom of the heatmap (e.g.\ \texttt{t1}, \texttt{t2}) are more
-    polysemantic, spreading probability mass across multiple subtasks.}
+  \caption{Token--subtask specialization heatmap (2-layer, 1-head, 128d; 100K examples).
+    Each cell shows $P(\text{subtask} \mid \text{token})$ over 2{,}600 held-out problems.
+    Rows are the 23 active tokens; columns are the 10 Quirke subtask labels.
+    Most tokens concentrate on 1--2 subtasks: \texttt{t20} fires 84\% on UD
+    (borrow cascade, subtraction) and \texttt{t19} fires 82\% on UD, together
+    forming a dedicated borrow-cascade detector pair.
+    \texttt{t3} specializes in SA (59\%, simple addition with no carry),
+    while \texttt{t6} concentrates on MD (64\%, simple subtraction).
+    Tokens \texttt{t1} and \texttt{t2} are more polysemantic, spreading
+    across UC, US, and MD — acting as general-purpose fallbacks.}
   \label{fig:token-subtask}
 \end{figure}
 

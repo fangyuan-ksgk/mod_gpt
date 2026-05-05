@@ -139,7 +139,7 @@ def plot_heatmap(token_data, model_name, K, abs_vocab, path):
                         color="white" if v > 0.5 else "black")
 
     plt.colorbar(im, label="P(subtask | token)")
-    ax.set_title(f"{model_name} (K={K}, abs={abs_vocab})")
+    ax.set_title(f"Token--subtask specialization (K={K}, codebook size {abs_vocab})")
     ax.set_xlabel("Quirke Subtask")
     ax.set_ylabel("Abstraction Token")
     plt.tight_layout()
