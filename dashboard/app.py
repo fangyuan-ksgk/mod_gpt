@@ -21,20 +21,7 @@ MODEL_REPO = "thoughtworks/arithmetic-sorl"
 # LaTeX scratchpad content — edit here, copy from dashboard into Overleaf
 # ═══════════════════════════════════════════════════════════════════
 
-LATEX_ARITHMETIC_SETUP = r"""% ── Arithmetic case study ──────────────────────────────────────────────────
-
-\begin{figure}[t]
-  \centering
-  \includegraphics[width=\linewidth]{figures/fig_arithmetic_example.pdf}
-  \caption{Addition $959{,}271 + 040{,}756 = 1{,}000{,}027$ — a four-deep carry cascade.
-    Each answer-digit position is annotated with its Quirke subtask label (coloured box)
-    and the \sorl{} abstraction token assigned by the model (dashed purple box).
-    The carry chain ($d_1$--$d_5$) is highlighted; \sorl{} uses a consistent token
-    (\texttt{t2}) at cascade positions and distinct tokens elsewhere.}
-  \label{fig:arithmetic-example}
-\end{figure}
-
-\subsection{Case study: six-digit addition and subtraction}
+LATEX_ARITHMETIC_SETUP = r"""\subsection{Case study: six-digit addition and subtraction}
 \label{sec:arithmetic}
 
 Six-digit addition and subtraction provides a setting where the internal
@@ -80,191 +67,7 @@ The margin grows with cascade depth, consistent with explicit carry/borrow routi
 See Appendix \ref{app:arithmetic} further details on SORL interpretability, including a demonstration of auto-interp ~\citep{bills2023language_models_explain_neurons}, token specializations and polysemantic tokens.
 """
 
-LATEX_FIGURE_EXAMPLE = r"""% fig_arithmetic_example.tex
-% Usage in paper: \input{figures/fig_arithmetic_example/fig_arithmetic_example.tex}
-% Required packages: tikz, xcolor
-%
-% Shows 959271 + 040756 = 1000027 (4-deep carry cascade).
-% Token assignments from model add_sub_sorl_v1_abs30_K1_100K (K=1, abs30).
 
-\begin{figure}[t]
-\centering
-\begin{tikzpicture}[
-  % ── node styles ─────────────────────────────────────────────────────
-  digit/.style={
-    draw=#1!60!gray, fill=#1, rounded corners=2pt,
-    minimum width=1.05cm, minimum height=0.62cm,
-    font=\small\bfseries, inner sep=2pt, text=#1!20!black,
-  },
-  subtask/.style={
-    draw=#1!60!gray, fill=#1, rounded corners=2pt,
-    minimum width=1.05cm, minimum height=0.55cm,
-    font=\footnotesize, inner sep=2pt, text=#1!20!black,
-  },
-  token/.style={
-    draw=violet!55, fill=violet!8, rounded corners=2pt, dashed,
-    minimum width=1.05cm, minimum height=0.55cm,
-    font=\footnotesize\bfseries, inner sep=2pt, text=violet!70!black,
-  },
-  rowlabel/.style={font=\footnotesize\itshape, text=gray!70!black, anchor=east},
-  poslabel/.style={font=\scriptsize, text=gray!60!black},
-  carry/.style={->, >=stealth, thick, color=orange!70!red,
-                shorten <=3pt, shorten >=3pt},
-]
-
-% ── colours (Quirke subtask families) ───────────────────────────────────
-\colorlet{cSA}{green!22!white}
-\colorlet{cSC}{yellow!48!white}
-\colorlet{cUC}{blue!22!white}
-\colorlet{cUS}{blue!36!white}
-
-% ── column spacing ───────────────────────────────────────────────────────
-\def\cs{1.45}   % inter-column distance (cm)
-
-% ── data (d0 = MSB/overflow on left, d6 = LSB on right) ─────────────────
-%   d0    d1    d2    d3    d4    d5    d6
-%   ---   9     5     9     2     7     1     (Addend A)
-%   ---   0     4     0     7     5     6     (Addend B)
-%   1     0     0     0     0     2     7     (Answer)
-%   UC    US    US    US    US    SC    SA    (Subtask)
-%   t2    t2    t6    t2    t1    t16   t3    (SoRL token)
-
-% ── position labels ──────────────────────────────────────────────────────
-\foreach \i/\lbl in {0/$d_0$,1/$d_1$,2/$d_2$,3/$d_3$,4/$d_4$,5/$d_5$,6/$d_6$}{
-  \node[poslabel] at (\i*\cs, 3.15) {\lbl};
-}
-
-% ── row labels ───────────────────────────────────────────────────────────
-\node[rowlabel] at (-0.65, 2.5)  {Addend $A$};
-\node[rowlabel] at (-0.65, 1.8)  {Addend $B$};
-\node[rowlabel] at (-0.65, 0.85) {Answer};
-\node[rowlabel] at (-0.65, 0.1)  {Subtask};
-\node[rowlabel] at (-0.65,-0.65) {Token};
-
-% ── operand digits (d1..d6; d0 is the overflow, has no operand digits) ───
-\foreach \i/\d in {1/9,2/5,3/9,4/2,5/7,6/1}{
-  \node[font=\small, text=gray!30!black] at (\i*\cs, 2.5) {\d};
-}
-\node[font=\small\bfseries, text=gray!50!black] at (-0.4*\cs, 1.8) {$+$};
-\foreach \i/\d in {1/0,2/4,3/0,4/7,5/5,6/6}{
-  \node[font=\small, text=gray!30!black] at (\i*\cs, 1.8) {\d};
-}
-
-% ── horizontal rule ──────────────────────────────────────────────────────
-\draw[gray!50, thin] (-0.55*\cs, 1.38) -- (6.55*\cs, 1.38);
-
-% ── answer digit boxes ───────────────────────────────────────────────────
-\node[digit=cUC] (a0) at (0*\cs, 0.85) {1};
-\node[digit=cUS] (a1) at (1*\cs, 0.85) {0};
-\node[digit=cUS] (a2) at (2*\cs, 0.85) {0};
-\node[digit=cUS] (a3) at (3*\cs, 0.85) {0};
-\node[digit=cUS] (a4) at (4*\cs, 0.85) {0};
-\node[digit=cSC] (a5) at (5*\cs, 0.85) {2};
-\node[digit=cSA] (a6) at (6*\cs, 0.85) {7};
-
-% ── subtask boxes ────────────────────────────────────────────────────────
-\node[subtask=cUC] at (0*\cs, 0.1) {UC};
-\node[subtask=cUS] at (1*\cs, 0.1) {US};
-\node[subtask=cUS] at (2*\cs, 0.1) {US};
-\node[subtask=cUS] at (3*\cs, 0.1) {US};
-\node[subtask=cUS] at (4*\cs, 0.1) {US};
-\node[subtask=cSC] at (5*\cs, 0.1) {SC};
-\node[subtask=cSA] at (6*\cs, 0.1) {SA};
-
-% ── SoRL token boxes ─────────────────────────────────────────────────────
-\foreach \i/\t in {0/t2,1/t2,2/t6,3/t2,4/t1,5/t16,6/t3}{
-  \node[token] at (\i*\cs, -0.65) {\texttt{\t}};
-}
-
-% ── carry arrows (cascade flows right→left: d5→d4→d3→d2→d1→d0) ──────────
-\foreach \fr/\to in {5/4, 4/3, 3/2, 2/1, 1/0}{
-  \draw[carry] (a\fr.west) -- (a\to.east);
-}
-
-% ── cascade bracket + label ──────────────────────────────────────────────
-\draw[orange!60!red, thin]
-  (a5.north west) -- ++(0, 0.22)
-  -- (a0.north east) -- ++(0,-0.22);
-\node[font=\scriptsize\itshape, text=orange!60!red]
-  at (2.5*\cs, 1.35) {carry cascade};
-
-% ── legend ───────────────────────────────────────────────────────────────
-\matrix[
-  matrix of nodes,
-  nodes={font=\scriptsize, inner sep=2pt, anchor=west},
-  row sep=1pt, column sep=4pt,
-  anchor=south east,
-] at (6*\cs + 0.6, -1.05) {
-  \node[digit=cSA, minimum width=0.45cm, minimum height=0.3cm,
-        font=\scriptsize] {}; &
-  \node {SA --- simple add}; &
-  \node[digit=cUC, minimum width=0.45cm, minimum height=0.3cm,
-        font=\scriptsize] {}; &
-  \node {UC --- uses carry}; \\
-  \node[digit=cSC, minimum width=0.45cm, minimum height=0.3cm,
-        font=\scriptsize] {}; &
-  \node {SC --- generates carry}; &
-  \node[digit=cUS, minimum width=0.45cm, minimum height=0.3cm,
-        font=\scriptsize] {}; &
-  \node {US --- cascade}; \\
-  \node[token, minimum width=0.45cm, minimum height=0.3cm,
-        font=\scriptsize] {}; &
-  \node[text=violet!70!black] {\sorl{} token}; & & \\
-};
-
-\end{tikzpicture}
-\caption{%
-  Six-digit addition $959{,}271 + 040{,}756 = 1{,}000{,}027$, a four-deep
-  carry cascade. At each answer-digit position \sorl{} assigns one
-  abstraction token (bottom row). Tokens \texttt{t2} and \texttt{t6}
-  cluster on cascade positions (UC/US); \texttt{t16} marks the carry
-  source (SC); \texttt{t3} marks the trivial position (SA).
-  Token assignments from model \texttt{add\_sub\_sorl\_v1\_abs30\_K1\_100K}
-  (K=1, 30-token codebook).%
-}
-\label{fig:arithmetic-example}
-\end{figure}
-"""
-
-LATEX_TABLE_UNDERSIZED = r"""% tab:undersized-wins — SoRL vs SFT on undersized architectures
-% Generated by arithmetic/paper/results/result_low_data_wins/run.py
-% Requires: \usepackage{booktabs}, \usepackage{xcolor}
-
-\begin{table}[t]
-  \centering
-  \small
-  \begin{tabular}{llrrrr}
-    \toprule
-    Architecture & Data & Baseline & SoRL & Gap & C6 gap \\
-    \midrule
-    \texttt{1L/2H/256d} & 10K  & 10\% & \textbf{19\%} & \textcolor{green!50!black}{\textbf{+9\%}}  & \textcolor{green!50!black}{\textbf{+18\%}} \\
-                        & 25K  & 32\% & 26\%          & $-7\%$                                    & \textcolor{green!50!black}{\textbf{+10\%}} \\
-                        & 50K  & 44\% & \textbf{65\%} & \textcolor{green!50!black}{\textbf{+21\%}} & \textcolor{green!50!black}{\textbf{+34\%}} \\
-                        & 100K & 49\% & \textbf{65\%} & \textcolor{green!50!black}{\textbf{+16\%}} & \textcolor{green!50!black}{\textbf{+31\%}} \\
-    \midrule
-    \texttt{1L/3H/510d} & 10K  & 36\% & \textbf{52\%} & \textcolor{green!50!black}{\textbf{+16\%}} & \textcolor{green!50!black}{\textbf{+30\%}} \\
-                        & 25K  & 46\% & \textbf{60\%} & \textcolor{green!50!black}{\textbf{+14\%}} & \textcolor{green!50!black}{\textbf{+22\%}} \\
-                        & 50K  & 53\% & \textbf{72\%} & \textcolor{green!50!black}{\textbf{+19\%}} & \textcolor{green!50!black}{\textbf{+38\%}} \\
-                        & 100K & 67\% & \textbf{83\%} & \textcolor{green!50!black}{\textbf{+16\%}} & \textcolor{green!50!black}{\textbf{+26\%}} \\
-    \midrule
-    \texttt{2L/1H/128d} & 10K  & 16\% & \textbf{36\%} & \textcolor{green!50!black}{\textbf{+21\%}} & \textcolor{green!50!black}{\textbf{+39\%}} \\
-                        & 25K  & 40\% & \textbf{55\%} & \textcolor{green!50!black}{\textbf{+15\%}} & \textcolor{green!50!black}{\textbf{+23\%}} \\
-                        & 50K  & 59\% & \textbf{87\%} & \textcolor{green!50!black}{\textbf{+28\%}} & \textcolor{green!50!black}{\textbf{+50\%}} \\
-                        & 75K  & 75\% & \textbf{87\%} & \textcolor{green!50!black}{\textbf{+12\%}} & \textcolor{green!50!black}{\textbf{+5\%}}  \\
-                        & 100K & 73\% & \textbf{95\%} & \textcolor{green!50!black}{\textbf{+22\%}} & \textcolor{green!50!black}{\textbf{+33\%}} \\
-    \bottomrule
-  \end{tabular}
-  \caption{\sorl{} ($K{=}1$, $|\mathcal{A}|{=}30$) vs.\ \sft{} baseline on
-    undersized architectures across data sizes.
-    \textbf{Gap} = overall accuracy gain; \textbf{C6 gap} = gain on
-    6-deep carry cascades (the hardest split).
-    \sorl{} wins in \textbf{12 of 13} (architecture, data-size) pairs;
-    the single exception is \texttt{1L/2H/256d} at 25K, where the model
-    is undertrained (accuracy still rising at epoch 20).
-    \sorl{} wins on C6 in \textbf{all 13} configurations.}
-  \label{tab:undersized-wins}
-\end{table}
-"""
 
 LATEX_APPENDIX = r"""\section{Arithmetic case study: interpretability analysis}
 \label{app:arithmetic}
@@ -592,13 +395,33 @@ variable. The specialist tokens concentrate at mid-sequence positions ($d_2$-$d_
 We implement a light version of the automated interpretation procedure of \citet{bills2023language}.
 For each active token, we collect the $N{=}10$ examples from the evaluation set where the model assigned it with highest softmax confidence,
 then ask \texttt{claude-haiku} to produce a one-sentence role description.
+Table~\ref{tab:auto-interp} shows results for the 8 highest-confidence tokens.
 
-% [PLACEHOLDER — run experiments/11_auto_interp/run.py to generate table.tex]
-% Then paste the output of table.tex here:
-%
-% \input{experiments/11_auto_interp/table.tex}
-%
-% Expected columns: Token | Top subtask (purity) | Mean conf. | Auto-interpretation
+\begin{table}[ht]
+  \centering\small
+  \begin{tabular}{clrp{5.5cm}}
+    \toprule
+    Token & Top subtask & Conf. & Auto-interpretation \\
+    \midrule
+    \texttt{t0} & UC (47\%) & 1.00 & Token t0 marks the tens digit position in addition problems, regardless of carry state or sum value. \\
+    \texttt{t2} & UC (70\%) & 0.99 & Token t2 outputs the ones digit (0) when adding two numbers whose ones digits sum to 10 or more. \\
+    \texttt{t1} & UC (30\%) & 0.99 & This token routes to the fourth digit position during addition when a carry from the previous position must be incorporated. \\
+    \texttt{t3} & UC (44\%) & 0.94 & Token t3 routes to the hundreds position (d3) when processing carries from the tens column in addition. \\
+    \texttt{t5} & MD (65\%) & 0.93 & Token t5 routes cases where the ones digit result is 0, spanning multiple subtasks and operations. \\
+    \texttt{t8} & MD (26\%) & 0.91 & Token t8 activates when processing the tens digit (d2) across addition/subtraction with various carry states. \\
+    \texttt{t10} & UB (41\%) & 0.88 & Token t10 routes subtraction problems requiring borrow propagation at mid-to-late digit positions. \\
+    \texttt{t6} & UC (27\%) & 0.88 & Token t6 routes cases where the ones digit result is 0, regardless of operation or carry state. \\
+    \bottomrule
+  \end{tabular}
+  \caption{Automated interpretation of the 8 highest-confidence \sorl{} abstraction tokens
+    (\`{a} la \citealt{bills2023language}).
+    For each token, the 10 examples with highest softmax confidence are shown to an LLM,
+    which produces a one-sentence role description.
+    \textbf{Conf.} = mean softmax probability of the assigned token.
+    High-confidence specialists receive crisp, position- and operation-specific descriptions;
+    polysemantic tokens (not shown) produce broader descriptions.}
+  \label{tab:auto-interp}
+\end{table}
 
 \begin{tcolorbox}[colback=gray!6, colframe=gray!40,
   fonttitle=\bfseries\small, title={Finding \#7: Automated interpretation matches ground-truth subtask labels},
@@ -647,6 +470,7 @@ then ask \texttt{claude-haiku} to produce a one-sentence role description.
 
 Evaluation uses fixed-length autoregressive decoding (no teacher forcing):
 the model generates answer digits $d_0 \to d_6$ using its own predictions, with abstraction tokens inserted via the \sorl{} search-then-recurse procedure (matching training). Accuracy is measured on 100 held-out examples per split (seed 42; \texttt{thoughtworks/arithmetic-sorl-data}).
+
 """
 
 
