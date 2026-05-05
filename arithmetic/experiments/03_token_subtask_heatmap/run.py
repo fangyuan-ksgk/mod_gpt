@@ -237,7 +237,9 @@ def main():
     print(f"Wrote {OUT_DIR / 'results.json'}")
 
     plot_heatmap(token_data, args.model, K, abs_vocab, OUT_DIR / "fig_token_subtask.png")
+    plot_heatmap(token_data, args.model, K, abs_vocab, OUT_DIR / "fig_token_subtask.pdf")
     plot_positions(token_data, args.model, OUT_DIR / "fig_token_positions.png")
+    plot_positions(token_data, args.model, OUT_DIR / "fig_token_positions.pdf")
     write_summary(token_data, args.model, n_examples, K, abs_vocab, OUT_DIR / "summary.md")
 
     del model
