@@ -14,3 +14,7 @@ log/qwen16-ckpt/*
 
 # Local NCCL tuner placeholder created by repo-owned launchers on RunPod.
 dummy_tuner_config.txt
+ckpt/
+data_cache/
+paper/
+amir_interp_rebuttal/logs/

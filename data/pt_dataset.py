@@ -2054,6 +2054,25 @@ DATASET_REGISTRY = {
 }
 
 
+def _register_rebuttal_datasets():
+    """Interpretability-rebuttal datasets (reviewer yrxa Q5): six-digit arithmetic
+    and CodeNet, both carrying per-chunk ground-truth labels. Imported lazily so a
+    missing optional dep can never break the main dataset registry."""
+    try:
+        from amir_interp_rebuttal.arith_dataset import ArithmeticDataset
+        DATASET_REGISTRY["arithmetic"] = ArithmeticDataset
+    except ImportError:
+        pass
+    try:
+        from amir_interp_rebuttal.codenet_dataset import CodeNetDataset
+        DATASET_REGISTRY["codenet"] = CodeNetDataset
+    except ImportError:
+        pass
+
+
+_register_rebuttal_datasets()
+
+
 def get_dataset(name, split="train", tokenizer=None, max_length=128):
     """Factory: instantiate a registered dataset by name.
 

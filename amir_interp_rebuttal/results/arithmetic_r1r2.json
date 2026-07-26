@@ -1,0 +1,200 @@
+{
+  "study": "arithmetic",
+  "ckpt": "ckpt/arith_v9",
+  "n_eval": 2600,
+  "accuracy": 0.8361538461538461,
+  "n_wrong": 426,
+  "R1": {
+    "n_active_codes": 5,
+    "median_lift": 1.8709619700723878,
+    "rows": [
+      {
+        "code": 20,
+        "n": 4155,
+        "top_subtask": "MD",
+        "purity": 0.3716004813477738,
+        "marginal": 0.15368131868131868,
+        "lift": 2.4179938364424323,
+        "top_pos": 0,
+        "pos_concentration": 0.6257521058965102,
+        "n_positions": 5
+      },
+      {
+        "code": 6,
+        "n": 494,
+        "top_subtask": "MB",
+        "purity": 0.3603238866396761,
+        "marginal": 0.06203296703296703,
+        "lift": 5.808587012260501,
+        "top_pos": 6,
+        "pos_concentration": 0.854251012145749,
+        "n_positions": 4
+      },
+      {
+        "code": 1,
+        "n": 2219,
+        "top_subtask": "SA",
+        "purity": 0.3334835511491663,
+        "marginal": 0.17824175824175825,
+        "lift": 1.8709619700723878,
+        "top_pos": 6,
+        "pos_concentration": 0.9815232086525462,
+        "n_positions": 2
+      },
+      {
+        "code": 7,
+        "n": 6492,
+        "top_subtask": "US",
+        "purity": 0.2245841035120148,
+        "marginal": 0.12615384615384614,
+        "lift": 1.7802398449123125,
+        "top_pos": 2,
+        "pos_concentration": 0.39926062846580407,
+        "n_positions": 4
+      },
+      {
+        "code": 19,
+        "n": 4840,
+        "top_subtask": "US",
+        "purity": 0.17169421487603306,
+        "marginal": 0.12615384615384614,
+        "lift": 1.360990727675872,
+        "top_pos": 5,
+        "pos_concentration": 0.5111570247933884,
+        "n_positions": 3
+      }
+    ],
+    "marginal": {
+      "SA": 0.17824175824175825,
+      "UC": 0.16335164835164837,
+      "US": 0.12615384615384614,
+      "SS": 0.018736263736263737,
+      "SC": 0.09043956043956045,
+      "MD": 0.15368131868131868,
+      "ME": 0.016703296703296705,
+      "UB": 0.10714285714285714,
+      "MB": 0.06203296703296703,
+      "UD": 0.08351648351648351
+    },
+    "replicated": false
+  },
+  "R2": {
+    "measurable": true,
+    "R2b_targeted": {
+      "measurable": true,
+      "n_attempted": 584,
+      "targeted_fix_rate": 0.005136986301369863,
+      "random_fix_rate": 0.003424657534246575,
+      "lift": 1.5,
+      "per_label": {
+        "SA": {
+          "fixed": 3,
+          "n": 182,
+          "rate": 0.016483516483516484
+        },
+        "US": {
+          "fixed": 0,
+          "n": 402,
+          "rate": 0.0
+        }
+      },
+      "code_for_label": {
+        "MD": 20,
+        "MB": 6,
+        "SA": 1,
+        "US": 7
+      }
+    },
+    "R2a_best_of_C": {
+      "per_position": {
+        "0": {
+          "fix_rate_best_of_C": 0.03333333333333333,
+          "n_wrong": 150,
+          "n_fixed": 5,
+          "best_code": [
+            0,
+            4
+          ]
+        },
+        "1": {
+          "fix_rate_best_of_C": 0.02,
+          "n_wrong": 150,
+          "n_fixed": 3,
+          "best_code": [
+            13,
+            2
+          ]
+        },
+        "2": {
+          "fix_rate_best_of_C": 0.013333333333333334,
+          "n_wrong": 150,
+          "n_fixed": 2,
+          "best_code": [
+            1,
+            1
+          ]
+        },
+        "3": {
+          "fix_rate_best_of_C": 0.006666666666666667,
+          "n_wrong": 150,
+          "n_fixed": 1,
+          "best_code": [
+            26,
+            1
+          ]
+        },
+        "4": {
+          "fix_rate_best_of_C": 0.0,
+          "n_wrong": 150,
+          "n_fixed": 0,
+          "best_code": null
+        },
+        "5": {
+          "fix_rate_best_of_C": 0.0,
+          "n_wrong": 150,
+          "n_fixed": 0,
+          "best_code": null
+        },
+        "6": {
+          "fix_rate_best_of_C": 0.0,
+          "n_wrong": 150,
+          "n_fixed": 0,
+          "best_code": null
+        }
+      },
+      "control": {
+        "0": {
+          "code": 24,
+          "fix_rate": 0.013333333333333334
+        },
+        "1": {
+          "code": 29,
+          "fix_rate": 0.006666666666666667
+        },
+        "2": {
+          "code": 17,
+          "fix_rate": 0.006666666666666667
+        },
+        "3": {
+          "code": 4,
+          "fix_rate": 0.0
+        },
+        "4": {
+          "code": 0,
+          "fix_rate": 0.0
+        },
+        "5": {
+          "code": 2,
+          "fix_rate": 0.0
+        },
+        "6": {
+          "code": 20,
+          "fix_rate": 0.0
+        }
+      },
+      "best_position": "0",
+      "note": "existence measure over C x positions attempts per example"
+    },
+    "replicated": false
+  }
+}
