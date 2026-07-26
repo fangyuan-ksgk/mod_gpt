@@ -127,6 +127,11 @@ def main():
                    help="stage 2: cap attempts; C x positions x N gets large")
     p.add_argument("--show", type=int, default=8,
                    help="stage 1: sample errors printed per class for eyeballing")
+    p.add_argument("--dump_batch_size", type=int, default=None,
+                   help="batch size for the --dump baseline pass. CodeNet MUST "
+                        "stay at 1 (left padding misaligns prefill chunks unless "
+                        "pad_len %% L == 0). Arithmetic has a fixed-length prompt "
+                        "so there is no pad variance and larger batches are safe.")
     p.add_argument("--seed", type=int, default=0,
                    help="seed for the random-control arm. A positive cell must "
                         "survive a fresh seed; with ~18 cells swept, a single "
@@ -192,8 +197,12 @@ def main():
         print(f"accuracy {acc:.4f} (cached) | {len(wrong)} wrong, "
               f"baseline pass skipped", flush=True)
     else:
+        dbs = args.dump_batch_size or 1
+        if args.study == "codenet" and dbs != 1:
+            raise SystemExit("CodeNet requires --dump_batch_size 1")
         recs = batched_generate(wrapper, tok, ds, args.device, idxs,
-                                eval_batch_size=1, max_new_tokens=args.max_new_tokens,
+                                eval_batch_size=dbs,
+                                max_new_tokens=args.max_new_tokens,
                                 record_codes=True, decode_scale=scale)
         acc = sum(r["correct"] for r in recs) / len(recs)
         wrong = [r for r in recs if not r["correct"]]

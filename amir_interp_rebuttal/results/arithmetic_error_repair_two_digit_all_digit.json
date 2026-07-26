@@ -1,0 +1,114 @@
+{
+  "ckpt": "ckpt/arith_s0.5_i10_z1_u8",
+  "study": "arithmetic",
+  "error_class": "two_digit",
+  "mode": "all",
+  "native_scale": 0.5,
+  "repair_scale": 0.5,
+  "max_gold_tokens": null,
+  "seed": 0,
+  "success_criterion": "target digit correct",
+  "n_attempted": 92,
+  "C": 30,
+  "n_positions": 8,
+  "fixed_best_of_C": 17,
+  "fix_rate_best_of_C": 0.18478260869565216,
+  "attempt_budget_per_example": 30,
+  "fixed_random_matched": 12,
+  "fix_rate_random_matched": 0.13043478260869565,
+  "fixing_codes": {
+    "0": 6,
+    "1": 5,
+    "2": 3,
+    "4": 1,
+    "9": 1,
+    "3": 1
+  },
+  "first_hits": [
+    {
+      "ds_idx": 149,
+      "code": 2,
+      "position": "all"
+    },
+    {
+      "ds_idx": 241,
+      "code": 1,
+      "position": "all"
+    },
+    {
+      "ds_idx": 362,
+      "code": 0,
+      "position": "all"
+    },
+    {
+      "ds_idx": 474,
+      "code": 1,
+      "position": "all"
+    },
+    {
+      "ds_idx": 902,
+      "code": 4,
+      "position": "all"
+    },
+    {
+      "ds_idx": 920,
+      "code": 0,
+      "position": "all"
+    },
+    {
+      "ds_idx": 934,
+      "code": 9,
+      "position": "all"
+    },
+    {
+      "ds_idx": 970,
+      "code": 3,
+      "position": "all"
+    },
+    {
+      "ds_idx": 1043,
+      "code": 1,
+      "position": "all"
+    },
+    {
+      "ds_idx": 1066,
+      "code": 1,
+      "position": "all"
+    },
+    {
+      "ds_idx": 1067,
+      "code": 2,
+      "position": "all"
+    },
+    {
+      "ds_idx": 1126,
+      "code": 0,
+      "position": "all"
+    },
+    {
+      "ds_idx": 1143,
+      "code": 0,
+      "position": "all"
+    },
+    {
+      "ds_idx": 1153,
+      "code": 1,
+      "position": "all"
+    },
+    {
+      "ds_idx": 1287,
+      "code": 0,
+      "position": "all"
+    },
+    {
+      "ds_idx": 1667,
+      "code": 2,
+      "position": "all"
+    },
+    {
+      "ds_idx": 2130,
+      "code": 0,
+      "position": "all"
+    }
+  ]
+}
