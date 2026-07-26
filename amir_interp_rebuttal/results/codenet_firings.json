@@ -1,0 +1,1119 @@
+{
+  "ckpt": "ckpt/codenet_s0.5_i10_z1_L8_n4000",
+  "L": 8,
+  "n_eval": 800,
+  "eval_batch_size": 1,
+  "codes": {
+    "9": {
+      "n_total": 809,
+      "examples": [
+        {
+          "file_idx": 0,
+          "chunk_index": 0,
+          "chunk_text": "x , y = map(int,input().",
+          "context_before": "",
+          "context_after": "split())\n\ndef GCD(x,y):\n    while y > 0:\n       ",
+          "label": "Call"
+        },
+        {
+          "file_idx": 67,
+          "chunk_index": 0,
+          "chunk_text": "def main():\n    a, b =",
+          "context_before": "",
+          "context_after": " tuple(map(int,input().split()))\n    print(gcd(a, b))\n\ndef",
+          "label": "FunctionDef"
+        },
+        {
+          "file_idx": 134,
+          "chunk_index": 0,
+          "chunk_text": "def getResult(a,b):\n\tif a<b",
+          "context_before": "",
+          "context_after": ":\n\t\ta,b=b,a\n\twhile b!=0:\n\t\tr = a",
+          "label": "FunctionDef"
+        },
+        {
+          "file_idx": 201,
+          "chunk_index": 0,
+          "chunk_text": "def gcd(x, y):\n    while",
+          "context_before": "",
+          "context_after": " x > 0:\n        x, y = y % x, x\n",
+          "label": "FunctionDef"
+        },
+        {
+          "file_idx": 268,
+          "chunk_index": 0,
+          "chunk_text": "def is_prime(x):\n    if x",
+          "context_before": "",
+          "context_after": " <= 1:\n        return False\n    i = 2\n    while",
+          "label": "FunctionDef"
+        },
+        {
+          "file_idx": 335,
+          "chunk_index": 0,
+          "chunk_text": "def isPrime(x):\n    if x",
+          "context_before": "",
+          "context_after": " == 2:\n        return True\n\n    if x < 2 or x",
+          "label": "FunctionDef"
+        },
+        {
+          "file_idx": 402,
+          "chunk_index": 0,
+          "chunk_text": "from math import sqrt\nres = ",
+          "context_before": "",
+          "context_after": "0\n\ndef isprime(x) :\n    if x == 2 : return",
+          "label": "Assign"
+        },
+        {
+          "file_idx": 469,
+          "chunk_index": 0,
+          "chunk_text": "import sys\ninput = lambda: sys",
+          "context_before": "",
+          "context_after": ".stdin.readline()[:-1]\nn,k=map(int,input().split())\nw",
+          "label": "Assign"
+        },
+        {
+          "file_idx": 536,
+          "chunk_index": 0,
+          "chunk_text": "n,k=map(int,input().split",
+          "context_before": "",
+          "context_after": "())\nw=[int(input()) for i in range(n)]\nleft=max(w)-",
+          "label": "Call"
+        },
+        {
+          "file_idx": 599,
+          "chunk_index": 22,
+          "chunk_text": "])*mt.cos(mt.radians(60",
+          "context_before": ".sin(mt.radians(60))\n         +(t[1]-s[1",
+          "context_after": ")) + s[1]]\n\n    kock(n-1, p1,",
+          "label": "Call"
+        },
+        {
+          "file_idx": 663,
+          "chunk_index": 0,
+          "chunk_text": "from math import cos, sin, pi",
+          "context_before": "",
+          "context_after": "\n\ndef show(p):\n    print(f'{p.real:.08} {",
+          "label": "OTHER"
+        },
+        {
+          "file_idx": 728,
+          "chunk_index": 0,
+          "chunk_text": "import math\n#1st line\n",
+          "context_before": "",
+          "context_after": "pos_x1, pos_y1, pos_x2, pos_y2 =",
+          "label": "Import"
+        }
+      ]
+    },
+    "0": {
+      "n_total": 4978,
+      "examples": [
+        {
+          "file_idx": 0,
+          "chunk_index": 1,
+          "chunk_text": "split())\n\ndef GCD(x,y):\n",
+          "context_before": "x , y = map(int,input().",
+          "context_after": "    while y > 0:\n        x ,y = y , x %",
+          "label": "FunctionDef"
+        },
+        {
+          "file_idx": 108,
+          "chunk_index": 5,
+          "chunk_text": "\n        x = y\n        y",
+          "context_before": " = tmp\n    while y > 0:\n        r = x % y",
+          "context_after": " = r\n\n    return print(x)\n\nx_y = input()\ntmp = list",
+          "label": "While"
+        },
+        {
+          "file_idx": 214,
+          "chunk_index": 4,
+          "chunk_text": " y, x\nwhile y > ",
+          "context_before": "y = n[1]\n\nif x < y:\n    x, y =",
+          "context_after": "0:\n    r = x % y\n    x = y\n    y",
+          "label": "While"
+        },
+        {
+          "file_idx": 312,
+          "chunk_index": 11,
+          "chunk_text": "%2 > 0 or x ==",
+          "context_before": ".append(int(input()))\ninlst = [x for x in inlst if x",
+          "context_after": " 2]\ni = 3\nmaxin = max(inlst)\nin",
+          "label": "Compare"
+        },
+        {
+          "file_idx": 405,
+          "chunk_index": 12,
+          "chunk_text": "\n\n    return True\n\nif __name",
+          "context_before": " > n:\n            break\n        if not(n % p):\n            return False",
+          "context_after": "__ == '__main__':\n    solve()",
+          "label": "Return"
+        },
+        {
+          "file_idx": 483,
+          "chunk_index": 7,
+          "chunk_text": ",input().split())\nw=[int(input",
+          "context_before": " if i==n: return n\n return i\nn,k=map(int",
+          "context_after": "())for _ in[0]*n]\nl=0;r=n*1",
+          "label": "Call"
+        },
+        {
+          "file_idx": 548,
+          "chunk_index": 16,
+          "chunk_text": " m-1)\n    else:\n       ",
+          "context_before": ", m)\n    if b:\n        return bi(array, k, l,",
+          "context_after": " return bi(array, k, m+1, r)\n        \n    \nn, k",
+          "label": "If"
+        },
+        {
+          "file_idx": 576,
+          "chunk_index": 6,
+          "chunk_text": ",(2*p1[1]+p",
+          "context_before": "    s=[(2*p1[0]+p2[0])/3",
+          "context_after": "2[1])/3]\n    t=[(p1[0]+2",
+          "label": "Subscript"
+        },
+        {
+          "file_idx": 601,
+          "chunk_index": 11,
+          "chunk_text": "p1[0] + p2",
+          "context_before": "1] + p2[1]) / 3\n\n    tx = (",
+          "context_after": "[0] * 2) / 3\n    ty = (p",
+          "label": "Subscript"
+        },
+        {
+          "file_idx": 627,
+          "chunk_index": 22,
+          "chunk_text": " (t.y-s.y) * (",
+          "context_before": "t.x-s.x) * (math.sin(math.pi / 3)) +",
+          "context_after": "math.cos(math.pi / 3)) + s.y)\n    #print(s",
+          "label": "BinOp"
+        },
+        {
+          "file_idx": 653,
+          "chunk_index": 12,
+          "chunk_text": "dots[i][0] + (dots",
+          "context_before": "1][1]-dots[i][1])/3]\n        pointB = [",
+          "context_after": "[i+1][0]-dots[i][0])*2/3, dots",
+          "label": "Subscript"
+        },
+        {
+          "file_idx": 679,
+          "chunk_index": 29,
+          "chunk_text": ".x, il.y)\n    f(i",
+          "context_before": "    f(i+1, n, l, il)\n    #print(il",
+          "context_after": "+1, n, il, trico)\n    #print(trico.x",
+          "label": "FunctionDef"
+        }
+      ]
+    },
+    "5": {
+      "n_total": 591,
+      "examples": [
+        {
+          "file_idx": 0,
+          "chunk_index": 2,
+          "chunk_text": "    while y > 0:\n       ",
+          "context_before": "x , y = map(int,input().split())\n\ndef GCD(x,y):\n",
+          "context_after": " x ,y = y , x %y\n    else:\n        return x",
+          "label": "While"
+        },
+        {
+          "file_idx": 92,
+          "chunk_index": 9,
+          "chunk_text": "        break\n    else:\n        big",
+          "context_before": " = big_num % sml_num\n    if diviser == 0:\n",
+          "context_after": "_num = sml_num\n        sml_num = diviser\n\nprint(s",
+          "label": "If"
+        },
+        {
+          "file_idx": 194,
+          "chunk_index": 2,
+          "chunk_text": "\t\ta=b\n\t\tb=temp\n",
+          "context_before": "import sys\n\ndef gcd(a,b):\n\ttemp = a\n\tif a<b:\n",
+          "context_after": "\tif b==0:\n\t\treturn a\n\tc = a%b\n\treturn",
+          "label": "Assign"
+        },
+        {
+          "file_idx": 269,
+          "chunk_index": 7,
+          "chunk_text": "            return False\n    return True   \n\n",
+          "context_before": "**0.5)+1,2):\n        if x%n==0:\n",
+          "context_after": "n=int(input())\nnum=[int(input()) for i in range(n)]\n\ni",
+          "label": "Return"
+        },
+        {
+          "file_idx": 303,
+          "chunk_index": 12,
+          "chunk_text": "        if p not in r:\n           ",
+          "context_before": " in range(n):\n    p = int(input())\n    if isPrime(p):\n",
+          "context_after": " r.append(p)\n\nprint(len(r))",
+          "label": "If"
+        },
+        {
+          "file_idx": 350,
+          "chunk_index": 13,
+          "chunk_text": "):\n    m = int(input())\n   ",
+          "context_before": "\n        \nn = int(input())\ncount = 0\n\nfor _ in range(n",
+          "context_after": " if is_prime(m):\n        count += 1\n\nprint(count)",
+          "label": "Call"
+        },
+        {
+          "file_idx": 396,
+          "chunk_index": 7,
+          "chunk_text": "            ok = 0\n            break",
+          "context_before": ", int(sqrt(x))+1):\n        if x % z == 0:\n",
+          "context_after": "\n    ans += ok\nprint(ans)",
+          "label": "If"
+        },
+        {
+          "file_idx": 445,
+          "chunk_index": 7,
+          "chunk_text": " == 2:\n\t\tisPrime =",
+          "context_before": " 0:\n\tx = int(input())\n\tisPrime = 0\n\tif x",
+          "context_after": " 1\n\telif x < 2 or x % 2 == 0",
+          "label": "Assign"
+        },
+        {
+          "file_idx": 483,
+          "chunk_index": 2,
+          "chunk_text": "  s=0\n  while s",
+          "context_before": "def check(P):\n i=0\n for _ in[0]*k:\n",
+          "context_after": "+w[i]<=P:\n   s+=w[i];i+=1\n  ",
+          "label": "While"
+        },
+        {
+          "file_idx": 525,
+          "chunk_index": 9,
+          "chunk_text": "        stack += i\n        if stack",
+          "context_before": "2\n    stack = car = 0\n    for i in w:\n",
+          "context_after": " > m:\n            stack = i\n            car += 1\n    if",
+          "label": "For"
+        },
+        {
+          "file_idx": 580,
+          "chunk_index": 19,
+          "chunk_text": "    print(xs,ys)\n    k",
+          "context_before": "\n\n\n    koch(d-1,x1,y1,xs,ys)\n",
+          "context_after": "och(d-1,xs,ys,xu,yu)\n    print(x",
+          "label": "Call"
+        },
+        {
+          "file_idx": 654,
+          "chunk_index": 23,
+          "chunk_text": ", ux,uy)\n    koch",
+          "context_before": "ay, sx,sy)\n    koch(n-1, sx,sy",
+          "context_after": "(n-1, ux,uy, tx,ty)\n    koch(n",
+          "label": "Call"
+        }
+      ]
+    },
+    "1": {
+      "n_total": 2696,
+      "examples": [
+        {
+          "file_idx": 1,
+          "chunk_index": 4,
+          "chunk_text": " < b:\n        a, b =",
+          "context_before": " print(gcd(X, Y))\n\ndef gcd(a, b):\n    if a",
+          "context_after": " b, a\n    r = a % b\n    if r == ",
+          "label": "If"
+        },
+        {
+          "file_idx": 133,
+          "chunk_index": 8,
+          "chunk_text": " = map(int,input().split())\nx",
+          "context_before": " = y\n        y = remain\n    return x\n\ninput_x,input_y",
+          "context_after": ",y = sort_two_nums_tuple(input_x,input_y)\nans = calculate_gcd",
+          "label": "Call"
+        },
+        {
+          "file_idx": 272,
+          "chunk_index": 10,
+          "chunk_text": "):\n    ans+=1\nprint(ans",
+          "context_before": "\nfor i in range(n):\n  tmp=int(input())\n  if prime(tmp",
+          "context_after": ")\n",
+          "label": "Call"
+        },
+        {
+          "file_idx": 351,
+          "chunk_index": 11,
+          "chunk_text": " count += 1\n    i +=",
+          "context_before": "):\n    a = int(input())\n    if(Isprime(a)==True):\n       ",
+          "context_after": " 1\nprint(count)",
+          "label": "AugAssign"
+        },
+        {
+          "file_idx": 426,
+          "chunk_index": 10,
+          "chunk_text": " :\n    n = int(input())\n   ",
+          "context_before": " return False\n        i += 2\n\n    return True\n\n\ndef main()",
+          "context_after": " nums = []\n    for i in range(n) :\n        x = int(input",
+          "label": "Call"
+        },
+        {
+          "file_idx": 482,
+          "chunk_index": 6,
+          "chunk_text": "2\n    stack = car = ",
+          "context_before": ")\n\nwhile l < r:\n    m = (l + r) // ",
+          "context_after": "0\n    for i in w:\n        stack += i\n        if stack",
+          "label": "Assign"
+        },
+        {
+          "file_idx": 515,
+          "chunk_index": 21,
+          "chunk_text": "1\nprint(l)\n",
+          "context_before": "(mid):\n        r = mid\n    else:\n        l = mid + ",
+          "context_after": "",
+          "label": "Call"
+        },
+        {
+          "file_idx": 551,
+          "chunk_index": 4,
+          "chunk_text": ") - 1\nwhile (s",
+          "context_before": "(n):\n\tw.append(int(input()))\ns = sum(w)\nm = max(w",
+          "context_after": "-m) > 1:\n\tmid = (s+m+1)//2",
+          "label": "While"
+        },
+        {
+          "file_idx": 585,
+          "chunk_index": 15,
+          "chunk_text": "=(tx-sx)*math.sin(math",
+          "context_before": "-sy)*math.sin(math.pi*1/3)+sx\n        uy",
+          "context_after": ".pi*1/3)+(ty-sy)*math.cos(math.pi*1",
+          "label": "BinOp"
+        },
+        {
+          "file_idx": 615,
+          "chunk_index": 28,
+          "chunk_text": ")/3\n    korch_curve(m",
+          "context_before": "*2)/3\n    third_second_y = (Ly + Ry*2",
+          "context_after": "iddle_x,middle_y,third_second_x,third_second_y,i - ",
+          "label": "Call"
+        },
+        {
+          "file_idx": 648,
+          "chunk_index": 2,
+          "chunk_text": " - left[0])/3, (",
+          "context_before": "def koch(n, left, right):\n\tvector = [(right[0]",
+          "context_after": "right[1] - left[1])/3]\n\tvector_up = [-vector",
+          "label": "BinOp"
+        },
+        {
+          "file_idx": 684,
+          "chunk_index": 1,
+          "chunk_text": "3\n\ndef koch(p2,",
+          "context_before": "import math\nth = math.pi/",
+          "context_after": " n, points):\n\tp1 = points[-1]\n\tx, y = p",
+          "label": "FunctionDef"
+        }
+      ]
+    },
+    "3": {
+      "n_total": 608,
+      "examples": [
+        {
+          "file_idx": 1,
+          "chunk_index": 8,
+          "chunk_text": ":\n        a = b\n        b",
+          "context_before": " % b\n    if r == 0:\n        return b\n    else",
+          "context_after": " = r\n        return gcd(a, b)\n\nmain()",
+          "label": "If"
+        },
+        {
+          "file_idx": 146,
+          "chunk_index": 22,
+          "chunk_text": " x = y\n    y = z",
+          "context_before": "().strip().split()))\nif x < y:\n    z = x\n   ",
+          "context_after": "\n\nwhile y > 0:\n    z = x % y\n    if",
+          "label": "Assign"
+        },
+        {
+          "file_idx": 261,
+          "chunk_index": 5,
+          "chunk_text": "N = int(input())\nnums = [",
+          "context_before": " if n % i == 0:\n            return False\n    return True\n\n",
+          "context_after": "int(input()) for i in range(N)]\nprint(sum([isPrime(n)",
+          "label": "Call"
+        },
+        {
+          "file_idx": 317,
+          "chunk_index": 2,
+          "chunk_text": " return True\n\n    if x % ",
+          "context_before": "import math\n\ndef is_prime(x):\n    if x == 2:\n       ",
+          "context_after": "2 == 0 or x < 2:\n        return False\n\n    i",
+          "label": "Return"
+        },
+        {
+          "file_idx": 363,
+          "chunk_index": 10,
+          "chunk_text": " else:\n            bool = False\n           ",
+          "context_before": " >= div):\n        if num % div:\n            div += 1\n       ",
+          "context_after": " break\n    if bool:\n        ans += 1\nprint(ans)\n\n",
+          "label": "If"
+        },
+        {
+          "file_idx": 430,
+          "chunk_index": 6,
+          "chunk_text": " continue\n    else :\n        for j",
+          "context_before": "    cnt += 1\n    if a[i] == 2 :\n       ",
+          "context_after": " in range(2, int(math.sqrt(a[i])) + 1) :\n",
+          "label": "If"
+        },
+        {
+          "file_idx": 473,
+          "chunk_index": 9,
+          "chunk_text": "    left,right=max(A),sum(A",
+          "context_before": " else:\n            cnt +=i\n    return track\n\ndef Binaryserch():\n",
+          "context_after": ")+1\n    ans=0\n    while left<right:\n        mid",
+          "label": "Assign"
+        },
+        {
+          "file_idx": 513,
+          "chunk_index": 19,
+          "chunk_text": " = P\n        else:\n            P",
+          "context_before": ") // 2\n        if checkCapacity(W,k,P):\n            Pmax",
+          "context_after": "min = P + 1\n    print(Pmax)",
+          "label": "If"
+        },
+        {
+          "file_idx": 545,
+          "chunk_index": 24,
+          "chunk_text": ":  # \u4f59\u88d5\u304c\u306a\u3051\u308c\u3070",
+          "context_before": "\u30ae\u30eaOK\u306a\u306e\u306fright\u306b\u6700\u7d42\u7684\u306b\u683c\u7d0d\u3055\u308c\u3066\u3044\u308b\u306f\u305a\n    else",
+          "context_after": "(n>n_nimotu_if_P())\u3001P\u3092\u5897\u3084\u3059\n       ",
+          "label": "If"
+        },
+        {
+          "file_idx": 583,
+          "chunk_index": 24,
+          "chunk_text": ", p4]\n\n\nif __name__",
+          "context_before": " p1[1])\n\n    return [p1, p2, p3",
+          "context_after": " == \"__main__\":\n    n = int(input())\n    points = [(0,",
+          "label": "Compare"
+        },
+        {
+          "file_idx": 617,
+          "chunk_index": 8,
+          "chunk_text": ", p2):\n    if n ==",
+          "context_before": ".x + C60 * p.y)\n\ndef koch(n, p1",
+          "context_after": " 0: return\n    s = Point((2*p1.x + p",
+          "label": "FunctionDef"
+        },
+        {
+          "file_idx": 649,
+          "chunk_index": 28,
+          "chunk_text": "    print(t[0],t[",
+          "context_before": "],u[1])\n    knoc(n-1, u, t)\n",
+          "context_after": "1])\n    knoc(n-1, t, r)\n    \nn =",
+          "label": "Call"
+        }
+      ]
+    },
+    "2": {
+      "n_total": 1150,
+      "examples": [
+        {
+          "file_idx": 1,
+          "chunk_index": 10,
+          "chunk_text": " b)\n\nmain()",
+          "context_before": ":\n        a = b\n        b = r\n        return gcd(a,",
+          "context_after": "",
+          "label": "Call"
+        },
+        {
+          "file_idx": 112,
+          "chunk_index": 1,
+          "chunk_text": " a < b:\n        a, b",
+          "context_before": "def gcd(a, b):\n    if",
+          "context_after": " = b, a\n    while b != 0:\n        a, b",
+          "label": "If"
+        },
+        {
+          "file_idx": 198,
+          "chunk_index": 2,
+          "chunk_text": " if a < b:\n        (a",
+          "context_before": "def main():\n    a, b = tuple(map(int,input().split()))\n   ",
+          "context_after": ", b) = (b, a)\n        # a > b \u3068\u306a\u308b",
+          "label": "If"
+        },
+        {
+          "file_idx": 272,
+          "chunk_index": 4,
+          "chunk_text": ",int(math.sqrt(num))+1):\n   ",
+          "context_before": " or num==3:\n    return True\n  for i in range(2",
+          "context_after": " if num%i==0:\n      return False\n  else:\n    return True",
+          "label": "Call"
+        },
+        {
+          "file_idx": 320,
+          "chunk_index": 6,
+          "chunk_text": " and x%2==0:\n       ",
+          "context_before": "    if x == 2:\n        return True\n    if x>2",
+          "context_after": " return False\n    i = 3\n    while i<=math.sqrt(x",
+          "label": "If"
+        },
+        {
+          "file_idx": 384,
+          "chunk_index": 1,
+          "chunk_text": "def solve():\n    n = int(sys",
+          "context_before": "import sys\nfrom math import sqrt\n\n",
+          "context_after": ".stdin.readline())\n\n    ans = sum(is_prime(int(sys.stdin.readline())) for i",
+          "label": "FunctionDef"
+        },
+        {
+          "file_idx": 440,
+          "chunk_index": 7,
+          "chunk_text": " if x % i == 0:\n",
+          "context_before": "(3, int(x**0.5)+1, 2):\n       ",
+          "context_after": "            return False\n    \n    return True\n\n\nN = int(input())\ncnt = ",
+          "label": "If"
+        },
+        {
+          "file_idx": 490,
+          "chunk_index": 12,
+          "chunk_text": " range(len(w)):     \n        track_on",
+          "context_before": " = 0\n    daisu = 1\n    for j in",
+          "context_after": " += w[j]\n        if track_on > p:\n            daisu +=",
+          "label": "For"
+        },
+        {
+          "file_idx": 536,
+          "chunk_index": 1,
+          "chunk_text": "())\nw=[int(input()) for i",
+          "context_before": "n,k=map(int,input().split",
+          "context_after": " in range(n)]\nleft=max(w)-1;right=sum(w)\nmid=",
+          "label": "Call"
+        },
+        {
+          "file_idx": 579,
+          "chunk_index": 24,
+          "chunk_text": "och(n-1,ux,uy",
+          "context_before": " koch(n-1,sx,sy,ux,uy)\n    k",
+          "context_after": ",tx,ty)\n    koch(n-1,tx,ty,x",
+          "label": "Call"
+        },
+        {
+          "file_idx": 624,
+          "chunk_index": 25,
+          "chunk_text": ",u,t)\n    print(t[0",
+          "context_before": "    print(u[0],u[1])\n    koch(n-1",
+          "context_after": "],t[1])\n    koch(n-1,t,b)\n\na =",
+          "label": "Call"
+        },
+        {
+          "file_idx": 661,
+          "chunk_index": 14,
+          "chunk_text": " -y_0) *2/",
+          "context_before": "/3\n    y_m2 = y_0 + (y_1",
+          "context_after": "3\n    x_m =  (x_m2 - x_m1)",
+          "label": "BinOp"
+        }
+      ]
+    },
+    "10": {
+      "n_total": 30,
+      "examples": [
+        {
+          "file_idx": 4,
+          "chunk_index": 6,
+          "chunk_text": " r\n    return x\n\nprint(g",
+          "context_before": ":\n        r = x % y\n        x = y\n        y =",
+          "context_after": "cd(*map(int, input().split())))",
+          "label": "Return"
+        },
+        {
+          "file_idx": 266,
+          "chunk_index": 3,
+          "chunk_text": "\tfor i in range(2,int(math",
+          "context_before": "n = int(input())\nfor _ in range(n):\n\tt = int(input())\n",
+          "context_after": ".sqrt(t)+1)):\n\t\tif t%i==0:\n\t\t\tbreak\n\telse",
+          "label": "Call"
+        },
+        {
+          "file_idx": 352,
+          "chunk_index": 2,
+          "chunk_text": " for i in range(2, int",
+          "context_before": "def is_prime(n):\n  if n < 2: return False\n ",
+          "context_after": "(n ** 0.5) + 1):\n    if n % i",
+          "label": "Call"
+        },
+        {
+          "file_idx": 384,
+          "chunk_index": 10,
+          "chunk_text": " for p in range(3, lim",
+          "context_before": "        return False\n\n    lim = int(sqrt(n)) + 1\n\n   ",
+          "context_after": ", 2):\n        if not(n % p):\n            return False\n            \n   ",
+          "label": "Call"
+        },
+        {
+          "file_idx": 416,
+          "chunk_index": 6,
+          "chunk_text": " for j in range(3, int",
+          "context_before": " a%2 == 0:\n        continue\n    b = True\n   ",
+          "context_after": "(math.sqrt(a))+1, 2):\n        if a%j == ",
+          "label": "Call"
+        },
+        {
+          "file_idx": 421,
+          "chunk_index": 14,
+          "chunk_text": "for _ in range(n):\n    num",
+          "context_before": "10000)\n\nn = int(input())\ncount = 0\n",
+          "context_after": " = int(input())\n    count += 1 if is_prime(num) else ",
+          "label": "For"
+        },
+        {
+          "file_idx": 439,
+          "chunk_index": 6,
+          "chunk_text": " for i in range(2, area",
+          "context_before": "        area = round(math.sqrt(n))\n        prime_ng = 0\n       ",
+          "context_after": " + 1):\n            if n % i == 0:\n                prime_ng",
+          "label": "For"
+        },
+        {
+          "file_idx": 462,
+          "chunk_index": 15,
+          "chunk_text": " mid\n    else:\n        ng =",
+          "context_before": " = (ng+ok)//2\n    if check(mid):\n        ok =",
+          "context_after": " mid\nprint(ok)\n",
+          "label": "If"
+        },
+        {
+          "file_idx": 468,
+          "chunk_index": 12,
+          "chunk_text": " for w in wlist:\n        if",
+          "context_before": "\uac1c\n    i = 0\n    gobigger = 0\n   ",
+          "context_after": "(truck[i] + w <= mid):\n            truck[i] = truck[i",
+          "label": "For"
+        },
+        {
+          "file_idx": 488,
+          "chunk_index": 21,
+          "chunk_text": " mid\n    else:\n        lo =",
+          "context_before": "\n    if can_load(W, k, mid, n):\n        hi =",
+          "context_after": " mid\nprint(hi)\n",
+          "label": "If"
+        },
+        {
+          "file_idx": 500,
+          "chunk_index": 4,
+          "chunk_text": " for j in range(k):\n        s",
+          "context_before": " i in range(n)]\ndef f(x):\n    i = 0\n   ",
+          "context_after": " = 0\n        while s+w[i] <= x:\n            s +=",
+          "label": "For"
+        },
+        {
+          "file_idx": 520,
+          "chunk_index": 17,
+          "chunk_text": " m\n        hi = m\n   ",
+          "context_before": " 2\n    if canMove(w, m, k):\n        P =",
+          "context_after": " else:\n        lo = m + 1\n\nprint(P)\n\n",
+          "label": "If"
+        }
+      ]
+    },
+    "6": {
+      "n_total": 291,
+      "examples": [
+        {
+          "file_idx": 7,
+          "chunk_index": 1,
+          "chunk_text": " y == 0:\n        return x",
+          "context_before": "def gcd(x, y):\n    if",
+          "context_after": "\n    else:\n        return gcd(y, x % y)\n\nx, y",
+          "label": "If"
+        },
+        {
+          "file_idx": 255,
+          "chunk_index": 10,
+          "chunk_text": " in range(3, int(pow(input",
+          "context_before": " == 0):\n            continue\n\n        flag = 0\n        for j",
+          "context_after": "Num, 1/2))+1):\n            if(inputNum % j ==",
+          "label": "Call"
+        },
+        {
+          "file_idx": 348,
+          "chunk_index": 15,
+          "chunk_text": " __name__ == '__main__'",
+          "context_before": "())\n        nums.append(x)\n\n    print(sum(map(isPrime, nums)))\n\n\nif",
+          "context_after": " :\n    main()",
+          "label": "Compare"
+        },
+        {
+          "file_idx": 457,
+          "chunk_index": 10,
+          "chunk_text": " in numbers_tuple))\n\nmain()",
+          "context_before": " i in range(number))\n    \n    print(sum(prime_detector(n) for n",
+          "context_after": "",
+          "label": "Call"
+        },
+        {
+          "file_idx": 498,
+          "chunk_index": 5,
+          "chunk_text": " for j in range(k):\n        s",
+          "context_before": " _ in range(n)]\n\ndef check(P):\n    i = 0\n   ",
+          "context_after": " = 0\n        while (s + T[i] <= P):\n           ",
+          "label": "For"
+        },
+        {
+          "file_idx": 554,
+          "chunk_index": 20,
+          "chunk_text": "t[0] - s[0",
+          "context_before": " * math.sin(math.pi / 3) + s[0],\n        (",
+          "context_after": "]) * math.sin(math.pi / 3) + (t[1]",
+          "label": "Subscript"
+        },
+        {
+          "file_idx": 579,
+          "chunk_index": 17,
+          "chunk_text": ")*m.sin(m.radians(60",
+          "context_before": "m.sin(m.radians(60))+sx\n    uy=(tx-sx",
+          "context_after": "))+(ty-sy)*m.cos(m.radians(60))+sy\n",
+          "label": "Call"
+        },
+        {
+          "file_idx": 599,
+          "chunk_index": 19,
+          "chunk_text": "[0]-s[0])*mt",
+          "context_before": "mt.sin(mt.radians(60)) + s[0],\n         (t",
+          "context_after": ".sin(mt.radians(60))\n         +(t[1]-s[1",
+          "label": "Subscript"
+        },
+        {
+          "file_idx": 614,
+          "chunk_index": 23,
+          "chunk_text": "] - p1[0])/2",
+          "context_before": " 2 + 1/sqrt(3) * (p2[0",
+          "context_after": "]\n\t\treturn koch(p1, c1, n-1)[:-",
+          "label": "Subscript"
+        },
+        {
+          "file_idx": 636,
+          "chunk_index": 18,
+          "chunk_text": " (t_x - s_x)*cos",
+          "context_before": "_y + 2*p2_y) / 3\n    u_x =",
+          "context_after": "60 - (t_y - s_y)*sin60 + s_x",
+          "label": "BinOp"
+        },
+        {
+          "file_idx": 654,
+          "chunk_index": 18,
+          "chunk_text": "ty-sy)*math.cos(math.radians",
+          "context_before": " uy=((tx-sx)*math.sin(math.radians(60)))+((",
+          "context_after": "(60)))+sy\n\n    koch(n-1, ax,",
+          "label": "Call"
+        },
+        {
+          "file_idx": 677,
+          "chunk_index": 1,
+          "chunk_text": "future__ import division, print_function\n",
+          "context_before": "#!/usr/bin/env python\nfrom __",
+          "context_after": "from sys import stdin\nfrom math import pi, sin, cos\n\nCOS",
+          "label": "OTHER"
+        }
+      ]
+    },
+    "8": {
+      "n_total": 259,
+      "examples": [
+        {
+          "file_idx": 18,
+          "chunk_index": 1,
+          "chunk_text": " r=x%y\n if r>",
+          "context_before": "def g(n):\n x,y=n\n",
+          "context_after": "0:g((y,r))\n else:print(y)\ng(sorted(list(map(int",
+          "label": "FunctionDef"
+        },
+        {
+          "file_idx": 185,
+          "chunk_index": 2,
+          "chunk_text": " x, y = y, x\n\n",
+          "context_before": "def greatest_common_division(x, y):\n    if x < y:\n       ",
+          "context_after": "    if y == 0 or x == y:\n        return x\n   ",
+          "label": "Assign"
+        },
+        {
+          "file_idx": 291,
+          "chunk_index": 4,
+          "chunk_text": " j in range(2, int(math",
+          "context_before": " range(n):\n    num = int(input())\n    flag = True\n    for",
+          "context_after": ".sqrt(num))+1):\n        if num%j == 0:\n            flag",
+          "label": "Call"
+        },
+        {
+          "file_idx": 414,
+          "chunk_index": 9,
+          "chunk_text": "nums = [int(input()) for _",
+          "context_before": " 0:\n            return False\n    return True\n\n\nN = int(input())\n",
+          "context_after": " in range(N)]\nans = len([num for num in nums if is_prime",
+          "label": "Call"
+        },
+        {
+          "file_idx": 473,
+          "chunk_index": 13,
+          "chunk_text": " track=track_num(mid)\n        if",
+          "context_before": "    while left<right:\n        mid=(left+right)//2\n       ",
+          "context_after": " track<=k:\n            ans=mid\n            right=mid\n        elif",
+          "label": "Call"
+        },
+        {
+          "file_idx": 507,
+          "chunk_index": 10,
+          "chunk_text": "left = 0\nright = ",
+          "context_before": "1\n            if(i == n):\n                return n\n\n    return i\n\n",
+          "context_after": "1e+9\n\nwhile right - left > 1:\n    mid =",
+          "label": "Assign"
+        },
+        {
+          "file_idx": 531,
+          "chunk_index": 15,
+          "chunk_text": "\tmid = (left + right)",
+          "context_before": " 10000\n\n\twhile right - left > 1:\n\t",
+          "context_after": " // 2\n\t\tv = check(mid)\n\t\tif v >= n:\n",
+          "label": "BinOp"
+        },
+        {
+          "file_idx": 572,
+          "chunk_index": 14,
+          "chunk_text": ".x-s.x, t.y-s.y",
+          "context_before": "2.y-p1.y)*2/3 )\n        v = Point( t",
+          "context_after": " )\n        rot_v = Point( v.x*a - v.y*b, b",
+          "label": "BinOp"
+        },
+        {
+          "file_idx": 598,
+          "chunk_index": 6,
+          "chunk_text": " t = [None, None]\n    \n",
+          "context_before": " s = [None, None]\n    u = [None, None]\n   ",
+          "context_after": "    s[0] = (2*p1[0] + p2",
+          "label": "Assign"
+        },
+        {
+          "file_idx": 633,
+          "chunk_index": 6,
+          "chunk_text": " r=(b-a)/3\n ",
+          "context_before": "(d)-1):\n  a,b=d[i],d[i+1]\n ",
+          "context_after": " p+=[a+r,a+r+r*(1+3**.5*",
+          "label": "BinOp"
+        },
+        {
+          "file_idx": 655,
+          "chunk_index": 27,
+          "chunk_text": "0:.8f} {1:.",
+          "context_before": "s))\n    koch(n-1, s , u)\n    print(\"{",
+          "context_after": "8f}\".format(*u))\n    koch(n-1, u ,",
+          "label": "Call"
+        },
+        {
+          "file_idx": 708,
+          "chunk_index": 3,
+          "chunk_text": "X = abs(x1 - x2",
+          "context_before": " y1, x2, y2 = map(float, input().split())\n",
+          "context_after": ")\nY = abs(y1 - y2)\nprint(sqrt(X**2 +",
+          "label": "BinOp"
+        }
+      ]
+    },
+    "7": {
+      "n_total": 58,
+      "examples": [
+        {
+          "file_idx": 45,
+          "chunk_index": 7,
+          "chunk_text": "split())\nprint(gcd(X, Y",
+          "context_before": " return x\n\nX, Y = (int(s) for s in input().",
+          "context_after": "))",
+          "label": "Call"
+        },
+        {
+          "file_idx": 157,
+          "chunk_index": 18,
+          "chunk_text": "1), int(num2))\nprint(max",
+          "context_before": "2 = raw_input().split()\nmaximam = euclidean_algorithm(int(num",
+          "context_after": "imam)\n\n",
+          "label": "Call"
+        },
+        {
+          "file_idx": 280,
+          "chunk_index": 11,
+          "chunk_text": " k):\n            flg = True\n",
+          "context_before": "(2, math.floor(math.sqrt(x))+1):\n        if not(x %",
+          "context_after": "            break\n    if not flg:\n        cnt += 1\nprint",
+          "label": "If"
+        },
+        {
+          "file_idx": 524,
+          "chunk_index": 4,
+          "chunk_text": "split(\" \")]\n    W = [",
+          "context_before": "__':\n\n    n, k = [int(s) for s in input().",
+          "context_after": "int(input()) for _ in range(n)]\n\n    def check(P):\n        i",
+          "label": "Call"
+        },
+        {
+          "file_idx": 556,
+          "chunk_index": 14,
+          "chunk_text": "dx/2-3**0.",
+          "context_before": "]-p1[1]\n    q3 = (p1[0]+",
+          "context_after": "5/6*dy, p1[1]+dy/2+3",
+          "label": "BinOp"
+        },
+        {
+          "file_idx": 563,
+          "chunk_index": 18,
+          "chunk_text": "-s.x) - math.sqrt(3",
+          "context_before": " * p2.y)\n        t = Coordinate(1/2*(u.x",
+          "context_after": ")/2*(u.y-s.y) + s.x, math.sqrt(3",
+          "label": "Call"
+        },
+        {
+          "file_idx": 576,
+          "chunk_index": 12,
+          "chunk_text": "t[0]-s[0])*",
+          "context_before": "1[1]+2*p2[1])/3]\n    u=[((",
+          "context_after": "math.cos(a)-(t[1]-s[1])*math.sin(a))+",
+          "label": "Subscript"
+        },
+        {
+          "file_idx": 588,
+          "chunk_index": 18,
+          "chunk_text": " s.x) * math.cos(th)",
+          "context_before": "2.y) / 3)\n    u = Point(x=(t.x -",
+          "context_after": " - (t.y - s.y) * math.sin(th) + s.x",
+          "label": "Call"
+        },
+        {
+          "file_idx": 605,
+          "chunk_index": 12,
+          "chunk_text": " cmp * c for c in (cmp",
+          "context_before": "2 - p1\n        s, u, t = [p1 +",
+          "context_after": "_s, cmp_u, cmp_t)]\n        koch_curve(p1, s",
+          "label": "ListComp"
+        },
+        {
+          "file_idx": 615,
+          "chunk_index": 16,
+          "chunk_text": "third_x,third_y,i - ",
+          "context_before": "*2 + Rx)/3\n    korch_curve(Lx,Ly,",
+          "context_after": "1)\n    middle_x = (Lx + Rx)/2 - (R",
+          "label": "Call"
+        },
+        {
+          "file_idx": 626,
+          "chunk_index": 18,
+          "chunk_text": " sx) + cos*(sy + ty",
+          "context_before": "*(sx + tx) - sin*(ty - sy), sin*(tx -",
+          "context_after": ")\n\n    koch(count-1, p1x ,p1y,",
+          "label": "BinOp"
+        },
+        {
+          "file_idx": 640,
+          "chunk_index": 25,
+          "chunk_text": " s \u3092\u4e2d\u5fc3\u3068\u3057\u3066  t \u3092 ",
+          "context_before": "[1] * 2) / 3)\n        # u \u306f",
+          "context_after": "60\u00aa \u56de\u8ee2\u3055\u305b\u305f\u70b9\n        ux = (t",
+          "label": "For"
+        }
+      ]
+    },
+    "4": {
+      "n_total": 68,
+      "examples": [
+        {
+          "file_idx": 53,
+          "chunk_index": 2,
+          "chunk_text": "\telse :\n\t\treturn gcd(b,a%",
+          "context_before": "def gcd(a,b):\n\tif a%b==0:\n\t\treturn b\n",
+          "context_after": "b)\n\ndef main():\n\ta,b=map(int,raw_input().split())\n",
+          "label": "If"
+        },
+        {
+          "file_idx": 191,
+          "chunk_index": 7,
+          "chunk_text": "\ta, b = b, a\n",
+          "context_before": " val in input( ).split( \" \" ) ]\nif a < b:\n",
+          "context_after": "print( gcd( a, b ) )",
+          "label": "Assign"
+        },
+        {
+          "file_idx": 285,
+          "chunk_index": 14,
+          "chunk_text": "\tk += 1\n\t\telse:\n",
+          "context_before": "[j] % k) == 0:\n\t\t\t\tbreak\n\t\t\telse:\n\t\t\t",
+          "context_after": "\t\t\tctr += 1\n\nprint(ctr)",
+          "label": "While"
+        },
+        {
+          "file_idx": 310,
+          "chunk_index": 2,
+          "chunk_text": " range(2, int(math.sqrt(num",
+          "context_before": "import math\ndef prime(num):\n    judge = True\n    for i in",
+          "context_after": ")+1)):\n        if num % i == 0:\n            judge = False",
+          "label": "Call"
+        },
+        {
+          "file_idx": 320,
+          "chunk_index": 12,
+          "chunk_text": " range(int(i)):\n    j=int(input",
+          "context_before": "            return False\n        i+=2\n    return True\n\nfor j in",
+          "context_after": "())\n    if isPrime(j):\n        count+=1\nprint(count)",
+          "label": "Call"
+        },
+        {
+          "file_idx": 335,
+          "chunk_index": 11,
+          "chunk_text": " range(n):\n    i = int(input",
+          "context_before": " return True\n\nn = int(input())\ncnt = 0\nfor _ in",
+          "context_after": "())\n    cnt += isPrime(i)\n\nprint(cnt)\n",
+          "label": "Call"
+        },
+        {
+          "file_idx": 359,
+          "chunk_index": 4,
+          "chunk_text": " return False\n    for i in range",
+          "context_before": ":\n        return True\n    if n % 2 == 0:\n       ",
+          "context_after": "(3, int(sqrt(n)) + 1, 2):\n        if",
+          "label": "Return"
+        },
+        {
+          "file_idx": 432,
+          "chunk_index": 2,
+          "chunk_text": " return True\n    if x % ",
+          "context_before": "import math\n\ndef isprime(n):\n    if x == 2:\n       ",
+          "context_after": "2 == 0:\n        return False\n    for i in range(3",
+          "label": "Return"
+        },
+        {
+          "file_idx": 453,
+          "chunk_index": 4,
+          "chunk_text": " return False\n    return pow(2",
+          "context_before": ": return True\n    if n<2 or n%2==0:",
+          "context_after": ", n-1, n) == 1\n\ncnt = 0\n",
+          "label": "Return"
+        },
+        {
+          "file_idx": 502,
+          "chunk_index": 21,
+          "chunk_text": " left = mid + 1\nprint",
+          "context_before": "2\n  if check(mid):\n    right = mid\n  else:\n   ",
+          "context_after": "(left)\n",
+          "label": "Assign"
+        },
+        {
+          "file_idx": 545,
+          "chunk_index": 27,
+          "chunk_text": " left = mid\n\nprint(right)\n",
+          "context_before": "(n>n_nimotu_if_P())\u3001P\u3092\u5897\u3084\u3059\n       ",
+          "context_after": "",
+          "label": "Call"
+        },
+        {
+          "file_idx": 602,
+          "chunk_index": 13,
+          "chunk_text": ")*(1/2)-(by-ay",
+          "context_before": "=(y1+2*y2)/3\n    cx=(bx-ax",
+          "context_after": ")*(math.sqrt(3)/2)+ax\n    cy=(bx-ax",
+          "label": "BinOp"
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,4000 @@
+{
+  "ckpt": "ckpt/codenet_s0.5_i10_z1_L8_n4000",
+  "study": "codenet",
+  "n_eval": 800,
+  "accuracy": 0.17,
+  "n_wrong": 664,
+  "counts": {
+    "truncation": 94,
+    "reordering": 6,
+    "identifier_swap": 24,
+    "same_construct": 208,
+    "different_construct": 332
+  },
+  "errors": [
+    {
+      "ds_idx": 0,
+      "error_class": "same_construct",
+      "gold": "print(ans)",
+      "pred": "print(x*y//ans)"
+    },
+    {
+      "ds_idx": 2,
+      "error_class": "different_construct",
+      "gold": "print(x)",
+      "pred": "# 100000000000000000000000000"
+    },
+    {
+      "ds_idx": 3,
+      "error_class": "truncation",
+      "gold": "print(a)",
+      "pred": "print(a) if a == b else print(a, b)  # print a and b, but a and b are same as before. So print a"
+    },
+    {
+      "ds_idx": 4,
+      "error_class": "same_construct",
+      "gold": "print(gcd(*map(int, input().split())))",
+      "pred": "print(gcd(12, 16))  # 4"
+    },
+    {
+      "ds_idx": 5,
+      "error_class": "different_construct",
+      "gold": "print(a)",
+      "pred": "#this is the code for the problem. it's a solution to the problem of finding the greatest common divisor of two numbers. the"
+    },
+    {
+      "ds_idx": 6,
+      "error_class": "different_construct",
+      "gold": "print(str(x))",
+      "pred": "y = int(n"
+    },
+    {
+      "ds_idx": 7,
+      "error_class": "same_construct",
+      "gold": "print(gcd(x, y))",
+      "pred": "print(gcd(y, x % y)) if x % y != 0 else print(x)  # print(x)"
+    },
+    {
+      "ds_idx": 8,
+      "error_class": "same_construct",
+      "gold": "print(gcd(a,b))",
+      "pred": "print(gcd(a,b),a*b//gcd(a,b))"
+    },
+    {
+      "ds_idx": 9,
+      "error_class": "different_construct",
+      "gold": "print(gcd(x,y))",
+      "pred": "# this is the same as the first code, but with the same output"
+    },
+    {
+      "ds_idx": 10,
+      "error_class": "truncation",
+      "gold": "print(result)",
+      "pred": "print(result)  # print the"
+    },
+    {
+      "ds_idx": 11,
+      "error_class": "truncation",
+      "gold": "print(x)",
+      "pred": "print"
+    },
+    {
+      "ds_idx": 12,
+      "error_class": "truncation",
+      "gold": "print(res)",
+      "pred": "print(res) if res ==x else print(res) + str(x) if res !=x else print(res) + str(x) + str(res) if"
+    },
+    {
+      "ds_idx": 13,
+      "error_class": "different_construct",
+      "gold": "gcd(y,x)",
+      "pred": "print(gcd(int(input()),int"
+    },
+    {
+      "ds_idx": 14,
+      "error_class": "different_construct",
+      "gold": "break",
+      "pred": "print(l) if s != 0 else print(0)  # print(0) if s == 0 else print(l) ?"
+    },
+    {
+      "ds_idx": 16,
+      "error_class": "different_construct",
+      "gold": "print(gcd[0])",
+      "pred": "#this is the code for the problem"
+    },
+    {
+      "ds_idx": 18,
+      "error_class": "same_construct",
+      "gold": "g(sorted(list(map(int,input().split()))))",
+      "pred": "g(100000000000000000000000"
+    },
+    {
+      "ds_idx": 19,
+      "error_class": "different_construct",
+      "gold": "print('{0}'.format(result))",
+      "pred": "# print(result) ???"
+    },
+    {
+      "ds_idx": 21,
+      "error_class": "truncation",
+      "gold": "print(gcd(x, y))",
+      "pred": "print(gcd(x, y))  # print(gcd(x, y))  # print(gcd(x, y))  # print(gcd(x"
+    },
+    {
+      "ds_idx": 22,
+      "error_class": "same_construct",
+      "gold": "print(greatest_common_divisor(x, y))",
+      "pred": "print(greatest_common_divisor(10, 100000"
+    },
+    {
+      "ds_idx": 23,
+      "error_class": "different_construct",
+      "gold": "if a > b: a, b = b, a",
+      "pred": "print(b)  # a is the answer.  b is the remainder.  So the answer is a.  But since the loop is infinite, we"
+    },
+    {
+      "ds_idx": 24,
+      "error_class": "different_construct",
+      "gold": "print(gcd(x, y))",
+      "pred": "# this is the same as the first code,"
+    },
+    {
+      "ds_idx": 26,
+      "error_class": "same_construct",
+      "gold": "print(z[0])",
+      "pred": "print(a*z[0]*z["
+    },
+    {
+      "ds_idx": 27,
+      "error_class": "same_construct",
+      "gold": "print(y)",
+      "pred": "print(x) if x == y else print(x * y)  # print(x * y)  # print(x * y)  # print(x *"
+    },
+    {
+      "ds_idx": 28,
+      "error_class": "different_construct",
+      "gold": "print(gcd(data[0],data[1]))",
+      "pred": "#"
+    },
+    {
+      "ds_idx": 29,
+      "error_class": "reordering",
+      "gold": "print(gcd(x,y))",
+      "pred": "print(gcd(y,x))"
+    },
+    {
+      "ds_idx": 30,
+      "error_class": "different_construct",
+      "gold": "print( gcd( a, b ) )",
+      "pred": "# the code is written in Python 3.0 and"
+    },
+    {
+      "ds_idx": 31,
+      "error_class": "same_construct",
+      "gold": "print (gcd(a,b))",
+      "pred": "print(gcd(a,b),a*b"
+    },
+    {
+      "ds_idx": 32,
+      "error_class": "same_construct",
+      "gold": "gdp(x,y)",
+      "pred": "gdp(small,big) #"
+    },
+    {
+      "ds_idx": 33,
+      "error_class": "different_construct",
+      "gold": "print(gcd(input[0], input[1]))",
+      "pred": "# print(gcd(input["
+    },
+    {
+      "ds_idx": 34,
+      "error_class": "same_construct",
+      "gold": "print(int(gcd(n, m)))",
+      "pred": "print(gcd(n, m)) if gcd(n, m) == n or gcd(n, m) == m else print(0)  # 0"
+    },
+    {
+      "ds_idx": 36,
+      "error_class": "same_construct",
+      "gold": "print(a[1])",
+      "pred": "print(a[0]) if a[0] == 0 else print(a[1]) if a[1] == 0 else print(a[0"
+    },
+    {
+      "ds_idx": 37,
+      "error_class": "different_construct",
+      "gold": "print(b)",
+      "pred": "#and then print it in reverse order"
+    },
+    {
+      "ds_idx": 38,
+      "error_class": "different_construct",
+      "gold": "print(GSD(x, y))",
+      "pred": "# the code is correct."
+    },
+    {
+      "ds_idx": 39,
+      "error_class": "same_construct",
+      "gold": "print(gcd(a,b))",
+      "pred": "print(gcd(a,b),a*b//gcd(a,b))"
+    },
+    {
+      "ds_idx": 40,
+      "error_class": "different_construct",
+      "gold": "print(gcd(int(nums[0]), int(nums[1])))",
+      "pred": "# the code is written in Python."
+    },
+    {
+      "ds_idx": 41,
+      "error_class": "same_construct",
+      "gold": "print(GCD(x,y))",
+      "pred": "print(GCD(x,y),x*y//GCD(x,y))"
+    },
+    {
+      "ds_idx": 42,
+      "error_class": "truncation",
+      "gold": "print(gcd(x, y))",
+      "pred": "print(gcd(x, y)) if gcd(x, y) == x + y else print(gcd(x, y), x + y)  # print"
+    },
+    {
+      "ds_idx": 43,
+      "error_class": "different_construct",
+      "gold": "a = r",
+      "pred": "# the code is written in Python 3.0 and"
+    },
+    {
+      "ds_idx": 44,
+      "error_class": "same_construct",
+      "gold": "print(str(gcd(x,y)))",
+      "pred": "print(gcd(x,y),x*y//gcd(x,y))"
+    },
+    {
+      "ds_idx": 45,
+      "error_class": "truncation",
+      "gold": "print(gcd(X, Y))",
+      "pred": "print(gcd(X, Y)) if gcd(X, Y) == X * Y else print(gcd(X, Y) * X * Y)  #"
+    },
+    {
+      "ds_idx": 46,
+      "error_class": "different_construct",
+      "gold": "print(gcd(a, b))",
+      "pred": "# this is the same as the Euclidean algorithm, but with the same result"
+    },
+    {
+      "ds_idx": 47,
+      "error_class": "different_construct",
+      "gold": "main()",
+      "pred": "# but why is it working? because it's using the Euclidean algorithm, which is the same as"
+    },
+    {
+      "ds_idx": 48,
+      "error_class": "different_construct",
+      "gold": "print(gcd(c,d))",
+      "pred": "# the"
+    },
+    {
+      "ds_idx": 49,
+      "error_class": "different_construct",
+      "gold": "print(gcd(x, y))",
+      "pred": "x, y = y, x % y"
+    },
+    {
+      "ds_idx": 51,
+      "error_class": "truncation",
+      "gold": "print(fractions.gcd(x, y))",
+      "pred": "print"
+    },
+    {
+      "ds_idx": 52,
+      "error_class": "different_construct",
+      "gold": "print(GCD_calc(a,b))",
+      "pred": "GCD_calc(a,b) returns the GCD of a and b. So the code is correct. But why does"
+    },
+    {
+      "ds_idx": 54,
+      "error_class": "different_construct",
+      "gold": "print(y)",
+      "pred": "#this is the code for the problem"
+    },
+    {
+      "ds_idx": 56,
+      "error_class": "truncation",
+      "gold": "print(a[0])",
+      "pred": "print(a"
+    },
+    {
+      "ds_idx": 57,
+      "error_class": "different_construct",
+      "gold": "print(gcd(a, b))",
+      "pred": "gcd(a, b) returns the greatest common divisor of a and b. So the code is correct. But why does"
+    },
+    {
+      "ds_idx": 58,
+      "error_class": "different_construct",
+      "gold": "print(gcd(a, b))",
+      "pred": "# this is the same as the code above, but with a loop instead of a"
+    },
+    {
+      "ds_idx": 59,
+      "error_class": "same_construct",
+      "gold": "print(ans)",
+      "pred": "print(x * y // ans)\t# print the answer as x * y // gcd(x, y)"
+    },
+    {
+      "ds_idx": 60,
+      "error_class": "truncation",
+      "gold": "print(f(a,b))",
+      "pred": "print(f"
+    },
+    {
+      "ds_idx": 61,
+      "error_class": "same_construct",
+      "gold": "print(gcd(A[0],A[1]))",
+      "pred": "print(gcd(A[2],A[0"
+    },
+    {
+      "ds_idx": 62,
+      "error_class": "different_construct",
+      "gold": "print(gcd(x, y))",
+      "pred": "# or, even better, print(gcd(x, y"
+    },
+    {
+      "ds_idx": 63,
+      "error_class": "same_construct",
+      "gold": "print(max(divs))",
+      "pred": "print(d) if d != 0 else print('no') # no"
+    },
+    {
+      "ds_idx": 64,
+      "error_class": "different_construct",
+      "gold": "print(x)",
+      "pred": "# the code is correct"
+    },
+    {
+      "ds_idx": 65,
+      "error_class": "different_construct",
+      "gold": "print(y)",
+      "pred": "#this is the code to solve the problem. the code is correct. the code is written in Python. the code is written"
+    },
+    {
+      "ds_idx": 67,
+      "error_class": "truncation",
+      "gold": "main()",
+      "pred": "main"
+    },
+    {
+      "ds_idx": 68,
+      "error_class": "truncation",
+      "gold": "solve()",
+      "pred": "solve"
+    },
+    {
+      "ds_idx": 69,
+      "error_class": "identifier_swap",
+      "gold": "print(b)",
+      "pred": "print(a)"
+    },
+    {
+      "ds_idx": 70,
+      "error_class": "different_construct",
+      "gold": "print(b)",
+      "pred": "#Wait, but why is the GCD printed twice? Because"
+    },
+    {
+      "ds_idx": 71,
+      "error_class": "different_construct",
+      "gold": "else     : print(mak(b, a))",
+      "pred": "a, b = [int(x) for x in input().split()]"
+    },
+    {
+      "ds_idx": 72,
+      "error_class": "different_construct",
+      "gold": "GCD(x,y)",
+      "pred": "print(x*y//"
+    },
+    {
+      "ds_idx": 73,
+      "error_class": "truncation",
+      "gold": "print(gcd(x, y))",
+      "pred": "print(gcd"
+    },
+    {
+      "ds_idx": 74,
+      "error_class": "truncation",
+      "gold": "print(n)",
+      "pred": "print(n)  # print(n)  # print(n)  # print(n)  # print(n)  # print(n)  # print"
+    },
+    {
+      "ds_idx": 75,
+      "error_class": "different_construct",
+      "gold": "test()",
+      "pred": "print(gcd("
+    },
+    {
+      "ds_idx": 76,
+      "error_class": "different_construct",
+      "gold": "print (str(A))",
+      "pred": "# Another way to do it is to use the Euclidean algorithm"
+    },
+    {
+      "ds_idx": 77,
+      "error_class": "different_construct",
+      "gold": "print(divisor)",
+      "pred": "# but wait, what if the divisor is not the correct one? like, if a"
+    },
+    {
+      "ds_idx": 80,
+      "error_class": "different_construct",
+      "gold": "x=a",
+      "pred": "#16D8101023J \u4e45\u4fdd\u7530\u51cc\u5f25"
+    },
+    {
+      "ds_idx": 81,
+      "error_class": "truncation",
+      "gold": "print(gcd(A,B))",
+      "pred": "print(g"
+    },
+    {
+      "ds_idx": 82,
+      "error_class": "truncation",
+      "gold": "print(mini)",
+      "pred": "print(mini) if big == 0 else print(big) if big == mini else print(mini) if big == mini else print(big) if big"
+    },
+    {
+      "ds_idx": 83,
+      "error_class": "same_construct",
+      "gold": "print(y)",
+      "pred": "print(x % y, x // y, y) if x % y != 0 else print(y, x // y"
+    },
+    {
+      "ds_idx": 84,
+      "error_class": "different_construct",
+      "gold": "print(div(x,y))",
+      "pred": "#this is the same as the first code, but with the same output"
+    },
+    {
+      "ds_idx": 85,
+      "error_class": "different_construct",
+      "gold": "print(y)",
+      "pred": "# x and y are swapped, so print y and"
+    },
+    {
+      "ds_idx": 86,
+      "error_class": "same_construct",
+      "gold": "print(gcd(x, y))",
+      "pred": "print(gcd(n, x % n))  # print(gcd(n, x % n))  # print(gcd(x, y))  # print"
+    },
+    {
+      "ds_idx": 87,
+      "error_class": "same_construct",
+      "gold": "print(gcd(x, y))",
+      "pred": "print(gcd(x % y, y))  # same as gcd(x,"
+    },
+    {
+      "ds_idx": 88,
+      "error_class": "same_construct",
+      "gold": "print(result)",
+      "pred": "print(result * 2 * (a + b) // result) # 2 * (a + b) / gcd(a"
+    },
+    {
+      "ds_idx": 90,
+      "error_class": "different_construct",
+      "gold": "print(Greatest_Common_Divisor(x[0],x[1]))",
+      "pred": "#16D8101012J \u4f0a\u85e4"
+    },
+    {
+      "ds_idx": 91,
+      "error_class": "different_construct",
+      "gold": "max_kouyakusu = kouyakusu(x,y)",
+      "pred": "# print the result in the"
+    },
+    {
+      "ds_idx": 92,
+      "error_class": "different_construct",
+      "gold": "print(sml_num)",
+      "pred": "# 123456"
+    },
+    {
+      "ds_idx": 93,
+      "error_class": "same_construct",
+      "gold": "print(y)",
+      "pred": "print(x) if x * y == x else print(x * y)  # print(x * y)  # print(x * y)  # print"
+    },
+    {
+      "ds_idx": 94,
+      "error_class": "different_construct",
+      "gold": "print(gcd(p,q))",
+      "pred": "#"
+    },
+    {
+      "ds_idx": 95,
+      "error_class": "same_construct",
+      "gold": "print(math.gcd(x,y))",
+      "pred": "print(int(math.sqrt(x**2+y**2)))"
+    },
+    {
+      "ds_idx": 96,
+      "error_class": "same_construct",
+      "gold": "print(x)",
+      "pred": "print(x,y)"
+    },
+    {
+      "ds_idx": 97,
+      "error_class": "truncation",
+      "gold": "run()",
+      "pred": "run()  # 100000002 and 3927"
+    },
+    {
+      "ds_idx": 98,
+      "error_class": "truncation",
+      "gold": "print(gcd(a, b))",
+      "pred": "print(gcd(a, b))  # same as before"
+    },
+    {
+      "ds_idx": 99,
+      "error_class": "same_construct",
+      "gold": "print(gcd(number[0],number[1]))",
+      "pred": "print(gcd(number[2],number[0"
+    },
+    {
+      "ds_idx": 100,
+      "error_class": "truncation",
+      "gold": "print(b)",
+      "pred": "print(b) # since a and b are the same as the original numbers, but in the loop they are swapped. So the output is the"
+    },
+    {
+      "ds_idx": 101,
+      "error_class": "same_construct",
+      "gold": "print(gcd(A[0], A[1]))",
+      "pred": "print(gcd(A[2],A[0"
+    },
+    {
+      "ds_idx": 102,
+      "error_class": "truncation",
+      "gold": "print(gcd(x, y))",
+      "pred": "print(g"
+    },
+    {
+      "ds_idx": 103,
+      "error_class": "identifier_swap",
+      "gold": "print(y)",
+      "pred": "print(c)"
+    },
+    {
+      "ds_idx": 105,
+      "error_class": "same_construct",
+      "gold": "print(b)",
+      "pred": "print(b * r) if a * b == data else print(a * b) if r == data[-1"
+    },
+    {
+      "ds_idx": 106,
+      "error_class": "different_construct",
+      "gold": "print(n)",
+      "pred": "# but since x"
+    },
+    {
+      "ds_idx": 108,
+      "error_class": "different_construct",
+      "gold": "gcd(x, y)",
+      "pred": "# print the"
+    },
+    {
+      "ds_idx": 109,
+      "error_class": "same_construct",
+      "gold": "print(a)",
+      "pred": "print(b"
+    },
+    {
+      "ds_idx": 110,
+      "error_class": "truncation",
+      "gold": "print(gcd(a,b))",
+      "pred": "print(g"
+    },
+    {
+      "ds_idx": 111,
+      "error_class": "identifier_swap",
+      "gold": "print(a)",
+      "pred": "print(c)"
+    },
+    {
+      "ds_idx": 112,
+      "error_class": "same_construct",
+      "gold": "print(gcd(*map(int, input().split())))",
+      "pred": "print(gcd(12, 18))  # 6"
+    },
+    {
+      "ds_idx": 113,
+      "error_class": "same_construct",
+      "gold": "ab[max_i] = r",
+      "pred": "ab = [ab[max_i], ab[min_i], r]  # ab is now [a, b, r] where r is the new gcd"
+    },
+    {
+      "ds_idx": 114,
+      "error_class": "same_construct",
+      "gold": "print(gcd(A[0],A[1]))",
+      "pred": "print(gcd(A[2],A[0"
+    },
+    {
+      "ds_idx": 115,
+      "error_class": "different_construct",
+      "gold": "main()",
+      "pred": "\u8fd0\u884c\u7ed3\u679c\u662f\u6b63\u786e\u7684"
+    },
+    {
+      "ds_idx": 116,
+      "error_class": "different_construct",
+      "gold": "print(y)",
+      "pred": "# the"
+    },
+    {
+      "ds_idx": 117,
+      "error_class": "different_construct",
+      "gold": "print (s[1])",
+      "pred": "# the code is correct?"
+    },
+    {
+      "ds_idx": 118,
+      "error_class": "different_construct",
+      "gold": "break",
+      "pred": "print(x+y) if x != y else print(x+y) if x > y else print(x+y) if y > x else print"
+    },
+    {
+      "ds_idx": 120,
+      "error_class": "different_construct",
+      "gold": "sys.stdout.write(str(gcd(a, b)) + '\\n')",
+      "pred": "print(gcd(b"
+    },
+    {
+      "ds_idx": 121,
+      "error_class": "truncation",
+      "gold": "print(greatest_common_divisor(x, y))",
+      "pred": "print(greatest_common_divisor(x, y))  # 100000000000000000"
+    },
+    {
+      "ds_idx": 122,
+      "error_class": "truncation",
+      "gold": "print(gcm(a,b))",
+      "pred": "print(gcm"
+    },
+    {
+      "ds_idx": 123,
+      "error_class": "truncation",
+      "gold": "print(gcd(x,y))",
+      "pred": "print(gcd(x,y)) #same"
+    },
+    {
+      "ds_idx": 124,
+      "error_class": "different_construct",
+      "gold": "gcd(a,b)",
+      "pred": "#print(gcd(a,b"
+    },
+    {
+      "ds_idx": 126,
+      "error_class": "truncation",
+      "gold": "print(gcd(x,y))",
+      "pred": "print(g"
+    },
+    {
+      "ds_idx": 127,
+      "error_class": "truncation",
+      "gold": "print(greatest_common_divisor(a, b))",
+      "pred": "print(greatest_common_divisor(a, b))  # 1000000000000000000"
+    },
+    {
+      "ds_idx": 128,
+      "error_class": "different_construct",
+      "gold": "print(gcd(x, y))",
+      "pred": "# print(gcd(x,"
+    },
+    {
+      "ds_idx": 129,
+      "error_class": "same_construct",
+      "gold": "print(gcd(x,y))",
+      "pred": "print(gcd(x, y))  # 100000000000000000000"
+    },
+    {
+      "ds_idx": 131,
+      "error_class": "different_construct",
+      "gold": "continue",
+      "pred": "# print(x, y"
+    },
+    {
+      "ds_idx": 132,
+      "error_class": "same_construct",
+      "gold": "print(small)",
+      "pred": "print(small * big * small)"
+    },
+    {
+      "ds_idx": 133,
+      "error_class": "different_construct",
+      "gold": "print(ans)",
+      "pred": "sort_two_nums_tuple(x,y)"
+    },
+    {
+      "ds_idx": 134,
+      "error_class": "different_construct",
+      "gold": "print(getResult(a,b))",
+      "pred": "getResult(a,b) returns a,b in the order of a,b. So the output is a. So the code is correct"
+    },
+    {
+      "ds_idx": 136,
+      "error_class": "same_construct",
+      "gold": "print(gcd(*[int(i) for i in input().split()]))",
+      "pred": "print(gcd(12, 18, 24))"
+    },
+    {
+      "ds_idx": 137,
+      "error_class": "identifier_swap",
+      "gold": "print(inp[0])",
+      "pred": "print(inp[1])"
+    },
+    {
+      "ds_idx": 138,
+      "error_class": "truncation",
+      "gold": "print(b)",
+      "pred": "print"
+    },
+    {
+      "ds_idx": 139,
+      "error_class": "different_construct",
+      "gold": "print(y)",
+      "pred": "# but the"
+    },
+    {
+      "ds_idx": 140,
+      "error_class": "same_construct",
+      "gold": "print(y)",
+      "pred": "print(x * y)  # 100000000000000"
+    },
+    {
+      "ds_idx": 141,
+      "error_class": "truncation",
+      "gold": "print(gcd(x, y))",
+      "pred": "print(gcd(x, y)) if gcd(x, y) == x or gcd(x, y) == y else print(0)  # 0"
+    },
+    {
+      "ds_idx": 142,
+      "error_class": "reordering",
+      "gold": "print(gc(A[0],A[1]))",
+      "pred": "print(gc(A[0], A[1]))"
+    },
+    {
+      "ds_idx": 143,
+      "error_class": "truncation",
+      "gold": "print(Euclid(b, a))",
+      "pred": "print(Euclid"
+    },
+    {
+      "ds_idx": 144,
+      "error_class": "different_construct",
+      "gold": "print(divisor(x, y))",
+      "pred": "# the code is correct"
+    },
+    {
+      "ds_idx": 145,
+      "error_class": "different_construct",
+      "gold": "print(x)",
+      "pred": "# this is the correct code, but the code is not correct in the way that it is written. So, the code"
+    },
+    {
+      "ds_idx": 146,
+      "error_class": "different_construct",
+      "gold": "y = z",
+      "pred": "# ???"
+    },
+    {
+      "ds_idx": 147,
+      "error_class": "truncation",
+      "gold": "print(gcd(a, b))",
+      "pred": "print(gcd(a, b)) if gcd(a, b) == a and gcd(a, b) == b else print(gcd(a, b), a"
+    },
+    {
+      "ds_idx": 148,
+      "error_class": "different_construct",
+      "gold": "print(gcd(a1,b1))",
+      "pred": "# this is the code for the problem."
+    },
+    {
+      "ds_idx": 149,
+      "error_class": "different_construct",
+      "gold": "print(mcg(num[0],num[1]))",
+      "pred": "# the code is correct."
+    },
+    {
+      "ds_idx": 150,
+      "error_class": "different_construct",
+      "gold": "main()",
+      "pred": "#????????????????????????????????????????????????????????????????????????????????????????????????????????????"
+    },
+    {
+      "ds_idx": 151,
+      "error_class": "different_construct",
+      "gold": "gcd(x, y)",
+      "pred": "print(x * y // gcd(x, y))  # Output is the product divided"
+    },
+    {
+      "ds_idx": 152,
+      "error_class": "different_construct",
+      "gold": "print(gcd(n1, n2))",
+      "pred": "# 147 and 105 have gcd 21"
+    },
+    {
+      "ds_idx": 153,
+      "error_class": "same_construct",
+      "gold": "print(gcd(a,b))",
+      "pred": "print(gcd(b,a"
+    },
+    {
+      "ds_idx": 155,
+      "error_class": "different_construct",
+      "gold": "print(gcd(n1, n2))",
+      "pred": "# 147 and 105 have gcd 21"
+    },
+    {
+      "ds_idx": 156,
+      "error_class": "truncation",
+      "gold": "print(gcd(b[0],b[1]))",
+      "pred": "print(gcd(b[0],b[1"
+    },
+    {
+      "ds_idx": 157,
+      "error_class": "different_construct",
+      "gold": "print(maximam)",
+      "pred": "# 1000000000000000000000"
+    },
+    {
+      "ds_idx": 158,
+      "error_class": "truncation",
+      "gold": "main()",
+      "pred": "main()  # call the main function again"
+    },
+    {
+      "ds_idx": 159,
+      "error_class": "same_construct",
+      "gold": "print(d)",
+      "pred": "print(d, x * y // d)  # print(x * y // d)  # print(x * y // d)  # print(x *"
+    },
+    {
+      "ds_idx": 160,
+      "error_class": "truncation",
+      "gold": "print(eucli(x, y))",
+      "pred": "print(eucli(x, y)) # print(eucli(x, y)) # print(eucli(x, y)) # print(eucli"
+    },
+    {
+      "ds_idx": 161,
+      "error_class": "truncation",
+      "gold": "main()",
+      "pred": "main"
+    },
+    {
+      "ds_idx": 162,
+      "error_class": "different_construct",
+      "gold": "print(gcd(a, b))",
+      "pred": "# or, even better, print(gcd(a, b"
+    },
+    {
+      "ds_idx": 163,
+      "error_class": "truncation",
+      "gold": "print(gcd(y,x))",
+      "pred": "print"
+    },
+    {
+      "ds_idx": 165,
+      "error_class": "truncation",
+      "gold": "print(gcd(X, Y))",
+      "pred": "print(gcd(X,"
+    },
+    {
+      "ds_idx": 166,
+      "error_class": "truncation",
+      "gold": "print(r)",
+      "pred": "print(r"
+    },
+    {
+      "ds_idx": 167,
+      "error_class": "same_construct",
+      "gold": "print(m)",
+      "pred": "print(m,x*y//m)"
+    },
+    {
+      "ds_idx": 169,
+      "error_class": "different_construct",
+      "gold": "break",
+      "pred": "print(x, y) if x != y else print(x, y) if x == y else print(x, y) if x !="
+    },
+    {
+      "ds_idx": 170,
+      "error_class": "same_construct",
+      "gold": "print(c(t,u))",
+      "pred": "print(c(u,t)) if t"
+    },
+    {
+      "ds_idx": 171,
+      "error_class": "different_construct",
+      "gold": "print(a)",
+      "pred": "# 100% correct, 100% efficient, 100% readable. 100"
+    },
+    {
+      "ds_idx": 172,
+      "error_class": "different_construct",
+      "gold": "print(x)",
+      "pred": "# the code"
+    },
+    {
+      "ds_idx": 173,
+      "error_class": "truncation",
+      "gold": "print(gcd(x, y))",
+      "pred": "print(gcd(x, y)) if gcd(x, y) == x or gcd(x, y) == y else print(0) #0 if not"
+    },
+    {
+      "ds_idx": 174,
+      "error_class": "same_construct",
+      "gold": "print(max(gcd(a,b)))",
+      "pred": "print(g"
+    },
+    {
+      "ds_idx": 175,
+      "error_class": "same_construct",
+      "gold": "print(gcd(*map(int, input().split())))",
+      "pred": "print(gcd(12, 16, 24)) #"
+    },
+    {
+      "ds_idx": 176,
+      "error_class": "truncation",
+      "gold": "print(gdc(x, y))",
+      "pred": "print(gdc(x, y))  # 100000000000000000000"
+    },
+    {
+      "ds_idx": 177,
+      "error_class": "different_construct",
+      "gold": "print(gcd(x,y))",
+      "pred": "# or, even better, print(gcd(x,y),gcd(y,x"
+    },
+    {
+      "ds_idx": 178,
+      "error_class": "different_construct",
+      "gold": "y = y1",
+      "pred": "# the code is correct."
+    },
+    {
+      "ds_idx": 179,
+      "error_class": "same_construct",
+      "gold": "Algo.greatest_common_divisor(X, Y)",
+      "pred": "Algo.greatest_common_divisor(*sys"
+    },
+    {
+      "ds_idx": 180,
+      "error_class": "truncation",
+      "gold": "print(gg(y,x))",
+      "pred": "print(gg"
+    },
+    {
+      "ds_idx": 181,
+      "error_class": "truncation",
+      "gold": "print(ans)",
+      "pred": "print"
+    },
+    {
+      "ds_idx": 183,
+      "error_class": "truncation",
+      "gold": "print(gcd(x, y))",
+      "pred": "print(gcd(x, y))  # 100000000000000000000"
+    },
+    {
+      "ds_idx": 184,
+      "error_class": "different_construct",
+      "gold": "print(gcd(a, b))",
+      "pred": "# 10"
+    },
+    {
+      "ds_idx": 185,
+      "error_class": "truncation",
+      "gold": "print(greatest_common_division(x, y))",
+      "pred": "print(greatest_common_division(x, y)) if greatest_common_division(x, y) == x else print(greatest_common_division(y, x))"
+    },
+    {
+      "ds_idx": 186,
+      "error_class": "different_construct",
+      "gold": "print(x)",
+      "pred": "# the idea is that the number of times you divide"
+    },
+    {
+      "ds_idx": 187,
+      "error_class": "different_construct",
+      "gold": "gcd(x,y)",
+      "pred": "print(math.gcd(x"
+    },
+    {
+      "ds_idx": 188,
+      "error_class": "reordering",
+      "gold": "print(gcd(a,b))",
+      "pred": "print(gcd(b,a))"
+    },
+    {
+      "ds_idx": 189,
+      "error_class": "same_construct",
+      "gold": "print(\"%d\"%(calc_gcd(x,y)))",
+      "pred": "print(calc_gcd(x,y))"
+    },
+    {
+      "ds_idx": 190,
+      "error_class": "different_construct",
+      "gold": "print(gcd(x,y))",
+      "pred": "# print(gcd(x,y))  # 100000000000000"
+    },
+    {
+      "ds_idx": 191,
+      "error_class": "different_construct",
+      "gold": "print( gcd( a, b ) )",
+      "pred": "# print("
+    },
+    {
+      "ds_idx": 192,
+      "error_class": "truncation",
+      "gold": "print(result)",
+      "pred": "print(result) if result == 0 else print(result * 2) if result == 2 else print(result * 2) if result == 3"
+    },
+    {
+      "ds_idx": 193,
+      "error_class": "different_construct",
+      "gold": "gcd(x, y)",
+      "pred": "print(gcd(y, x % y)) if x % y != 0 else print(x) if x == y else"
+    },
+    {
+      "ds_idx": 194,
+      "error_class": "different_construct",
+      "gold": "print(gcd(A,B))",
+      "pred": "# print(gcd(A"
+    },
+    {
+      "ds_idx": 195,
+      "error_class": "truncation",
+      "gold": "print(gcd)",
+      "pred": "print(g"
+    },
+    {
+      "ds_idx": 196,
+      "error_class": "different_construct",
+      "gold": "y = b",
+      "pred": "print(x) if x == y else print(y) if x > y else print(x) if x < y else print(y)"
+    },
+    {
+      "ds_idx": 197,
+      "error_class": "different_construct",
+      "gold": "print(y)",
+      "pred": "# since x is the maximum of a"
+    },
+    {
+      "ds_idx": 198,
+      "error_class": "truncation",
+      "gold": "main()",
+      "pred": "main"
+    },
+    {
+      "ds_idx": 199,
+      "error_class": "different_construct",
+      "gold": "pass",
+      "pred": "# print(gcd)  # 100000000000000000000000"
+    },
+    {
+      "ds_idx": 200,
+      "error_class": "different_construct",
+      "gold": "\"\"\"",
+      "pred": "print(GCD(A[0],A[1"
+    },
+    {
+      "ds_idx": 201,
+      "error_class": "same_construct",
+      "gold": "print(y)",
+      "pred": "print(x * y) if y == 0 else print(x * y)  # print(x * y) if y == 0 else print(x *"
+    },
+    {
+      "ds_idx": 202,
+      "error_class": "different_construct",
+      "gold": "print(y)",
+      "pred": "# 100000000000000000000000"
+    },
+    {
+      "ds_idx": 203,
+      "error_class": "truncation",
+      "gold": "print(gdc(a[0],a[1]))",
+      "pred": "print(gdc("
+    },
+    {
+      "ds_idx": 204,
+      "error_class": "different_construct",
+      "gold": "if __name__ == \"__main__\": main()",
+      "pred": "main()"
+    },
+    {
+      "ds_idx": 205,
+      "error_class": "identifier_swap",
+      "gold": "print(a)",
+      "pred": "print(b)"
+    },
+    {
+      "ds_idx": 206,
+      "error_class": "different_construct",
+      "gold": "print(B)",
+      "pred": "#"
+    },
+    {
+      "ds_idx": 207,
+      "error_class": "truncation",
+      "gold": "print(gcd(a, b))",
+      "pred": "print(gcd(a, b)) # 10000000000000000000000"
+    },
+    {
+      "ds_idx": 208,
+      "error_class": "same_construct",
+      "gold": "print(gcd(max(data), min(data)));",
+      "pred": "print(gcd(data[0], data[1])); # print the result again"
+    },
+    {
+      "ds_idx": 209,
+      "error_class": "different_construct",
+      "gold": "print(x)",
+      "pred": "# 2023-04-10 12:"
+    },
+    {
+      "ds_idx": 211,
+      "error_class": "different_construct",
+      "gold": "print(x)",
+      "pred": "# 1000000000"
+    },
+    {
+      "ds_idx": 212,
+      "error_class": "truncation",
+      "gold": "print(gcd(x, y))",
+      "pred": "print(gcd(x, y)) if x == y else print(gcd(x, y), x - y * gcd(x, y)) if x > y"
+    },
+    {
+      "ds_idx": 213,
+      "error_class": "same_construct",
+      "gold": "print(gcd(x, y))",
+      "pred": "print(gcd(x, y) * 2 - x * y) if x * y % gcd(x, y"
+    },
+    {
+      "ds_idx": 214,
+      "error_class": "different_construct",
+      "gold": "print(x)",
+      "pred": "#"
+    },
+    {
+      "ds_idx": 215,
+      "error_class": "same_construct",
+      "gold": "print (gcd(a, b))",
+      "pred": "print(gcd"
+    },
+    {
+      "ds_idx": 216,
+      "error_class": "same_construct",
+      "gold": "print(x)",
+      "pred": "print(x * y * 10 + y)"
+    },
+    {
+      "ds_idx": 217,
+      "error_class": "different_construct",
+      "gold": "print(gcd(nums[0], nums[1]))",
+      "pred": "# 100000000000000000"
+    },
+    {
+      "ds_idx": 218,
+      "error_class": "different_construct",
+      "gold": "gcd(x, y)",
+      "pred": "print(gcd(x, y))  # 1000000000000000000000"
+    },
+    {
+      "ds_idx": 222,
+      "error_class": "different_construct",
+      "gold": "print(euclidean_alg(x,y))",
+      "pred": "# or, same as above"
+    },
+    {
+      "ds_idx": 223,
+      "error_class": "truncation",
+      "gold": "print(gcd(num_a, num_b))",
+      "pred": "print(gcd(num_a, num_b)) if num_a == num_b else print(gcd(num_a, num_b), num_a - num_b) if"
+    },
+    {
+      "ds_idx": 224,
+      "error_class": "different_construct",
+      "gold": "print(gcd(x, y))",
+      "pred": "# sample output"
+    },
+    {
+      "ds_idx": 226,
+      "error_class": "identifier_swap",
+      "gold": "print(y)",
+      "pred": "print(x)"
+    },
+    {
+      "ds_idx": 227,
+      "error_class": "different_construct",
+      "gold": "print(y)",
+      "pred": "###wait, no, that's not right. Because x is the remainder, but the code is supposed to print x"
+    },
+    {
+      "ds_idx": 228,
+      "error_class": "different_construct",
+      "gold": "print(gcd(a, b))",
+      "pred": "# this is the same as before, but the code is"
+    },
+    {
+      "ds_idx": 229,
+      "error_class": "same_construct",
+      "gold": "print (gcd(x,y))",
+      "pred": "print(gcd(x"
+    },
+    {
+      "ds_idx": 230,
+      "error_class": "different_construct",
+      "gold": "print(gcm(a,b))",
+      "pred": "gcm(a, b) returns the greatest common divisor of a and b. So the"
+    },
+    {
+      "ds_idx": 231,
+      "error_class": "different_construct",
+      "gold": "break",
+      "pred": "# the code"
+    },
+    {
+      "ds_idx": 235,
+      "error_class": "different_construct",
+      "gold": "print(gcd(x, y))",
+      "pred": "# or, even better, print(gcd(x, y"
+    },
+    {
+      "ds_idx": 236,
+      "error_class": "different_construct",
+      "gold": "main()",
+      "pred": "#????????????????????????????????????????????????????????????????????????????????????????????????????????????"
+    },
+    {
+      "ds_idx": 237,
+      "error_class": "different_construct",
+      "gold": "test()",
+      "pred": "# print(gcd(10"
+    },
+    {
+      "ds_idx": 238,
+      "error_class": "different_construct",
+      "gold": "print(x)",
+      "pred": "# but wait, what if x is 0? then y is"
+    },
+    {
+      "ds_idx": 239,
+      "error_class": "same_construct",
+      "gold": "print(a)",
+      "pred": "print(gcd(x, y), x * y //"
+    },
+    {
+      "ds_idx": 240,
+      "error_class": "same_construct",
+      "gold": "print(b)",
+      "pred": "print(b%a)"
+    },
+    {
+      "ds_idx": 242,
+      "error_class": "truncation",
+      "gold": "print(gcd(x, y))",
+      "pred": "print(gcd(x, y)) if x == y else print(gcd(x, y), x - 2 * gcd(x, y)) if x >"
+    },
+    {
+      "ds_idx": 243,
+      "error_class": "identifier_swap",
+      "gold": "print(tmp)",
+      "pred": "print(x)"
+    },
+    {
+      "ds_idx": 244,
+      "error_class": "different_construct",
+      "gold": "print(count)",
+      "pred": "for i in range(int"
+    },
+    {
+      "ds_idx": 245,
+      "error_class": "different_construct",
+      "gold": "print(t)",
+      "pred": "# input 3, output"
+    },
+    {
+      "ds_idx": 247,
+      "error_class": "same_construct",
+      "gold": "print(c)",
+      "pred": "print(c * 2 + 1)  #"
+    },
+    {
+      "ds_idx": 248,
+      "error_class": "same_construct",
+      "gold": "print(sum([isPrime(int(stdin.readline())) for _ in range(n)]))",
+      "pred": "print(\"YES\" if isPrime(n) else \"NO\")"
+    },
+    {
+      "ds_idx": 249,
+      "error_class": "different_construct",
+      "gold": "main()",
+      "pred": "# 100000000000000000000000000"
+    },
+    {
+      "ds_idx": 250,
+      "error_class": "different_construct",
+      "gold": "solve()",
+      "pred": "# the code is written in Python"
+    },
+    {
+      "ds_idx": 251,
+      "error_class": "same_construct",
+      "gold": "print(sum(ans))",
+      "pred": "print(' '.join(map(str,ans)))"
+    },
+    {
+      "ds_idx": 252,
+      "error_class": "same_construct",
+      "gold": "print([is_prime(x) for x in d].count(True))",
+      "pred": "print(len(pr"
+    },
+    {
+      "ds_idx": 253,
+      "error_class": "same_construct",
+      "gold": "print(sum(1 for n in range(int(input())) if f(int(input()))))",
+      "pred": "print(f(10000000000000000000000000000"
+    },
+    {
+      "ds_idx": 254,
+      "error_class": "different_construct",
+      "gold": "print(str(cnt))",
+      "pred": "# this code is for the problem"
+    },
+    {
+      "ds_idx": 255,
+      "error_class": "different_construct",
+      "gold": "main()",
+      "pred": "def main():"
+    },
+    {
+      "ds_idx": 256,
+      "error_class": "truncation",
+      "gold": "main()",
+      "pred": "main"
+    },
+    {
+      "ds_idx": 257,
+      "error_class": "same_construct",
+      "gold": "print(x-count)",
+      "pred": "print(count)"
+    },
+    {
+      "ds_idx": 259,
+      "error_class": "different_construct",
+      "gold": "print(prime_number)",
+      "pred": "# this code is for the problem"
+    },
+    {
+      "ds_idx": 260,
+      "error_class": "same_construct",
+      "gold": "print(count)",
+      "pred": "print(len(A), *A)"
+    },
+    {
+      "ds_idx": 261,
+      "error_class": "different_construct",
+      "gold": "print(sum([isPrime(n) for n in nums]))",
+      "pred": "if __name__ == \"__main__\":"
+    },
+    {
+      "ds_idx": 262,
+      "error_class": "different_construct",
+      "gold": "print(len(a))",
+      "pred": "#"
+    },
+    {
+      "ds_idx": 263,
+      "error_class": "same_construct",
+      "gold": "print(sum(is_prime(int(input())) for _ in range(n)))",
+      "pred": "print(\""
+    },
+    {
+      "ds_idx": 264,
+      "error_class": "same_construct",
+      "gold": "print(sum(is_prime(num) for num in num_list))",
+      "pred": "print(len([is_prime(n) for n in num_list]))"
+    },
+    {
+      "ds_idx": 266,
+      "error_class": "different_construct",
+      "gold": "print(c)",
+      "pred": "# print(c)"
+    },
+    {
+      "ds_idx": 268,
+      "error_class": "different_construct",
+      "gold": "print(cnt)",
+      "pred": "But wait, the code is not correct. Let me think. The code checks for primes, but the input is read as integers. The function"
+    },
+    {
+      "ds_idx": 270,
+      "error_class": "different_construct",
+      "gold": "print(len([prime(e) for e in list(map(int, inp[1:])) if prime(e)==1]))",
+      "pred": "#print('yes' if prime"
+    },
+    {
+      "ds_idx": 272,
+      "error_class": "truncation",
+      "gold": "print(ans)",
+      "pred": "print(ans"
+    },
+    {
+      "ds_idx": 273,
+      "error_class": "different_construct",
+      "gold": "print(count)",
+      "pred": "if"
+    },
+    {
+      "ds_idx": 277,
+      "error_class": "same_construct",
+      "gold": "print(count)",
+      "pred": "print(count * 1000000000 + 1000000000 * count)"
+    },
+    {
+      "ds_idx": 279,
+      "error_class": "different_construct",
+      "gold": "print(counter)",
+      "pred": "# print(isprime(10000000000000000000000"
+    },
+    {
+      "ds_idx": 280,
+      "error_class": "truncation",
+      "gold": "print(cnt)",
+      "pred": "print(cnt) # 100000000000000000000000000"
+    },
+    {
+      "ds_idx": 281,
+      "error_class": "different_construct",
+      "gold": "print(ans)",
+      "pred": "# 100% efficient"
+    },
+    {
+      "ds_idx": 283,
+      "error_class": "different_construct",
+      "gold": "print(sum(check))",
+      "pred": "# or, same as above, but"
+    },
+    {
+      "ds_idx": 285,
+      "error_class": "truncation",
+      "gold": "print(ctr)",
+      "pred": "print(ctr) if ctr == 0 else print(ctr - 1) if ctr == 1 else print(ctr) if ctr == 2"
+    },
+    {
+      "ds_idx": 286,
+      "error_class": "different_construct",
+      "gold": "print(ans)",
+      "pred": "# \u4f18\u5316\u540e\u7684\u4ee3\u7801\u5982\u4e0b\uff1a"
+    },
+    {
+      "ds_idx": 289,
+      "error_class": "different_construct",
+      "gold": "print(count)",
+      "pred": "# print the"
+    },
+    {
+      "ds_idx": 290,
+      "error_class": "different_construct",
+      "gold": "print(cnt)",
+      "pred": "This is a Python program that checks for prime numbers. The code reads an integer N, then for each of the next N lines, it reads"
+    },
+    {
+      "ds_idx": 292,
+      "error_class": "different_construct",
+      "gold": "print(sum(g(n)))",
+      "pred": "# this is the code that should be run,"
+    },
+    {
+      "ds_idx": 293,
+      "error_class": "different_construct",
+      "gold": "print(sum([isPrime(int(stdin.readline())) for _ in range(int(stdin.readline()))]))",
+      "pred": "if __name__ == \"__"
+    },
+    {
+      "ds_idx": 296,
+      "error_class": "same_construct",
+      "gold": "print(sum([1 for _ in range(N) if isPrime(int(input()))]))",
+      "pred": "print(\"YES\" if isPrime(N) else \"NO\")"
+    },
+    {
+      "ds_idx": 297,
+      "error_class": "different_construct",
+      "gold": "x",
+      "pred": "# This code is adapted from"
+    },
+    {
+      "ds_idx": 298,
+      "error_class": "same_construct",
+      "gold": "print(str(b))",
+      "pred": "print(b)"
+    },
+    {
+      "ds_idx": 299,
+      "error_class": "different_construct",
+      "gold": "print(len(inlst))",
+      "pred": "#"
+    },
+    {
+      "ds_idx": 301,
+      "error_class": "same_construct",
+      "gold": "print(sum([p(int(input()))for _ in range(n)]))",
+      "pred": "print(p(n))"
+    },
+    {
+      "ds_idx": 303,
+      "error_class": "different_construct",
+      "gold": "print(len(r))",
+      "pred": "# the"
+    },
+    {
+      "ds_idx": 304,
+      "error_class": "different_construct",
+      "gold": "solve()",
+      "pred": "But wait, the code is not correct. Let me think why. The code reads N as the"
+    },
+    {
+      "ds_idx": 308,
+      "error_class": "truncation",
+      "gold": "print(cnt)",
+      "pred": "print(cnt)  # 10000000000000000000000000"
+    },
+    {
+      "ds_idx": 310,
+      "error_class": "same_construct",
+      "gold": "print(cnt)",
+      "pred": "print(len(ns),"
+    },
+    {
+      "ds_idx": 312,
+      "error_class": "truncation",
+      "gold": "print(len(inlst))",
+      "pred": "print"
+    },
+    {
+      "ds_idx": 313,
+      "error_class": "same_construct",
+      "gold": "print(sum([p(int(input()))for _ in range(n)]))",
+      "pred": "print(p(n-"
+    },
+    {
+      "ds_idx": 314,
+      "error_class": "truncation",
+      "gold": "print(cnt)",
+      "pred": "print(cnt)  # ????\u00b0??????"
+    },
+    {
+      "ds_idx": 316,
+      "error_class": "different_construct",
+      "gold": "print(count_prime_numbers(A))",
+      "pred": "# 10000000000000000000000"
+    },
+    {
+      "ds_idx": 317,
+      "error_class": "same_construct",
+      "gold": "print(count)",
+      "pred": "print(\" \".join([\"yes\" if is_prime(int(input())) else \"no\" for _ in range(n)]))"
+    },
+    {
+      "ds_idx": 318,
+      "error_class": "same_construct",
+      "gold": "print(str(cnt))",
+      "pred": "print(len(str(x)))"
+    },
+    {
+      "ds_idx": 319,
+      "error_class": "different_construct",
+      "gold": "main()",
+      "pred": "# 100000000000000000000000000"
+    },
+    {
+      "ds_idx": 321,
+      "error_class": "different_construct",
+      "gold": "print(result)",
+      "pred": "# the code is correct, but it's not efficient for"
+    },
+    {
+      "ds_idx": 322,
+      "error_class": "different_construct",
+      "gold": "print(ans)",
+      "pred": "The code is not working because it's not checking for the prime numbers correctly. Let's"
+    },
+    {
+      "ds_idx": 325,
+      "error_class": "truncation",
+      "gold": "main()",
+      "pred": "main()  #"
+    },
+    {
+      "ds_idx": 328,
+      "error_class": "different_construct",
+      "gold": "print(count)",
+      "pred": "# this is the code that works, but the code"
+    },
+    {
+      "ds_idx": 330,
+      "error_class": "different_construct",
+      "gold": "print(sum(isPrime(int(readline())) for _ in range(int(input()))))",
+      "pred": "# the code is correct"
+    },
+    {
+      "ds_idx": 331,
+      "error_class": "same_construct",
+      "gold": "print(output)",
+      "pred": "print(element_number"
+    },
+    {
+      "ds_idx": 333,
+      "error_class": "different_construct",
+      "gold": "print(cnt)",
+      "pred": "# print(len(str(chknum))) # 100000000000"
+    },
+    {
+      "ds_idx": 336,
+      "error_class": "truncation",
+      "gold": "print(i)",
+      "pred": "print(i"
+    },
+    {
+      "ds_idx": 337,
+      "error_class": "different_construct",
+      "gold": "print(len(a))",
+      "pred": "This code is not working."
+    },
+    {
+      "ds_idx": 338,
+      "error_class": "same_construct",
+      "gold": "print(n - sum)",
+      "pred": "print(sum)"
+    },
+    {
+      "ds_idx": 339,
+      "error_class": "same_construct",
+      "gold": "print(count)",
+      "pred": "print(count*1000000"
+    },
+    {
+      "ds_idx": 341,
+      "error_class": "different_construct",
+      "gold": "print(p)",
+      "pred": "if __name__ == \"__main__\":"
+    },
+    {
+      "ds_idx": 343,
+      "error_class": "same_construct",
+      "gold": "print( cnt )",
+      "pred": "print( nums[ len( nums"
+    },
+    {
+      "ds_idx": 344,
+      "error_class": "different_construct",
+      "gold": "print(prime_count)",
+      "pred": "# 0 is"
+    },
+    {
+      "ds_idx": 345,
+      "error_class": "truncation",
+      "gold": "solve()",
+      "pred": "solve"
+    },
+    {
+      "ds_idx": 346,
+      "error_class": "different_construct",
+      "gold": "print(answer)",
+      "pred": "# 100000000000000000000000000"
+    },
+    {
+      "ds_idx": 348,
+      "error_class": "different_construct",
+      "gold": "main()",
+      "pred": "# this code is correct, but it's not efficient for large n and large x. For example, if n is 1e4"
+    },
+    {
+      "ds_idx": 349,
+      "error_class": "same_construct",
+      "gold": "print(prime)",
+      "pred": "print(prime * 1000000 + 1) # 1000000 is 1"
+    },
+    {
+      "ds_idx": 350,
+      "error_class": "truncation",
+      "gold": "print(count)",
+      "pred": "print(count) if is_prime(n) else print(0"
+    },
+    {
+      "ds_idx": 352,
+      "error_class": "different_construct",
+      "gold": "print(count)",
+      "pred": "# 10000000000000000000000000"
+    },
+    {
+      "ds_idx": 353,
+      "error_class": "different_construct",
+      "gold": "print(c)",
+      "pred": "c = 0"
+    },
+    {
+      "ds_idx": 355,
+      "error_class": "same_construct",
+      "gold": "print(n-c)",
+      "pred": "print(c"
+    },
+    {
+      "ds_idx": 356,
+      "error_class": "different_construct",
+      "gold": "print(count)",
+      "pred": "#the code"
+    },
+    {
+      "ds_idx": 357,
+      "error_class": "different_construct",
+      "gold": "print(count)",
+      "pred": "# print(len(num_set),count"
+    },
+    {
+      "ds_idx": 361,
+      "error_class": "different_construct",
+      "gold": "print(len([x for x in A if is_prime(x)]))",
+      "pred": "def is_prime(n):"
+    },
+    {
+      "ds_idx": 365,
+      "error_class": "same_construct",
+      "gold": "print(k)",
+      "pred": "print(*num_prime, sep='\\n"
+    },
+    {
+      "ds_idx": 368,
+      "error_class": "same_construct",
+      "gold": "print(count)",
+      "pred": "print(str"
+    },
+    {
+      "ds_idx": 369,
+      "error_class": "different_construct",
+      "gold": "print(count)",
+      "pred": "The problem is that the code is not working because the input is not being read correctly."
+    },
+    {
+      "ds_idx": 371,
+      "error_class": "same_construct",
+      "gold": "print(count)",
+      "pred": "print(*[str(i) for i"
+    },
+    {
+      "ds_idx": 372,
+      "error_class": "reordering",
+      "gold": "print (count)",
+      "pred": "print(count)"
+    },
+    {
+      "ds_idx": 373,
+      "error_class": "truncation",
+      "gold": "main()",
+      "pred": "main"
+    },
+    {
+      "ds_idx": 375,
+      "error_class": "same_construct",
+      "gold": "print(prime_numbers(n))",
+      "pred": "print(prime_numbers([3, 5, 7, 11, 1"
+    },
+    {
+      "ds_idx": 377,
+      "error_class": "same_construct",
+      "gold": "print(n_p)",
+      "pred": "print(n - n_p) if n_p != 0 else print(0)"
+    },
+    {
+      "ds_idx": 378,
+      "error_class": "same_construct",
+      "gold": "print(sum([p(int(input()))for _ in range(n)]))",
+      "pred": "print(p(n-"
+    },
+    {
+      "ds_idx": 379,
+      "error_class": "same_construct",
+      "gold": "print(sum(1 for _ in range(int(input())) if p(int(input()))))",
+      "pred": "print(p(int(input())))"
+    },
+    {
+      "ds_idx": 381,
+      "error_class": "different_construct",
+      "gold": "print(c)",
+      "pred": "# the code is"
+    },
+    {
+      "ds_idx": 384,
+      "error_class": "truncation",
+      "gold": "solve()",
+      "pred": "solve"
+    },
+    {
+      "ds_idx": 385,
+      "error_class": "truncation",
+      "gold": "print(n_prime)",
+      "pred": "print(n_prime) if n_prime > 0 else print(0) # print(0) if n_prime ==0 else print(n_prime) ??"
+    },
+    {
+      "ds_idx": 388,
+      "error_class": "same_construct",
+      "gold": "print(sum(is_prime(i) for i in s))",
+      "pred": "print(str(count +"
+    },
+    {
+      "ds_idx": 389,
+      "error_class": "same_construct",
+      "gold": "print(sum(map(judge, ls)))",
+      "pred": "print(judge(n))"
+    },
+    {
+      "ds_idx": 390,
+      "error_class": "same_construct",
+      "gold": "print(nn)",
+      "pred": "print(\"YES\" if IsPrime(nn) else \"NO\")"
+    },
+    {
+      "ds_idx": 393,
+      "error_class": "reordering",
+      "gold": "print (c)",
+      "pred": "print(c)"
+    },
+    {
+      "ds_idx": 394,
+      "error_class": "different_construct",
+      "gold": "print(ans)",
+      "pred": "# 100000000000000000000000000"
+    },
+    {
+      "ds_idx": 395,
+      "error_class": "different_construct",
+      "gold": "print(cnt)",
+      "pred": "# 10000000000000000000000000"
+    },
+    {
+      "ds_idx": 398,
+      "error_class": "same_construct",
+      "gold": "print(sum(is_prime(i) for i in s))",
+      "pred": "print(primes[i]) if i == 0 else print(primes[i-1], i+1) if is_prime"
+    },
+    {
+      "ds_idx": 399,
+      "error_class": "different_construct",
+      "gold": "print(ans)",
+      "pred": "#print(i+1, Algo.is_prime(int"
+    },
+    {
+      "ds_idx": 400,
+      "error_class": "same_construct",
+      "gold": "print(sum(s))",
+      "pred": "print(len([True]*sum(s)))"
+    },
+    {
+      "ds_idx": 401,
+      "error_class": "same_construct",
+      "gold": "print(count)",
+      "pred": "print(numbers[i] for i in range(num) if isPrime(numbers"
+    },
+    {
+      "ds_idx": 402,
+      "error_class": "different_construct",
+      "gold": "print(res)",
+      "pred": "# 100000000000000000000000000"
+    },
+    {
+      "ds_idx": 403,
+      "error_class": "different_construct",
+      "gold": "print(count_prime)",
+      "pred": "# 100000000000000"
+    },
+    {
+      "ds_idx": 404,
+      "error_class": "same_construct",
+      "gold": "print(n-c)",
+      "pred": "print(c)"
+    },
+    {
+      "ds_idx": 411,
+      "error_class": "different_construct",
+      "gold": "main()",
+      "pred": "The problem is that the function is_prime is not defined. So, we need to"
+    },
+    {
+      "ds_idx": 412,
+      "error_class": "different_construct",
+      "gold": "print( cnt )",
+      "pred": "# \t# \t# \t# \t# \t# \t# \t# \t#"
+    },
+    {
+      "ds_idx": 413,
+      "error_class": "different_construct",
+      "gold": "print(COUNTER)",
+      "pred": "# 1000000000000000000000000"
+    },
+    {
+      "ds_idx": 414,
+      "error_class": "different_construct",
+      "gold": "print(ans)",
+      "pred": "if __name__ =="
+    },
+    {
+      "ds_idx": 415,
+      "error_class": "different_construct",
+      "gold": "print(n)",
+      "pred": "# the code is correct. it counts"
+    },
+    {
+      "ds_idx": 418,
+      "error_class": "same_construct",
+      "gold": "#print(end - start)",
+      "pred": "# this is the code that runs when the file is executed directly"
+    },
+    {
+      "ds_idx": 421,
+      "error_class": "different_construct",
+      "gold": "print(count)",
+      "pred": "# for example, 10000 is the max, and the primes up"
+    },
+    {
+      "ds_idx": 422,
+      "error_class": "different_construct",
+      "gold": "print(len([0 for _ in range(int(stdin.readline())) if isPrime(int(stdin.readline())) == 1]))",
+      "pred": "# this is the code for the problem."
+    },
+    {
+      "ds_idx": 423,
+      "error_class": "same_construct",
+      "gold": "print(len(prime_numbers))",
+      "pred": "print(len(prime_numbers), *prime_numbers)"
+    },
+    {
+      "ds_idx": 424,
+      "error_class": "truncation",
+      "gold": "print(cnt)",
+      "pred": "print(cnt)  # 1000000000000000000000000"
+    },
+    {
+      "ds_idx": 425,
+      "error_class": "different_construct",
+      "gold": "print(prime)",
+      "pred": "But wait, the code is not correct. Let me think. The function is_prime is supposed to check if a number is prime. But"
+    },
+    {
+      "ds_idx": 426,
+      "error_class": "truncation",
+      "gold": "main()",
+      "pred": "main"
+    },
+    {
+      "ds_idx": 427,
+      "error_class": "truncation",
+      "gold": "solve()",
+      "pred": "solve"
+    },
+    {
+      "ds_idx": 428,
+      "error_class": "different_construct",
+      "gold": "print(count)",
+      "pred": "for i in range(int"
+    },
+    {
+      "ds_idx": 429,
+      "error_class": "different_construct",
+      "gold": "print(COUNTER)",
+      "pred": "# the code"
+    },
+    {
+      "ds_idx": 430,
+      "error_class": "different_construct",
+      "gold": "print(cnt)",
+      "pred": "# 2023"
+    },
+    {
+      "ds_idx": 431,
+      "error_class": "same_construct",
+      "gold": "print(len(ans))",
+      "pred": "print(len(ans),*ans)"
+    },
+    {
+      "ds_idx": 432,
+      "error_class": "different_construct",
+      "gold": "print(count)",
+      "pred": "But wait, the code above has a problem. The function isprime is defined inside the loop, which is not allowed. So the code is"
+    },
+    {
+      "ds_idx": 433,
+      "error_class": "same_construct",
+      "gold": "print(K)",
+      "pred": "print(len(L), K)"
+    },
+    {
+      "ds_idx": 434,
+      "error_class": "truncation",
+      "gold": "solve()",
+      "pred": "solve"
+    },
+    {
+      "ds_idx": 435,
+      "error_class": "different_construct",
+      "gold": "PN(n,a)",
+      "pred": "print"
+    },
+    {
+      "ds_idx": 436,
+      "error_class": "different_construct",
+      "gold": "print(c)",
+      "pred": "1"
+    },
+    {
+      "ds_idx": 437,
+      "error_class": "different_construct",
+      "gold": "print(len([x for x in list(map(isPrime, map(int, inputs))) if x is not None]))",
+      "pred": "# but the code is not correct, because the input"
+    },
+    {
+      "ds_idx": 440,
+      "error_class": "different_construct",
+      "gold": "print(cnt)",
+      "pred": "# but wait, the code is not"
+    },
+    {
+      "ds_idx": 442,
+      "error_class": "reordering",
+      "gold": "print (n)",
+      "pred": "print(n)"
+    },
+    {
+      "ds_idx": 443,
+      "error_class": "different_construct",
+      "gold": "print(sum([isPrime(int(n))for n in stdin]))",
+      "pred": "if __name__ == \"__"
+    },
+    {
+      "ds_idx": 445,
+      "error_class": "different_construct",
+      "gold": "print(result)",
+      "pred": "# 100000000000000000000"
+    },
+    {
+      "ds_idx": 446,
+      "error_class": "different_construct",
+      "gold": "print(prime_count)",
+      "pred": "# print(pr"
+    },
+    {
+      "ds_idx": 450,
+      "error_class": "different_construct",
+      "gold": "print(sum(map(is_prime, nums)))",
+      "pred": "if __name__ == \"__main__\":"
+    },
+    {
+      "ds_idx": 452,
+      "error_class": "different_construct",
+      "gold": "solve()",
+      "pred": "The code is not correct because it uses the Fermat's little theorem, but the"
+    },
+    {
+      "ds_idx": 456,
+      "error_class": "different_construct",
+      "gold": "print(cnt)",
+      "pred": "# print the primes in A"
+    },
+    {
+      "ds_idx": 457,
+      "error_class": "different_construct",
+      "gold": "main()",
+      "pred": "The code first reads the number,"
+    },
+    {
+      "ds_idx": 458,
+      "error_class": "same_construct",
+      "gold": "print(sum(is_prime(int(input())) for _ in range(n)))",
+      "pred": "print(\"YES\" if is_prime(n) else \"NO\")"
+    },
+    {
+      "ds_idx": 461,
+      "error_class": "truncation",
+      "gold": "prime_number()",
+      "pred": "prime_number()  # 1000000000000000000000000"
+    },
+    {
+      "ds_idx": 464,
+      "error_class": "different_construct",
+      "gold": "print(right)",
+      "pred": "# this is the code from the contest, but I think it's"
+    },
+    {
+      "ds_idx": 465,
+      "error_class": "same_construct",
+      "gold": "print(right)",
+      "pred": "print(left) if left * k >= n else print(left + 1) # 10000000000000"
+    },
+    {
+      "ds_idx": 466,
+      "error_class": "same_construct",
+      "gold": "print(str(low))",
+      "pred": "print(low)"
+    },
+    {
+      "ds_idx": 467,
+      "error_class": "same_construct",
+      "gold": "print(r)",
+      "pred": "print(int((n +"
+    },
+    {
+      "ds_idx": 468,
+      "error_class": "identifier_swap",
+      "gold": "print(ma)",
+      "pred": "print(mi)"
+    },
+    {
+      "ds_idx": 469,
+      "error_class": "different_construct",
+      "gold": "print(minp)",
+      "pred": "# print the minp"
+    },
+    {
+      "ds_idx": 470,
+      "error_class": "truncation",
+      "gold": "print(ok)",
+      "pred": "print"
+    },
+    {
+      "ds_idx": 471,
+      "error_class": "identifier_swap",
+      "gold": "print(right)",
+      "pred": "print(left)"
+    },
+    {
+      "ds_idx": 472,
+      "error_class": "same_construct",
+      "gold": "print(r)",
+      "pred": "print(*w[:n])"
+    },
+    {
+      "ds_idx": 474,
+      "error_class": "different_construct",
+      "gold": "print(right)",
+      "pred": "This code is not working. What is the"
+    },
+    {
+      "ds_idx": 475,
+      "error_class": "different_construct",
+      "gold": "print(min_p)",
+      "pred": "Wait, but why is the code"
+    },
+    {
+      "ds_idx": 476,
+      "error_class": "different_construct",
+      "gold": "print(right)",
+      "pred": "# 0 is not possible"
+    },
+    {
+      "ds_idx": 477,
+      "error_class": "identifier_swap",
+      "gold": "print(r)",
+      "pred": "print(l)"
+    },
+    {
+      "ds_idx": 478,
+      "error_class": "same_construct",
+      "gold": "print(int(right))",
+      "pred": "print(left)"
+    },
+    {
+      "ds_idx": 479,
+      "error_class": "same_construct",
+      "gold": "print(end)",
+      "pred": "print(start) if check(t, n, k, start) == n else print(start - 1)  # print(start -1) if not"
+    },
+    {
+      "ds_idx": 480,
+      "error_class": "same_construct",
+      "gold": "print(right)",
+      "pred": "print(left"
+    },
+    {
+      "ds_idx": 481,
+      "error_class": "identifier_swap",
+      "gold": "print(p)",
+      "pred": "print(l)"
+    },
+    {
+      "ds_idx": 483,
+      "error_class": "identifier_swap",
+      "gold": "print(r)",
+      "pred": "print(l)"
+    },
+    {
+      "ds_idx": 484,
+      "error_class": "different_construct",
+      "gold": "print(right)",
+      "pred": "# \u3053\u308c\u3067\u3001O(nk)\u306e\u6642\u9593\u3067\u89e3\u3051\u308b\u304b\uff1f \u306f\u3044\u3001n\u306f1000\u3001"
+    },
+    {
+      "ds_idx": 485,
+      "error_class": "same_construct",
+      "gold": "print(\"%d\" % ok)",
+      "pred": "print(ok) if is_ok(ok) else print(ok - 1)  # 10000000000000"
+    },
+    {
+      "ds_idx": 486,
+      "error_class": "same_construct",
+      "gold": "print(right)",
+      "pred": "print(left"
+    },
+    {
+      "ds_idx": 487,
+      "error_class": "different_construct",
+      "gold": "print(r)",
+      "pred": "# print(l"
+    },
+    {
+      "ds_idx": 488,
+      "error_class": "identifier_swap",
+      "gold": "print(hi)",
+      "pred": "print(lo)"
+    },
+    {
+      "ds_idx": 489,
+      "error_class": "identifier_swap",
+      "gold": "print(right)",
+      "pred": "print(left)"
+    },
+    {
+      "ds_idx": 490,
+      "error_class": "different_construct",
+      "gold": "print(binarySearch(track,weight))",
+      "pred": "#print"
+    },
+    {
+      "ds_idx": 491,
+      "error_class": "different_construct",
+      "gold": "main()",
+      "pred": "print(min_item_num(weights, num_item, num_vehicle, capacity))  # this is called in main"
+    },
+    {
+      "ds_idx": 492,
+      "error_class": "different_construct",
+      "gold": "print(ans)",
+      "pred": "# wait, but the code is not correct. Because the function is_ok is called with truck,"
+    },
+    {
+      "ds_idx": 494,
+      "error_class": "different_construct",
+      "gold": "print(ALDS1_4D())",
+      "pred": "```"
+    },
+    {
+      "ds_idx": 495,
+      "error_class": "same_construct",
+      "gold": "print(right)",
+      "pred": "print(left) if check_p(packages, n, k, left) == n else print(left + 1) if check_p(packages, n,"
+    },
+    {
+      "ds_idx": 496,
+      "error_class": "different_construct",
+      "gold": "print(r)",
+      "pred": "f"
+    },
+    {
+      "ds_idx": 497,
+      "error_class": "same_construct",
+      "gold": "print(PSearch(W,0,1000000000,k))",
+      "pred": "print(PSearch(W,0,n-1,k))"
+    },
+    {
+      "ds_idx": 498,
+      "error_class": "different_construct",
+      "gold": "print(right)",
+      "pred": "# the code is correct?"
+    },
+    {
+      "ds_idx": 499,
+      "error_class": "same_construct",
+      "gold": "print(right)",
+      "pred": "print(left) if f(left) == n else print(left + 1)  # 1000000000000"
+    },
+    {
+      "ds_idx": 500,
+      "error_class": "same_construct",
+      "gold": "print(bin_search(0,10**9))",
+      "pred": "print(bin_search(1,n))"
+    },
+    {
+      "ds_idx": 501,
+      "error_class": "different_construct",
+      "gold": "print(r)",
+      "pred": "# 10^10 is too big, but the code is correct."
+    },
+    {
+      "ds_idx": 503,
+      "error_class": "identifier_swap",
+      "gold": "print(w_max)",
+      "pred": "print(w_min)"
+    },
+    {
+      "ds_idx": 504,
+      "error_class": "different_construct",
+      "gold": "p += 1",
+      "pred": "print(cnt_car(w, p)) if cnt_car(w, p) <= k else print(\"failed"
+    },
+    {
+      "ds_idx": 505,
+      "error_class": "different_construct",
+      "gold": "print(solver())",
+      "pred": "# this is the code that passes all test cases."
+    },
+    {
+      "ds_idx": 506,
+      "error_class": "different_construct",
+      "gold": "print(right)",
+      "pred": "0"
+    },
+    {
+      "ds_idx": 507,
+      "error_class": "same_construct",
+      "gold": "print(right)",
+      "pred": "print(update(n)) if update(n"
+    },
+    {
+      "ds_idx": 508,
+      "error_class": "same_construct",
+      "gold": "print (right)",
+      "pred": "print(f(left))"
+    },
+    {
+      "ds_idx": 509,
+      "error_class": "same_construct",
+      "gold": "print(right)",
+      "pred": "print(left) if check(T, left, n, k) == n else print(left + 1) if check(T, left + 1, n"
+    },
+    {
+      "ds_idx": 510,
+      "error_class": "truncation",
+      "gold": "print(left)",
+      "pred": "print(left) if calc_k_constP(left) == k else print(left - 1)  # 10000 * n is the max"
+    },
+    {
+      "ds_idx": 512,
+      "error_class": "same_construct",
+      "gold": "print(t)",
+      "pred": "print(w[s"
+    },
+    {
+      "ds_idx": 513,
+      "error_class": "different_construct",
+      "gold": "print(Pmax)",
+      "pred": "#print(Pmax) if checkCapacity(W,k,Pmax"
+    },
+    {
+      "ds_idx": 514,
+      "error_class": "different_construct",
+      "gold": "if'__main__'==__name__:s()",
+      "pred": "s()"
+    },
+    {
+      "ds_idx": 516,
+      "error_class": "same_construct",
+      "gold": "print(hi)",
+      "pred": "print(lo + 1)"
+    },
+    {
+      "ds_idx": 517,
+      "error_class": "identifier_swap",
+      "gold": "print(p_min)",
+      "pred": "print(left)"
+    },
+    {
+      "ds_idx": 518,
+      "error_class": "identifier_swap",
+      "gold": "print(right)",
+      "pred": "print(left)"
+    },
+    {
+      "ds_idx": 519,
+      "error_class": "different_construct",
+      "gold": "print(ans)",
+      "pred": "# 0 is not possible,"
+    },
+    {
+      "ds_idx": 521,
+      "error_class": "same_construct",
+      "gold": "print(P_min)",
+      "pred": "print(n_loads(P_min) - n + 1, P_min - n +"
+    },
+    {
+      "ds_idx": 522,
+      "error_class": "same_construct",
+      "gold": "print(right)",
+      "pred": "print(mid) if check(mid, k, n, w) == n else print(mid - 1)  # print mid or mid-1"
+    },
+    {
+      "ds_idx": 523,
+      "error_class": "different_construct",
+      "gold": "print(Solve().solve())",
+      "pred": "# Output: 100000000"
+    },
+    {
+      "ds_idx": 524,
+      "error_class": "same_construct",
+      "gold": "print(right)",
+      "pred": "print(check(left)) if left != 0 else print(0)  # print(0) if n=0 else print(n"
+    },
+    {
+      "ds_idx": 526,
+      "error_class": "different_construct",
+      "gold": "print(right)",
+      "pred": "# print(track(w,"
+    },
+    {
+      "ds_idx": 527,
+      "error_class": "different_construct",
+      "gold": "print(ans)",
+      "pred": "binary_search() if ans == n else print(ans -"
+    },
+    {
+      "ds_idx": 528,
+      "error_class": "identifier_swap",
+      "gold": "print(r)",
+      "pred": "print(l)"
+    },
+    {
+      "ds_idx": 529,
+      "error_class": "truncation",
+      "gold": "main()",
+      "pred": "main"
+    },
+    {
+      "ds_idx": 530,
+      "error_class": "identifier_swap",
+      "gold": "print(s)",
+      "pred": "print(l)"
+    },
+    {
+      "ds_idx": 531,
+      "error_class": "different_construct",
+      "gold": "print(solve())",
+      "pred": "# this is the code that solves the problem. It uses binary search to find the"
+    },
+    {
+      "ds_idx": 532,
+      "error_class": "different_construct",
+      "gold": "print(binary_search())",
+      "pred": "binary_search() # 1000000000000000000000"
+    },
+    {
+      "ds_idx": 533,
+      "error_class": "truncation",
+      "gold": "main()",
+      "pred": "main"
+    },
+    {
+      "ds_idx": 534,
+      "error_class": "different_construct",
+      "gold": "print(ma)",
+      "pred": "# 100000000000000000"
+    },
+    {
+      "ds_idx": 535,
+      "error_class": "same_construct",
+      "gold": "print(r)",
+      "pred": "print(f"
+    },
+    {
+      "ds_idx": 536,
+      "error_class": "same_construct",
+      "gold": "print(right)",
+      "pred": "print(left+1) if left+1<=k else print(left+1) if left+1<=k else print(left+1) if left+"
+    },
+    {
+      "ds_idx": 537,
+      "error_class": "identifier_swap",
+      "gold": "print(imax)",
+      "pred": "print(imin)"
+    },
+    {
+      "ds_idx": 538,
+      "error_class": "different_construct",
+      "gold": "print(ans)",
+      "pred": "# 0 is not possible,"
+    },
+    {
+      "ds_idx": 540,
+      "error_class": "same_construct",
+      "gold": "print(binarySearch(max(w),sum(w)))",
+      "pred": "print(binarySearch(0,n-1))"
+    },
+    {
+      "ds_idx": 541,
+      "error_class": "different_construct",
+      "gold": "print(h)",
+      "pred": "# this is the code for the problem"
+    },
+    {
+      "ds_idx": 542,
+      "error_class": "same_construct",
+      "gold": "print(bs(max(w), sum(w)))",
+      "pred": "print(bs(0, k)) if check(k, w, k) else print(bs(0, k-1))"
+    },
+    {
+      "ds_idx": 543,
+      "error_class": "different_construct",
+      "gold": "print(left)",
+      "pred": "This code is not correct. Let me think about it. The problem is that the code is"
+    },
+    {
+      "ds_idx": 544,
+      "error_class": "same_construct",
+      "gold": "print(tail)",
+      "pred": "print(limit_num) if is_ok(W, limit_num, k) else print(limit_num + 1)  # print limit_num or limit_num +1"
+    },
+    {
+      "ds_idx": 545,
+      "error_class": "different_construct",
+      "gold": "print(right)",
+      "pred": "# \u3053\u308c\u3067\u3001"
+    },
+    {
+      "ds_idx": 546,
+      "error_class": "different_construct",
+      "gold": "print(Solve())",
+      "pred": "Solve()"
+    },
+    {
+      "ds_idx": 547,
+      "error_class": "truncation",
+      "gold": "print(m)",
+      "pred": "print(m) if m<="
+    },
+    {
+      "ds_idx": 548,
+      "error_class": "same_construct",
+      "gold": "print(bi(l, k, 0, p))",
+      "pred": "print(bi(l, k, 0, n-1)) if can(l, k, p) else print(0)"
+    },
+    {
+      "ds_idx": 549,
+      "error_class": "same_construct",
+      "gold": "print(R)",
+      "pred": "print(check(L + R))"
+    },
+    {
+      "ds_idx": 550,
+      "error_class": "different_construct",
+      "gold": "print(int(solve()))",
+      "pred": "The problem is that the code is not correct. The function"
+    },
+    {
+      "ds_idx": 551,
+      "error_class": "different_construct",
+      "gold": "print(s)",
+      "pred": "# the code"
+    },
+    {
+      "ds_idx": 552,
+      "error_class": "different_construct",
+      "gold": "print(right)",
+      "pred": "w"
+    },
+    {
+      "ds_idx": 553,
+      "error_class": "different_construct",
+      "gold": "print(*p2)",
+      "pred": "kock(n,p2,p1) #reverse"
+    },
+    {
+      "ds_idx": 554,
+      "error_class": "different_construct",
+      "gold": "print(f\"{u[0",
+      "pred": "koch(5, (0, 0), (0, 0))"
+    },
+    {
+      "ds_idx": 555,
+      "error_class": "different_construct",
+      "gold": "print(f\"{'{:.9f}'.format(t[0])} {'{:.9f}'.format(t[1",
+      "pred": "KochCurve(p1,p2,"
+    },
+    {
+      "ds_idx": 556,
+      "error_class": "same_construct",
+      "gold": "print(x[0], x[1])",
+      "pred": "print(' '.join([str"
+    },
+    {
+      "ds_idx": 557,
+      "error_class": "different_construct",
+      "gold": "koch(s, u,",
+      "pred": "print_tuple(edge_e)"
+    },
+    {
+      "ds_idx": 558,
+      "error_class": "different_construct",
+      "gold": "koch([",
+      "pred": "# print the coordinates of the"
+    },
+    {
+      "ds_idx": 559,
+      "error_class": "different_construct",
+      "gold": "print(' '.join(str(i) for i in s))",
+      "pred": "koch(int(input()), [0, 0], [0"
+    },
+    {
+      "ds_idx": 560,
+      "error_class": "truncation",
+      "gold": "inp = [(0.0, 0.0), (100.",
+      "pred": "inp = [(0.0, 0.0), (100.0, 0.0), (100.0, 100.0), (0.0, 100.0"
+    },
+    {
+      "ds_idx": 561,
+      "error_class": "different_construct",
+      "gold": "+ koch(c2[",
+      "pred": "print(koch(0,0,100"
+    },
+    {
+      "ds_idx": 562,
+      "error_class": "different_construct",
+      "gold": "print(0",
+      "pred": "koch(n, 0, 0"
+    },
+    {
+      "ds_idx": 563,
+      "error_class": "different_construct",
+      "gold": "Koch(n-",
+      "pred": "print(str(t.x)"
+    },
+    {
+      "ds_idx": 564,
+      "error_class": "truncation",
+      "gold": "make_koch_curve(N-1, t, n2",
+      "pred": "make_koch"
+    },
+    {
+      "ds_idx": 565,
+      "error_class": "different_construct",
+      "gold": "for e in d:print(e.real,e.imag)",
+      "pred": "print(*"
+    },
+    {
+      "ds_idx": 566,
+      "error_class": "different_construct",
+      "gold": "p1y=",
+      "pred": "print(\"%5f %5f\"%(p"
+    },
+    {
+      "ds_idx": 567,
+      "error_class": "different_construct",
+      "gold": "k",
+      "pred": "print(\"{:.8f} {:.8f}\".format(qx, qy"
+    },
+    {
+      "ds_idx": 568,
+      "error_class": "different_construct",
+      "gold": "unit_koch([0,0],[100",
+      "pred": "print(\" \".join(map(str,p"
+    },
+    {
+      "ds_idx": 569,
+      "error_class": "different_construct",
+      "gold": "return l",
+      "pred": "print(rec([1,0,0,0],1000))"
+    },
+    {
+      "ds_idx": 570,
+      "error_class": "same_construct",
+      "gold": "kochfunc(n1+1, ux, uy,",
+      "pred": "kochfunc(3,"
+    },
+    {
+      "ds_idx": 571,
+      "error_class": "different_construct",
+      "gold": "print(str(format(t[0],'.8f'))+\" \"+str(format(t[1],'.8f",
+      "pred": "main"
+    },
+    {
+      "ds_idx": 572,
+      "error_class": "different_construct",
+      "gold": "p2 = Point(100,",
+      "pred": "I think the problem"
+    },
+    {
+      "ds_idx": 573,
+      "error_class": "different_construct",
+      "gold": "koch(n,[",
+      "pred": "print(*koch(n,[0,0],["
+    },
+    {
+      "ds_idx": 574,
+      "error_class": "truncation",
+      "gold": "print (",
+      "pred": "print (s_x, s_y)"
+    },
+    {
+      "ds_idx": 575,
+      "error_class": "different_construct",
+      "gold": "koch(u, t",
+      "pred": "if __name__ =="
+    },
+    {
+      "ds_idx": 576,
+      "error_class": "different_construct",
+      "gold": "kock(n,start",
+      "pred": "print(\" \".join(map(str"
+    },
+    {
+      "ds_idx": 577,
+      "error_class": "different_construct",
+      "gold": "print(",
+      "pred": "pass"
+    },
+    {
+      "ds_idx": 578,
+      "error_class": "different_construct",
+      "gold": "next_p.append",
+      "pred": "#"
+    },
+    {
+      "ds_idx": 579,
+      "error_class": "different_construct",
+      "gold": "plot(100,0)",
+      "pred": "koch"
+    },
+    {
+      "ds_idx": 580,
+      "error_class": "truncation",
+      "gold": "koch(n,0.0,0",
+      "pred": "koch(n,0.0,0.0,0.0,0.0,0.0,0.0,0.0)  # 0.0000"
+    },
+    {
+      "ds_idx": 581,
+      "error_class": "different_construct",
+      "gold": "print(t[0",
+      "pred": "kochCurve(3, (0,0"
+    },
+    {
+      "ds_idx": 582,
+      "error_class": "different_construct",
+      "gold": "print(t[0],",
+      "pred": "koch(3,"
+    },
+    {
+      "ds_idx": 583,
+      "error_class": "different_construct",
+      "gold": "for origin, dest in zip(points, points[",
+      "pred": "print(len(points), *points)  # print"
+    },
+    {
+      "ds_idx": 584,
+      "error_class": "different_construct",
+      "gold": "print(t.real, t.imag)",
+      "pred": "koch(5, 0, 2"
+    },
+    {
+      "ds_idx": 585,
+      "error_class": "different_construct",
+      "gold": "hundred=100",
+      "pred": "print(hundred,hundred)"
+    },
+    {
+      "ds_idx": 586,
+      "error_class": "different_construct",
+      "gold": "return make_koch(d-1, p1, s) + make_koch(d-1, s, u) + make_k",
+      "pred": "print(len(make_koch(d, (0,0), (0,0))))"
+    },
+    {
+      "ds_idx": 587,
+      "error_class": "different_construct",
+      "gold": "p1=[10",
+      "pred": "koch"
+    },
+    {
+      "ds_idx": 588,
+      "error_class": "identifier_swap",
+      "gold": "print('{:.8f} {:.8f}'.format(u",
+      "pred": "print('{:.8f} {:.8f}'.format(p2"
+    },
+    {
+      "ds_idx": 589,
+      "error_class": "truncation",
+      "gold": "print(\"%.8f %.8f",
+      "pred": "print(\"%.8f %.8f\"%(end[0"
+    },
+    {
+      "ds_idx": 590,
+      "error_class": "same_construct",
+      "gold": "solve(0,0,100,0,0)",
+      "pred": "solve(0,0,0,0,0,0,"
+    },
+    {
+      "ds_idx": 591,
+      "error_class": "different_construct",
+      "gold": "for i",
+      "pred": "print(rec([], 10"
+    },
+    {
+      "ds_idx": 592,
+      "error_class": "different_construct",
+      "gold": "y2 = newdot[",
+      "pred": "print(len"
+    },
+    {
+      "ds_idx": 593,
+      "error_class": "different_construct",
+      "gold": "d = int(input",
+      "pred": "print"
+    },
+    {
+      "ds_idx": 594,
+      "error_class": "same_construct",
+      "gold": "koch(d - 1, t",
+      "pred": "koch(3, (0, 0), (1, 1))"
+    },
+    {
+      "ds_idx": 595,
+      "error_class": "different_construct",
+      "gold": "for point in koch_curve([[0.0, 0.0],",
+      "pred": "# this"
+    },
+    {
+      "ds_idx": 596,
+      "error_class": "different_construct",
+      "gold": "point",
+      "pred": "# print(*point, sep='\\n')"
+    },
+    {
+      "ds_idx": 597,
+      "error_class": "different_construct",
+      "gold": "print(*",
+      "pred": "koch(1, (0, 0), ("
+    },
+    {
+      "ds_idx": 598,
+      "error_class": "same_construct",
+      "gold": "print(s[0], s[1",
+      "pred": "print(u[0"
+    },
+    {
+      "ds_idx": 599,
+      "error_class": "different_construct",
+      "gold": "print(\"{0:.8f} {1:.8f}\".format(u[0],u",
+      "pred": "kock(3, [0,0], [0,0"
+    },
+    {
+      "ds_idx": 600,
+      "error_class": "different_construct",
+      "gold": "koch(d-1,",
+      "pred": "return u"
+    },
+    {
+      "ds_idx": 601,
+      "error_class": "different_construct",
+      "gold": "print(\"{",
+      "pred": "k"
+    },
+    {
+      "ds_idx": 602,
+      "error_class": "different_construct",
+      "gold": "plot(100,0)",
+      "pred": "koch(n,0,0,100,"
+    },
+    {
+      "ds_idx": 603,
+      "error_class": "same_construct",
+      "gold": "solve((x1 + x2) / 2 + (y1 - y2) * (3 ** (1 / 2)) / 6, (y1 + y2) / 2 + (x2 - x1) * (3 ** (1 / 2)) / 6, (x1 + 2 * x2) / 3,",
+      "pred": "solve(1, 0, 1, 0,"
+    },
+    {
+      "ds_idx": 604,
+      "error_class": "same_construct",
+      "gold": "koch(d + 1",
+      "pred": "koch(0, p"
+    },
+    {
+      "ds_idx": 606,
+      "error_class": "truncation",
+      "gold": "koch",
+      "pred": "koch("
+    },
+    {
+      "ds_idx": 607,
+      "error_class": "different_construct",
+      "gold": "q2 = coordinate(1",
+      "pred": "print(koch(3, q1, q"
+    },
+    {
+      "ds_idx": 608,
+      "error_class": "different_construct",
+      "gold": "print(0,0)",
+      "pred": "kock(n,0,0,"
+    },
+    {
+      "ds_idx": 609,
+      "error_class": "same_construct",
+      "gold": "Koch(p1, s, n - 1)",
+      "pred": "Koch(Point(0,"
+    },
+    {
+      "ds_idx": 610,
+      "error_class": "different_construct",
+      "gold": "plot",
+      "pred": "# this is the code for the plot, but the code is not correct"
+    },
+    {
+      "ds_idx": 611,
+      "error_class": "same_construct",
+      "gold": "koch(n - 1, u, t)",
+      "pred": "koch(3, (0, 0), (0, 0))  #"
+    },
+    {
+      "ds_idx": 612,
+      "error_class": "same_construct",
+      "gold": "print(L[i][0],L[i][1])",
+      "pred": "print(i+1, *L[i])"
+    },
+    {
+      "ds_idx": 613,
+      "error_class": "same_construct",
+      "gold": "f(i+1",
+      "pred": "f(1, 3, 0, 0)  #"
+    },
+    {
+      "ds_idx": 614,
+      "error_class": "different_construct",
+      "gold": "for",
+      "pred": "print(' '.join(map(str, koch((1,0), (0,0), 1000000"
+    },
+    {
+      "ds_idx": 615,
+      "error_class": "same_construct",
+      "gold": "korch_curve(third",
+      "pred": "korch_curve(0,0,"
+    },
+    {
+      "ds_idx": 616,
+      "error_class": "same_construct",
+      "gold": "koch(d-1,t",
+      "pred": "koch(d-1,u,t)"
+    },
+    {
+      "ds_idx": 617,
+      "error_class": "same_construct",
+      "gold": "koch(n - 1, t",
+      "pred": "koch(3, Point(0, 0), Point(1,"
+    },
+    {
+      "ds_idx": 618,
+      "error_class": "different_construct",
+      "gold": "print(\" \".",
+      "pred": "kock"
+    },
+    {
+      "ds_idx": 619,
+      "error_class": "different_construct",
+      "gold": "print(\"{0:.5f} {1:.5f}\".format(ux",
+      "pred": "koch(1, (0,0), (1,"
+    },
+    {
+      "ds_idx": 620,
+      "error_class": "different_construct",
+      "gold": "print(\"{:.",
+      "pred": "# print the results"
+    },
+    {
+      "ds_idx": 621,
+      "error_class": "different_construct",
+      "gold": "Koch(n-1,s,u)",
+      "pred": "# this code is for the Koch"
+    },
+    {
+      "ds_idx": 622,
+      "error_class": "different_construct",
+      "gold": "n2 = [n1[",
+      "pred": "new_lines.append([n3[0],"
+    },
+    {
+      "ds_idx": 624,
+      "error_class": "different_construct",
+      "gold": "print(b[",
+      "pred": "koch(n,b,a"
+    },
+    {
+      "ds_idx": 625,
+      "error_class": "different_construct",
+      "gold": "def p",
+      "pred": "koch(n, start,"
+    },
+    {
+      "ds_idx": 626,
+      "error_class": "different_construct",
+      "gold": "koch(n",
+      "pred": "print(0, 0)"
+    },
+    {
+      "ds_idx": 627,
+      "error_class": "different_construct",
+      "gold": "print(u.x",
+      "pred": "koch(2, Point(0,"
+    },
+    {
+      "ds_idx": 628,
+      "error_class": "different_construct",
+      "gold": "print(*b)",
+      "pred": "koch(n,*"
+    },
+    {
+      "ds_idx": 629,
+      "error_class": "different_construct",
+      "gold": "koch",
+      "pred": "print(u[0],u"
+    },
+    {
+      "ds_idx": 630,
+      "error_class": "different_construct",
+      "gold": "print(*k",
+      "pred": "koch(0, 0, 1, 1,"
+    },
+    {
+      "ds_idx": 631,
+      "error_class": "different_construct",
+      "gold": "new_tops.append(tops[i+1])",
+      "pred": "print(Koch([1,0,0,0,0,0,0,0,0,0,0,0"
+    },
+    {
+      "ds_idx": 632,
+      "error_class": "different_construct",
+      "gold": "if",
+      "pred": "koch(3, (0,"
+    },
+    {
+      "ds_idx": 633,
+      "error_class": "different_construct",
+      "gold": "for e in d:print(e.real,e.imag)",
+      "pred": "print(p[0]+p[1]*0j)"
+    },
+    {
+      "ds_idx": 634,
+      "error_class": "same_construct",
+      "gold": "koch(d-1, (ux,",
+      "pred": "koch(d-1, (tx, ty), (sx, sy"
+    },
+    {
+      "ds_idx": 635,
+      "error_class": "same_construct",
+      "gold": "koch(n",
+      "pred": "koch(N, p2, p1)  # for"
+    },
+    {
+      "ds_idx": 636,
+      "error_class": "truncation",
+      "gold": "k",
+      "pred": "koch(n"
+    },
+    {
+      "ds_idx": 637,
+      "error_class": "different_construct",
+      "gold": "print(ss[0],ss[",
+      "pred": "s,t,n= input().split(),input"
+    },
+    {
+      "ds_idx": 638,
+      "error_class": "same_construct",
+      "gold": "koch(i + 1, [x1,",
+      "pred": "koch(i + 1, [x2, y2], [x3, y3])"
+    },
+    {
+      "ds_idx": 639,
+      "error_class": "different_construct",
+      "gold": "print(\" \".join(['{:.8f}'.format(x",
+      "pred": "# this is the code that will generate the Koch curve for a given input. The input is a list"
+    },
+    {
+      "ds_idx": 640,
+      "error_class": "different_construct",
+      "gold": "uy = (t",
+      "pred": "nextKoch.append( (ux,"
+    },
+    {
+      "ds_idx": 641,
+      "error_class": "different_construct",
+      "gold": "koch_curve(n - 1, u_x, u_y, t_x, t_y",
+      "pred": "print(koch_curve(3,"
+    },
+    {
+      "ds_idx": 642,
+      "error_class": "different_construct",
+      "gold": "print(u[",
+      "pred": "koch(3, (0,"
+    },
+    {
+      "ds_idx": 643,
+      "error_class": "different_construct",
+      "gold": "print(p2.real, p2.imag)",
+      "pred": "k"
+    },
+    {
+      "ds_idx": 644,
+      "error_class": "different_construct",
+      "gold": "coh(s, u, cnt-",
+      "pred": "print(*s)"
+    },
+    {
+      "ds_idx": 645,
+      "error_class": "truncation",
+      "gold": "kock",
+      "pred": "kock(3, (0, 0), (0, 0))"
+    },
+    {
+      "ds_idx": 646,
+      "error_class": "truncation",
+      "gold": "func(N, (0.0, 0.0), (100.0, 0.0))",
+      "pred": "func(N, (0.0"
+    },
+    {
+      "ds_idx": 647,
+      "error_class": "different_construct",
+      "gold": "for i in range(len(arr)",
+      "pred": "result.append([arr[i][0] + arr[i+1][0], arr[i][1] + arr[i+1]["
+    },
+    {
+      "ds_idx": 648,
+      "error_class": "different_construct",
+      "gold": "for point in [[0,0]] + koch(int(input()),",
+      "pred": "# print(\" \".join(map(str, point)))"
+    },
+    {
+      "ds_idx": 649,
+      "error_class": "different_construct",
+      "gold": "start = (0,",
+      "pred": "knoc(n, start, start)"
+    },
+    {
+      "ds_idx": 650,
+      "error_class": "different_construct",
+      "gold": "print(p2.real, p2.imag)",
+      "pred": "makeCurve(p1, p2, 0)"
+    },
+    {
+      "ds_idx": 651,
+      "error_class": "different_construct",
+      "gold": "print(\"{0:.8f} {1:.8",
+      "pred": "koch((0,0), (1"
+    },
+    {
+      "ds_idx": 652,
+      "error_class": "different_construct",
+      "gold": "ux = (tx-sx)*cos60 - (ty-sy)*sin",
+      "pred": "li.append([ux, uy])"
+    },
+    {
+      "ds_idx": 653,
+      "error_class": "different_construct",
+      "gold": "pointC = [pointA[0]",
+      "pred": "dots.extend(producedD"
+    },
+    {
+      "ds_idx": 654,
+      "error_class": "different_construct",
+      "gold": "plot(100,0)",
+      "pred": "koch(n, 0,0, 100,0"
+    },
+    {
+      "ds_idx": 655,
+      "error_class": "different_construct",
+      "gold": "print(\"{0:.8f} {1:.8f}\".",
+      "pred": "koch(5, (0,0), ("
+    },
+    {
+      "ds_idx": 656,
+      "error_class": "same_construct",
+      "gold": "c2=[q[0",
+      "pred": "c2=[p[0],(p[1]*2+"
+    },
+    {
+      "ds_idx": 657,
+      "error_class": "same_construct",
+      "gold": "kochCurve(t, p2,",
+      "pred": "kochCurve((0,0), (1,1), 1000000000000000"
+    },
+    {
+      "ds_idx": 658,
+      "error_class": "different_construct",
+      "gold": "koch(n - 1,",
+      "pred": "print(int(u"
+    },
+    {
+      "ds_idx": 659,
+      "error_class": "different_construct",
+      "gold": "print('{:8f}",
+      "pred": "p2 = list(map(float, input"
+    },
+    {
+      "ds_idx": 660,
+      "error_class": "different_construct",
+      "gold": "plot(100,0)",
+      "pred": "koch(n,0,0"
+    },
+    {
+      "ds_idx": 661,
+      "error_class": "same_construct",
+      "gold": "koch(n-1,x_m1,y_m1,x_m,y_m",
+      "pred": "koch(n,0,0,1,"
+    },
+    {
+      "ds_idx": 662,
+      "error_class": "same_construct",
+      "gold": "koch(c-1, tx, ty, qx, qy)",
+      "pred": "koch(n, 0, 0, 0, 0)"
+    },
+    {
+      "ds_idx": 663,
+      "error_class": "different_construct",
+      "gold": "show(p2)",
+      "pred": "go(int(input()), p1, p2)  #"
+    },
+    {
+      "ds_idx": 664,
+      "error_class": "different_construct",
+      "gold": "n = int",
+      "pred": "koch(n, p1, p"
+    },
+    {
+      "ds_idx": 665,
+      "error_class": "different_construct",
+      "gold": "for l in [[p1,s],[s,u],[",
+      "pred": "print(len(koch([0"
+    },
+    {
+      "ds_idx": 666,
+      "error_class": "different_construct",
+      "gold": "f(n,0",
+      "pred": "print(0.00000000, 0.00000000"
+    },
+    {
+      "ds_idx": 667,
+      "error_class": "different_construct",
+      "gold": "print(*",
+      "pred": "# print(*ans_ls, sep"
+    },
+    {
+      "ds_idx": 668,
+      "error_class": "different_construct",
+      "gold": "da=gohho(da",
+      "pred": "# this is the code, but it's not correct. the code is not correct. the code is not"
+    },
+    {
+      "ds_idx": 669,
+      "error_class": "different_construct",
+      "gold": "print(u[0], u[",
+      "pred": "koch(n, (0,0), (n,0))"
+    },
+    {
+      "ds_idx": 670,
+      "error_class": "different_construct",
+      "gold": "for e in d:print(e.real,e.imag)",
+      "pred": "print(*d[:10"
+    },
+    {
+      "ds_idx": 671,
+      "error_class": "truncation",
+      "gold": "koch(n",
+      "pred": "koch(n, p2,"
+    },
+    {
+      "ds_idx": 672,
+      "error_class": "same_construct",
+      "gold": "print(\"{:.8f} {:.8f}\".format(z.real, z.imag))",
+      "pred": "print(z.real, z.imag) if z.imag == 0 else print(z.real, z.imag)  # print with 0.000"
+    },
+    {
+      "ds_idx": 673,
+      "error_class": "different_construct",
+      "gold": "p2_start = [100.0, 0.",
+      "pred": "print"
+    },
+    {
+      "ds_idx": 674,
+      "error_class": "identifier_swap",
+      "gold": "print(*t)",
+      "pred": "print(*u)"
+    },
+    {
+      "ds_idx": 675,
+      "error_class": "different_construct",
+      "gold": "for e in d:print(e.real,e.imag)",
+      "pred": "print(*d[:10"
+    },
+    {
+      "ds_idx": 676,
+      "error_class": "same_construct",
+      "gold": "a.insert(ind+2,d)",
+      "pred": "a = [int(input()) for _ in range(1000000)]"
+    },
+    {
+      "ds_idx": 677,
+      "error_class": "different_construct",
+      "gold": "koch_curve(p2, p3, n-1)[1:] + koch_curve(p3, e, n-",
+      "pred": "if"
+    },
+    {
+      "ds_idx": 678,
+      "error_class": "same_construct",
+      "gold": "print(i[0],i[1])",
+      "pred": "print(\"{0:.0f},{1:.0f}\".format(i[0],i[1]))"
+    },
+    {
+      "ds_idx": 679,
+      "error_class": "truncation",
+      "gold": "#print(trico.x",
+      "pred": "#print(trico"
+    },
+    {
+      "ds_idx": 680,
+      "error_class": "different_construct",
+      "gold": "print(*p)",
+      "pred": "koch(p1,p2) returns a list of three points: the first is the midpoint, the"
+    },
+    {
+      "ds_idx": 681,
+      "error_class": "same_construct",
+      "gold": "koch(c3[0],c3",
+      "pred": "koch(0,"
+    },
+    {
+      "ds_idx": 682,
+      "error_class": "truncation",
+      "gold": "koch(p",
+      "pred": "koch(p5,"
+    },
+    {
+      "ds_idx": 683,
+      "error_class": "different_construct",
+      "gold": "koh(d-1,[tx",
+      "pred": "print("
+    },
+    {
+      "ds_idx": 684,
+      "error_class": "different_construct",
+      "gold": "if __name__ == '__main",
+      "pred": "print(' '.join(map(str, [p[0], p"
+    },
+    {
+      "ds_idx": 685,
+      "error_class": "different_construct",
+      "gold": "for j in range(len(arr)",
+      "pred": "print(arr[-1][0], arr[-1"
+    },
+    {
+      "ds_idx": 686,
+      "error_class": "same_construct",
+      "gold": "print('{0:.5f}'.format(r))",
+      "pred": "print(int(r**"
+    },
+    {
+      "ds_idx": 687,
+      "error_class": "same_construct",
+      "gold": "print(sqrt((x2-x1)**2 + (y2-y1)**2))",
+      "pred": "print(int((sqrt((x2 - x1)**2 + (y2 - y1)**2)) * 10000000"
+    },
+    {
+      "ds_idx": 688,
+      "error_class": "same_construct",
+      "gold": "print(\"{:.5f}\".format(dist))",
+      "pred": "print(\"{0:.0f}\".format(int(dist)))  # 0.0f is 0, 0.0f is 0,"
+    },
+    {
+      "ds_idx": 689,
+      "error_class": "same_construct",
+      "gold": "print(pow(z,0.5))",
+      "pred": "print(z**0.5) if z**0.5**2==int(z**0.5**2) else print(z**0.5"
+    },
+    {
+      "ds_idx": 690,
+      "error_class": "different_construct",
+      "gold": "print(format(distance,'.8f'))",
+      "pred": "#"
+    },
+    {
+      "ds_idx": 691,
+      "error_class": "different_construct",
+      "gold": "print('{:.8f}'.format(a))",
+      "pred": "# print(int(a"
+    },
+    {
+      "ds_idx": 692,
+      "error_class": "different_construct",
+      "gold": "print (x**2+y**2)**0.5",
+      "pred": "#print(x**"
+    },
+    {
+      "ds_idx": 693,
+      "error_class": "different_construct",
+      "gold": "print(math.sqrt(x**2 + y**2))",
+      "pred": "# print"
+    },
+    {
+      "ds_idx": 694,
+      "error_class": "different_construct",
+      "gold": "print(\"{0:.5f}\".format(d))",
+      "pred": "# 10"
+    },
+    {
+      "ds_idx": 695,
+      "error_class": "same_construct",
+      "gold": "print(A)",
+      "pred": "print(int(A**"
+    },
+    {
+      "ds_idx": 696,
+      "error_class": "same_construct",
+      "gold": "print(math.sqrt(x+y))",
+      "pred": "print(int(math.sqrt"
+    },
+    {
+      "ds_idx": 697,
+      "error_class": "different_construct",
+      "gold": "print('{:.5f}'.format(ans))",
+      "pred": "# 10"
+    },
+    {
+      "ds_idx": 699,
+      "error_class": "same_construct",
+      "gold": "print(r)",
+      "pred": "print(int(r))"
+    },
+    {
+      "ds_idx": 700,
+      "error_class": "same_construct",
+      "gold": "#round(f,6)\u3067f\u3092\u5c0f\u6570\u70b9\u4ee5\u4e0b6\u6841\u306b\u307e\u3068\u3081\u308b\u3002",
+      "pred": "# this is the correct code, but the print statement is not correct. So the"
+    },
+    {
+      "ds_idx": 701,
+      "error_class": "different_construct",
+      "gold": "print(l)",
+      "pred": "# this is the code for"
+    },
+    {
+      "ds_idx": 702,
+      "error_class": "different_construct",
+      "gold": "print(d)",
+      "pred": "# 0"
+    },
+    {
+      "ds_idx": 703,
+      "error_class": "same_construct",
+      "gold": "print(f'{t1:10.8f}')",
+      "pred": "print(int"
+    },
+    {
+      "ds_idx": 704,
+      "error_class": "same_construct",
+      "gold": "print('%0.5f'%dis)",
+      "pred": "print(int(dis))"
+    },
+    {
+      "ds_idx": 705,
+      "error_class": "different_construct",
+      "gold": "print('%.5f'%math.sqrt(pow(x2-x1, 2) + pow(y2-y1, 2)))",
+      "pred": "# print(int(math.h"
+    },
+    {
+      "ds_idx": 706,
+      "error_class": "same_construct",
+      "gold": "print(d)",
+      "pred": "print(int(d**"
+    },
+    {
+      "ds_idx": 708,
+      "error_class": "same_construct",
+      "gold": "print(sqrt(X**2 + Y**2))",
+      "pred": "print(int(sqrt(X*X + Y*Y))) if (X*X + Y*Y) == int(X*X + Y*Y) else print(int(X"
+    },
+    {
+      "ds_idx": 709,
+      "error_class": "different_construct",
+      "gold": "print(dis)",
+      "pred": "# the code is written in Python 3"
+    },
+    {
+      "ds_idx": 710,
+      "error_class": "different_construct",
+      "gold": "print(round(ans,8))",
+      "pred": "# but"
+    },
+    {
+      "ds_idx": 711,
+      "error_class": "same_construct",
+      "gold": "print(math.sqrt(bottom**2 + height**2))",
+      "pred": "print(int(math.floor(math.sqrt(bottom * bottom + height * height)))) if math.sqrt(bottom * bottom + height * height) ** 2 == (bottom *"
+    },
+    {
+      "ds_idx": 713,
+      "error_class": "different_construct",
+      "gold": "print(\"%.8f\" % (float(distance)))",
+      "pred": "#"
+    },
+    {
+      "ds_idx": 714,
+      "error_class": "different_construct",
+      "gold": "print(ans)",
+      "pred": "# 0.000000"
+    },
+    {
+      "ds_idx": 715,
+      "error_class": "different_construct",
+      "gold": "print(l)",
+      "pred": "# 1000 is the number of meters"
+    },
+    {
+      "ds_idx": 716,
+      "error_class": "different_construct",
+      "gold": "print(f'{C:.8f}')",
+      "pred": "#print(C"
+    },
+    {
+      "ds_idx": 717,
+      "error_class": "same_construct",
+      "gold": "print(f'{l:.8f}')",
+      "pred": "print(int(l**"
+    },
+    {
+      "ds_idx": 718,
+      "error_class": "same_construct",
+      "gold": "print(n)",
+      "pred": "print(int(n))"
+    },
+    {
+      "ds_idx": 719,
+      "error_class": "different_construct",
+      "gold": "print(\"{:.5f}\".format(d))",
+      "pred": "#"
+    },
+    {
+      "ds_idx": 720,
+      "error_class": "same_construct",
+      "gold": "print (math.sqrt(hoge(math.fabs(x1-x2)) + hoge(math.fabs(y1-y2))))",
+      "pred": "print(int(hoge"
+    },
+    {
+      "ds_idx": 721,
+      "error_class": "different_construct",
+      "gold": "print('{:.8f}'.format(math.sqrt(x+y)))",
+      "pred": "#"
+    },
+    {
+      "ds_idx": 722,
+      "error_class": "same_construct",
+      "gold": "print(distance)",
+      "pred": "print(\"{:."
+    },
+    {
+      "ds_idx": 724,
+      "error_class": "same_construct",
+      "gold": "print(math.sqrt(dis))",
+      "pred": "print(int"
+    },
+    {
+      "ds_idx": 725,
+      "error_class": "same_construct",
+      "gold": "print ((x1-x2)**2+(y1-y2)**2)**0.5",
+      "pred": "print('YES' if (abs(x1 - x2) + abs(y1 - y2)) == 0 else 'NO')"
+    },
+    {
+      "ds_idx": 726,
+      "error_class": "different_construct",
+      "gold": "print(d)",
+      "pred": "# 100"
+    },
+    {
+      "ds_idx": 728,
+      "error_class": "different_construct",
+      "gold": "print(str(dist))",
+      "pred": "pos_x2, pos_y2, pos_x3, pos_y3 = map(float, input().split(\""
+    },
+    {
+      "ds_idx": 729,
+      "error_class": "same_construct",
+      "gold": "print(round(((x2-x1)**2 + (y2-y1)**2) ** 0.5, 6))",
+      "pred": "print(int((x1 + x2) * 100000000000000000000"
+    },
+    {
+      "ds_idx": 730,
+      "error_class": "same_construct",
+      "gold": "print('{:.8f}'.format(c));",
+      "pred": "print(c);"
+    },
+    {
+      "ds_idx": 731,
+      "error_class": "same_construct",
+      "gold": "print(\"{}\" .format(dis))",
+      "pred": "print(dis) if dis > 0 else print(0.00000000)  # 0.00000"
+    },
+    {
+      "ds_idx": 732,
+      "error_class": "same_construct",
+      "gold": "print(A)",
+      "pred": "print(int(A**"
+    },
+    {
+      "ds_idx": 733,
+      "error_class": "same_construct",
+      "gold": "print(round(V,8))",
+      "pred": "print(int(A)+int(B)+int"
+    },
+    {
+      "ds_idx": 735,
+      "error_class": "same_construct",
+      "gold": "print(math.sqrt(t))",
+      "pred": "print(int"
+    },
+    {
+      "ds_idx": 736,
+      "error_class": "same_construct",
+      "gold": "print(f'{s:.08f}')",
+      "pred": "print(int(s))"
+    },
+    {
+      "ds_idx": 737,
+      "error_class": "same_construct",
+      "gold": "print(n1)",
+      "pred": "print(int(n1**5"
+    },
+    {
+      "ds_idx": 738,
+      "error_class": "same_construct",
+      "gold": "print(\"%.6f\"%math.sqrt(s1+s2))",
+      "pred": "print(math.sqrt(s1 + s2)) if a == b == c == d else print(0.0) if a == b == c == d"
+    },
+    {
+      "ds_idx": 739,
+      "error_class": "same_construct",
+      "gold": "print(math.sqrt(pq))",
+      "pred": "print(int(math.sqrt(pq**2 + (2 * math.sqrt(pq**2 + (2 * math.sqrt(pq**2 + (2 *"
+    },
+    {
+      "ds_idx": 740,
+      "error_class": "same_construct",
+      "gold": "print(kyori)",
+      "pred": "print(kyori**2 - (x"
+    },
+    {
+      "ds_idx": 741,
+      "error_class": "different_construct",
+      "gold": "print('{:.4f}'.format(hypot(x1-x2, y1-y2)))",
+      "pred": "# or print(int(hypot(x1, y1"
+    },
+    {
+      "ds_idx": 742,
+      "error_class": "different_construct",
+      "gold": "print(\"{0:04f}\".format(length))",
+      "pred": "# the code is correct"
+    },
+    {
+      "ds_idx": 743,
+      "error_class": "different_construct",
+      "gold": "print(\"{:.4f}\".format(dis))",
+      "pred": "x1,y1,x2,y2=[float(x) for x in input().split('"
+    },
+    {
+      "ds_idx": 744,
+      "error_class": "same_construct",
+      "gold": "print(math.sqrt(math.pow(p1[0]-p2[0], 2)+math.pow(p1[1]-p2[1],2)))",
+      "pred": "print(\"{0} {1}\".format(p2[0], p"
+    },
+    {
+      "ds_idx": 745,
+      "error_class": "same_construct",
+      "gold": "print('{:.8f}'.format(d))",
+      "pred": "print(int(d *"
+    },
+    {
+      "ds_idx": 746,
+      "error_class": "same_construct",
+      "gold": "print('%.6f'%result)",
+      "pred": "print(result)"
+    },
+    {
+      "ds_idx": 747,
+      "error_class": "same_construct",
+      "gold": "print('{:.8f}'.format(c))",
+      "pred": "print(\"{0:.0f}\".format(math.sqrt((x2-x1)**2+(y2-y1"
+    },
+    {
+      "ds_idx": 748,
+      "error_class": "same_construct",
+      "gold": "print(res)",
+      "pred": "print(int(res)**4"
+    },
+    {
+      "ds_idx": 749,
+      "error_class": "truncation",
+      "gold": "resolve()",
+      "pred": "resolve()  #"
+    },
+    {
+      "ds_idx": 750,
+      "error_class": "same_construct",
+      "gold": "print(math.sqrt(a*a+b*b))",
+      "pred": "print(int(math.sqrt(a**2 +"
+    },
+    {
+      "ds_idx": 751,
+      "error_class": "same_construct",
+      "gold": "print(math.sqrt(((numList[2]-numList[0]) ** 2) + ((numList[3]-numList[1]) ** 2)))",
+      "pred": "print(int(math.floor(numList[0] * 100000000000000000000"
+    },
+    {
+      "ds_idx": 752,
+      "error_class": "same_construct",
+      "gold": "print(math.sqrt(A))",
+      "pred": "print(int(math.sqrt(A)))"
+    },
+    {
+      "ds_idx": 753,
+      "error_class": "different_construct",
+      "gold": "print(s)",
+      "pred": "# print(int"
+    },
+    {
+      "ds_idx": 754,
+      "error_class": "same_construct",
+      "gold": "print(line)",
+      "pred": "print(int(line *"
+    },
+    {
+      "ds_idx": 755,
+      "error_class": "different_construct",
+      "gold": "print('{:.5f}'.format(distance))",
+      "pred": "#\u6ce8\u610f\uff1a\u8fd9\u91cc\u8f93\u51fa\u7684\u6574\u6570\u662f\u8ddd\u79bb\u7684\u6574\u6570"
+    },
+    {
+      "ds_idx": 756,
+      "error_class": "same_construct",
+      "gold": "print(distance)",
+      "pred": "print(\"{0:.0f}\".format(int(distance)))  # round"
+    },
+    {
+      "ds_idx": 757,
+      "error_class": "different_construct",
+      "gold": "print(\"%.8f\" % math.sqrt((x1 - x2)**2 + (y1 - y2)**2))",
+      "pred": "# 0 0"
+    },
+    {
+      "ds_idx": 758,
+      "error_class": "same_construct",
+      "gold": "print('%.4f'% l)",
+      "pred": "print(int(l*1000))"
+    },
+    {
+      "ds_idx": 759,
+      "error_class": "same_construct",
+      "gold": "print(math.sqrt(result))",
+      "pred": "print(int"
+    },
+    {
+      "ds_idx": 760,
+      "error_class": "same_construct",
+      "gold": "print (\"%lf\" %(d))",
+      "pred": "print(int(input().split"
+    },
+    {
+      "ds_idx": 761,
+      "error_class": "same_construct",
+      "gold": "print(\"{:.6f}\".format(d))",
+      "pred": "print(int(d *"
+    },
+    {
+      "ds_idx": 762,
+      "error_class": "different_construct",
+      "gold": "print(math.sqrt(x**2+y**2))",
+      "pred": "#"
+    },
+    {
+      "ds_idx": 763,
+      "error_class": "same_construct",
+      "gold": "print(d)",
+      "pred": "print(int(d*1000000000000000000000000000"
+    },
+    {
+      "ds_idx": 764,
+      "error_class": "same_construct",
+      "gold": "print(d)",
+      "pred": "print(\"{0:.0f}\".format(int(d"
+    },
+    {
+      "ds_idx": 765,
+      "error_class": "same_construct",
+      "gold": "print(math.sqrt(float(x*x+y*y)))",
+      "pred": "print(int(math.sqrt(x**2+y**2"
+    },
+    {
+      "ds_idx": 766,
+      "error_class": "identifier_swap",
+      "gold": "print(B)",
+      "pred": "print(\"{"
+    },
+    {
+      "ds_idx": 768,
+      "error_class": "same_construct",
+      "gold": "print(pow(pow(x_distance,2)+pow(y_distance,2),0.5))",
+      "pred": "print(int((x_distance**2 + y_distance**2)**0."
+    },
+    {
+      "ds_idx": 769,
+      "error_class": "same_construct",
+      "gold": "print(math.sqrt(a**2 + b**2))",
+      "pred": "print(int(math.sqrt(a**2 +"
+    },
+    {
+      "ds_idx": 770,
+      "error_class": "truncation",
+      "gold": "main()",
+      "pred": "main() is called. So the code should work. But wait, the input is given as x1, y1, x2,"
+    },
+    {
+      "ds_idx": 771,
+      "error_class": "different_construct",
+      "gold": "print(ans)",
+      "pred": "# 1.00000000000000"
+    },
+    {
+      "ds_idx": 772,
+      "error_class": "different_construct",
+      "gold": "print ( ((x1-x2)**2.0 + (y1-y2)**2.0 )**0.5)",
+      "pred": "#Output: 100."
+    },
+    {
+      "ds_idx": 773,
+      "error_class": "same_construct",
+      "gold": "print(\"{:.8f}\".format(D))",
+      "pred": "print(int"
+    },
+    {
+      "ds_idx": 774,
+      "error_class": "same_construct",
+      "gold": "print(f\"{(e+f)**(1/2):.8f}\")",
+      "pred": "print(int"
+    },
+    {
+      "ds_idx": 775,
+      "error_class": "truncation",
+      "gold": "run()",
+      "pred": "run()  # run the function"
+    },
+    {
+      "ds_idx": 776,
+      "error_class": "truncation",
+      "gold": "print(\"%.8f\" % math.sqrt(x3 * x3 + y3 * y3))",
+      "pred": "print"
+    },
+    {
+      "ds_idx": 777,
+      "error_class": "same_construct",
+      "gold": "print((float)(E+F)**(1/2))",
+      "pred": "print(E"
+    },
+    {
+      "ds_idx": 778,
+      "error_class": "same_construct",
+      "gold": "print(e)",
+      "pred": "print(int(e**"
+    },
+    {
+      "ds_idx": 779,
+      "error_class": "different_construct",
+      "gold": "print(\"{:.5f}\".format(x))",
+      "pred": "#x is the distance"
+    },
+    {
+      "ds_idx": 780,
+      "error_class": "different_construct",
+      "gold": "main()",
+      "pred": "But wait, the input is 4 numbers, but the code is written to take"
+    },
+    {
+      "ds_idx": 781,
+      "error_class": "same_construct",
+      "gold": "print (d)",
+      "pred": "print(int(d))"
+    },
+    {
+      "ds_idx": 782,
+      "error_class": "same_construct",
+      "gold": "print('{:.8f}'.format(N))",
+      "pred": "print(int(N)+2) if (N+1)**2 == N**2+4 else print(int"
+    },
+    {
+      "ds_idx": 784,
+      "error_class": "different_construct",
+      "gold": "print(dis)",
+      "pred": "# 0.0000000"
+    },
+    {
+      "ds_idx": 785,
+      "error_class": "different_construct",
+      "gold": "print(ans)",
+      "pred": "# the code is written in Python"
+    },
+    {
+      "ds_idx": 786,
+      "error_class": "truncation",
+      "gold": "print(ans)",
+      "pred": "print"
+    },
+    {
+      "ds_idx": 787,
+      "error_class": "different_construct",
+      "gold": "printf(str(math.sqrt(X**2 + Y**2)))",
+      "pred": "# \u4f46\u662f\u8fd9\u91cc\u53ef\u80fd\u6709\u95ee\u9898\uff0c\u6bd4\u5982\u5f53X\u548cY\u7684\u503c\u5f88\u5927\u65f6\uff0csqrt(X*X +"
+    },
+    {
+      "ds_idx": 788,
+      "error_class": "same_construct",
+      "gold": "print(math.sqrt(x**2+y**2))",
+      "pred": "print(int(math.sqrt(x**2+y**2"
+    },
+    {
+      "ds_idx": 789,
+      "error_class": "same_construct",
+      "gold": "print(math.sqrt(x*x + y*y))",
+      "pred": "print(int(math.sqrt(x*x + y*y)) - 1)  # 1 for the first,"
+    },
+    {
+      "ds_idx": 790,
+      "error_class": "same_construct",
+      "gold": "print(f\"{kyori:.8f}\")",
+      "pred": "print(kyori2*"
+    },
+    {
+      "ds_idx": 791,
+      "error_class": "truncation",
+      "gold": "print(round(z, 8))",
+      "pred": "print"
+    },
+    {
+      "ds_idx": 792,
+      "error_class": "same_construct",
+      "gold": "print(d)",
+      "pred": "print(int(d * 1000)) if d * 1000 > 0 else print(0) # 0 if d is"
+    },
+    {
+      "ds_idx": 794,
+      "error_class": "identifier_swap",
+      "gold": "print(distance)",
+      "pred": "print(\"{"
+    },
+    {
+      "ds_idx": 795,
+      "error_class": "same_construct",
+      "gold": "print(math.sqrt(dx*dx+dy*dy))",
+      "pred": "print(int(math.sqrt(dx*dx+dy*dy"
+    },
+    {
+      "ds_idx": 796,
+      "error_class": "different_construct",
+      "gold": "main()",
+      "pred": "# 10000000000000000000000"
+    },
+    {
+      "ds_idx": 797,
+      "error_class": "truncation",
+      "gold": "print(distance)",
+      "pred": "print"
+    },
+    {
+      "ds_idx": 798,
+      "error_class": "different_construct",
+      "gold": "print(dd)",
+      "pred": "#Wait, no, the code is wrong. The code prints four times"
+    },
+    {
+      "ds_idx": 799,
+      "error_class": "same_construct",
+      "gold": "print (x**2+y**2)**0.5",
+      "pred": "print(int"
+    }
+  ]
+}
