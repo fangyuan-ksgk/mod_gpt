@@ -20,7 +20,7 @@ Mapped onto the original case study's finding numbers:
 
 | # | Paper finding | Status | Evidence |
 |---|---|---|---|
-| **#2** | codes causally necessary | **replicated** | CodeNet 17.50% → 10.62%, −39.3% rel; RANDOM arm accounts for 6.37 of 6.87pp |
+| **#2** | codes causally necessary | **replicated, both domains** | CodeNet −39.3% rel; arithmetic −7.88pp at `scale=0.5`, and **−13.08pp when identities are scrambled** — wrong codes worse than no codes |
 | **#3** | sub-task-specialised routing | **replicated** | arith `t6` 78.3%/6.21×; CodeNet `t5`,`t3`,`t6` at 1.88/1.88/1.80× position-matched |
 | **#5** | tri-state carry classifier | **replicated** (addition half) | `t6` marks sum-9, 11/14, p<1e-4, 5.04× leave-one-out |
 | **#6** | specialists + generalists coexist | **replicated** | 3 specialists 14.3% of traffic, 4 generalists 85.7% |
