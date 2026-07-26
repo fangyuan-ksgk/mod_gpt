@@ -44,6 +44,16 @@ chk("arith knockout 0.15pp", round(100*(ki["codes_ON"]-ki["codes_OFF"]),2), 0.15
 ai = json.loads((R/"arithmetic_autointerp_rawfirings.json").read_text())["summary"]
 chk("autointerp agreement 7/7", float(ai["agreement_with_purity_table"].split("/")[0]), 7.0, 0.001)
 
+# Finding #4 — the measured negative. R1 and R2 come from the same batch-1 run,
+# so the repair null is quoted against the purity table it belongs to.
+cr = json.loads((R/"codenet_r1r2.json").read_text())
+chk("codenet R1 median lift 2.06x", round(cr["R1"]["median_lift"], 2), 2.06)
+chk("codenet R1 active codes 11",   float(cr["R1"]["n_active_codes"]), 11.0, 0.001)
+r2 = cr["R2"]["R2b_targeted"]
+chk("codenet R2 attempts 82",       float(r2["n_attempted"]), 82.0, 0.001)
+chk("codenet R2 matched 0%",        float(r2["targeted_fix_rate"]), 0.0, 0.001)
+chk("codenet R2 random 0%",         float(r2["random_fix_rate"]), 0.0, 0.001)
+
 print(f"\n  {ok} verified, {fail} failed")
 sys.exit(1 if fail else 0)
 PY

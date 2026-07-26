@@ -25,7 +25,7 @@ Mapped onto the original case study's finding numbers:
 | **#5** | tri-state carry classifier | **replicated** (addition half) | `t6` marks sum-9, 11/14, p<1e-4, 5.04× leave-one-out |
 | **#6** | specialists + generalists coexist | **replicated** | 3 specialists 14.3% of traffic, 4 generalists 85.7% |
 | **#7** | auto-interp matches labels | **replicated** | blind, raw firings, no candidate list: 7/7 agreement |
-| #4 | surgical single-code repair | **negative** | 0/69 label-matched vs 1/69 random, on a load-bearing checkpoint |
+| #4 | surgical single-code repair | **negative** | 0/82 vs 0/82 random, and 0/69 vs 1/69 in a second run — on a load-bearing checkpoint |
 
 Finding #4 is a *measured* negative, not an unmeasurable one: it was run on the
 checkpoint where removing the codes costs 39% of accuracy, so the codes

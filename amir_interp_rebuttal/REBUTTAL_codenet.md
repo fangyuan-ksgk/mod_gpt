@@ -124,5 +124,20 @@ Reproduce: `repro/knockout.sh`, `repro/f3_codenet_purity.sh`. Raw results in
 
 **Scope.** Claims here are about what the codes encode and whether removing them
 costs accuracy. Single-code surgical repair was measured on this same
-load-bearing checkpoint and did not replicate (0/69 label-matched vs 1/69
-random); it is reported separately and not claimed here.
+load-bearing checkpoint and did not replicate. Two independent batch-1
+measurements, differing only in generation length, agree:
+
+```
+  ┌──────────────────────┬────────────┬────────────────┬──────────────┐
+  │ Run                  │ n attempts │ label-matched  │ random code  │
+  ├──────────────────────┼────────────┼────────────────┼──────────────┤
+  │ max_new_tokens = 8   │         82 │  0  (0.0%)     │  0  (0.0%)   │
+  │ max_new_tokens = 32  │         69 │  0  (0.0%)     │  1  (1.4%)   │
+  └──────────────────────┴────────────┴────────────────┴──────────────┘
+```
+
+Forcing the code that its own purity table associates with the correct
+construct repairs nothing, and never beats its random control. Because the
+knockout on this checkpoint is large, this is a **measured negative** rather
+than an underpowered null: the codes demonstrably carry information the model
+uses, and single-code edits still do not steer the prediction.
