@@ -10,7 +10,7 @@ Qwen3-0.6B, DLR v9 residual steering, `inject_layers=14`, `C_SIZE=30`, `L=8`,
 > motivated the scale sweep. That sweep produced
 > `ckpt/codenet_s0.5_i10_z1_L8_n4000` (`scale=0.5`), which is the checkpoint
 > every reported CodeNet number now comes from — see
-> [REBUTTAL_codenet.md](REBUTTAL_codenet.md). Numbers below describe the
+> [REBUTTAL_codenet.md](../REBUTTAL_codenet.md). Numbers below describe the
 > superseded checkpoint and are retained as provenance for the withdrawal.
 
 ---

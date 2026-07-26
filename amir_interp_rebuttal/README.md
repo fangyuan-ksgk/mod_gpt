@@ -51,16 +51,23 @@ demonstrably matter and single-code edits still do not repair predictions.
 ## Layout
 
 ```
-REBUTTAL_arithmetic.md  REBUTTAL_codenet.md   the deliverables
+REBUTTAL_arithmetic.md  REBUTTAL_codenet.md   the deliverables — read these
 PLAN_arithmetic.md      PLAN_codenet.md       objectives, metrics, status
-arithmetic.md                                 the original case study, extracted
-codenet_gate.md                               CodeNet gate sweep + confound audit
-r1_r3_r5_tables.md                            supporting tables (LOO, Bonferroni)
-MODELS.md                                     checkpoints + HuggingFace links
+MODELS.md                                     checkpoints, configs, HF links
 repro/                                        one script per table + verification
 results/                                      all raw JSON
 logs/                                         every run
+notes/                                        working notes, not deliverables
+  arithmetic.md                                 the original case study, extracted
+  codenet_gate.md                               confound audit for the SUPERSEDED
+                                                scale=0.1 checkpoint
+  r1_r3_r5_tables.md                            per-code tables behind Finding #6
 ```
+
+`notes/` is provenance, not results. `codenet_gate.md` describes the checkpoint
+the scale sweep replaced, and `r1_r3_r5_tables.md` includes an R3 section that
+neither deliverable claims. Both are kept because they document *why* a result
+was withdrawn, which is worth more than a clean-looking directory.
 
 Code: `arith_dataset.py`, `codenet_dataset.py` (data + labels) · `interp.py`
 (purity, swaps) · `runner.py` (generation + code capture) · `analyze.py` (entry

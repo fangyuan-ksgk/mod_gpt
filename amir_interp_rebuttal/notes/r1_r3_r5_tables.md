@@ -121,7 +121,7 @@ guess.
 >    of seven positions. A correct detector for a position-bound condition must
 >    be position-bound, so conditioning on position divides out the signal it is
 >    meant to validate. See the label-position table in
->    [REBUTTAL_arithmetic.md](REBUTTAL_arithmetic.md).
+>    [REBUTTAL_arithmetic.md](../REBUTTAL_arithmetic.md).
 >
 > R3 is not claimed as a finding in either deliverable. This section is retained
 > as the working analysis behind Finding #6.
@@ -215,11 +215,11 @@ digit pairs, because the pool is dominated by these seven codes' own firings and
 >
 > The `RANDOM` arm accounts for 6.37 of those 6.87 points, so it is code
 > *identity* that carries the information, not steering magnitude. See
-> [REBUTTAL_codenet.md](REBUTTAL_codenet.md) and `repro/knockout.sh`.
+> [REBUTTAL_codenet.md](../REBUTTAL_codenet.md) and `repro/knockout.sh`.
 >
 > The arithmetic knockout on `ckpt/arith_v9_paperhp` remains ~0 (+0.15pp), and a
 > four-rung escalation raised it ~11× without opening the gate — see the
-> escalation table in [REBUTTAL_arithmetic.md](REBUTTAL_arithmetic.md) and
+> escalation table in [REBUTTAL_arithmetic.md](../REBUTTAL_arithmetic.md) and
 > `repro/f2_escalation.sh`. The R1/R3/R5 tables above are claims about what the
 > codes *encode* and do not depend on causal load.
 
