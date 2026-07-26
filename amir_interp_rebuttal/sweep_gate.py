@@ -45,6 +45,21 @@ over is disclosure — every rung tried, passing or not, lands in
 sweep_gate_summary.json with its config and its active-code count, and the
 config is baked into each checkpoint tag. Any number that reaches the rebuttal
 can name the recipe that produced it, and a reader can see this was a search.
+
+NOT MERGED WITH codenet_sweep_gate.py, DELIBERATELY
+---------------------------------------------------
+The two sweep drivers look like duplicates and are not. 87 of ~320 lines match,
+and the largest shared block is the 13-line import header; the ladder shape, the
+training command, the knockout ARM SET (two arms plus a full ablation here,
+four arms with a RANDOM control there), the result schema (`{tag}_knockout.json`
+vs `{tag}_knockout4.json`) and the gate rule (this one also passes on relative
+delta) all differ. Merging them means a branch at every one of those points.
+
+The schemas are the hard constraint: repro/verify_claims.sh and repro/manifest.sh
+read both shapes, and arith_paperhp_knockout.json is behind a reported number.
+Nor can a merge be validated — re-running either driver means retraining on a
+GPU, so a refactor here would ship untested against the checkpoints the rebuttal
+rests on. Highest risk, lowest reward. Left as two files on purpose.
 """
 from __future__ import annotations
 

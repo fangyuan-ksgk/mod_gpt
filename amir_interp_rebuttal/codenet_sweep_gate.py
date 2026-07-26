@@ -47,6 +47,11 @@ The published loss weights carry no authority here: the paper never ran CodeNet.
 They are rung 0, not a constraint. Every rung tried, passing or not, lands in
 results/codenet_sweep_summary.json with its full config, and the config is baked
 into the checkpoint tag so any number can name the recipe that produced it.
+
+NOT MERGED WITH sweep_gate.py, DELIBERATELY — see the matching note in that
+file. The overlap is the import header; the ladder, training command, knockout
+arm set, result schema and gate rule all differ, both schemas are read by
+repro/verify_claims.sh, and a merge cannot be validated without retraining.
 """
 from __future__ import annotations
 

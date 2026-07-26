@@ -52,8 +52,9 @@ demonstrably matter and single-code edits still do not repair predictions.
 
 ```
 REBUTTAL_arithmetic.md  REBUTTAL_codenet.md   the deliverables — read these
-PLAN_arithmetic.md      PLAN_codenet.md       objectives, metrics, status
+PLAN.md                                       objectives, metrics, checklist
 MODELS.md                                     checkpoints, configs, HF links
+AUDIT.md                                      code audit: defects, fixes, what was left
 repro/                                        one script per table + verification
 results/                                      all raw JSON
 logs/                                         every run
@@ -71,9 +72,11 @@ was withdrawn, which is worth more than a clean-looking directory.
 
 Code: `arith_dataset.py`, `codenet_dataset.py` (data + labels) · `interp.py`
 (purity, swaps) · `runner.py` (generation + code capture) · `analyze.py` (entry
-point) · `load_local.py` (local checkpoints; `sorl.analyze` only reads the Hub) ·
-`sweep_gate.py`, `codenet_sweep_gate.py` (gate sweeps) · `codenet_confound.py`
-(position control) · `autointerp.py`, `dump_firings.py` (auto-interp) ·
+point, `--study {arithmetic,codenet}`) · `load_local.py` (local checkpoints;
+`sorl.analyze` only reads the Hub) · `sweep_gate.py`, `codenet_sweep_gate.py`
+(gate sweeps — deliberately not merged, see `AUDIT.md`) · `codenet_confound.py`
+(position control) · `per_code_ablation.py` (single-code knockout) ·
+`dump_firings.py` then `autointerp.py` (auto-interp, both `--study`) ·
 `push_models.py` (HF).
 
 ## Reproduction
@@ -85,6 +88,7 @@ bash amir_interp_rebuttal/repro/f3_codenet_purity.sh # CodeNet R1, position-cont
 bash amir_interp_rebuttal/repro/f6_polysemanticity.sh # Finding #6
 bash amir_interp_rebuttal/repro/r1_purity.sh        # arithmetic R1
 bash amir_interp_rebuttal/repro/r5_sum9.sh          # Finding #5
+bash amir_interp_rebuttal/repro/f7_autointerp.sh    # Finding #7
 bash amir_interp_rebuttal/repro/determinism.sh      # runs each twice, fails on drift
 bash amir_interp_rebuttal/repro/manifest.sh         # provenance + sha256 per table
 ```
