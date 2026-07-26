@@ -107,6 +107,25 @@ them; they must be the off-peak halves of c0 and c2 (the only codes with pos_con
 but which of the two goes where is not recoverable from `results/` alone, and the script does not
 guess.
 
+> **Reconciliation with the deliverable.** The R3 analysis above is written as
+> a defect report, and on reflection that framing over-reads it. Two things:
+>
+> 1. The codes it calls "position tags" (c0, c2, c7, c1 — the ones covering a
+>    position ~100%) are exactly the **generalists** of Finding #6. That
+>    specialists and high-frequency near-chance generalists coexist is the
+>    paper's claim, and it is what this table shows: 3 specialists carrying
+>    14.3% of firings at 2.2–6.2× lift, 4 generalists carrying 85.7% at
+>    1.2–1.6×. Read that way this is a replication, not a failure.
+> 2. Concentration is not by itself disqualifying, because the *labels* are
+>    position-bound: `US` is structurally impossible at d0 and d6, `UD` at four
+>    of seven positions. A correct detector for a position-bound condition must
+>    be position-bound, so conditioning on position divides out the signal it is
+>    meant to validate. See the label-position table in
+>    [REBUTTAL_arithmetic.md](REBUTTAL_arithmetic.md).
+>
+> R3 is not claimed as a finding in either deliverable. This section is retained
+> as the working analysis behind Finding #6.
+
 ---
 
 ## R5 — sum-9 / equal-digit selectivity
@@ -183,51 +202,45 @@ digit pairs, because the pool is dominated by these seven codes' own firings and
 
 ## Appendix — code knockout (causal test)
 
-```
-
-  Code knockout | accuracy with abstraction codes ON vs zeroed OFF
-  ┌──────────────────────────┬────────────────────────┬─────────┬───────────┬───────────┬─────────────┬──────────┐
-  │ Study                    │ Checkpoint             │ n_eval  │ codes ON  │ codes OFF │ Δ (ON-OFF)  │ rel Δ    │
-  ├──────────────────────────┼────────────────────────┼─────────┼───────────┼───────────┼─────────────┼──────────┤
-  │ arithmetic (6-digit +/-) │ ckpt/arith_v9_paperhp  │    2600 │    0.8635 │    0.8619 │     +0.0015 │    +0.2% │
-  │ codenet @125 steps       │ ckpt/codenet_v9        │     800 │    0.2213 │    0.2275 │     -0.0063 │    -2.7% │
-  │ codenet @20k             │ ckpt/codenet_v9_20k    │     800 │    0.0512 │    0.0537 │     -0.0025 │    -4.7% │
-  └──────────────────────────┴────────────────────────┴─────────┴───────────┴───────────┴─────────────┴──────────┘
-  codes OFF = abstraction codes ablated at inference. A positive Δ means the codes help.
-
-```
-
-Ablating the codes moves accuracy by +0.15pp on arithmetic and *improves* both codenet
-checkpoints. Whatever the codes encode, the model is not using it.
+> **Superseded.** The knockout numbers this appendix used to carry were all
+> *decode-only* ablations on `scale=0.1` checkpoints, and the conclusion drawn
+> from them ("whatever the codes encode, the model is not using it") is no
+> longer correct. A scale sweep produced `ckpt/codenet_s0.5_i10_z1_L8_n4000`,
+> where a full four-arm knockout shows the codes **are** load-bearing:
+>
+> ```
+>   codes ON   17.50%      RANDOM  11.13%      OFF_full  10.62%
+>   removing the codes costs 6.87pp = 39.3% relative
+> ```
+>
+> The `RANDOM` arm accounts for 6.37 of those 6.87 points, so it is code
+> *identity* that carries the information, not steering magnitude. See
+> [REBUTTAL_codenet.md](REBUTTAL_codenet.md) and `repro/knockout.sh`.
+>
+> The arithmetic knockout on `ckpt/arith_v9_paperhp` remains ~0 (+0.15pp), and a
+> four-rung escalation raised it ~11× without opening the gate — see the
+> escalation table in [REBUTTAL_arithmetic.md](REBUTTAL_arithmetic.md) and
+> `repro/f2_escalation.sh`. The R1/R3/R5 tables above are claims about what the
+> codes *encode* and do not depend on causal load.
 
 ---
 
 ## Provenance
 
+This file used to embed a frozen provenance snapshot (commit hash + sha256 per
+table). It drifted: two of the JSONs it listed
+(`codenet_125step_knockout.json`, `codenet_20k_knockout.json`) no longer exist,
+and its commit was recorded as DIRTY. A snapshot that goes stale silently is
+worse than no snapshot, so it is generated on demand instead:
+
+```bash
+bash amir_interp_rebuttal/repro/manifest.sh
 ```
 
-  Provenance manifest
-  repo   : /lambda/nfs/Amir-steering/codes/mod_gpt
-  commit : 86c6008cc57e647394448cbc2688eee71b742ce7  [DIRTY (uncommitted changes in tree)]
-  ┌──────────────┬────────────────────────┬────────────────────────────────┬────────────────────┬────────────────────────┐
-  │ Table        │ Script                 │ Source JSON (results/)         │ sha256 (first 16)  │ Checkpoint             │
-  ├──────────────┼────────────────────────┼────────────────────────────────┼────────────────────┼────────────────────────┤
-  │ R1 purity    │ repro/r1_purity.sh     │ results/arithmetic_r1r2.json   │ d37094aafad3f25b   │ ckpt/arith_v9_paperhp  │
-  │ R3 position  │ repro/r3_position.sh   │ results/arithmetic_r1r2.json   │ d37094aafad3f25b   │ ckpt/arith_v9_paperhp  │
-  │ R5 sum9/eq   │ repro/r5_sum9.sh       │ results/arith_firings.json     │ 53de3b8a3f6e9f11   │ ckpt/arith_v9_paperhp  │
-  │ knockout     │ repro/knockout.sh      │ results/arith_paperhp_knockout.json │ 8e566178a81ede19   │ ckpt/arith_v9_paperhp  │
-  │ knockout     │ repro/knockout.sh      │ results/codenet_125step_knockout.json │ 56d0edc68ea1ad28   │ ckpt/codenet_v9        │
-  │ knockout     │ repro/knockout.sh      │ results/codenet_20k_knockout.json │ 37e97c7d33d8c71f   │ ckpt/codenet_v9_20k    │
-  └──────────────┴────────────────────────┴────────────────────────────────┴────────────────────┴────────────────────────┘
-
-  Full sha256:
-    results/arithmetic_r1r2.json       d37094aafad3f25b88beaadec70ccd33107f6c49d42cde2c0fe8732f20638947
-    results/arith_firings.json         53de3b8a3f6e9f11ebd5665f80ad5b04c163ed61d49513653a8c4782f4c2a1e3
-    results/arith_paperhp_knockout.json 8e566178a81ede19429fff1d9b835b29ecf4a62b33ea074100de81398c5a2c91
-    results/codenet_125step_knockout.json 56d0edc68ea1ad28660725bee3df6fae0270e71cc5d73e1af01af23ed8b41e2e
-    results/codenet_20k_knockout.json  37e97c7d33d8c71fb44367cc788f90e3d42909f56129d6cc03d04b673a44bbd3
-
-```
+That prints the current commit, and for every reported table the script, the
+source JSON, its sha256 and the checkpoint. `repro/verify_claims.sh` separately
+re-derives each headline number from its source JSON, and `repro/determinism.sh`
+runs every table twice and fails on any byte-level drift.
 
 ## Regenerating
 

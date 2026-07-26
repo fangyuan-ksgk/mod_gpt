@@ -4,6 +4,15 @@ Qwen3-0.6B, DLR v9 residual steering, `inject_layers=14`, `C_SIZE=30`, `L=8`,
 `scale=0.1`. Regenerate with `amir_interp_rebuttal/codenet_confound.py` and
 `amir_interp_rebuttal/codenet_sweep_gate.py`.
 
+> **Scope: this is the audit trail, not a deliverable.** It documents the
+> investigation on `ckpt/codenet_v9` (`scale=0.1`) that (a) withdrew the
+> `t20 -> FunctionDef 3.84x` result as a padding-alignment artefact and (b)
+> motivated the scale sweep. That sweep produced
+> `ckpt/codenet_s0.5_i10_z1_L8_n4000` (`scale=0.5`), which is the checkpoint
+> every reported CodeNet number now comes from — see
+> [REBUTTAL_codenet.md](REBUTTAL_codenet.md). Numbers below describe the
+> superseded checkpoint and are retained as provenance for the withdrawal.
+
 ---
 
 # Task 1 — is CodeNet's t20 the same position confound as arithmetic?

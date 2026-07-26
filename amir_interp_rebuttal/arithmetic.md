@@ -180,7 +180,8 @@ Top-10 highest-confidence examples per code → `claude-haiku` → one-sentence 
 ## 3. What has to replicate on Qwen3-0.6B
 
 > **Framing constraint (rebuttal phase — no paper edits possible).**
-> The deliverables (`addition_followup.md`, `codenet.md`) must be **self-contained**.
+> The deliverables (`REBUTTAL_arithmetic.md`, `REBUTTAL_codenet.md`) must be
+> **self-contained**.
 > We are training a new model and reporting its numbers on their own terms:
 > - state the measurement definitions inline; do not point at Appendix G tables
 > - do not cite the toy model's code IDs (`t21`, `t20`, `t6`, …) — the new model has
