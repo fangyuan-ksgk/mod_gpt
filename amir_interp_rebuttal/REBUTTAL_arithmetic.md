@@ -146,7 +146,8 @@ On a real pretrained LLM:
 - **an independent model recovers the detector blind**, with a working negative
   control
 
-Reproduce: `repro/r1_purity.sh`, `repro/r5_sum9.sh`, `repro/f6_polysemanticity.sh`.
+Reproduce: `repro/r1_purity.sh`, `repro/r5_sum9.sh`, `repro/f6_polysemanticity.sh`,
+`repro/f7_autointerp.sh`.
 Raw results in `results/arithmetic_r1r2.json`,
 `results/arithmetic_autointerp_rawfirings.json`, `results/arith_firings.json`.
 
