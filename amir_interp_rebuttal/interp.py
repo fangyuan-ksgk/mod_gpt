@@ -28,14 +28,27 @@ ALL_LABELS = ADD_LABELS + SUB_LABELS
 # ─────────────────────────────────────────────────────────────────────
 
 @contextlib.contextmanager
-def force_code_at(wrapper, position: int, code: int):
-    """Force the routed code at decode step `position` to `code`.
+def force_code_at(wrapper, position, code: int):
+    """Force the routed code at decode step(s) `position` to `code`.
+
+    `position` may be an int (one decode step), an iterable of ints (several),
+    or None meaning EVERY decode step. Forcing a single step is the weakest
+    possible intervention: if a code's role is sustained -- "keep ending the
+    line here" rather than "emit this token now" -- a one-step nudge is washed
+    out by the next unforced step. Sweeping over intervention breadth is
+    therefore part of the measurement, not a convenience.
 
     The V9 wrapper only ships n-gram-pattern patching (`_ablate_patch_codes`),
     which cannot express "position d_1, whatever the history". We swap in a
     positional patch on the instance for the duration of the block, then restore
     the original bound method. Nothing in sorl/steer.py is modified.
     """
+    if position is None:
+        want = None                       # every step
+    elif isinstance(position, int):
+        want = {position}
+    else:
+        want = set(int(p) for p in position)
     # The patch counts decode steps per batch row. If steering were injected at
     # more than one layer the hook would fire once per layer and the counter would
     # advance several times per generated token, silently shifting which position
@@ -58,7 +71,7 @@ def force_code_at(wrapper, position: int, code: int):
             for k in range(nc):
                 step = counters[b]
                 counters[b] += 1
-                if step == position:
+                if want is None or step in want:
                     codes[b, k] = code
         return codes
 

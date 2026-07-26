@@ -91,10 +91,20 @@ def main():
     p.add_argument("--repair", action="store_true", help="stage 2: best-of-C sweep")
     p.add_argument("--error_class", default=None,
                    help="stage 2: which class to attempt (from stage 1)")
+    p.add_argument("--mode", default="single", choices=["single", "all"],
+                   help="single: force one code at one decode step (weakest "
+                        "intervention). all: force it at EVERY decode step -- "
+                        "the right shape when a code's role is sustained, e.g. "
+                        "'stop the line here' rather than 'emit this token'.")
     p.add_argument("--max_examples", type=int, default=60,
                    help="stage 2: cap attempts; C x positions x N gets large")
     p.add_argument("--show", type=int, default=8,
                    help="stage 1: sample errors printed per class for eyeballing")
+    p.add_argument("--from_taxonomy", action="store_true",
+                   help="skip the 800-example baseline pass and read the error "
+                        "list from {study}_error_taxonomy.json. The baseline is "
+                        "identical for every class and mode, so re-running it "
+                        "per job wastes ~15 min each and serialises the sweep.")
     p.add_argument("--out_dir", default="amir_interp_rebuttal/results")
     args = p.parse_args()
     if not (args.dump or args.repair):
@@ -111,16 +121,31 @@ def main():
     print(f"loaded {args.ckpt} | scale={scale} L={L} C={C} | {len(idxs)} examples",
           flush=True)
 
-    recs = batched_generate(wrapper, tok, ds, args.device, idxs,
-                            eval_batch_size=1, max_new_tokens=args.max_new_tokens,
-                            record_codes=True, decode_scale=scale)
-    acc = sum(r["correct"] for r in recs) / len(recs)
-    wrong = [r for r in recs if not r["correct"]]
-    print(f"accuracy {acc:.4f} | {len(wrong)} wrong of {len(recs)}", flush=True)
-
-    for r in wrong:
-        r["error_class"] = classify(r.get("pred"), r.get("gold"))
-    counts = Counter(r["error_class"] for r in wrong)
+    tax_path = Path(args.out_dir) / f"{args.study}_error_taxonomy.json"
+    if args.from_taxonomy:
+        if not tax_path.exists():
+            raise SystemExit(f"--from_taxonomy needs {tax_path}; run --dump first")
+        tax = json.loads(tax_path.read_text())
+        if tax.get("ckpt") != args.ckpt:
+            raise SystemExit(
+                f"taxonomy was built on {tax.get('ckpt')} but --ckpt is "
+                f"{args.ckpt}. Error indices are checkpoint-specific; refusing "
+                f"to reuse them.")
+        wrong = [dict(r) for r in tax["errors"]]
+        acc = tax["accuracy"]
+        counts = Counter(r["error_class"] for r in wrong)
+        print(f"accuracy {acc:.4f} (cached) | {len(wrong)} wrong, "
+              f"baseline pass skipped", flush=True)
+    else:
+        recs = batched_generate(wrapper, tok, ds, args.device, idxs,
+                                eval_batch_size=1, max_new_tokens=args.max_new_tokens,
+                                record_codes=True, decode_scale=scale)
+        acc = sum(r["correct"] for r in recs) / len(recs)
+        wrong = [r for r in recs if not r["correct"]]
+        print(f"accuracy {acc:.4f} | {len(wrong)} wrong of {len(recs)}", flush=True)
+        for r in wrong:
+            r["error_class"] = classify(r.get("pred"), r.get("gold"))
+        counts = Counter(r["error_class"] for r in wrong)
 
     out = Path(args.out_dir)
     out.mkdir(parents=True, exist_ok=True)
@@ -162,8 +187,12 @@ def main():
             raise SystemExit(f"no errors in class {args.error_class!r}")
         target = target[:args.max_examples]
         n_chunks = max(1, args.max_new_tokens // L)
-        print(f"\n  repairing class {args.error_class!r}: {len(target)} examples "
-              f"x {C} codes x {n_chunks} positions", flush=True)
+        # Each entry is what gets handed to force_code_at as `position`.
+        posspecs = list(range(n_chunks)) if args.mode == "single" else [None]
+        budget = C * len(posspecs)
+        print(f"\n  repairing class {args.error_class!r} [mode={args.mode}]: "
+              f"{len(target)} examples x {C} codes x {len(posspecs)} position-set(s) "
+              f"= {budget} attempts/arm", flush=True)
 
         import torch
 
@@ -191,16 +220,16 @@ def main():
 
         fixed_any, fixed_by, first_hit = 0, Counter(), []
         rand_fixed = 0
-        budget = C * n_chunks
         for n, r in enumerate(target, 1):
             i = r["ds_idx"]
 
             got = False
-            for pos in range(n_chunks):
+            for pos in posspecs:
                 for c in range(C):
                     if try_one(i, pos, c):
                         got, fixed_by[c] = True, fixed_by[c] + 1
-                        first_hit.append({"ds_idx": i, "code": c, "position": pos})
+                        first_hit.append({"ds_idx": i, "code": c,
+                                          "position": ("all" if pos is None else pos)})
                         break
                 if got:
                     break
@@ -212,7 +241,8 @@ def main():
                 v = torch.randn(saved_emb.shape[1], generator=gen)
                 v = (v / v.norm() * mean_norm).to(saved_emb.dtype)
                 wrapper.steering_emb.weight.data[SCRATCH] = v.to(saved_emb.device)
-                pos = int(torch.randint(n_chunks, (1,), generator=gen).item())
+                pos = (None if args.mode == "all" else
+                       int(torch.randint(n_chunks, (1,), generator=gen).item()))
                 if try_one(i, pos, SCRATCH):
                     rgot = True
                     break
@@ -225,7 +255,7 @@ def main():
 
         payload = {
             "ckpt": args.ckpt, "study": args.study,
-            "error_class": args.error_class,
+            "error_class": args.error_class, "mode": args.mode,
             "n_attempted": len(target), "C": C, "n_positions": n_chunks,
             "fixed_best_of_C": fixed_any,
             "fix_rate_best_of_C": fixed_any / len(target),
@@ -235,7 +265,7 @@ def main():
             "fixing_codes": dict(fixed_by.most_common()),
             "first_hits": first_hit,
         }
-        path = out / f"{args.study}_error_repair_{args.error_class}.json"
+        path = out / f"{args.study}_error_repair_{args.error_class}_{args.mode}.json"
         path.write_text(json.dumps(payload, indent=2))
         print(f"\n  best-of-{C}: {fixed_any}/{len(target)} "
               f"({fixed_any/len(target):.1%})")
