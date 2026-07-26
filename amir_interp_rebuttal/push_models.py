@@ -76,6 +76,64 @@ CARD_ARG_KEYS = [
 # ARITH_DIGITS / ARITH_SIZE / CODENET_SIZE from the environment at train time,
 # so those values live here and are labelled as reconstructed in the card.
 CHECKPOINTS = {
+    # ── Reported checkpoints: the two the deliverables actually cite ─────────
+    "codenet_s0.5_i10_z1_L8_n4000": dict(
+        study="codenet",
+        task="Project CodeNet Python; predict the final line of a short "
+             "solution given the lines above it; one steering code per 8-token "
+             "chunk",
+        train_size=4000, digits=None, eval_n=800,
+        env="CODENET_SIZE=4000, 2 epochs, grad_accum 4 (250 optimizer steps)",
+        blurb="The gate-open CodeNet checkpoint: scale=0.5, target_vocab_util "
+              "0.8. The only checkpoint in this study where the codes are "
+              "causally load-bearing.",
+        metrics_json=["codenet_s0.5_i10_z1_L8_n4000_knockout4.json",
+                      "codenet_gated_confound_nopad.json",
+                      "codenet_r1r2.json"],
+        deliverables=["REBUTTAL_codenet.md (Finding #2 knockout, R1 purity)",
+                      "PLAN_codenet.md",
+                      "repro/knockout.sh", "repro/f3_codenet_purity.sh"],
+        recommend="push", provisional=False,
+        reason="THE causal result of the rebuttal. Removing the codes costs "
+               "39.3% of relative accuracy, and both reported CodeNet tables "
+               "are measured on this one checkpoint, so the causal claim and "
+               "the interpretability claim describe the same model.",
+        shows=[
+            "Finding #2 replicates: codes are causally necessary. Four arms on "
+            "800 held-out files — ON 17.50%, RANDOM 11.13%, OFF_full 10.62%. "
+            "Removing the codes costs 6.87pp, i.e. 39.3% relative.",
+            "The RANDOM control is what carries the claim: substituting "
+            "same-magnitude steering vectors with scrambled identities costs "
+            "6.37 of those 6.87 points, so the model depends on WHICH code "
+            "fires, not merely on being steered.",
+            "Finding #3 replicates under a position-matched control: t5 and t3 "
+            "track `If` at 1.88x, t6 tracks `BinOp` at 1.80x, each firing at 31 "
+            "of 32 chunk positions with n in the hundreds, so the lift cannot "
+            "be inherited from any single position's construct distribution.",
+            "Healthy codebook: 23 of 30 codes used, 8 active above the 1% "
+            "threshold, top-code share 47.8%.",
+        ],
+        does_not_show=[
+            "Finding #4 (surgical single-code repair) does NOT replicate on "
+            "this checkpoint: a label-matched forced code repaired 0/69 wrong "
+            "predictions against 1/69 for a random code. Because the knockout "
+            "is large here, this is a genuine measured negative rather than an "
+            "underpowered null — the codes demonstrably matter, and single-code "
+            "edits still do not repair predictions.",
+            "17.5% exact match is not a usable code model. The knockout is a "
+            "claim about mechanism, not about capability.",
+            "The effect is far smaller than the toy model's (-99.9% relative). "
+            "Same phenomenon, same measurement, much more capable backbone.",
+            "Two codes that looked like the best result were withdrawn by the "
+            "position control: t9 and t20 -> FunctionDef at 4.40x/3.84x global "
+            "lift collapse to exactly 1.00x position-matched, i.e. they encode "
+            "P(FunctionDef | chunk 0) and add nothing over knowing the position.",
+            "All numbers are measured at eval batch size 1. At batch 32, left "
+            "padding misaligns prefill chunk indices unless pad_len % L == 0 "
+            "(true for 28.5% of rows), which silently reshuffles routing.",
+            "Single seed, one run per configuration.",
+        ],
+    ),
     "arith_v9_paperhp": dict(
         study="arithmetic",
         task="6-digit addition and subtraction, `abcdef±ghijkl=mnopqrs`; one "
@@ -83,200 +141,253 @@ CHECKPOINTS = {
         train_size=100_000, digits=6, eval_n=2600,
         env="ARITH_DIGITS=6 ARITH_SIZE=100000 (defaults)",
         blurb="Published loss weights (alpha_info=10, alpha_abs=0.1, "
-              "alpha_zipf=1.0). The arithmetic headline checkpoint.",
-        metrics_json=["arith_paperhp_knockout.json", "arithmetic_r1r2.json"],
-        deliverables=["addition_followup.md (published-weights arm)",
-                      "r1_r3_r5_tables.md (R1, R3, R5, knockout)",
-                      "PLAN_arithmetic.md"],
-        recommend="push", provisional=True,
-        reason="Behind every arithmetic number currently in a deliverable. "
-               "PROVISIONAL: sweep_gate.py is running; if a rung opens the "
-               "gate, R1/R3/R5 are regenerated on that checkpoint instead.",
+              "alpha_zipf=1.0). The arithmetic headline checkpoint — every "
+              "arithmetic interpretability table is measured on it.",
+        metrics_json=["arith_paperhp_knockout.json", "arithmetic_r1r2.json",
+                      "arithmetic_autointerp_rawfirings.json",
+                      "arith_firings.json"],
+        deliverables=["REBUTTAL_arithmetic.md (R1, Finding #5, #6, #7)",
+                      "PLAN_arithmetic.md",
+                      "repro/r1_purity.sh", "repro/r5_sum9.sh",
+                      "repro/f6_polysemanticity.sh"],
+        recommend="push", provisional=False,
+        reason="Behind every arithmetic number in the rebuttal. The gate sweep "
+               "has settled: four rungs were tried and none opened the causal "
+               "gate, so no checkpoint supersedes this one for the "
+               "interpretability tables, which do not depend on causal load.",
         shows=[
-            "One code (t6) is a genuine sub-task specialist: 78.3% pure on the "
-            "sum-9 carry-cascade label (US) against a 12.6% base rate, 6.21x "
-            "lift, at the one answer position where routing is input-dependent.",
-            "That code is independently sum-9 selective (11/14 sampled firings, "
-            "p<1e-4, leave-one-out lift 5.0) — a consistency check, since US is "
-            "defined by sum-9 columns.",
-            "86.3% exact-match accuracy on 2,600 held-out problems, generated "
-            "autoregressively with no teacher forcing.",
+            "Finding #3 replicates: t6 is a sum-9 carry-cascade (US) detector "
+            "at 78.3% purity against a 12.6% base rate — 6.21x lift. t17 (UB, "
+            "4.07x) and t11 (UC, 2.24x) are the borrow- and carry-consumption "
+            "analogues.",
+            "Finding #5 replicates: the tri-state carry classifier's `U` "
+            "boundary is recovered without supervision. t6 marks sum-9 columns "
+            "in 11/14 sampled firings against a 15.6% leave-one-out base rate "
+            "(5.04x, exact binomial p<1e-4); every other active code sits at or "
+            "below base rate.",
+            "Finding #6 replicates: specialists and polysemantic generalists "
+            "coexist. 3 specialists carry 14.3% of firings at 2.2-6.2x lift; 4 "
+            "generalists carry 85.7% at 1.2-1.6x.",
+            "Finding #7 replicates under a blind protocol: a separate model, "
+            "shown only raw firing examples with no labels, no purity "
+            "statistics and NO candidate list, described t6 as firing when the "
+            "column generates a carry-out, and correctly called the four "
+            "generalists positional tags. 7/7 agreement with the purity table.",
+            "86.3% exact-match on 2,600 held-out problems across 24 difficulty "
+            "splits, generated autoregressively with no teacher forcing.",
         ],
         does_not_show=[
-            "The codes are NOT causally load-bearing. Silencing decode-time "
-            "steering moves accuracy by +0.15pp (86.35% -> 86.19%). This is a "
-            "read-out, not a control signal.",
-            "That knockout is a DECODE-ONLY ablation: the two arms differ only "
-            "in `decode_scale` (0.1 vs 0.0), which the v9 wrapper documents as "
-            "leaving prefill untouched, so the 14-token prompt stays fully "
-            "steered in both arms. +0.15pp is a lower bound on the true "
-            "knockout, not a measurement of it. A four-arm version (with "
-            "`steering_emb` zeroed outright) has not yet been run on this "
-            "checkpoint.",
-            "Single-code repair (R2) does NOT work: a label-matched forced code "
-            "repaired 1/843 wrong predictions, a random code repaired 2/843. "
-            "The treatment loses to its own control.",
-            "R2 is gated on the knockout, so its null is uninformative rather "
-            "than a negative finding — editing a channel the computation "
-            "ignores cannot repair anything.",
-            "Position locking is degenerate: at 6 of 7 answer positions a "
-            "single code covers ~100% of problems, so P(label|code) there is "
-            "inherited from P(label|position). Only position 1 has competing "
-            "codes, and that is where t6 lives.",
+            "The codes are NOT causally load-bearing here. A full ablation "
+            "moves accuracy by +0.15pp. On this checkpoint the codes are a "
+            "read-out, not a control signal — the causal claim in the rebuttal "
+            "rests on the CodeNet checkpoint instead.",
+            "The gate stayed closed across a four-rung escalation (6-digit "
+            "100K; 12-digit 10K at two Zipf settings; 18-digit 500 at "
+            "scale=1.0). Causal load rose ~11x, from +0.15pp to +1.69pp, "
+            "without reaching the 3pp threshold. A 596M pretrained backbone "
+            "solves 6-digit arithmetic with too much slack for the codes to "
+            "have to carry it.",
+            "Finding #4 (single-code repair) does not work here, and because "
+            "the knockout is ~0 that null is UNINFORMATIVE rather than a "
+            "negative result: editing a channel the computation ignores cannot "
+            "repair anything. The informative negative is on the CodeNet side.",
+            "The specialist codes are position-concentrated. This is expected "
+            "rather than disqualifying — the sub-tasks are themselves "
+            "position-bound (a carry cascade is structurally impossible at the "
+            "first and last answer digit) — but it does mean these codes are "
+            "not position-invariant detectors.",
             "Single seed, one run per configuration.",
         ],
     ),
-    "arith_v9": dict(
+
+    # ── Supporting runs: cited as rows in a table, not as headline results ───
+    "arith_18d_500_MAX": dict(
         study="arithmetic",
-        task="6-digit addition and subtraction, `abcdef±ghijkl=mnopqrs`; one "
-             "steering code per answer digit",
-        train_size=100_000, digits=6, eval_n=2600,
-        env="ARITH_DIGITS=6 ARITH_SIZE=100000 (defaults)",
-        blurb="Default loss weights (alpha_info=1.0, alpha_abs=0.5, "
-              "alpha_zipf=0.01). The negative arm of the weights comparison.",
-        metrics_json=[],
-        metrics_static={
-            "accuracy": 0.836, "n_eval": 2600, "n_active_codes": 5,
-            "best_code": "t20 -> MD, purity 37.2%, base rate 15.4%, lift 2.42x",
-            "median_lift": 1.87,
-            "R2_matched": "3/584 (0.5%)", "R2_random": "2/584 (0.3%)",
-            "_source": "addition_followup.md, 'Summary against the first run' "
-                       "(no results/*.json on disk for this arm)",
-        },
-        deliverables=["addition_followup.md (default-weights arm)"],
-        recommend="push", provisional=False,
-        reason="The control arm of the published claim that the first run's "
-               "failure was configuration and not scale. That claim is only "
-               "checkable if both arms are downloadable. Not provisional: it "
-               "is a fixed contrast, nothing in the sweep supersedes it.",
-        shows=[
-            "A misconfigured DLR run produces a collapsed codebook: 5 of 30 "
-            "codes active, peak purity 37.2% at a 15.4% base rate (2.42x).",
-            "The paired contrast with arith_v9_paperhp — identical in every "
-            "respect except three loss weights — isolates configuration from "
-            "model scale as the cause of the first run's null.",
-        ],
-        does_not_show=[
-            "Nothing positive. This checkpoint is published as a negative "
-            "control, not as a result.",
-            "Its M1 purity does NOT replicate the paper's specialisation claim; "
-            "the deliverable reports it as 'not replicated'.",
-            "Knockout was not run separately on this arm.",
-        ],
-    ),
-    "codenet_v9": dict(
-        study="codenet",
-        task="Project CodeNet Python; predict the final line of a short "
-             "solution given the lines above it; one steering code per 8-token "
-             "chunk",
-        train_size=4000, digits=None, eval_n=800,
-        env="CODENET_SIZE=4000 (125 optimizer steps)",
-        blurb="125 optimizer steps. The CodeNet checkpoint behind the "
-              "position-confound audit.",
-        metrics_json=["codenet_125step_knockout.json",
-                      "codenet_r1r2_125step.json",
-                      "codenet_position_confound.json"],
-        deliverables=["codenet.md", "codenet_gate.md (confound audit)",
-                      "r1_r3_r5_tables.md (knockout)", "PLAN_codenet.md"],
-        recommend="push", provisional=True,
-        reason="The checkpoint the confound audit was run on, and the only one "
-               "with a code that survives a position-matched control. "
-               "PROVISIONAL: codenet_sweep_gate.py is running and a stronger "
-               "knockout arm (random-code / full-emb-zero) is being measured; "
-               "the reported checkpoint and the knockout number may both move.",
-        shows=[
-            "One code (t5) survives a position-matched control: `If` at 25.4% "
-            "purity vs a position-matched baseline of 14.9%, lift_pos 1.70x, "
-            "n=457 over 31 chunk positions, Bonferroni p=7.7e-7.",
-            "A healthier codebook than the arithmetic runs: 12 of 30 codes "
-            "active, and no chunk position is owned ~100% by one code (max "
-            "single-code share 71.5%).",
-        ],
-        does_not_show=[
-            "The previously headlined result is WITHDRAWN. `t20 -> FunctionDef, "
-            "35.1% purity, 3.84x lift` does not survive: t20 fires at exactly 1 "
-            "of 32 positions, and P(FunctionDef | chunk 0) is 41.2% before any "
-            "code is consulted, so its lift_pos is 0.85x — below its own "
-            "baseline.",
-            "Worse, t20's firing pattern is a deterministic function of "
-            "left-padding alignment: it fires at chunk 0 iff the batch row's "
-            "pad length is an exact multiple of L=8 (228/228 vs 0/572, perfect "
-            "separation). It is a padding-alignment detector, not a syntactic "
-            "one.",
-            "The codes are NOT causally load-bearing, and the sign is negative: "
-            "ablating decode-time codes moves accuracy 22.13% -> 22.75%, i.e. "
-            "removing the codes is very slightly better.",
-            "That -0.63pp is a DECODE-ONLY ablation and for this task it is "
-            "nearly no ablation at all: the Python source sits in the prompt, "
-            "so 32 prefill chunks stay fully steered in both arms while at most "
-            "4 decode chunks differ. A four-arm knockout (zeroed `steering_emb` "
-            "across prefill and decode, plus a random-code control) is being "
-            "measured; treat -0.63pp as superseded.",
-            "Single-code repair (R2) is UNDERPOWERED, not null: 0/86 repairs in "
-            "both the treatment and the control arm cannot separate 'no effect' "
-            "from 'too few trials'.",
-            "Task accuracy is 22%, so this is not a usable code model.",
-        ],
-    ),
-    "codenet_v9_20k": dict(
-        study="codenet",
-        task="Project CodeNet Python; predict the final line of a short "
-             "solution given the lines above it; one steering code per 8-token "
-             "chunk",
-        train_size=20_000, digits=None, eval_n=800,
-        env="CODENET_SIZE=20000 (625 optimizer steps)",
-        blurb="625 optimizer steps — the 5x-budget control.",
-        metrics_json=["codenet_20k_knockout.json", "codenet_r1r2_20k.json"],
-        deliverables=["codenet.md (matched-budget control)",
-                      "r1_r3_r5_tables.md (knockout)"],
+        task="18-digit addition and subtraction; one steering code per answer "
+             "digit. Top rung of the causal escalation.",
+        train_size=500, digits=18, eval_n=2600,
+        env="ARITH_DIGITS=18 ARITH_SIZE=500",
+        blurb="Hardest escalation rung: 18-digit, scale=1.0, alpha_info=30, "
+              "alpha_zipf=20, target_vocab_util=0.9, 200 epochs.",
+        metrics_json=["arith_18d_500_MAX_knockout.json"],
+        deliverables=["REBUTTAL_arithmetic.md (escalation table, row 4)",
+                      "repro/f2_escalation.sh"],
         recommend="hold", provisional=False,
-        reason="HOLD. 4.9% accuracy — below the study's own 10% analysis floor. "
-               "Its only role is the control showing 5x training budget made "
-               "things worse on both axes, and that claim is fully documented "
-               "by history.json and the train log, which are kilobytes. "
-               "Publishing 1.5GB of degenerate weights to support a "
-               "'it got worse' sentence is not a good trade. Push only if a "
-               "reviewer asks to verify the budget control directly.",
+        reason="HOLD. One row of the escalation table. It is the rung with the "
+               "largest arithmetic knockout (+1.69pp, +5.9% relative) and it "
+               "still does not open the gate, so it is evidence about a trend "
+               "rather than a reported model. The trend is fully documented by "
+               "the knockout JSON, which is kilobytes.",
         shows=[
-            "5x the optimizer budget of codenet_v9 makes the result worse on "
-            "both axes: accuracy 22.1% -> 4.9%, peak lift 3.84x -> 1.30x.",
-            "Codebook utilisation rises slightly (12 -> 15 of 30 active), so "
-            "the degradation is not codebook collapse.",
+            "Causal load responds to pressure: pushing difficulty to 18 digits "
+            "and steering scale to 1.0 raises the knockout ~11x over the "
+            "6-digit published recipe (+0.15pp -> +1.69pp).",
         ],
         does_not_show=[
-            "Nothing positive. Median lift 1.12x — the median code is at chance.",
-            "Knockout is negative here too: 5.13% ON vs 5.38% OFF.",
-            "R2 is underpowered: 0/105 in both arms.",
-            "At 4.9% exact match this model does not perform the task.",
+            "The gate still does not open: +1.69pp / +5.9% relative is below "
+            "the 3pp-or-15% threshold, so the codes are not load-bearing here "
+            "either.",
+            "No R1/R2/R5 analysis was run on this checkpoint.",
+            "500 training examples over 200 epochs — heavily overfit by "
+            "construction; the rung tests causal load, not generalisation.",
         ],
     ),
     "arith_12d_10k": dict(
         study="arithmetic",
         task="12-digit addition and subtraction; one steering code per answer "
-             "digit. Rung 1 of the causal gate sweep.",
+             "digit. Escalation rung 2.",
         train_size=10_000, digits=12, eval_n=2600,
         env="ARITH_DIGITS=12 ARITH_SIZE=10000",
-        blurb="Gate-sweep rung 1 (published recipe on the harder task).",
+        blurb="Escalation rung 2 (published recipe on the harder task).",
         metrics_json=["arith_12d_10k_knockout.json"],
-        deliverables=[],
+        deliverables=["REBUTTAL_arithmetic.md (escalation table, row 2)",
+                      "repro/f2_escalation.sh"],
         recommend="hold", provisional=False,
-        reason="HOLD. Rung 1 of seven in a sweep that is still running. Its "
-               "gate is closed (delta -0.23pp) so it will never be the reported "
-               "checkpoint, and no number from it appears in any deliverable — "
-               "it is one row of a sweep table in sweep_gate_summary.json. "
-               "Publish the rung that opens the gate, if one does; publish "
-               "nothing if none does.",
+        reason="HOLD. One row of the escalation table; gate closed (+0.54pp). "
+               "The row is documented by its knockout JSON.",
+        shows=["12-digit arithmetic at the published recipe: 83.0% accuracy, "
+               "10 of 30 codes active, knockout +0.54pp."],
+        does_not_show=["Gate closed. No R1/R2/R5 analysis was run on it."],
+    ),
+    "arith_12d_10k_s0.1_i10_z10u8": dict(
+        study="arithmetic",
+        task="12-digit addition and subtraction; escalation rung 3 "
+             "(Zipf pressure raised 10x).",
+        train_size=10_000, digits=12, eval_n=2600,
+        env="ARITH_DIGITS=12 ARITH_SIZE=10000",
+        blurb="Escalation rung 3: alpha_zipf 1.0 -> 10.0, target_vocab_util 0.8.",
+        metrics_json=["arith_12d_10k_s0.1_i10_z10u8_knockout.json"],
+        deliverables=["REBUTTAL_arithmetic.md (escalation table, row 3)",
+                      "repro/f2_escalation.sh"],
+        recommend="hold", provisional=False,
+        reason="HOLD. One row of the escalation table; gate closed (+0.23pp).",
+        shows=["Isolates the Zipf codebook-diversity knob at fixed difficulty: "
+               "raising alpha_zipf 10x did not raise causal load."],
+        does_not_show=["Gate closed, and LOWER than rung 2 (+0.23pp vs "
+                       "+0.54pp) — codebook diversity pressure alone does not "
+                       "buy causal load."],
+    ),
+
+    # ── Negative results: kept on the record, not published ──────────────────
+    "codenet_FROZEN": dict(
+        study="codenet",
+        task="Project CodeNet Python, frozen backbone: all 596M model "
+             "parameters frozen, only the 61K steering parameters trained.",
+        train_size=4000, digits=None, eval_n=800,
+        env="CODENET_SIZE=4000, --freeze_model, 8 epochs, steer_lr=1e-2",
+        blurb="Frozen-backbone experiment. A tried-and-failed configuration, "
+              "kept on the record because the way it failed is informative.",
+        metrics_json=["codenet_FROZEN_knockout.json"],
+        deliverables=["MODELS.md (negative result)"],
+        recommend="hold", provisional=False,
+        reason="HOLD. The configuration failed. Freezing the backbone was "
+               "intended to force causal load structurally — if the model "
+               "cannot adapt its weights, it must route through the codes. It "
+               "does force codebook diversity (23 of 30 codes used), but at "
+               "scale=1.0 decode-time steering destroys generation rather than "
+               "guiding it.",
         shows=[
-            "Rung 1 of the causal gate sweep: 12-digit arithmetic at 10K "
-            "examples, published recipe. 83.0% accuracy, 10 of 30 codes active.",
+            "Freezing does prevent codebook collapse: 23 of 30 codes used, "
+            "versus 8-11 active in the trainable-backbone runs. With no weight "
+            "updates available, the model cannot route around the codebook.",
         ],
         does_not_show=[
-            "The gate does not open here: knockout delta is -0.23pp, so codes "
-            "remain causally inert on the harder task at the published recipe. "
-            "That delta is a decode-only ablation (decode_scale 0.1 vs 0.0) and "
-            "is a lower bound, not a full knockout.",
-            "No R1/R2/R3/R5 analysis was run on this checkpoint.",
+            "The configuration is a net failure: 9.25% with codes ON against "
+            "10.37% with steering fully zeroed — the codes cost 1.12pp "
+            "(-12.2% relative). The sign is negative.",
+            "At scale=1.0 decode-time steering is actively destructive, and "
+            "this is the informative part. Three arms from one settings-matched "
+            "run: prefill-steered/decode-off 25.50%, no steering 10.37%, fully "
+            "steered 9.25%. Prefill steering is worth +15pp; adding decode "
+            "steering at this magnitude costs 16pp. The reported CodeNet "
+            "checkpoint uses scale=0.5.",
+            "Do not compare 9.25% against the 15.75% untrained baseline: that "
+            "baseline was measured with different generation settings and is "
+            "not settings-matched to these arms. The three arms above are, and "
+            "they are the comparison to quote.",
+            "The frozen arithmetic counterpart was NOT run to completion, and "
+            "deliberately so: a frozen Qwen3-0.6B cannot produce the "
+            "`123456+654321=` answer format at all, so its knockout would "
+            "measure 'the codes taught the output format' rather than 'the "
+            "codes carry carry-logic'. The control would confound the claim.",
         ],
+    ),
+    "codenet_v9": dict(
+        study="codenet",
+        task="Project CodeNet Python; one steering code per 8-token chunk. "
+             "125 optimizer steps, scale=0.1.",
+        train_size=4000, digits=None, eval_n=800,
+        env="CODENET_SIZE=4000 (125 optimizer steps)",
+        blurb="Superseded first CodeNet run (scale=0.1). Kept for provenance.",
+        metrics_json=["codenet_v9_knockout4.json",
+                      "codenet_position_confound_nopad.json"],
+        deliverables=[],
+        recommend="hold", provisional=False,
+        reason="HOLD, superseded. This is the pre-gate CodeNet checkpoint at "
+               "scale=0.1, where the codes are causally inert. Every CodeNet "
+               "number in the rebuttal now comes from "
+               "codenet_s0.5_i10_z1_L8_n4000 instead. Nothing cites it.",
+        shows=["Historical: the run whose padding-alignment bug was found and "
+               "fixed, which is why every later CodeNet number is measured at "
+               "eval batch size 1."],
+        does_not_show=[
+            "Codes are not load-bearing at scale=0.1 — this is the observation "
+            "that motivated the scale sweep that produced the reported "
+            "checkpoint.",
+            "Its once-headlined `t20 -> FunctionDef 3.84x` is withdrawn: t20 "
+            "fires at chunk 0 iff the row's left-pad length is a multiple of "
+            "L=8 (228/228 aligned vs 0/572 misaligned). It was a "
+            "padding-alignment detector.",
+        ],
+    ),
+    "arith_v9": dict(
+        study="arithmetic",
+        task="6-digit addition and subtraction; one steering code per answer "
+             "digit. Misconfigured loss weights.",
+        train_size=100_000, digits=6, eval_n=2600,
+        env="ARITH_DIGITS=6 ARITH_SIZE=100000 (defaults)",
+        blurb="Default loss weights (alpha_info=1.0, alpha_abs=0.5, "
+              "alpha_zipf=0.01) — 100x low on Zipf, 10x low on info.",
+        metrics_json=[],
+        metrics_static={
+            "accuracy": 0.836, "n_eval": 2600, "n_active_codes": 5,
+            "best_code": "t20 -> MD, purity 37.2%, base rate 15.4%, lift 2.42x",
+            "median_lift": 1.87,
+            "_source": "run log; no results/*.json on disk for this arm",
+        },
+        deliverables=[],
+        recommend="hold", provisional=False,
+        reason="HOLD. It was the negative arm of a weights comparison whose "
+               "deliverable no longer exists; no current table cites it. The "
+               "configuration-not-scale point it supported is now carried by "
+               "the escalation table, which uses live checkpoints.",
+        shows=["A misconfigured DLR run collapses the codebook: 5 of 30 codes "
+               "active, peak purity 37.2% at a 15.4% base rate."],
+        does_not_show=["Nothing positive; published as a control, and no "
+                       "longer cited by any deliverable."],
+    ),
+    "codenet_v9_20k": dict(
+        study="codenet",
+        task="Project CodeNet Python; one steering code per 8-token chunk. "
+             "625 optimizer steps.",
+        train_size=20_000, digits=None, eval_n=800,
+        env="CODENET_SIZE=20000 (625 optimizer steps)",
+        blurb="The 5x-budget control.",
+        metrics_json=[],
+        metrics_static={"accuracy": 0.0488, "n_eval": 800,
+                        "n_active_codes": 15, "median_lift": 1.12,
+                        "_source": "history.json / train.log"},
+        deliverables=[],
+        recommend="hold", provisional=False,
+        reason="HOLD. 4.88% accuracy, below the study's 10% analysis floor. "
+               "Its role — showing 5x optimizer budget made things worse, "
+               "which rules out undertraining — is fully documented by "
+               "history.json and the train log.",
+        shows=["5x the optimizer budget makes the result worse on both axes: "
+               "accuracy 22.1% -> 4.9%, peak lift 3.84x -> 1.30x, so the weak "
+               "125-step result is not an undertraining artefact."],
+        does_not_show=["Nothing positive. Median lift 1.12x; at 4.9% exact "
+                       "match the model does not perform the task."],
     ),
 }
 

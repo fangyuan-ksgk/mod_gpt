@@ -1,0 +1,9 @@
+{
+  "codes_ON": 0.0925,
+  "n_codes_used": 23,
+  "codes_OFF_dec": 0.255,
+  "codes_OFF_full": 0.10375,
+  "delta_pp": -1.1249999999999996,
+  "delta_rel_pct": -12.162162162162158,
+  "untrained_baseline": 0.1575
+}
