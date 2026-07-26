@@ -1,0 +1,8 @@
+{
+  "codes_ON": 0.1975,
+  "codes_RANDOM": 0.12875,
+  "codes_OFF_full": 0.14,
+  "delta_pp": 5.75,
+  "delta_rel_pct": 29.11392405063291,
+  "scoring": "clean (trailing comments + whitespace normalised)"
+}
