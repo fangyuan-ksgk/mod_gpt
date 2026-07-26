@@ -100,10 +100,19 @@ class CodeNetDataset(Dataset):
     """
 
     def __init__(self, split="train", tokenizer=None, max_length=256,
-                 size=4000, seed=42, min_lines=4, max_lines=25,
+                 size=None, seed=42, min_lines=4, max_lines=25,
                  max_chars=900, root=None):
         self.tokenizer = tokenizer
         self.max_length = max_length
+
+        # `get_dataset(name, split, tokenizer, max_length)` has no size argument,
+        # so the training-set size is set here via CODENET_SIZE. It matters: at
+        # the 4000 default this study trains for 125 optimizer steps against the
+        # arithmetic study's 3125, and a null result at that budget cannot be
+        # distinguished from undertraining.
+        if size is None:
+            import os
+            size = int(os.environ.get("CODENET_SIZE", 4000))
 
         root = Path(root or LOCAL_ROOT)
         if not root.exists():

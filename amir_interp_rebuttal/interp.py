@@ -263,7 +263,7 @@ def surgical_swap_sweep(
 
 def targeted_swap_sweep(
     wrapper, tokenizer, dataset, device, wrong_idxs: Sequence[int],
-    purity_rows: Sequence[dict], label_fn, C_SIZE: int, span: int,
+    purity_rows: Sequence[dict], label_at, C_SIZE: int, span: int,
     max_examples: int = 200, eval_batch_size: int = 32, max_new_tokens: int = 16,
     seed: int = 7, decode_scale: float = None, log_fn=print,
 ):
@@ -303,10 +303,14 @@ def targeted_swap_sweep(
         by_code: Dict[int, List[int]] = defaultdict(list)
         labels_at_pos: Dict[int, str] = {}
         for i in idxs:
-            labels = label_fn(i)
-            if pos >= len(labels):
+            # `label_at(i, pos)` resolves the study-specific offset between a
+            # decode step and the labelled chunk it corresponds to. For
+            # arithmetic they coincide; for CodeNet the decode stream starts
+            # after the prompt's chunks, so a naive labels[pos] would score the
+            # completion against the wrong part of the file.
+            lab = label_at(i, pos)
+            if lab is None:
                 continue
-            lab = labels[pos]
             code = best_for_label.get(lab)
             if code is None:
                 continue

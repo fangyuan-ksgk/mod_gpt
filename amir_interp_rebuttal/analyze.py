@@ -108,10 +108,29 @@ def main():
         def labels_at(self, i):
             return label_fn(i)
 
+    # Which recorded code stream lines up with the labels differs by study:
+    #
+    #   arithmetic — the labelled structure IS the generated answer, so the
+    #                decode codes (one per answer digit) are the right stream.
+    #   codenet    — the labelled structure is the source code, nearly all of
+    #                which sits in the prompt. Decode codes cover only the ~4
+    #                chunks of the generated final line, so scoring them against
+    #                whole-source chunk labels would compare chunk k of the
+    #                completion with chunk k of the file. Use the prefill codes,
+    #                which start at the same token as the labels.
+    code_key = "codes" if args.study == "arithmetic" else "prompt_codes"
+    usable = [r for r in recs if code_key in r and r[code_key]]
+    if not usable:
+        raise RuntimeError(
+            f"no records carry '{code_key}' — cannot align codes to labels. "
+            "Check that record_codes=True and the wrapper exposes the stream.")
+    for r in usable:
+        r["codes"] = r[code_key]
+
     span = n_chunks if n_chunks is not None else max(
-        (len(r.get("codes", [])) for r in recs), default=0)
-    counts, pos_counts = build_contingency(
-        [r for r in recs if "codes" in r], _LabelAdapter(), span)
+        (len(r["codes"]) for r in usable), default=0)
+    print(f"  aligning on '{code_key}' | {len(usable)} records | span {span} chunks")
+    counts, pos_counts = build_contingency(usable, _LabelAdapter(), span)
     rows, marginal = purity_report(counts, pos_counts, min_n=args.min_code_n)
 
     if rows:
@@ -150,8 +169,21 @@ def main():
         # This is the claim-supporting number; run it first so it lands even if
         # the exhaustive sweep gets cut short.
         print("\n  [R2b] label-matched code vs random control")
+        # Resolve decode step -> labelled chunk. Arithmetic: the labels ARE the
+        # answer digits, so decode step i is label i. CodeNet: labels index the
+        # whole source and the decode stream begins after the prompt's chunks,
+        # so the same decode step is label (n_prompt_chunks + i).
+        def label_at(i, pos):
+            labels = label_fn(i)
+            if args.study == "arithmetic":
+                return labels[pos] if pos < len(labels) else None
+            item = ds[i]
+            offset = -(-int(item["prompt_len"]) // args.L)   # ceil div
+            k = offset + pos
+            return labels[k] if k < len(labels) else None
+
         targeted = targeted_swap_sweep(
-            wrapper, tok, ds, dev, wrong, rows, _LabelAdapter().labels_at,
+            wrapper, tok, ds, dev, wrong, rows, label_at,
             args.C_SIZE, span, max_examples=args.max_swap_examples,
             max_new_tokens=args.max_new_tokens, decode_scale=decode_scale,
         )
@@ -160,7 +192,13 @@ def main():
         # published number, but it is an EXISTENCE measure over C x positions
         # interventions per example, not evidence of structure on its own.
         print("\n  [R2a] exhaustive best-of-C (existence only)")
-        positions = list(range(span)) if args.study == "arithmetic" else list(range(min(span, 8)))
+        # Swaps are applied at DECODE steps, so the position range is bounded by
+        # how many chunks are actually generated (max_new_tokens / L) — not by
+        # `span`, which for CodeNet counts chunks across the whole source.
+        n_decode_chunks = max(1, args.max_new_tokens // max(1, args.L))
+        positions = (list(range(span)) if args.study == "arithmetic"
+                     else list(range(min(n_decode_chunks, 8))))
+        print(f"  swap positions: {positions}")
         swap = surgical_swap_sweep(
             wrapper, tok, ds, dev, wrong, args.C_SIZE, span,
             positions=positions, max_examples=args.max_swap_examples,
