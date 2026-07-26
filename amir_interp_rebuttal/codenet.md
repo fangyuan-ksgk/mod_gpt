@@ -115,24 +115,96 @@ which is at least consistent with the treatment arm's result.
 
 ## Result — matched training budget
 
-<!-- PENDING: ckpt/codenet_v9_20k (CODENET_SIZE=20000, ~625 steps, 5x the first run;
-     all other settings identical). To be filled from
-     amir_interp_rebuttal/logs/codenet_analyze_20k.log and
-     amir_interp_rebuttal/results/codenet_20k_knockout.json. -->
+A second model at 20,000 examples — **625 optimizer steps, 5× the first run** — with
+every other setting identical. The purpose was to test whether the weak purity above
+was an artefact of undertraining.
+
+**It was not. More training produced a worse model on both axes.**
+
+| | 125 steps | 625 steps |
+|---|---|---|
+| Accuracy (same 800 held-out) | **22.2%** | 4.9% |
+| Active codes (≥30 uses) | 12 / 30 | 15 / 30 |
+| Best code | t20 → FunctionDef | t12 → Call |
+| — its purity | 35.1% | 38.2% |
+| — its base rate | 9.1% | 29.3% |
+| — its lift | **3.84×** | 1.30× |
+| — positions occupied | **1 of 32** | — |
+| Median lift | 1.06× | 1.12× |
+| M1 purity | not replicated | not replicated |
+| M2 predictive repair | 0/86 vs 0/86 | 0/105 vs 0/105 |
+
+The genuine specialist disappears. At 125 steps one code marked function definitions
+at 3.84× base rate from a single chunk position; at 625 steps the best code merely
+tracks `Call`, the most frequent construct, at 1.30×. Peak lift falls by two thirds
+while the codebook grows more populated — more codes doing less.
+
+The accuracy collapse is real, not a bookkeeping artefact. The two runs were scored on
+**byte-identical** eval examples (verified: the collection order is deterministic, so
+the size parameter only controls where collection stops, never which examples come
+first). Training loss behaved normally in both (7.28 → 1.19 here). Accuracy was already
+6.0% at the first evaluation and never recovered, so this is not late-stage degradation.
+
+**Consequence for the writeup.** The 125-step run has both the better accuracy and the
+better code structure, so it is the fairer thing to report as this study's primary
+result. The 625-step run is retained as evidence *against* the undertraining
+explanation — it was run to give the weak-purity result its best chance, and it made
+things worse.
 
 ---
 
 ## Causal load
 
-<!-- PENDING: codes-on vs codes-off for both CodeNet models, from
-     amir_interp_rebuttal/results/codenet_{125step,20k}_knockout.json.
+The measurement that ties the two studies together. Same model, same weights, steering
+switched on and off at generation time:
 
-     On arithmetic this single measurement resolved an otherwise confusing split
-     verdict: high-purity codes coexisted with zero repair effect because the codes
-     carried no causal load at all (0.2pp when removed). The router had learned to
-     predict structure without the codes acting on the computation -- a readout, not
-     a control. The same measurement here decides whether that is a property of the
-     approach at this scale or something specific to arithmetic. -->
+| Model | Codes active | Codes zeroed | Difference |
+|---|---|---|---|
+| CodeNet, 125 steps | 22.1% | 22.8% | **−0.6 pp** |
+| CodeNet, 625 steps | 5.1% | 5.4% | **−0.3 pp** |
+| *(Arithmetic, for comparison)* | *86.3%* | *86.2%* | *+0.2 pp* |
+
+**The codes carry no measurable causal load in either CodeNet model**, and both
+differences are slightly negative — removing the codes is, if anything, marginally
+better. Across three models spanning two domains, the largest effect of the entire
+steering apparatus on task accuracy is two tenths of a percentage point.
+
+This explains the repair results without appeal to noise or sample size. A computation
+cannot be repaired by editing a channel it does not read, which is why the label-matched
+code and a random code produce identical outcomes: neither does anything.
+
+---
+
+## Interpretation
+
+CodeNet reproduces the arithmetic study's conclusion by a different route, which is what
+makes it worth having.
+
+On arithmetic the codebook **collapsed** (7 of 30 codes) yet yielded a strong specialist
+(78.3% purity, 6.21× lift). Here the codebook stays **healthy** (12–15 codes, no
+collapse) and yields a weaker but genuinely position-locked one (`t20`, function
+definitions, 3.84×, one position of 32). Different failure modes, different purity
+outcomes — and the same finding about causal load.
+
+The pattern in both domains is that **the router learns to predict structure while the
+codes do no work**. That is a coherent thing for the training objective to produce: the
+routing head is optimised to be predictable from the input, which is satisfied by
+becoming a classifier of the input, whether or not the selected vector influences the
+computation. The information-gain term is supposed to prevent exactly this, and at these
+weights it does not.
+
+The most likely cause remains capacity. A 596M-parameter pretrained model has no need to
+route computation through a 30-vector codebook for either six-digit arithmetic or Python
+line completion; gradient descent takes the cheaper path of solving the task in the
+weights and letting the router describe what it sees.
+
+What this replication establishes, stated fairly:
+
+- **Yes**, structurally specialised codes emerge outside toy-scale models, in both an
+  algorithmic and a syntactic domain, including a position-locked one here.
+- **No**, single-code edits do not repair predictions at this scale.
+- **And** the codes carry no measurable causal load, which is the honest reason for the
+  second answer and a substantial caveat on the first.
 
 ---
 

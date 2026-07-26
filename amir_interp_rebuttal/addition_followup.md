@@ -264,6 +264,37 @@ directly by predicting that load-bearingness, and with it repairability, returns
 
 ---
 
+## Cross-study summary
+
+The same protocol was run on a second, unrelated domain — Python source from CodeNet,
+with per-chunk syntactic constructs as ground truth in place of arithmetic sub-tasks
+(see `codenet.md`). The two studies reach the same conclusion by different routes,
+which is the strongest form the evidence takes.
+
+| | Arithmetic | CodeNet |
+|---|---|---|
+| Structure type | algorithmic (carry/borrow) | syntactic (AST constructs) |
+| Codebook behaviour | **collapsed** — 7 of 30 active | **healthy** — 12–15 of 30 active |
+| Best specialist | sum-9 cascade, **78.3%**, 6.21× | function definition, 35.1%, 3.84×, **1 of 32 positions** |
+| Median lift | 1.62× | 1.06× |
+| Sub-task purity | **replicates** | does not replicate |
+| Single-code repair | does not replicate | underpowered (0 vs 0) |
+| **Causal load** | **+0.2 pp** | **−0.6 pp / −0.3 pp** |
+
+The intermediate results differ in nearly every respect — one codebook collapses and the
+other does not; purity replicates in one domain and not the other. The final measurement
+does not differ: across three models and two domains, **removing the codes entirely
+changes accuracy by at most two tenths of a percentage point**, and twice the change is
+negative.
+
+A single null invites the objection that the task, scale, or configuration was wrong.
+Two nulls reached through different codebook behaviours and opposite purity outcomes
+are much harder to attribute to any one of those. The consistent finding is that the
+routing head learns to *predict* structure while the codes do no work on the
+computation — a readout rather than a control.
+
+---
+
 ## Method note: decode-time knockout
 
 The knockout above zeroes the steering scale during *generation*, which is the condition

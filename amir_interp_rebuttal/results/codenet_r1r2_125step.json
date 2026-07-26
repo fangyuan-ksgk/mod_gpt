@@ -1,0 +1,165 @@
+{
+  "study": "codenet",
+  "ckpt": "ckpt/codenet_v9",
+  "note": "125 optimizer steps (CODENET_SIZE=4000)",
+  "accuracy": 0.222,
+  "n_wrong": 622,
+  "n_eval": 800,
+  "R1": {
+    "n_active_codes": 12,
+    "rows": [
+      {
+        "code": 13,
+        "n": 38,
+        "top": "BinOp",
+        "purity": 0.447,
+        "recall": 0.011000000000000001,
+        "f1": 0.02,
+        "marginal": 0.135,
+        "lift": 3.31,
+        "top_pos": 18,
+        "n_positions": 18
+      },
+      {
+        "code": 20,
+        "n": 228,
+        "top": "FunctionDef",
+        "purity": 0.35100000000000003,
+        "recall": 0.07400000000000001,
+        "f1": 0.12,
+        "marginal": 0.091,
+        "lift": 3.84,
+        "top_pos": 0,
+        "n_positions": 1
+      },
+      {
+        "code": 8,
+        "n": 79,
+        "top": "Call",
+        "purity": 0.32899999999999996,
+        "recall": 0.008,
+        "f1": 0.01,
+        "marginal": 0.293,
+        "lift": 1.12,
+        "top_pos": 7,
+        "n_positions": 20
+      },
+      {
+        "code": 6,
+        "n": 73,
+        "top": "Call",
+        "purity": 0.32899999999999996,
+        "recall": 0.006999999999999999,
+        "f1": 0.01,
+        "marginal": 0.293,
+        "lift": 1.12,
+        "top_pos": 4,
+        "n_positions": 28
+      },
+      {
+        "code": 2,
+        "n": 1275,
+        "top": "Call",
+        "purity": 0.311,
+        "recall": 0.115,
+        "f1": 0.17,
+        "marginal": 0.293,
+        "lift": 1.06,
+        "top_pos": 1,
+        "n_positions": 31
+      },
+      {
+        "code": 0,
+        "n": 5697,
+        "top": "Call",
+        "purity": 0.303,
+        "recall": 0.499,
+        "f1": 0.38,
+        "marginal": 0.293,
+        "lift": 1.03,
+        "top_pos": 1,
+        "n_positions": 31
+      },
+      {
+        "code": 1,
+        "n": 2459,
+        "top": "Call",
+        "purity": 0.297,
+        "recall": 0.21100000000000002,
+        "f1": 0.25,
+        "marginal": 0.293,
+        "lift": 1.01,
+        "top_pos": 0,
+        "n_positions": 32
+      },
+      {
+        "code": 9,
+        "n": 80,
+        "top": "Call",
+        "purity": 0.287,
+        "recall": 0.006999999999999999,
+        "f1": 0.01,
+        "marginal": 0.293,
+        "lift": 0.98,
+        "top_pos": 5,
+        "n_positions": 26
+      },
+      {
+        "code": 4,
+        "n": 412,
+        "top": "Call",
+        "purity": 0.28600000000000003,
+        "recall": 0.034,
+        "f1": 0.06,
+        "marginal": 0.293,
+        "lift": 0.98,
+        "top_pos": 2,
+        "n_positions": 29
+      },
+      {
+        "code": 3,
+        "n": 768,
+        "top": "Call",
+        "purity": 0.263,
+        "recall": 0.057999999999999996,
+        "f1": 0.1,
+        "marginal": 0.293,
+        "lift": 0.9,
+        "top_pos": 4,
+        "n_positions": 31
+      },
+      {
+        "code": 5,
+        "n": 457,
+        "top": "If",
+        "purity": 0.254,
+        "recall": 0.073,
+        "f1": 0.11,
+        "marginal": 0.135,
+        "lift": 1.88,
+        "top_pos": 5,
+        "n_positions": 31
+      },
+      {
+        "code": 7,
+        "n": 103,
+        "top": "Call",
+        "purity": 0.243,
+        "recall": 0.006999999999999999,
+        "f1": 0.01,
+        "marginal": 0.293,
+        "lift": 0.83,
+        "top_pos": 13,
+        "n_positions": 24
+      }
+    ]
+  },
+  "R2": {
+    "R2b_targeted": {
+      "targeted_fixed": 0,
+      "random_fixed": 0,
+      "n_attempted": 86,
+      "verdict": "underpowered: 0 vs 0 cannot separate no-effect from too-few-trials"
+    }
+  }
+}
