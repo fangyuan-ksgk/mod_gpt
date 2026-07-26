@@ -18,10 +18,33 @@ def _pad_id(tokenizer):
 
 
 @torch.no_grad()
+def _clean_match(pred, gold):
+    """Correctness ignoring two pure decoding artefacts.
+
+    Roughly 12% of CodeNet eval failures are not modelling errors: the model
+    emits the right statement and then a trailing `# comment`, or the answer is
+    scored against a line that carries one. Neither has anything to do with the
+    steering codes, but both sit in the denominator of every knockout and repair
+    rate, diluting exactly the effect we are trying to measure.
+
+    This strips trailing comments and collapses whitespace before comparing. It
+    does NOT rescue a prediction whose code differs -- `print` vs `print(x)` is
+    still wrong, because generation genuinely stopped early.
+    """
+    import re as _re
+    if pred is None:
+        return False
+    def norm(s):
+        s = _re.sub(r"\s+#.*$", "", str(s))     # trailing comment
+        return _re.sub(r"\s+", " ", s).strip()
+    return norm(pred) == norm(gold)
+
+
 def batched_generate(
     wrapper, tokenizer, dataset, device, idxs: Sequence[int],
     eval_batch_size: int = 32, max_new_tokens: int = 16,
     record_codes: bool = False, decode_scale: Optional[float] = None,
+    score_mode: str = "exact",
 ):
     """Greedy-generate for `idxs`. Returns list of dicts with pred/gold/correct
     and, when `record_codes`, the per-decode-step routed codes.
@@ -75,6 +98,7 @@ def batched_generate(
                 prompt_codes = pc.detach().cpu()
 
         max_pl = input_ids.size(1)
+
         for j, i in enumerate(chunk):
             gen_ids = generated[j, max_pl - prompts[j].size(0):]
             text = tokenizer.decode(gen_ids.tolist(), skip_special_tokens=True)
@@ -84,8 +108,11 @@ def batched_generate(
                 "pred": pred,
                 "gold": golds[j],
                 "correct": (pred is not None and pred == golds[j]),
+                "correct_clean": _clean_match(pred, golds[j]),
                 "text": text,
             }
+            if score_mode == "clean":
+                rec["correct"] = rec["correct_clean"]
             if decode_codes is not None:
                 rec["codes"] = decode_codes[j].tolist()
             if prompt_codes is not None:

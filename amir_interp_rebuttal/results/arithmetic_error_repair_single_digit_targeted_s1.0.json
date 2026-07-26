@@ -1,0 +1,51 @@
+{
+  "ckpt": "ckpt/arith_v9_paperhp",
+  "study": "arithmetic",
+  "error_class": "single_digit",
+  "mode": "targeted",
+  "native_scale": 0.1,
+  "repair_scale": 1.0,
+  "n_attempted": 27,
+  "C": 30,
+  "n_positions": 8,
+  "fixed_best_of_C": 6,
+  "fix_rate_best_of_C": 0.2222222222222222,
+  "attempt_budget_per_example": 30,
+  "fixed_random_matched": 6,
+  "fix_rate_random_matched": 0.2222222222222222,
+  "fixing_codes": {
+    "0": 6
+  },
+  "first_hits": [
+    {
+      "ds_idx": 1008,
+      "code": 0,
+      "position": 3
+    },
+    {
+      "ds_idx": 1026,
+      "code": 0,
+      "position": 3
+    },
+    {
+      "ds_idx": 1166,
+      "code": 0,
+      "position": 2
+    },
+    {
+      "ds_idx": 1316,
+      "code": 0,
+      "position": 4
+    },
+    {
+      "ds_idx": 1484,
+      "code": 0,
+      "position": 3
+    },
+    {
+      "ds_idx": 1897,
+      "code": 0,
+      "position": 2
+    }
+  ]
+}

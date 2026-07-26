@@ -77,8 +77,10 @@ def classify(pred, gold):
     pt, gt = _toks(p), _toks(g)
     if not pt or not gt:
         return "other"
-    if g.startswith(p) or p.startswith(g):
-        return "truncation"               # right prefix, stopped early / ran on
+    if g.startswith(p):
+        return "stopped_early"            # correct prefix, generation ended too soon
+    if p.startswith(g):
+        return "ran_on"                   # correct answer, then kept generating
     if sorted(pt) == sorted(gt):
         return "reordering"               # same tokens, different order
     if pt[0] == gt[0] and len(pt) == len(gt):
@@ -91,7 +93,7 @@ def classify(pred, gold):
     return "different_construct"
 
 
-CLASS_ORDER = ["empty", "whitespace_only", "truncation", "reordering",
+CLASS_ORDER = ["empty", "whitespace_only", "stopped_early", "ran_on", "reordering",
                "identifier_swap", "same_construct", "different_construct", "other",
                # arithmetic
                "single_digit", "two_digit", "many_digit", "length_mismatch"]
@@ -125,6 +127,12 @@ def main():
                    help="stage 2: cap attempts; C x positions x N gets large")
     p.add_argument("--show", type=int, default=8,
                    help="stage 1: sample errors printed per class for eyeballing")
+    p.add_argument("--max_gold_tokens", type=int, default=None,
+                   help="restrict to examples whose gold answer is at most this "
+                        "many tokens. At 17%% accuracy most CodeNet errors are "
+                        "'the model did not solve it', which no code swap fixes. "
+                        "Short-gold errors are the competent subset: right "
+                        "content, wrong boundary.")
     p.add_argument("--repair_scale", type=float, default=None,
                    help="decode_scale to use DURING repair attempts. The "
                         "arithmetic checkpoint trains at scale=0.1, so swapping "
@@ -222,6 +230,12 @@ def main():
         if not args.error_class:
             raise SystemExit("--repair needs --error_class (see --dump output)")
         target = [r for r in wrong if r["error_class"] == args.error_class]
+        if args.max_gold_tokens:
+            before = len(target)
+            target = [r for r in target
+                      if len(_toks(r.get("gold"))) <= args.max_gold_tokens]
+            print(f"  gold-length filter <= {args.max_gold_tokens} tokens: "
+                  f"{before} -> {len(target)} examples", flush=True)
         if not target:
             raise SystemExit(f"no errors in class {args.error_class!r}")
         target = target[:args.max_examples]
@@ -317,6 +331,7 @@ def main():
             "ckpt": args.ckpt, "study": args.study,
             "error_class": args.error_class, "mode": args.mode,
             "native_scale": scale, "repair_scale": rscale,
+            "max_gold_tokens": args.max_gold_tokens,
             "n_attempted": len(target), "C": C, "n_positions": n_chunks,
             "fixed_best_of_C": fixed_any,
             "fix_rate_best_of_C": fixed_any / len(target),
@@ -329,6 +344,8 @@ def main():
         tag = f"{args.error_class}_{args.mode}"
         if rscale != scale:
             tag += f"_s{rscale}"
+        if args.max_gold_tokens:
+            tag += f"_g{args.max_gold_tokens}"
         path = out / f"{args.study}_error_repair_{tag}.json"
         path.write_text(json.dumps(payload, indent=2))
         print(f"\n  best-of-{C}: {fixed_any}/{len(target)} "

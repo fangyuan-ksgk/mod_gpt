@@ -5,11 +5,12 @@
   "accuracy": 0.17,
   "n_wrong": 664,
   "counts": {
-    "truncation": 94,
-    "reordering": 6,
-    "identifier_swap": 24,
+    "different_construct": 332,
     "same_construct": 208,
-    "different_construct": 332
+    "ran_on": 50,
+    "stopped_early": 44,
+    "identifier_swap": 24,
+    "reordering": 6
   },
   "errors": [
     {
@@ -26,7 +27,7 @@
     },
     {
       "ds_idx": 3,
-      "error_class": "truncation",
+      "error_class": "ran_on",
       "gold": "print(a)",
       "pred": "print(a) if a == b else print(a, b)  # print a and b, but a and b are same as before. So print a"
     },
@@ -68,19 +69,19 @@
     },
     {
       "ds_idx": 10,
-      "error_class": "truncation",
+      "error_class": "ran_on",
       "gold": "print(result)",
       "pred": "print(result)  # print the"
     },
     {
       "ds_idx": 11,
-      "error_class": "truncation",
+      "error_class": "stopped_early",
       "gold": "print(x)",
       "pred": "print"
     },
     {
       "ds_idx": 12,
-      "error_class": "truncation",
+      "error_class": "ran_on",
       "gold": "print(res)",
       "pred": "print(res) if res ==x else print(res) + str(x) if res !=x else print(res) + str(x) + str(res) if"
     },
@@ -116,7 +117,7 @@
     },
     {
       "ds_idx": 21,
-      "error_class": "truncation",
+      "error_class": "ran_on",
       "gold": "print(gcd(x, y))",
       "pred": "print(gcd(x, y))  # print(gcd(x, y))  # print(gcd(x, y))  # print(gcd(x"
     },
@@ -230,7 +231,7 @@
     },
     {
       "ds_idx": 42,
-      "error_class": "truncation",
+      "error_class": "ran_on",
       "gold": "print(gcd(x, y))",
       "pred": "print(gcd(x, y)) if gcd(x, y) == x + y else print(gcd(x, y), x + y)  # print"
     },
@@ -248,7 +249,7 @@
     },
     {
       "ds_idx": 45,
-      "error_class": "truncation",
+      "error_class": "ran_on",
       "gold": "print(gcd(X, Y))",
       "pred": "print(gcd(X, Y)) if gcd(X, Y) == X * Y else print(gcd(X, Y) * X * Y)  #"
     },
@@ -278,7 +279,7 @@
     },
     {
       "ds_idx": 51,
-      "error_class": "truncation",
+      "error_class": "stopped_early",
       "gold": "print(fractions.gcd(x, y))",
       "pred": "print"
     },
@@ -296,7 +297,7 @@
     },
     {
       "ds_idx": 56,
-      "error_class": "truncation",
+      "error_class": "stopped_early",
       "gold": "print(a[0])",
       "pred": "print(a"
     },
@@ -320,7 +321,7 @@
     },
     {
       "ds_idx": 60,
-      "error_class": "truncation",
+      "error_class": "stopped_early",
       "gold": "print(f(a,b))",
       "pred": "print(f"
     },
@@ -356,13 +357,13 @@
     },
     {
       "ds_idx": 67,
-      "error_class": "truncation",
+      "error_class": "stopped_early",
       "gold": "main()",
       "pred": "main"
     },
     {
       "ds_idx": 68,
-      "error_class": "truncation",
+      "error_class": "stopped_early",
       "gold": "solve()",
       "pred": "solve"
     },
@@ -392,13 +393,13 @@
     },
     {
       "ds_idx": 73,
-      "error_class": "truncation",
+      "error_class": "stopped_early",
       "gold": "print(gcd(x, y))",
       "pred": "print(gcd"
     },
     {
       "ds_idx": 74,
-      "error_class": "truncation",
+      "error_class": "ran_on",
       "gold": "print(n)",
       "pred": "print(n)  # print(n)  # print(n)  # print(n)  # print(n)  # print(n)  # print"
     },
@@ -428,13 +429,13 @@
     },
     {
       "ds_idx": 81,
-      "error_class": "truncation",
+      "error_class": "stopped_early",
       "gold": "print(gcd(A,B))",
       "pred": "print(g"
     },
     {
       "ds_idx": 82,
-      "error_class": "truncation",
+      "error_class": "ran_on",
       "gold": "print(mini)",
       "pred": "print(mini) if big == 0 else print(big) if big == mini else print(mini) if big == mini else print(big) if big"
     },
@@ -518,13 +519,13 @@
     },
     {
       "ds_idx": 97,
-      "error_class": "truncation",
+      "error_class": "ran_on",
       "gold": "run()",
       "pred": "run()  # 100000002 and 3927"
     },
     {
       "ds_idx": 98,
-      "error_class": "truncation",
+      "error_class": "ran_on",
       "gold": "print(gcd(a, b))",
       "pred": "print(gcd(a, b))  # same as before"
     },
@@ -536,7 +537,7 @@
     },
     {
       "ds_idx": 100,
-      "error_class": "truncation",
+      "error_class": "ran_on",
       "gold": "print(b)",
       "pred": "print(b) # since a and b are the same as the original numbers, but in the loop they are swapped. So the output is the"
     },
@@ -548,7 +549,7 @@
     },
     {
       "ds_idx": 102,
-      "error_class": "truncation",
+      "error_class": "stopped_early",
       "gold": "print(gcd(x, y))",
       "pred": "print(g"
     },
@@ -584,7 +585,7 @@
     },
     {
       "ds_idx": 110,
-      "error_class": "truncation",
+      "error_class": "stopped_early",
       "gold": "print(gcd(a,b))",
       "pred": "print(g"
     },
@@ -644,19 +645,19 @@
     },
     {
       "ds_idx": 121,
-      "error_class": "truncation",
+      "error_class": "ran_on",
       "gold": "print(greatest_common_divisor(x, y))",
       "pred": "print(greatest_common_divisor(x, y))  # 100000000000000000"
     },
     {
       "ds_idx": 122,
-      "error_class": "truncation",
+      "error_class": "stopped_early",
       "gold": "print(gcm(a,b))",
       "pred": "print(gcm"
     },
     {
       "ds_idx": 123,
-      "error_class": "truncation",
+      "error_class": "ran_on",
       "gold": "print(gcd(x,y))",
       "pred": "print(gcd(x,y)) #same"
     },
@@ -668,13 +669,13 @@
     },
     {
       "ds_idx": 126,
-      "error_class": "truncation",
+      "error_class": "stopped_early",
       "gold": "print(gcd(x,y))",
       "pred": "print(g"
     },
     {
       "ds_idx": 127,
-      "error_class": "truncation",
+      "error_class": "ran_on",
       "gold": "print(greatest_common_divisor(a, b))",
       "pred": "print(greatest_common_divisor(a, b))  # 1000000000000000000"
     },
@@ -728,7 +729,7 @@
     },
     {
       "ds_idx": 138,
-      "error_class": "truncation",
+      "error_class": "stopped_early",
       "gold": "print(b)",
       "pred": "print"
     },
@@ -746,7 +747,7 @@
     },
     {
       "ds_idx": 141,
-      "error_class": "truncation",
+      "error_class": "ran_on",
       "gold": "print(gcd(x, y))",
       "pred": "print(gcd(x, y)) if gcd(x, y) == x or gcd(x, y) == y else print(0)  # 0"
     },
@@ -758,7 +759,7 @@
     },
     {
       "ds_idx": 143,
-      "error_class": "truncation",
+      "error_class": "stopped_early",
       "gold": "print(Euclid(b, a))",
       "pred": "print(Euclid"
     },
@@ -782,7 +783,7 @@
     },
     {
       "ds_idx": 147,
-      "error_class": "truncation",
+      "error_class": "ran_on",
       "gold": "print(gcd(a, b))",
       "pred": "print(gcd(a, b)) if gcd(a, b) == a and gcd(a, b) == b else print(gcd(a, b), a"
     },
@@ -830,7 +831,7 @@
     },
     {
       "ds_idx": 156,
-      "error_class": "truncation",
+      "error_class": "stopped_early",
       "gold": "print(gcd(b[0],b[1]))",
       "pred": "print(gcd(b[0],b[1"
     },
@@ -842,7 +843,7 @@
     },
     {
       "ds_idx": 158,
-      "error_class": "truncation",
+      "error_class": "ran_on",
       "gold": "main()",
       "pred": "main()  # call the main function again"
     },
@@ -854,13 +855,13 @@
     },
     {
       "ds_idx": 160,
-      "error_class": "truncation",
+      "error_class": "ran_on",
       "gold": "print(eucli(x, y))",
       "pred": "print(eucli(x, y)) # print(eucli(x, y)) # print(eucli(x, y)) # print(eucli"
     },
     {
       "ds_idx": 161,
-      "error_class": "truncation",
+      "error_class": "stopped_early",
       "gold": "main()",
       "pred": "main"
     },
@@ -872,19 +873,19 @@
     },
     {
       "ds_idx": 163,
-      "error_class": "truncation",
+      "error_class": "stopped_early",
       "gold": "print(gcd(y,x))",
       "pred": "print"
     },
     {
       "ds_idx": 165,
-      "error_class": "truncation",
+      "error_class": "stopped_early",
       "gold": "print(gcd(X, Y))",
       "pred": "print(gcd(X,"
     },
     {
       "ds_idx": 166,
-      "error_class": "truncation",
+      "error_class": "stopped_early",
       "gold": "print(r)",
       "pred": "print(r"
     },
@@ -920,7 +921,7 @@
     },
     {
       "ds_idx": 173,
-      "error_class": "truncation",
+      "error_class": "ran_on",
       "gold": "print(gcd(x, y))",
       "pred": "print(gcd(x, y)) if gcd(x, y) == x or gcd(x, y) == y else print(0) #0 if not"
     },
@@ -938,7 +939,7 @@
     },
     {
       "ds_idx": 176,
-      "error_class": "truncation",
+      "error_class": "ran_on",
       "gold": "print(gdc(x, y))",
       "pred": "print(gdc(x, y))  # 100000000000000000000"
     },
@@ -962,19 +963,19 @@
     },
     {
       "ds_idx": 180,
-      "error_class": "truncation",
+      "error_class": "stopped_early",
       "gold": "print(gg(y,x))",
       "pred": "print(gg"
     },
     {
       "ds_idx": 181,
-      "error_class": "truncation",
+      "error_class": "stopped_early",
       "gold": "print(ans)",
       "pred": "print"
     },
     {
       "ds_idx": 183,
-      "error_class": "truncation",
+      "error_class": "ran_on",
       "gold": "print(gcd(x, y))",
       "pred": "print(gcd(x, y))  # 100000000000000000000"
     },
@@ -986,7 +987,7 @@
     },
     {
       "ds_idx": 185,
-      "error_class": "truncation",
+      "error_class": "ran_on",
       "gold": "print(greatest_common_division(x, y))",
       "pred": "print(greatest_common_division(x, y)) if greatest_common_division(x, y) == x else print(greatest_common_division(y, x))"
     },
@@ -1028,7 +1029,7 @@
     },
     {
       "ds_idx": 192,
-      "error_class": "truncation",
+      "error_class": "ran_on",
       "gold": "print(result)",
       "pred": "print(result) if result == 0 else print(result * 2) if result == 2 else print(result * 2) if result == 3"
     },
@@ -1046,7 +1047,7 @@
     },
     {
       "ds_idx": 195,
-      "error_class": "truncation",
+      "error_class": "stopped_early",
       "gold": "print(gcd)",
       "pred": "print(g"
     },
@@ -1064,7 +1065,7 @@
     },
     {
       "ds_idx": 198,
-      "error_class": "truncation",
+      "error_class": "stopped_early",
       "gold": "main()",
       "pred": "main"
     },
@@ -1094,7 +1095,7 @@
     },
     {
       "ds_idx": 203,
-      "error_class": "truncation",
+      "error_class": "stopped_early",
       "gold": "print(gdc(a[0],a[1]))",
       "pred": "print(gdc("
     },
@@ -1118,7 +1119,7 @@
     },
     {
       "ds_idx": 207,
-      "error_class": "truncation",
+      "error_class": "ran_on",
       "gold": "print(gcd(a, b))",
       "pred": "print(gcd(a, b)) # 10000000000000000000000"
     },
@@ -1142,7 +1143,7 @@
     },
     {
       "ds_idx": 212,
-      "error_class": "truncation",
+      "error_class": "ran_on",
       "gold": "print(gcd(x, y))",
       "pred": "print(gcd(x, y)) if x == y else print(gcd(x, y), x - y * gcd(x, y)) if x > y"
     },
@@ -1190,7 +1191,7 @@
     },
     {
       "ds_idx": 223,
-      "error_class": "truncation",
+      "error_class": "ran_on",
       "gold": "print(gcd(num_a, num_b))",
       "pred": "print(gcd(num_a, num_b)) if num_a == num_b else print(gcd(num_a, num_b), num_a - num_b) if"
     },
@@ -1274,7 +1275,7 @@
     },
     {
       "ds_idx": 242,
-      "error_class": "truncation",
+      "error_class": "ran_on",
       "gold": "print(gcd(x, y))",
       "pred": "print(gcd(x, y)) if x == y else print(gcd(x, y), x - 2 * gcd(x, y)) if x >"
     },
@@ -1352,7 +1353,7 @@
     },
     {
       "ds_idx": 256,
-      "error_class": "truncation",
+      "error_class": "stopped_early",
       "gold": "main()",
       "pred": "main"
     },
@@ -1418,7 +1419,7 @@
     },
     {
       "ds_idx": 272,
-      "error_class": "truncation",
+      "error_class": "stopped_early",
       "gold": "print(ans)",
       "pred": "print(ans"
     },
@@ -1442,7 +1443,7 @@
     },
     {
       "ds_idx": 280,
-      "error_class": "truncation",
+      "error_class": "ran_on",
       "gold": "print(cnt)",
       "pred": "print(cnt) # 100000000000000000000000000"
     },
@@ -1460,7 +1461,7 @@
     },
     {
       "ds_idx": 285,
-      "error_class": "truncation",
+      "error_class": "ran_on",
       "gold": "print(ctr)",
       "pred": "print(ctr) if ctr == 0 else print(ctr - 1) if ctr == 1 else print(ctr) if ctr == 2"
     },
@@ -1538,7 +1539,7 @@
     },
     {
       "ds_idx": 308,
-      "error_class": "truncation",
+      "error_class": "ran_on",
       "gold": "print(cnt)",
       "pred": "print(cnt)  # 10000000000000000000000000"
     },
@@ -1550,7 +1551,7 @@
     },
     {
       "ds_idx": 312,
-      "error_class": "truncation",
+      "error_class": "stopped_early",
       "gold": "print(len(inlst))",
       "pred": "print"
     },
@@ -1562,7 +1563,7 @@
     },
     {
       "ds_idx": 314,
-      "error_class": "truncation",
+      "error_class": "ran_on",
       "gold": "print(cnt)",
       "pred": "print(cnt)  # ????\u00b0??????"
     },
@@ -1604,7 +1605,7 @@
     },
     {
       "ds_idx": 325,
-      "error_class": "truncation",
+      "error_class": "ran_on",
       "gold": "main()",
       "pred": "main()  #"
     },
@@ -1634,7 +1635,7 @@
     },
     {
       "ds_idx": 336,
-      "error_class": "truncation",
+      "error_class": "stopped_early",
       "gold": "print(i)",
       "pred": "print(i"
     },
@@ -1676,7 +1677,7 @@
     },
     {
       "ds_idx": 345,
-      "error_class": "truncation",
+      "error_class": "stopped_early",
       "gold": "solve()",
       "pred": "solve"
     },
@@ -1700,7 +1701,7 @@
     },
     {
       "ds_idx": 350,
-      "error_class": "truncation",
+      "error_class": "ran_on",
       "gold": "print(count)",
       "pred": "print(count) if is_prime(n) else print(0"
     },
@@ -1772,7 +1773,7 @@
     },
     {
       "ds_idx": 373,
-      "error_class": "truncation",
+      "error_class": "stopped_early",
       "gold": "main()",
       "pred": "main"
     },
@@ -1808,13 +1809,13 @@
     },
     {
       "ds_idx": 384,
-      "error_class": "truncation",
+      "error_class": "stopped_early",
       "gold": "solve()",
       "pred": "solve"
     },
     {
       "ds_idx": 385,
-      "error_class": "truncation",
+      "error_class": "ran_on",
       "gold": "print(n_prime)",
       "pred": "print(n_prime) if n_prime > 0 else print(0) # print(0) if n_prime ==0 else print(n_prime) ??"
     },
@@ -1952,7 +1953,7 @@
     },
     {
       "ds_idx": 424,
-      "error_class": "truncation",
+      "error_class": "ran_on",
       "gold": "print(cnt)",
       "pred": "print(cnt)  # 1000000000000000000000000"
     },
@@ -1964,13 +1965,13 @@
     },
     {
       "ds_idx": 426,
-      "error_class": "truncation",
+      "error_class": "stopped_early",
       "gold": "main()",
       "pred": "main"
     },
     {
       "ds_idx": 427,
-      "error_class": "truncation",
+      "error_class": "stopped_early",
       "gold": "solve()",
       "pred": "solve"
     },
@@ -2012,7 +2013,7 @@
     },
     {
       "ds_idx": 434,
-      "error_class": "truncation",
+      "error_class": "stopped_early",
       "gold": "solve()",
       "pred": "solve"
     },
@@ -2096,7 +2097,7 @@
     },
     {
       "ds_idx": 461,
-      "error_class": "truncation",
+      "error_class": "ran_on",
       "gold": "prime_number()",
       "pred": "prime_number()  # 1000000000000000000000000"
     },
@@ -2138,7 +2139,7 @@
     },
     {
       "ds_idx": 470,
-      "error_class": "truncation",
+      "error_class": "stopped_early",
       "gold": "print(ok)",
       "pred": "print"
     },
@@ -2354,7 +2355,7 @@
     },
     {
       "ds_idx": 510,
-      "error_class": "truncation",
+      "error_class": "ran_on",
       "gold": "print(left)",
       "pred": "print(left) if calc_k_constP(left) == k else print(left - 1)  # 10000 * n is the max"
     },
@@ -2444,7 +2445,7 @@
     },
     {
       "ds_idx": 529,
-      "error_class": "truncation",
+      "error_class": "stopped_early",
       "gold": "main()",
       "pred": "main"
     },
@@ -2468,7 +2469,7 @@
     },
     {
       "ds_idx": 533,
-      "error_class": "truncation",
+      "error_class": "stopped_early",
       "gold": "main()",
       "pred": "main"
     },
@@ -2546,7 +2547,7 @@
     },
     {
       "ds_idx": 547,
-      "error_class": "truncation",
+      "error_class": "ran_on",
       "gold": "print(m)",
       "pred": "print(m) if m<="
     },
@@ -2624,7 +2625,7 @@
     },
     {
       "ds_idx": 560,
-      "error_class": "truncation",
+      "error_class": "ran_on",
       "gold": "inp = [(0.0, 0.0), (100.",
       "pred": "inp = [(0.0, 0.0), (100.0, 0.0), (100.0, 100.0), (0.0, 100.0"
     },
@@ -2648,7 +2649,7 @@
     },
     {
       "ds_idx": 564,
-      "error_class": "truncation",
+      "error_class": "stopped_early",
       "gold": "make_koch_curve(N-1, t, n2",
       "pred": "make_koch"
     },
@@ -2708,7 +2709,7 @@
     },
     {
       "ds_idx": 574,
-      "error_class": "truncation",
+      "error_class": "ran_on",
       "gold": "print (",
       "pred": "print (s_x, s_y)"
     },
@@ -2744,7 +2745,7 @@
     },
     {
       "ds_idx": 580,
-      "error_class": "truncation",
+      "error_class": "ran_on",
       "gold": "koch(n,0.0,0",
       "pred": "koch(n,0.0,0.0,0.0,0.0,0.0,0.0,0.0)  # 0.0000"
     },
@@ -2798,7 +2799,7 @@
     },
     {
       "ds_idx": 589,
-      "error_class": "truncation",
+      "error_class": "ran_on",
       "gold": "print(\"%.8f %.8f",
       "pred": "print(\"%.8f %.8f\"%(end[0"
     },
@@ -2894,7 +2895,7 @@
     },
     {
       "ds_idx": 606,
-      "error_class": "truncation",
+      "error_class": "ran_on",
       "gold": "koch",
       "pred": "koch("
     },
@@ -3068,7 +3069,7 @@
     },
     {
       "ds_idx": 636,
-      "error_class": "truncation",
+      "error_class": "ran_on",
       "gold": "k",
       "pred": "koch(n"
     },
@@ -3122,13 +3123,13 @@
     },
     {
       "ds_idx": 645,
-      "error_class": "truncation",
+      "error_class": "ran_on",
       "gold": "kock",
       "pred": "kock(3, (0, 0), (0, 0))"
     },
     {
       "ds_idx": 646,
-      "error_class": "truncation",
+      "error_class": "stopped_early",
       "gold": "func(N, (0.0, 0.0), (100.0, 0.0))",
       "pred": "func(N, (0.0"
     },
@@ -3278,7 +3279,7 @@
     },
     {
       "ds_idx": 671,
-      "error_class": "truncation",
+      "error_class": "ran_on",
       "gold": "koch(n",
       "pred": "koch(n, p2,"
     },
@@ -3326,7 +3327,7 @@
     },
     {
       "ds_idx": 679,
-      "error_class": "truncation",
+      "error_class": "stopped_early",
       "gold": "#print(trico.x",
       "pred": "#print(trico"
     },
@@ -3344,7 +3345,7 @@
     },
     {
       "ds_idx": 682,
-      "error_class": "truncation",
+      "error_class": "ran_on",
       "gold": "koch(p",
       "pred": "koch(p5,"
     },
@@ -3710,7 +3711,7 @@
     },
     {
       "ds_idx": 749,
-      "error_class": "truncation",
+      "error_class": "ran_on",
       "gold": "resolve()",
       "pred": "resolve()  #"
     },
@@ -3830,7 +3831,7 @@
     },
     {
       "ds_idx": 770,
-      "error_class": "truncation",
+      "error_class": "ran_on",
       "gold": "main()",
       "pred": "main() is called. So the code should work. But wait, the input is given as x1, y1, x2,"
     },
@@ -3860,13 +3861,13 @@
     },
     {
       "ds_idx": 775,
-      "error_class": "truncation",
+      "error_class": "ran_on",
       "gold": "run()",
       "pred": "run()  # run the function"
     },
     {
       "ds_idx": 776,
-      "error_class": "truncation",
+      "error_class": "stopped_early",
       "gold": "print(\"%.8f\" % math.sqrt(x3 * x3 + y3 * y3))",
       "pred": "print"
     },
@@ -3920,7 +3921,7 @@
     },
     {
       "ds_idx": 786,
-      "error_class": "truncation",
+      "error_class": "stopped_early",
       "gold": "print(ans)",
       "pred": "print"
     },
@@ -3950,7 +3951,7 @@
     },
     {
       "ds_idx": 791,
-      "error_class": "truncation",
+      "error_class": "stopped_early",
       "gold": "print(round(z, 8))",
       "pred": "print"
     },
@@ -3980,7 +3981,7 @@
     },
     {
       "ds_idx": 797,
-      "error_class": "truncation",
+      "error_class": "stopped_early",
       "gold": "print(distance)",
       "pred": "print"
     },
