@@ -95,5 +95,20 @@ between runs, is a claim that cannot be defended.
 
 ## Reported models
 
-Checkpoints behind reported numbers, their exact configs, and HuggingFace links:
+Both checkpoints behind the reported numbers are published to
+**[`thoughtworks/dlr-rebuttal-interp`](https://huggingface.co/thoughtworks/dlr-rebuttal-interp)**
+(currently **private** — the repo is under a named org and the submission is
+still under review; flip it public from the HF UI when that no longer matters).
+
+| Checkpoint | Carries |
+|---|---|
+| [`codenet_s0.5_i10_z1_L8_n4000`](https://huggingface.co/thoughtworks/dlr-rebuttal-interp/tree/main/codenet_s0.5_i10_z1_L8_n4000) | the causal result — knockout, per-code ablation, CodeNet R1 |
+| [`arith_v9_paperhp`](https://huggingface.co/thoughtworks/dlr-rebuttal-interp/tree/main/arith_v9_paperhp) | every arithmetic table — R1, Findings #5, #6, #7 |
+
+Each ships `final.pt` (optimizer state stripped, 1.19 GB — loads for inference,
+will not resume training), `history.json`, `steer_v9.pt`, and a model card
+carrying the exact config, every metric with the results file it came from, and
+an explicit "what this model does NOT show" section.
+
+Full configs, the seven checkpoints that were *not* published, and why:
 [MODELS.md](MODELS.md).

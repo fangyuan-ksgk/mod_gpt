@@ -1,6 +1,6 @@
 # MODELS.md — reported checkpoints
 
-HuggingFace repo: **`thoughtworks/dlr-rebuttal-interp`**, one subfolder per
+HuggingFace repo: **[`thoughtworks/dlr-rebuttal-interp`](https://huggingface.co/thoughtworks/dlr-rebuttal-interp)** — **pushed, private**, one subfolder per
 checkpoint tag. Naming follows the existing project convention
 (`thoughtworks/arithmetic-sorl`, `thoughtworks/arithmetic-sorl-data`): one model
 repo per study family, subfolders per run, config and metrics beside the weights.
