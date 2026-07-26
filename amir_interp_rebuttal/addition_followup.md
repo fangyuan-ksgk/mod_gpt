@@ -178,9 +178,99 @@ the comparison drawn, but the purity table should not be read at per-code resolu
 
 ## Corrected-configuration run
 
-<!-- PENDING: results for ckpt/arith_v9_paperhp (alpha_info=10.0, alpha_abs=0.1,
-     alpha_zipf=1.0). To be filled from
-     amir_interp_rebuttal/logs/arith_paperhp_analyze.log. -->
+Second model, identical in every respect except the three loss weights, set to the
+published values: information-gain 10.0, abstraction 0.1, diversity 1.0.
+
+### Summary against the first run
+
+| | Default weights | Published weights |
+|---|---|---|
+| Accuracy (2,600 held-out) | 83.6% | **86.3%** |
+| Active codes (≥30 uses) | 5 / 30 | **7 / 30** |
+| Best purity | 37.2% | **78.3%** |
+| — its base rate | 15.4% | 12.6% |
+| — lift | 2.42× | **6.21×** |
+| Median lift | 1.87× | 1.62× |
+| **M1 sub-task purity** | not replicated | **replicated** |
+| M2 label-matched repair | 3 / 584 (0.5%) | 1 / 843 (0.1%) |
+| M2 random control | 2 / 584 (0.3%) | 2 / 843 (0.2%) |
+| **M2 single-code repair** | not replicated | **not replicated** |
+
+### M1 replicates
+
+At the published weights a genuine specialist appears. **Code t6 steers sum-9 carry
+cascades 78.3% of the time against a 12.6% base rate — 6.21× lift.** That clears the
+≥70% threshold that would let it be called a sub-task specialist, on a 596M-parameter
+pretrained model. Codebook usage also improves, from 5 active codes to 7.
+
+The first run's failure was configuration, not scale: the diversity weight was 100×
+too low and the information-gain weight 10× too low, which is precisely the recipe for
+a collapsed, unused codebook. That run should not be read as evidence about real LLMs.
+
+### M2 does not replicate, and the reason is not noise
+
+The label-matched code repaired 1 of 843 attempts; a random code repaired 2. The
+treatment loses to its own control. There is no reading of this in which single-code
+repair works.
+
+### Why both are true at once: the codes are inert
+
+Same model, same weights, steering switched on and off at generation time:
+
+| Generation condition | Accuracy (2,600 held-out) |
+|---|---|
+| Codes active | 86.3% (355 wrong) |
+| Codes zeroed at decode | 86.2% (359 wrong) |
+| **Difference** | **0.2 pp** |
+
+Removing the codes entirely costs two tenths of a point. This reconciles the split
+verdict into a single finding:
+
+> **The router learned to predict sub-task structure without the codes acting on the
+> computation.** Code t6 is a reliable sum-9-cascade detector — it reads the input and
+> emits an informative symbol — but the steering vector it selects does not change what
+> the model computes. The code is a *readout*, not a *control*.
+
+This is why M2 fails without appeal to sampling noise: a computation cannot be repaired
+by editing a channel it does not read. It also means M1's replication must be stated
+carefully. The codes are interpretable in the sense of being *diagnostic of the input*.
+They are not interpretable in the stronger sense of *externalising the mechanism*, which
+is the claim that motivates the approach.
+
+The 83.6% → 86.3% accuracy gain between the two runs is therefore a training-recipe
+effect, not evidence that codes contribute to the answer — the within-model comparison
+above settles that directly.
+
+### Interpretation
+
+On a real pretrained LLM at this scale, DLR produces codes that are **readable but not
+load-bearing**. The most likely cause remains capacity: a 596M-parameter model already
+solves six-digit arithmetic unaided, so nothing pressures it to route computation
+through a 30-vector codebook, however much the information-gain term rewards doing so.
+The router, being trained to be predictable from the input, converges on a sub-task
+classifier instead — which is genuinely informative, just not mechanism.
+
+A fair statement of what this replication establishes:
+
+- **Yes**, sub-task-specialised codes do emerge outside toy-scale models — 78.3% purity
+  at 6.21× lift on a real pretrained LLM.
+- **No**, single-code edits do not repair predictions at this scale.
+- **And** the codes carry no measurable causal load here, which is the honest reason for
+  the second answer and a caveat on the first.
+
+The measurement to run next, given more time, is the same protocol on a model small
+enough that arithmetic is genuinely hard — which would test the capacity hypothesis
+directly by predicting that load-bearingness, and with it repairability, returns.
+
+---
+
+## Method note: decode-time knockout
+
+The knockout above zeroes the steering scale during *generation*, which is the condition
+that matters for answer digits — each is produced at a decode step steered by exactly one
+code. Prefill-time steering over the 14 prompt tokens is left intact, so this measures
+the causal contribution of the codes at the positions being predicted, not of the whole
+steering apparatus.
 
 ---
 
