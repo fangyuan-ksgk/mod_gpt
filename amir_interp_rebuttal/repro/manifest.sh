@@ -22,6 +22,7 @@ TABLES = [
     ("R1 purity",     "repro/r1_purity.sh",  ["arithmetic_r1r2.json"], "ckpt/arith_v9_paperhp"),
     ("R3 position",   "repro/r3_position.sh", ["arithmetic_r1r2.json"], "ckpt/arith_v9_paperhp"),
     ("R5 sum9/eq",    "repro/r5_sum9.sh",    ["arith_firings.json"],   "ckpt/arith_v9_paperhp"),
+    ("F7 autointerp", "repro/f7_autointerp.sh", ["arithmetic_autointerp_rawfirings.json"], "ckpt/arith_v9_paperhp"),
     ("knockout",      "repro/knockout.sh",   ["arith_paperhp_knockout.json"], "ckpt/arith_v9_paperhp"),
     ("knockout",      "repro/knockout.sh",   ["codenet_v9_knockout4.json"], "ckpt/codenet_v9"),
     ("knockout",      "repro/knockout.sh",   ["codenet_s0.5_i10_z1_L8_n4000_knockout4.json"], "ckpt/codenet_s0.5_i10_z1_L8_n4000"),

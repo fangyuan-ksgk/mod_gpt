@@ -5,8 +5,11 @@
 # locale) and is worth chasing down. Exits nonzero if anything differs.
 source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/_common.sh"
 
+# f4_per_code_ablation.sh is deliberately absent: it exits nonzero until
+# results/codenet_per_code_ablation.json exists, which would abort this script
+# under `set -e`. Add it once that file lands.
 SCRIPTS=(r1_purity.sh r3_position.sh r5_sum9.sh knockout.sh manifest.sh f2_escalation.sh \
-         f3_codenet_purity.sh f6_polysemanticity.sh verify_claims.sh)
+         f3_codenet_purity.sh f6_polysemanticity.sh f7_autointerp.sh verify_claims.sh)
 
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
