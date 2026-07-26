@@ -140,6 +140,33 @@ all come from a single file, so that comparison is internally consistent.
 
 ## Negative results, kept on the record
 
+### The abstraction ratio was swept: 1:8 is where the codes are load-bearing
+
+`L` is the number of trajectory tokens per abstraction code — the reasoning-to-
+trajectory ratio. It is baked into the checkpoint, so each value is a separate
+training run and a separate gate measurement, all on the identical recipe
+(`scale=0.5, alpha_info=10, alpha_zipf=1.0, target_vocab_util=0.8`, 2 epochs,
+4,000 files) with only `L` changed.
+
+```
+  ┌────────┬─────┬──────────┬──────────┬──────────┬──────────────────┬────────┐
+  │ Ratio  │  L  │ codes ON │  RANDOM  │ OFF_full │ knockout         │  gate  │
+  ├────────┼─────┼──────────┼──────────┼──────────┼──────────────────┼────────┤
+  │  1:4   │   4 │   10.62% │   10.50% │   10.00% │ +0.62pp /  5.9%  │ closed │
+  │  1:8   │   8 │   17.50% │   11.13% │   10.62% │ +6.87pp / 39.3%  │  OPEN  │
+  │  1:16  │  16 │    9.88% │        — │        — │ see below        │   —    │
+  └────────┴─────┴──────────┴──────────┴──────────┴──────────────────┴────────┘
+```
+
+1:4 fails on both axes at once: the model trains to 10.62% against 1:8's 17.50%,
+*and* its codes stop being load-bearing (5.9% relative, against a 15% bar). 1:16
+starts lower still at 9.88%.
+
+This is not a negative result to be reported as a finding — it is the
+justification for the reported configuration. `L=8` is not an unexamined default;
+it is the setting at which the codes carry the computation, and the two
+neighbouring ratios were trained and gated to establish that.
+
 ### `codenet_FROZEN` — freezing the backbone does not force causal load
 
 The idea: freeze all 596M model parameters and train only the 61K steering
