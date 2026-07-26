@@ -1,226 +1,161 @@
 {
   "study": "codenet",
-  "ckpt": "ckpt/codenet_v9_20k",
+  "ckpt": "ckpt/codenet_s0.5_i10_z1_L8_n4000",
   "n_eval": 800,
-  "accuracy": 0.04875,
-  "n_wrong": 761,
+  "accuracy": 0.175,
+  "n_wrong": 660,
   "R1": {
-    "n_active_codes": 15,
-    "median_lift": 1.1212019314834494,
+    "n_active_codes": 10,
+    "median_lift": 1.1046866820835293,
     "rows": [
       {
-        "code": 12,
-        "n": 55,
-        "top_subtask": "Call",
-        "purity": 0.38181818181818183,
-        "recall": 0.006072874493927126,
-        "f1": 0.011955593509820665,
-        "marginal": 0.29334916864608074,
-        "lift": 1.3015826278984175,
-        "top_pos": 1,
-        "pos_concentration": 0.14545454545454545,
-        "n_positions": 23
-      },
-      {
         "code": 4,
-        "n": 552,
+        "n": 74,
         "top_subtask": "Call",
-        "purity": 0.3532608695652174,
-        "recall": 0.05639097744360902,
-        "f1": 0.0972568578553616,
+        "purity": 0.3783783783783784,
+        "recall": 0.008097165991902834,
+        "f1": 0.015855039637599093,
         "marginal": 0.29334916864608074,
-        "lift": 1.2042334096109841,
-        "top_pos": 2,
-        "pos_concentration": 0.10507246376811594,
-        "n_positions": 31
+        "lift": 1.2898566582777111,
+        "top_pos": 4,
+        "pos_concentration": 0.14864864864864866,
+        "n_positions": 28
       },
       {
-        "code": 11,
-        "n": 85,
-        "top_subtask": "Call",
-        "purity": 0.3411764705882353,
-        "recall": 0.00838635049161365,
-        "f1": 0.016370307648885127,
-        "marginal": 0.29334916864608074,
-        "lift": 1.1630388187663732,
-        "top_pos": 1,
-        "pos_concentration": 0.32941176470588235,
+        "code": 9,
+        "n": 237,
+        "top_subtask": "FunctionDef",
+        "purity": 0.33755274261603374,
+        "recall": 0.07421150278293136,
+        "f1": 0.12167300380228137,
+        "marginal": 0.09144893111638955,
+        "lift": 3.6911611595155898,
+        "top_pos": 0,
+        "pos_concentration": 0.9620253164556962,
+        "n_positions": 6
+      },
+      {
+        "code": 7,
+        "n": 46,
+        "top_subtask": "BinOp",
+        "purity": 0.32608695652173914,
+        "recall": 0.009428032683846637,
+        "f1": 0.01832620647525962,
+        "marginal": 0.13496776382762132,
+        "lift": 2.416035853851829,
+        "top_pos": 18,
+        "pos_concentration": 0.10869565217391304,
         "n_positions": 18
       },
       {
         "code": 3,
-        "n": 1204,
+        "n": 611,
         "top_subtask": "Call",
-        "purity": 0.3289036544850498,
-        "recall": 0.11451706188548294,
-        "f1": 0.16988416988416988,
+        "purity": 0.32405891980360063,
+        "recall": 0.05725853094274147,
+        "f1": 0.0973212091422954,
         "marginal": 0.29334916864608074,
-        "lift": 1.1212019314834494,
-        "top_pos": 0,
-        "pos_concentration": 0.4750830564784053,
-        "n_positions": 32
-      },
-      {
-        "code": 5,
-        "n": 576,
-        "top_subtask": "If",
-        "purity": 0.328125,
-        "recall": 0.11879321181646763,
-        "f1": 0.17443470235348407,
-        "marginal": 0.13496776382762132,
-        "lift": 2.4311360779384033,
-        "top_pos": 2,
-        "pos_concentration": 0.1232638888888889,
-        "n_positions": 31
-      },
-      {
-        "code": 19,
-        "n": 31,
-        "top_subtask": "Call",
-        "purity": 0.3225806451612903,
-        "recall": 0.002891844997108155,
-        "f1": 0.005732301519059902,
-        "marginal": 0.29334916864608074,
-        "lift": 1.099647381480998,
-        "top_pos": 4,
-        "pos_concentration": 0.12903225806451613,
-        "n_positions": 19
-      },
-      {
-        "code": 0,
-        "n": 4843,
-        "top_subtask": "Call",
-        "purity": 0.31881065455296304,
-        "recall": 0.44650086755349916,
-        "f1": 0.37200337308757986,
-        "marginal": 0.29334916864608074,
-        "lift": 1.0867958345489672,
-        "top_pos": 1,
-        "pos_concentration": 0.08858145777410696,
-        "n_positions": 31
-      },
-      {
-        "code": 9,
-        "n": 38,
-        "top_subtask": "BinOp",
-        "purity": 0.2894736842105263,
-        "recall": 0.0069138906348208675,
-        "f1": 0.01350521792510743,
-        "marginal": 0.13496776382762132,
-        "lift": 2.144761652717589,
-        "top_pos": 6,
-        "pos_concentration": 0.13157894736842105,
-        "n_positions": 18
-      },
-      {
-        "code": 18,
-        "n": 56,
-        "top_subtask": "Call",
-        "purity": 0.2857142857142857,
-        "recall": 0.004626951995373048,
-        "f1": 0.009106431417188388,
-        "marginal": 0.29334916864608074,
-        "lift": 0.9739733950260266,
-        "top_pos": 1,
-        "pos_concentration": 0.16071428571428573,
-        "n_positions": 15
-      },
-      {
-        "code": 2,
-        "n": 1075,
-        "top_subtask": "Call",
-        "purity": 0.28093023255813954,
-        "recall": 0.08733371891266628,
-        "f1": 0.13324509155084932,
-        "marginal": 0.29334916864608074,
-        "lift": 0.9576650032953583,
-        "top_pos": 0,
-        "pos_concentration": 0.21209302325581394,
+        "lift": 1.1046866820835293,
+        "top_pos": 5,
+        "pos_concentration": 0.09819967266775777,
         "n_positions": 31
       },
       {
         "code": 8,
-        "n": 306,
+        "n": 268,
         "top_subtask": "Call",
-        "purity": 0.27124183006535946,
-        "recall": 0.024002313475997687,
-        "f1": 0.04410201912858661,
+        "purity": 0.31716417910447764,
+        "recall": 0.024580682475419318,
+        "f1": 0.045625335480407946,
         "marginal": 0.29334916864608074,
-        "lift": 0.9246381413564077,
-        "top_pos": 2,
-        "pos_concentration": 0.14052287581699346,
-        "n_positions": 24
+        "lift": 1.081183153060608,
+        "top_pos": 3,
+        "pos_concentration": 0.11940298507462686,
+        "n_positions": 28
+      },
+      {
+        "code": 0,
+        "n": 5150,
+        "top_subtask": "Call",
+        "purity": 0.3155339805825243,
+        "recall": 0.4699248120300752,
+        "f1": 0.3775557620817844,
+        "marginal": 0.29334916864608074,
+        "lift": 1.0756259580991314,
+        "top_pos": 1,
+        "pos_concentration": 0.08563106796116506,
+        "n_positions": 31
       },
       {
         "code": 6,
-        "n": 655,
+        "n": 873,
+        "top_subtask": "FunctionDef",
+        "purity": 0.29553264604810997,
+        "recall": 0.23933209647495363,
+        "f1": 0.2644797539723219,
+        "marginal": 0.09144893111638955,
+        "lift": 3.231668674967644,
+        "top_pos": 0,
+        "pos_concentration": 0.6552119129438717,
+        "n_positions": 32
+      },
+      {
+        "code": 2,
+        "n": 1173,
         "top_subtask": "Call",
-        "purity": 0.26259541984732826,
-        "recall": 0.04973973395026027,
-        "f1": 0.0836372477510333,
+        "purity": 0.2932651321398124,
+        "recall": 0.09947946790052054,
+        "f1": 0.14856402504858562,
         "marginal": 0.29334916864608074,
-        "lift": 0.8951633340544551,
+        "lift": 0.999713527375393,
         "top_pos": 2,
-        "pos_concentration": 0.1083969465648855,
+        "pos_concentration": 0.09548167092924126,
         "n_positions": 31
       },
       {
-        "code": 7,
-        "n": 251,
-        "top_subtask": "If",
-        "purity": 0.2589641434262948,
-        "recall": 0.04085480829666876,
-        "f1": 0.07057546145494027,
-        "marginal": 0.13496776382762132,
-        "lift": 1.9187110764985311,
-        "top_pos": 2,
-        "pos_concentration": 0.10358565737051793,
-        "n_positions": 29
+        "code": 5,
+        "n": 533,
+        "top_subtask": "Call",
+        "purity": 0.28142589118198874,
+        "recall": 0.04337767495662233,
+        "f1": 0.07516913054372339,
+        "marginal": 0.29334916864608074,
+        "lift": 0.9593546573896136,
+        "top_pos": 6,
+        "pos_concentration": 0.0975609756097561,
+        "n_positions": 31
       },
       {
         "code": 1,
-        "n": 1912,
+        "n": 2719,
         "top_subtask": "Call",
-        "purity": 0.2557531380753138,
-        "recall": 0.14141122035858877,
-        "f1": 0.18212290502793296,
+        "purity": 0.2526664214784847,
+        "recall": 0.19866975130133024,
+        "f1": 0.22243807673627972,
         "marginal": 0.29334916864608074,
-        "lift": 0.8718386326292075,
-        "top_pos": 4,
-        "pos_concentration": 0.07688284518828452,
+        "lift": 0.8613163031776686,
+        "top_pos": 2,
+        "pos_concentration": 0.08606105185730048,
         "n_positions": 31
-      },
-      {
-        "code": 13,
-        "n": 51,
-        "top_subtask": "FunctionDef",
-        "purity": 0.2549019607843137,
-        "recall": 0.012059369202226345,
-        "f1": 0.023029229406554476,
-        "marginal": 0.09144893111638955,
-        "lift": 2.787369493251846,
-        "top_pos": 1,
-        "pos_concentration": 0.17647058823529413,
-        "n_positions": 20
       }
     ],
     "marginal": {
       "Call": 0.29334916864608074,
-      "Return": 0.03859857482185273,
       "FunctionDef": 0.09144893111638955,
       "Assign": 0.07931795045809298,
-      "Subscript": 0.06175771971496437,
-      "If": 0.13496776382762132,
-      "While": 0.04784526637258229,
+      "OTHER": 0.010773668137088565,
+      "Import": 0.013148965049202578,
       "BinOp": 0.13496776382762132,
       "Compare": 0.02494061757719715,
       "Expr": 0.008822531387852052,
-      "OTHER": 0.010773668137088565,
-      "For": 0.0500508992195453,
+      "While": 0.04784526637258229,
+      "If": 0.13496776382762132,
       "ListComp": 0.004580929759077028,
-      "Import": 0.013148965049202578,
-      "AugAssign": 0.004156769596199525,
-      "Try": 0.0012724804886325076
+      "Subscript": 0.06175771971496437,
+      "Return": 0.03859857482185273,
+      "For": 0.0500508992195453,
+      "Try": 0.0012724804886325076,
+      "AugAssign": 0.004156769596199525
     },
     "replicated": false
   },
@@ -228,7 +163,7 @@
     "measurable": true,
     "R2b_targeted": {
       "measurable": true,
-      "n_attempted": 105,
+      "n_attempted": 111,
       "targeted_fix_rate": 0.0,
       "random_fix_rate": 0.0,
       "lift": Infinity,
@@ -240,20 +175,14 @@
         },
         "Call": {
           "fixed": 0,
-          "n": 103,
-          "rate": 0.0
-        },
-        "If": {
-          "fixed": 0,
-          "n": 1,
+          "n": 110,
           "rate": 0.0
         }
       },
       "code_for_label": {
-        "Call": 12,
-        "If": 5,
-        "BinOp": 9,
-        "FunctionDef": 13
+        "Call": 4,
+        "FunctionDef": 9,
+        "BinOp": 7
       }
     },
     "R2a_best_of_C": {
@@ -263,48 +192,57 @@
           "n_wrong": 200,
           "n_fixed": 2,
           "best_code": [
-            1,
+            3,
             2
           ]
         },
         "1": {
-          "fix_rate_best_of_C": 0.0,
+          "fix_rate_best_of_C": 0.015,
           "n_wrong": 200,
-          "n_fixed": 0,
-          "best_code": null
+          "n_fixed": 3,
+          "best_code": [
+            6,
+            2
+          ]
         },
         "2": {
-          "fix_rate_best_of_C": 0.0,
+          "fix_rate_best_of_C": 0.01,
           "n_wrong": 200,
-          "n_fixed": 0,
-          "best_code": null
+          "n_fixed": 2,
+          "best_code": [
+            1,
+            2
+          ]
         },
         "3": {
-          "fix_rate_best_of_C": 0.0,
+          "fix_rate_best_of_C": 0.01,
           "n_wrong": 200,
-          "n_fixed": 0,
-          "best_code": null
+          "n_fixed": 2,
+          "best_code": [
+            5,
+            2
+          ]
         }
       },
       "control": {
         "0": {
           "code": 24,
-          "fix_rate": 0.01
+          "fix_rate": 0.005
         },
         "1": {
           "code": 29,
-          "fix_rate": 0.0
+          "fix_rate": 0.005
         },
         "2": {
           "code": 17,
-          "fix_rate": 0.0
+          "fix_rate": 0.005
         },
         "3": {
           "code": 4,
-          "fix_rate": 0.0
+          "fix_rate": 0.005
         }
       },
-      "best_position": "0",
+      "best_position": "1",
       "note": "existence measure over C x positions attempts per example"
     },
     "replicated": false

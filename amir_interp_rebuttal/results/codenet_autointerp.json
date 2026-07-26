@@ -1,0 +1,57 @@
+{
+  "study": "codenet",
+  "ckpt": "ckpt/codenet_v9",
+  "interpreter_model": "claude-sonnet-5",
+  "method": "summary-statistics (v1)",
+  "method_note": "As with the arithmetic file: distribution-only descriptions, ground-truth label withheld, candidate constructs listed in the prompt. SUPERSEDED FOR NUMBERS: the underlying codenet_v9 R1 rows were computed at batch 32 and are contaminated by the left-padding alignment bug (prefill chunk k maps to source chunk k only when pad_len % L == 0). The interpreter's *behaviour* below is still informative — in particular its refusal to invent patterns for near-chance codes — but the per-code lifts it was shown are not the clean values. See codenet_gate.md for batch-1 numbers.",
+  "prompt_source": "amir_interp_rebuttal/results/codenet_autointerp_prompts.json",
+  "results": [
+    {
+      "code": 20, "lift_shown": 3.84, "ground_truth_top_label": "FunctionDef",
+      "confidence": "medium",
+      "description": "Fires only at chunk d0 (the very first chunk of every file) with 3.8x lift toward one construct category, marking the file's opening chunk - plausibly an import or top-level module statement.",
+      "directional_match": "partial",
+      "note": "Position call correct, construct call wrong (guessed import, actual FunctionDef). WITHDRAWN ANYWAY: clean measurement gives lift_pos = 1.00x - this code is P(FunctionDef | chunk 0), a fact about Python file structure, not a learned detector."
+    },
+    {
+      "code": 13, "lift_shown": 3.31, "ground_truth_top_label": "BinOp",
+      "confidence": "medium",
+      "description": "A rare code (n=38) that is unusually concentrated on one specific construct category (45% purity, 3.3x lift) and recurs at many different chunk positions (18 of 32) rather than being tied to one file location, suggesting it tracks a specific construct type wherever it occurs in the file.",
+      "directional_match": true,
+      "note": "Correct shape (distributed construct tracker, not positional). Clean batch-1 measurement weakens it to lift_pos 1.68x, p_bonf = 1 - does not survive correction."
+    },
+    {
+      "code": 5, "lift_shown": 1.88, "ground_truth_top_label": "If",
+      "confidence": "low",
+      "description": "Spread across almost every chunk position in the file (31 of 32) with only a modest skew (1.9x lift) toward a category rarer than call expressions, giving a weak but non-trivial construct association rather than a clean pattern.",
+      "directional_match": true,
+      "note": "Holds up under batch-1: If, lift_pos 1.73x across 31 positions."
+    },
+    {
+      "code": 8, "lift_shown": 1.12, "ground_truth_top_label": "Call",
+      "confidence": "low",
+      "description": "Purity and lift are essentially at the corpus base rate for call expressions (1.1x lift) - no clear pattern beyond reflecting the dominant background construct frequency.",
+      "directional_match": true,
+      "note": "Correctly called at chance. Under batch-1 this code is actually t8 -> Return, lift_pos 5.41x, p_bonf 6e-11 - the padding bug had hidden a real detector behind a chance-level Call assignment."
+    },
+    {
+      "code": 6, "lift_shown": 1.12, "ground_truth_top_label": "Call",
+      "confidence": "low",
+      "description": "Like t8, its top category purity matches the call-expression base rate almost exactly (1.1x lift) - no clear discriminative pattern.",
+      "directional_match": true
+    },
+    {
+      "code": 2, "lift_shown": 1.06, "ground_truth_top_label": "Call",
+      "confidence": "low",
+      "description": "The largest python code (n=1275), spread over nearly all positions, with purity essentially equal to the call-expression base rate (1.06x lift) - no clear pattern, functions as a generic/default code.",
+      "directional_match": true
+    }
+  ],
+  "summary": {
+    "n_codes": 6,
+    "n_directional_match": 5,
+    "n_partial": 1,
+    "negative_control": "All three codes at ~1.1x lift were labelled 'no clear pattern'. The interpreter did not manufacture findings where the statistics did not support them.",
+    "caveat": "One consequence of the padding bug is visible here: code 8 was shown as a chance-level Call code and correctly called as such, but the clean measurement reveals it as the study's strongest CodeNet detector (Return, lift_pos 5.41x). The interpreter was right about the data it was given; the data was wrong."
+  }
+}

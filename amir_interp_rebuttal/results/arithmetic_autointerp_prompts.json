@@ -1,0 +1,62 @@
+[
+  {
+    "code": 6,
+    "n": 415,
+    "top_label": "US",
+    "purity": 0.7831325301204819,
+    "lift": 6.207757860711138,
+    "top_pos": 1,
+    "n_positions": 2,
+    "prompt": "This code fired 415 times across six-digit addition and subtraction problems. The model emits one code per answer digit, reading the answer left to right (index 0 = most significant).\n\nObserved distribution for this code:\n  - appears most often at answer digit index 1\n  - appears at 2 of the 7 answer positions in total\n  - 78% of its firings land on one particular category of digit-level operation, versus 13% if it fired at random\n\nGiven that this is column-wise addition and subtraction, what kind of per-digit situation does this code most plausibly mark? Name the specific arithmetic condition (for example: a column that generates a carry, a column that consumes one, a borrow chain, a column where the digits sum to exactly 9, or a trivial column with no carry involvement)."
+  },
+  {
+    "code": 17,
+    "n": 1026,
+    "top_label": "UB",
+    "purity": 0.43567251461988304,
+    "lift": 4.0662768031189085,
+    "top_pos": 1,
+    "n_positions": 1,
+    "prompt": "This code fired 1026 times across six-digit addition and subtraction problems. The model emits one code per answer digit, reading the answer left to right (index 0 = most significant).\n\nObserved distribution for this code:\n  - appears most often at answer digit index 1\n  - appears at 1 of the 7 answer positions in total\n  - 44% of its firings land on one particular category of digit-level operation, versus 11% if it fired at random\n\nGiven that this is column-wise addition and subtraction, what kind of per-digit situation does this code most plausibly mark? Name the specific arithmetic condition (for example: a column that generates a carry, a column that consumes one, a borrow chain, a column where the digits sum to exactly 9, or a trivial column with no carry involvement)."
+  },
+  {
+    "code": 11,
+    "n": 1163,
+    "top_label": "UC",
+    "purity": 0.3654342218400688,
+    "lift": 2.2371015262325096,
+    "top_pos": 1,
+    "n_positions": 1,
+    "prompt": "This code fired 1163 times across six-digit addition and subtraction problems. The model emits one code per answer digit, reading the answer left to right (index 0 = most significant).\n\nObserved distribution for this code:\n  - appears most often at answer digit index 1\n  - appears at 1 of the 7 answer positions in total\n  - 37% of its firings land on one particular category of digit-level operation, versus 16% if it fired at random\n\nGiven that this is column-wise addition and subtraction, what kind of per-digit situation does this code most plausibly mark? Name the specific arithmetic condition (for example: a column that generates a carry, a column that consumes one, a borrow chain, a column where the digits sum to exactly 9, or a trivial column with no carry involvement)."
+  },
+  {
+    "code": 0,
+    "n": 5200,
+    "top_label": "MD",
+    "purity": 0.24865384615384614,
+    "lift": 1.617983553807651,
+    "top_pos": 0,
+    "n_positions": 2,
+    "prompt": "This code fired 5200 times across six-digit addition and subtraction problems. The model emits one code per answer digit, reading the answer left to right (index 0 = most significant).\n\nObserved distribution for this code:\n  - appears most often at answer digit index 0\n  - appears at 2 of the 7 answer positions in total\n  - 25% of its firings land on one particular category of digit-level operation, versus 15% if it fired at random\n\nGiven that this is column-wise addition and subtraction, what kind of per-digit situation does this code most plausibly mark? Name the specific arithmetic condition (for example: a column that generates a carry, a column that consumes one, a borrow chain, a column where the digits sum to exactly 9, or a trivial column with no carry involvement)."
+  },
+  {
+    "code": 7,
+    "n": 2579,
+    "top_label": "US",
+    "purity": 0.20124079100426523,
+    "lift": 1.5952013921069805,
+    "top_pos": 3,
+    "n_positions": 1,
+    "prompt": "This code fired 2579 times across six-digit addition and subtraction problems. The model emits one code per answer digit, reading the answer left to right (index 0 = most significant).\n\nObserved distribution for this code:\n  - appears most often at answer digit index 3\n  - appears at 1 of the 7 answer positions in total\n  - 20% of its firings land on one particular category of digit-level operation, versus 13% if it fired at random\n\nGiven that this is column-wise addition and subtraction, what kind of per-digit situation does this code most plausibly mark? Name the specific arithmetic condition (for example: a column that generates a carry, a column that consumes one, a borrow chain, a column where the digits sum to exactly 9, or a trivial column with no carry involvement)."
+  },
+  {
+    "code": 1,
+    "n": 2596,
+    "top_label": "US",
+    "purity": 0.1926040061633282,
+    "lift": 1.5267390732458945,
+    "top_pos": 4,
+    "n_positions": 1,
+    "prompt": "This code fired 2596 times across six-digit addition and subtraction problems. The model emits one code per answer digit, reading the answer left to right (index 0 = most significant).\n\nObserved distribution for this code:\n  - appears most often at answer digit index 4\n  - appears at 1 of the 7 answer positions in total\n  - 19% of its firings land on one particular category of digit-level operation, versus 13% if it fired at random\n\nGiven that this is column-wise addition and subtraction, what kind of per-digit situation does this code most plausibly mark? Name the specific arithmetic condition (for example: a column that generates a carry, a column that consumes one, a borrow chain, a column where the digits sum to exactly 9, or a trivial column with no carry involvement)."
+  }
+]

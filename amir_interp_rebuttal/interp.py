@@ -73,52 +73,6 @@ def force_code_at(wrapper, position: int, code: int):
         wrapper._ablate_patch_codes = original
 
 
-@contextlib.contextmanager
-def perturb_codes(wrapper, mode: str, C_SIZE: int, seed: int = 0):
-    """Global causal interventions matching the paper's Finding #2.
-
-    mode: "shuffle"   — permute the decoded codes within each sequence
-                        (identity preserved, position destroyed)
-          "random"    — replace each code with a uniform draw over the codebook
-          "knockout"  — zero the steering vector entirely (no code information)
-    """
-    rng = random.Random(seed)
-
-    if mode == "knockout":
-        saved = wrapper.steering_emb.weight.data.clone()
-        wrapper.steering_emb.weight.data.zero_()
-        try:
-            yield
-        finally:
-            wrapper.steering_emb.weight.data.copy_(saved)
-        return
-
-    original = wrapper._ablate_patch_codes
-    buffers: Dict[int, List[int]] = defaultdict(list)
-
-    def patch(codes, phase):
-        if phase != "decode":
-            return codes
-        B, nc = codes.shape
-        for b in range(B):
-            for k in range(nc):
-                if mode == "random":
-                    codes[b, k] = rng.randrange(C_SIZE)
-                elif mode == "shuffle":
-                    # Streaming shuffle: hold the sequence's own codes and
-                    # re-emit them in a permuted order. Identity preserved.
-                    buffers[b].append(int(codes[b, k].item()))
-                    pool = buffers[b]
-                    codes[b, k] = pool[rng.randrange(len(pool))]
-        return codes
-
-    wrapper._ablate_patch_codes = patch
-    try:
-        yield
-    finally:
-        wrapper._ablate_patch_codes = original
-
-
 # ─────────────────────────────────────────────────────────────────────
 # R1 — code <-> subtask purity
 # ─────────────────────────────────────────────────────────────────────
@@ -189,7 +143,12 @@ def purity_report(counts, pos_counts, min_n: int = 30):
             "pos_concentration": top_pos_n / n,
             "n_positions": n_pos,
         })
-    rows.sort(key=lambda r: -r["purity"])
+    # Rank by LIFT, not purity. With an imbalanced label set, purity ranking is
+    # actively misleading: `Call` occurs in 29.3% of CodeNet chunks, so a code
+    # firing 37.8% on Call scores high purity at 1.29x lift and outranks a
+    # genuine 3.69x specialist. Purity stays as a reported column because it is
+    # the paper's metric, but it is not the sort key.
+    rows.sort(key=lambda r: -(r["lift"] if r["lift"] == r["lift"] else 0.0))
     return rows, marginal_rate
 
 

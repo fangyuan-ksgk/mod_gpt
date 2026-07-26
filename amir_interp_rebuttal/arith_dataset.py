@@ -103,7 +103,19 @@ class ArithmeticDataset(Dataset):
     """
 
     def __init__(self, split="train", tokenizer=None, max_length=64,
-                 n_digits=6, size=100_000, seed=42, enrich=True):
+                 n_digits=None, size=None, seed=42, enrich=True):
+        # `get_dataset(name, split, tokenizer, max_length)` takes no extra
+        # arguments, so the difficulty and data-sparsity axes are set through the
+        # environment. Both matter: the codes only become load-bearing once the
+        # model cannot solve the task from its weights alone, which is approached
+        # by lengthening the carry chain (ARITH_DIGITS) and by starving it of
+        # examples (ARITH_SIZE).
+        import os
+        if n_digits is None:
+            n_digits = int(os.environ.get("ARITH_DIGITS", 6))
+        if size is None:
+            size = int(os.environ.get("ARITH_SIZE", 100_000))
+
         self.tokenizer = tokenizer
         self.max_length = max_length
         self.n_digits = n_digits

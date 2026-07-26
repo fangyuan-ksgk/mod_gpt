@@ -1,0 +1,14 @@
+{
+  "scale": 0.5,
+  "L": 8,
+  "codes_ON": 0.175,
+  "n_codes_used": 23,
+  "n_codes_active": 8,
+  "top_code_share": 0.4783,
+  "codes_OFF_decode": 0.11875,
+  "codes_RANDOM": 0.11125,
+  "codes_OFF_full": 0.10625,
+  "delta_pp_full": 6.874999999999999,
+  "delta_pp_decode": 5.624999999999999,
+  "delta_pp_random": 6.374999999999999
+}

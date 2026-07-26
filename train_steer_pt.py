@@ -130,7 +130,13 @@ def parse_args():
     p.add_argument("--search_temp", type=float, default=1.0, help="V9: temperature for sampling during search")
     p.add_argument("--alpha_info", type=float, default=1.0, help="V9: weight for info-gain loss")
     p.add_argument("--alpha_abs", type=float, default=0.5, help="V9: weight for abs_loss (routing prediction)")
-    p.add_argument("--alpha_zipf", type=float, default=0.01, help="V9: weight for zipf diversity loss")
+    p.add_argument("--target_vocab_util", type=float, default=0.8,
+                   help="V9: fraction of the codebook the Zipf prior aims to keep "
+                        "in use (0.8 = 24 of 30 codes)")
+    p.add_argument("--zipf_alpha", type=float, default=1.0,
+                   help="V9: Zipf exponent; lower = flatter prior = more uniform "
+                        "code usage")
+    p.add_argument("--alpha_zipf", type=float, default=0.01,help="V9: weight for zipf diversity loss")
     p.add_argument("--detach_routing", action="store_true",
                    help="V9: detach hidden states before abs_proj (decouple policy from rep)")
 
@@ -637,8 +643,14 @@ def main():
         )
         wrapper._detach_routing = args.detach_routing
 
+        # target_vocab_util and zipf_alpha were previously left at their defaults
+        # (0.8 / 1.0), so the prior asked for 80% codebook utilisation while the
+        # runs it governed were collapsing to ~23%. Exposing them makes the
+        # diversity target a swept variable rather than a hidden constant.
         zipf_loss_fn = VariableZipfian2gramLoss(
-            vocab_size=torch.tensor(args.C_SIZE, device=device))
+            vocab_size=torch.tensor(args.C_SIZE, device=device),
+            target_vocab_util=args.target_vocab_util,
+            zipf_alpha=args.zipf_alpha)
 
     log(f"Steering: mode={args.mode} C_SIZE={args.C_SIZE} L={args.L} "
         f"scale={args.scale} layers={wrapper.inject_layers}"

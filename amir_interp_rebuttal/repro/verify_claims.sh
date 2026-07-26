@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+# Every headline number in REBUTTAL_arithmetic.md and REBUTTAL_codenet.md,
+# checked against the JSON it came from. Exits nonzero on any mismatch.
+#
+# This exists because two silent-config bugs in this study (decode-time steering
+# defaulting to zero; left-padding breaking chunk alignment) each produced
+# clean-looking numbers that were wrong. A claim that cannot be traced to a
+# result file is a claim that cannot be defended.
+set -euo pipefail
+cd "$(dirname "$0")/../.."
+python3 - <<'PY'
+import json, sys
+from pathlib import Path
+R = Path("amir_interp_rebuttal/results")
+ok = fail = 0
+def chk(label, got, want, tol=0.02):
+    global ok, fail
+    good = got is not None and abs(got - want) <= tol
+    print(f"  {'OK ' if good else 'BAD'}  {label:<46} claimed {want:<8} found {got}")
+    ok += good; fail += (not good)
+
+a = {r["code"]: r for r in json.loads((R/"arithmetic_r1r2.json").read_text())["R1"]["rows"]}
+chk("arith t6 purity 78.3%",   round(100*a[6]["purity"],1), 78.3)
+chk("arith t6 lift 6.21x",     round(a[6]["lift"],2),  6.21)
+chk("arith t17 lift 4.07x",    round(a[17]["lift"],2), 4.07)
+chk("arith t11 lift 2.24x",    round(a[11]["lift"],2), 2.24)
+
+k = json.loads((R/"codenet_s0.5_i10_z1_L8_n4000_knockout4.json").read_text())
+chk("codenet ON 17.50%",       round(100*k["codes_ON"],2), 17.50)
+chk("codenet RANDOM 11.13%",   round(100*k["codes_RANDOM"],2), 11.13)
+chk("codenet OFF_full 10.62%", round(100*k["codes_OFF_full"],2), 10.62)
+chk("codenet rel drop 39.3%",
+    round(100*(k["codes_ON"]-k["codes_OFF_full"])/k["codes_ON"],1), 39.3, 0.2)
+
+c = {r["code"]: r for r in json.loads((R/"codenet_gated_confound_nopad.json").read_text())["code_rows"]}
+chk("codenet t5 lift_pos 1.88x",   round(c[5]["lift_pos"],2), 1.88)
+chk("codenet t3 lift_pos 1.88x",   round(c[3]["lift_pos"],2), 1.88)
+chk("codenet t6 lift_pos 1.80x",   round(c[6]["lift_pos"],2), 1.80)
+chk("codenet t9 confounded 1.00x", round(c[9]["lift_pos"],2), 1.00)
+
+ki = json.loads((R/"arith_paperhp_knockout.json").read_text())
+chk("arith knockout 0.15pp", round(100*(ki["codes_ON"]-ki["codes_OFF"]),2), 0.15)
+
+ai = json.loads((R/"arithmetic_autointerp_rawfirings.json").read_text())["summary"]
+chk("autointerp agreement 7/7", float(ai["agreement_with_purity_table"].split("/")[0]), 7.0, 0.001)
+
+print(f"\n  {ok} verified, {fail} failed")
+sys.exit(1 if fail else 0)
+PY

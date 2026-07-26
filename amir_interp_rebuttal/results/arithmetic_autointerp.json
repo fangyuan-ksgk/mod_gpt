@@ -1,0 +1,58 @@
+{
+  "study": "arithmetic",
+  "ckpt": "ckpt/arith_v9_paperhp",
+  "interpreter_model": "claude-sonnet-5",
+  "method": "summary-statistics (v1)",
+  "method_note": "Codes were described to the interpreter by their FIRING DISTRIBUTION only (n, top position, number of positions occupied, purity vs base rate). The interpreter was never shown the ground-truth label. IMPORTANT LIMITATION: the prompt also listed candidate arithmetic conditions, including 'a column where the two digits sum to exactly 9'. Code 6's match is therefore partly selection from a supplied menu, not unprompted identification. A raw-firing version without any candidate list supersedes this file; see arithmetic_autointerp_rawfirings.json.",
+  "prompt_source": "amir_interp_rebuttal/results/arithmetic_autointerp_prompts.json",
+  "scoring": "Each description was compared post-hoc against the code's ground-truth top label from arithmetic_r1r2.json. 'directional' means the description correctly characterised the code as either a specific arithmetic-condition detector or a positional/generic code, matching what the purity table shows.",
+  "results": [
+    {
+      "code": 6, "lift": 6.21, "ground_truth_top_label": "US",
+      "confidence": "high",
+      "description": "Fires almost exclusively on one specific per-digit carry/borrow category (78% purity, 6.2x lift) and is tightly localized to the d1 answer position, indicating a genuine single-event marker (e.g. a carry-generating or sum-to-9 propagation column) rather than a generic position tag.",
+      "directional_match": true,
+      "note": "Named sum-to-9 propagation. US is by definition a carry cascade through a sum-9 run, so this matches. Caveat: sum-9 was one of the listed candidates."
+    },
+    {
+      "code": 17, "lift": 4.07, "ground_truth_top_label": "UB",
+      "confidence": "medium",
+      "description": "Fires only at position d1 and is moderately concentrated on one carry-related category (44% purity, 4.1x lift), suggesting a d1-specific carry/borrow marker, though less exclusively single-category than t6.",
+      "directional_match": true,
+      "note": "Correct family (borrow consumption) without naming the exact label."
+    },
+    {
+      "code": 11, "lift": 2.24, "ground_truth_top_label": "UC",
+      "confidence": "low",
+      "description": "Also confined to position d1 with a mild skew toward one carry category (37% purity, 2.2x lift), consistent with a weaker or partially overlapping d1 carry-state signal.",
+      "directional_match": true
+    },
+    {
+      "code": 0, "lift": 1.62, "ground_truth_top_label": "MD",
+      "confidence": "low",
+      "description": "The largest code by far (n=5200) with only a slight bias toward one category and toward the overflow position d0, but purity is close to base rate - no clear single carry-category pattern, more like a generic/default column code.",
+      "directional_match": true,
+      "note": "Correctly declined to invent a specialist story for a near-chance code."
+    },
+    {
+      "code": 7, "lift": 1.60, "ground_truth_top_label": "US",
+      "confidence": "medium",
+      "description": "Fires exclusively at answer position d3 in every occurrence, but shows little preference for any particular carry/borrow category, indicating it marks the d3 digit position itself rather than a specific arithmetic event.",
+      "directional_match": true,
+      "note": "Correctly identified as positional rather than semantic."
+    },
+    {
+      "code": 1, "lift": 1.53, "ground_truth_top_label": "US",
+      "confidence": "medium",
+      "description": "Fires exclusively at answer position d4 with weak category concentration, indicating a positional marker for the d4 digit rather than a carry/borrow-specific signal.",
+      "directional_match": true,
+      "note": "Correctly identified as positional rather than semantic."
+    }
+  ],
+  "summary": {
+    "n_codes": 6,
+    "n_directional_match": 6,
+    "n_named_exact_condition": 1,
+    "negative_control": "The interpreter labelled every near-chance code (lift 1.5-1.6) as positional or generic rather than inventing a specialist story for it. This is the control that makes the code-6 identification meaningful: the same procedure declined to produce a finding where there was none."
+  }
+}

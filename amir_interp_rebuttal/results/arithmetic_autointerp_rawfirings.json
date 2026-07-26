@@ -1,0 +1,70 @@
+{
+  "study": "arithmetic",
+  "ckpt": "ckpt/arith_v9_paperhp",
+  "interpreter_model": "claude-sonnet-5",
+  "method": "raw-firing examples (v2, supersedes the summary-statistics version)",
+  "method_note": "The interpreter was shown ONLY raw firings: for each code, 14 sampled (problem, answer-digit index, digit value, operand column). It was given NO ground-truth labels, NO purity statistics, and NO list of candidate arithmetic conditions. It was told explicitly that 'this code only marks position N' was a valid and valuable answer, so declining to find structure carried no penalty. This removes the menu-selection confound in the v1 run, where 'a column where the two digits sum to exactly 9' had been listed among the candidates.",
+  "source_data": "amir_interp_rebuttal/results/arith_firings.json",
+  "results": [
+    {
+      "code": 6, "ground_truth_top_label": "US", "gt_purity": 0.783, "gt_lift": 6.21,
+      "is_positional_only": false, "confidence": "high",
+      "fires_when": "Fires at index 1 (the leftmost operand column) specifically when that column generates a carry-out, i.e. A+G+carry_in >= 10 - equivalently, whenever the addition overflows into a 7th leading digit (answer index 0 = 1).",
+      "evidence": "All 14 sampled firings have carry_out at column 1 equal to 1; every sample's overflow digit is 1. All 14 are addition.",
+      "verdict": "CORRECT, UNPROMPTED",
+      "verdict_note": "Ground truth US is 'carry propagates through a run of sum-9 positions'. The interpreter named the observable signature of that condition (carry-out at the leading column producing a 7th digit) rather than the sum-9 mechanism itself. These pick out the same firings - the sampled answers are dominated by deep cascades (1000001, 1000002, 1000008, 1000103, 1000399) - and the description is precise enough to test on new examples, which is what was asked. It is a correct characterisation arrived at with no candidate list."
+    },
+    {
+      "code": 17, "ground_truth_top_label": "UB", "gt_purity": 0.436, "gt_lift": 4.07,
+      "is_positional_only": false, "confidence": "high",
+      "fires_when": "Fires at index 1 when that column does NOT generate a carry-out/borrow-out: A+G+carry_in < 10, or A-G-borrow_in >= 0.",
+      "evidence": "All 14 firings have carry_out/borrow_out = 0 at column 1, in both carry_in states. Resulting digit always <= 4.",
+      "verdict": "PARTIAL",
+      "verdict_note": "Correctly identified as a genuine arithmetic condition rather than a position tag, and correctly separated from t6 by carry-out polarity. Ground truth is borrow consumption; the interpreter's rule covers the no-carry-out case in both operations without isolating the borrow half."
+    },
+    {
+      "code": 11, "ground_truth_top_label": "UC", "gt_purity": 0.365, "gt_lift": 2.24,
+      "is_positional_only": false, "confidence": "medium",
+      "fires_when": "Also at index 1, but does not reduce to a clean carry rule; best-supported pattern is 'high local column magnitude at index 1' rather than a carry/no-carry boolean.",
+      "evidence": "Appears in both carry_out=1 and carry_out=0 cases; carry_out=0 digits mostly >=5 (vs t17's <=4).",
+      "verdict": "APPROPRIATE UNCERTAINTY",
+      "verdict_note": "Explicitly declined to state a clean rule and lowered confidence to medium. This is the weakest of the three specialists (2.24x lift) and the interpreter's hedging tracks that."
+    },
+    {
+      "code": 0, "ground_truth_top_label": "MD", "gt_lift": 1.62,
+      "is_positional_only": true, "confidence": "high",
+      "fires_when": "Two fixed positions (answer index 0 and index 5) in every problem, regardless of operand values, carry/borrow status, digit value, or operation.",
+      "evidence": "Carry status varies freely across firings; 5200 firings is exactly 2x the 2600-problem eval set.",
+      "verdict": "CORRECT - POSITIONAL"
+    },
+    {
+      "code": 2, "ground_truth_top_label": "SA", "gt_lift": 1.24,
+      "is_positional_only": true, "confidence": "high",
+      "fires_when": "Two fixed positions (index 2 and index 6) in every problem, independent of arithmetic.",
+      "evidence": "5200 firings = 2x problem count; both carry regimes present.",
+      "verdict": "CORRECT - POSITIONAL"
+    },
+    {
+      "code": 1, "ground_truth_top_label": "US", "gt_lift": 1.53,
+      "is_positional_only": true, "confidence": "high",
+      "fires_when": "Single fixed position index 4 in essentially every problem.",
+      "evidence": "All four carry_in/carry_out combinations appear; 2596 firings ~= problem count.",
+      "verdict": "CORRECT - POSITIONAL"
+    },
+    {
+      "code": 7, "ground_truth_top_label": "US", "gt_lift": 1.60,
+      "is_positional_only": true, "confidence": "high",
+      "fires_when": "Single fixed position index 3 in essentially every problem.",
+      "evidence": "Both carry regimes, digit values 0-9; 2579 firings ~= problem count.",
+      "verdict": "CORRECT - POSITIONAL"
+    }
+  ],
+  "summary": {
+    "n_codes": 7,
+    "n_flagged_positional_only": 4,
+    "n_flagged_arithmetic_condition": 3,
+    "agreement_with_purity_table": "7/7",
+    "headline": "Given only raw firings and no candidate answers, the interpreter partitioned the codebook exactly as the purity table does: the four near-chance codes (lift 1.24-1.62) were each identified as fixed-position tags carrying no arithmetic information, and the three genuine specialists (lift 2.24-6.21) were identified as encoding real carry/borrow conditions. For the strongest code it produced a precise, testable rule that picks out the ground-truth condition without ever being told the label or offered a menu.",
+    "why_the_negative_control_matters": "The interpreter had an easy path to a false positive - inventing an arithmetic story for t0, t1, t2, t7, which fire thousands of times - and instead used the sample counts (5200 = 2x problem count) to deduce they were positional. It also lowered its own confidence on the weakest specialist. The procedure fails to find structure where there is none, which is what makes its identification of t6 meaningful."
+  }
+}

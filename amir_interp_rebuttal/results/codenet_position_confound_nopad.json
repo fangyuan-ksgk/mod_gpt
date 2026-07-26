@@ -1,0 +1,1024 @@
+{
+ "ckpt": "ckpt/codenet_v9",
+ "n_eval": 800,
+ "L": 8,
+ "C_SIZE": 30,
+ "accuracy": 0.31,
+ "marginal": {
+  "Call": 0.2852,
+  "If": 0.1367,
+  "BinOp": 0.1367,
+  "FunctionDef": 0.0927,
+  "Assign": 0.0803,
+  "Subscript": 0.0619,
+  "For": 0.0507,
+  "While": 0.0485,
+  "Return": 0.0391,
+  "Compare": 0.0251,
+  "Import": 0.0133,
+  "OTHER": 0.0108,
+  "Expr": 0.0089,
+  "ListComp": 0.0046,
+  "AugAssign": 0.0041,
+  "Try": 0.0013
+ },
+ "code_rows": [
+  {
+   "code": 12,
+   "n": 38,
+   "top_label": "Call",
+   "purity": 0.4211,
+   "marginal": 0.2852,
+   "lift_global": 1.476,
+   "pos_matched_baseline": 0.3452,
+   "lift_pos": 1.22,
+   "top_pos": 13,
+   "top_pos_share_of_code": 0.1316,
+   "n_positions": 24,
+   "share_of_top_pos": 0.0148
+  },
+  {
+   "code": 9,
+   "n": 72,
+   "top_label": "If",
+   "purity": 0.4167,
+   "marginal": 0.1367,
+   "lift_global": 3.049,
+   "pos_matched_baseline": 0.1466,
+   "lift_pos": 2.842,
+   "top_pos": 5,
+   "top_pos_share_of_code": 0.125,
+   "n_positions": 27,
+   "share_of_top_pos": 0.0124
+  },
+  {
+   "code": 20,
+   "n": 800,
+   "top_label": "FunctionDef",
+   "purity": 0.4125,
+   "marginal": 0.0927,
+   "lift_global": 4.449,
+   "pos_matched_baseline": 0.4125,
+   "lift_pos": 1.0,
+   "top_pos": 0,
+   "top_pos_share_of_code": 1.0,
+   "n_positions": 1,
+   "share_of_top_pos": 1.0
+  },
+  {
+   "code": 13,
+   "n": 31,
+   "top_label": "BinOp",
+   "purity": 0.3226,
+   "marginal": 0.1367,
+   "lift_global": 2.36,
+   "pos_matched_baseline": 0.1921,
+   "lift_pos": 1.68,
+   "top_pos": 14,
+   "top_pos_share_of_code": 0.129,
+   "n_positions": 16,
+   "share_of_top_pos": 0.0134
+  },
+  {
+   "code": 0,
+   "n": 5509,
+   "top_label": "Call",
+   "purity": 0.3184,
+   "marginal": 0.2852,
+   "lift_global": 1.116,
+   "pos_matched_baseline": 0.2936,
+   "lift_pos": 1.085,
+   "top_pos": 1,
+   "top_pos_share_of_code": 0.083,
+   "n_positions": 31,
+   "share_of_top_pos": 0.5713
+  },
+  {
+   "code": 2,
+   "n": 1232,
+   "top_label": "Call",
+   "purity": 0.3166,
+   "marginal": 0.2852,
+   "lift_global": 1.11,
+   "pos_matched_baseline": 0.2964,
+   "lift_pos": 1.068,
+   "top_pos": 1,
+   "top_pos_share_of_code": 0.1071,
+   "n_positions": 31,
+   "share_of_top_pos": 0.165
+  },
+  {
+   "code": 7,
+   "n": 109,
+   "top_label": "BinOp",
+   "purity": 0.3119,
+   "marginal": 0.1367,
+   "lift_global": 2.282,
+   "pos_matched_baseline": 0.1431,
+   "lift_pos": 2.179,
+   "top_pos": 3,
+   "top_pos_share_of_code": 0.1193,
+   "n_positions": 24,
+   "share_of_top_pos": 0.0163
+  },
+  {
+   "code": 6,
+   "n": 89,
+   "top_label": "If",
+   "purity": 0.3034,
+   "marginal": 0.1367,
+   "lift_global": 2.22,
+   "pos_matched_baseline": 0.1315,
+   "lift_pos": 2.308,
+   "top_pos": 4,
+   "top_pos_share_of_code": 0.0899,
+   "n_positions": 28,
+   "share_of_top_pos": 0.0103
+  },
+  {
+   "code": 8,
+   "n": 92,
+   "top_label": "Return",
+   "purity": 0.2935,
+   "marginal": 0.0391,
+   "lift_global": 7.499,
+   "pos_matched_baseline": 0.0543,
+   "lift_pos": 5.407,
+   "top_pos": 2,
+   "top_pos_share_of_code": 0.1522,
+   "n_positions": 18,
+   "share_of_top_pos": 0.0175
+  },
+  {
+   "code": 4,
+   "n": 428,
+   "top_label": "If",
+   "purity": 0.285,
+   "marginal": 0.1367,
+   "lift_global": 2.086,
+   "pos_matched_baseline": 0.1585,
+   "lift_pos": 1.798,
+   "top_pos": 1,
+   "top_pos_share_of_code": 0.0958,
+   "n_positions": 29,
+   "share_of_top_pos": 0.0512
+  },
+  {
+   "code": 1,
+   "n": 1835,
+   "top_label": "Call",
+   "purity": 0.2703,
+   "marginal": 0.2852,
+   "lift_global": 0.948,
+   "pos_matched_baseline": 0.2871,
+   "lift_pos": 0.941,
+   "top_pos": 5,
+   "top_pos_share_of_code": 0.0681,
+   "n_positions": 31,
+   "share_of_top_pos": 0.1727
+  },
+  {
+   "code": 5,
+   "n": 495,
+   "top_label": "If",
+   "purity": 0.2646,
+   "marginal": 0.1367,
+   "lift_global": 1.936,
+   "pos_matched_baseline": 0.1533,
+   "lift_pos": 1.726,
+   "top_pos": 4,
+   "top_pos_share_of_code": 0.101,
+   "n_positions": 31,
+   "share_of_top_pos": 0.0647
+  },
+  {
+   "code": 3,
+   "n": 807,
+   "top_label": "If",
+   "purity": 0.2491,
+   "marginal": 0.1367,
+   "lift_global": 1.822,
+   "pos_matched_baseline": 0.1563,
+   "lift_pos": 1.594,
+   "top_pos": 2,
+   "top_pos_share_of_code": 0.1066,
+   "n_positions": 31,
+   "share_of_top_pos": 0.1075
+  }
+ ],
+ "position_rows": [
+  {
+   "pos": 0,
+   "n": 800,
+   "n_distinct_codes": 1,
+   "top_code": 20,
+   "top_code_share": 1.0,
+   "top3_codes": [
+    [
+     20,
+     1.0
+    ]
+   ],
+   "n_codes_peaking_here": 1,
+   "codes_peaking_here": [
+    20
+   ],
+   "top_label": "FunctionDef",
+   "top_label_share": 0.4125
+  },
+  {
+   "pos": 1,
+   "n": 800,
+   "n_distinct_codes": 12,
+   "top_code": 0,
+   "top_code_share": 0.5713,
+   "top3_codes": [
+    [
+     0,
+     0.5713
+    ],
+    [
+     2,
+     0.165
+    ],
+    [
+     1,
+     0.095
+    ]
+   ],
+   "n_codes_peaking_here": 3,
+   "codes_peaking_here": [
+    0,
+    2,
+    4
+   ],
+   "top_label": "Call",
+   "top_label_share": 0.3362
+  },
+  {
+   "pos": 2,
+   "n": 800,
+   "n_distinct_codes": 15,
+   "top_code": 0,
+   "top_code_share": 0.5312,
+   "top3_codes": [
+    [
+     0,
+     0.5312
+    ],
+    [
+     2,
+     0.125
+    ],
+    [
+     3,
+     0.1075
+    ]
+   ],
+   "n_codes_peaking_here": 2,
+   "codes_peaking_here": [
+    3,
+    8
+   ],
+   "top_label": "Call",
+   "top_label_share": 0.2938
+  },
+  {
+   "pos": 3,
+   "n": 796,
+   "n_distinct_codes": 13,
+   "top_code": 0,
+   "top_code_share": 0.5616,
+   "top3_codes": [
+    [
+     0,
+     0.5616
+    ],
+    [
+     2,
+     0.1369
+    ],
+    [
+     1,
+     0.1131
+    ]
+   ],
+   "n_codes_peaking_here": 1,
+   "codes_peaking_here": [
+    7
+   ],
+   "top_label": "Call",
+   "top_label_share": 0.2249
+  },
+  {
+   "pos": 4,
+   "n": 773,
+   "n_distinct_codes": 15,
+   "top_code": 0,
+   "top_code_share": 0.4916,
+   "top3_codes": [
+    [
+     0,
+     0.4916
+    ],
+    [
+     1,
+     0.1436
+    ],
+    [
+     2,
+     0.1138
+    ]
+   ],
+   "n_codes_peaking_here": 2,
+   "codes_peaking_here": [
+    5,
+    6
+   ],
+   "top_label": "Call",
+   "top_label_share": 0.1966
+  },
+  {
+   "pos": 5,
+   "n": 724,
+   "n_distinct_codes": 14,
+   "top_code": 0,
+   "top_code_share": 0.4834,
+   "top3_codes": [
+    [
+     0,
+     0.4834
+    ],
+    [
+     1,
+     0.1727
+    ],
+    [
+     2,
+     0.1091
+    ]
+   ],
+   "n_codes_peaking_here": 2,
+   "codes_peaking_here": [
+    1,
+    9
+   ],
+   "top_label": "Call",
+   "top_label_share": 0.2279
+  },
+  {
+   "pos": 6,
+   "n": 664,
+   "n_distinct_codes": 13,
+   "top_code": 0,
+   "top_code_share": 0.5075,
+   "top3_codes": [
+    [
+     0,
+     0.5075
+    ],
+    [
+     1,
+     0.1717
+    ],
+    [
+     2,
+     0.1145
+    ]
+   ],
+   "n_codes_peaking_here": 0,
+   "codes_peaking_here": [],
+   "top_label": "Call",
+   "top_label_share": 0.2349
+  },
+  {
+   "pos": 7,
+   "n": 597,
+   "n_distinct_codes": 16,
+   "top_code": 0,
+   "top_code_share": 0.4673,
+   "top3_codes": [
+    [
+     0,
+     0.4673
+    ],
+    [
+     1,
+     0.2027
+    ],
+    [
+     2,
+     0.0938
+    ]
+   ],
+   "n_codes_peaking_here": 0,
+   "codes_peaking_here": [],
+   "top_label": "Call",
+   "top_label_share": 0.2111
+  },
+  {
+   "pos": 8,
+   "n": 543,
+   "n_distinct_codes": 13,
+   "top_code": 0,
+   "top_code_share": 0.488,
+   "top3_codes": [
+    [
+     0,
+     0.488
+    ],
+    [
+     1,
+     0.2136
+    ],
+    [
+     2,
+     0.0976
+    ]
+   ],
+   "n_codes_peaking_here": 0,
+   "codes_peaking_here": [],
+   "top_label": "Call",
+   "top_label_share": 0.2155
+  },
+  {
+   "pos": 9,
+   "n": 491,
+   "n_distinct_codes": 12,
+   "top_code": 0,
+   "top_code_share": 0.4297,
+   "top3_codes": [
+    [
+     0,
+     0.4297
+    ],
+    [
+     1,
+     0.2057
+    ],
+    [
+     2,
+     0.1283
+    ]
+   ],
+   "n_codes_peaking_here": 0,
+   "codes_peaking_here": [],
+   "top_label": "Call",
+   "top_label_share": 0.2301
+  },
+  {
+   "pos": 10,
+   "n": 447,
+   "n_distinct_codes": 13,
+   "top_code": 0,
+   "top_code_share": 0.4385,
+   "top3_codes": [
+    [
+     0,
+     0.4385
+    ],
+    [
+     1,
+     0.2036
+    ],
+    [
+     2,
+     0.1074
+    ]
+   ],
+   "n_codes_peaking_here": 0,
+   "codes_peaking_here": [],
+   "top_label": "Call",
+   "top_label_share": 0.2237
+  },
+  {
+   "pos": 11,
+   "n": 401,
+   "n_distinct_codes": 12,
+   "top_code": 0,
+   "top_code_share": 0.5037,
+   "top3_codes": [
+    [
+     0,
+     0.5037
+    ],
+    [
+     1,
+     0.1796
+    ],
+    [
+     2,
+     0.0948
+    ]
+   ],
+   "n_codes_peaking_here": 0,
+   "codes_peaking_here": [],
+   "top_label": "Call",
+   "top_label_share": 0.2294
+  },
+  {
+   "pos": 12,
+   "n": 369,
+   "n_distinct_codes": 15,
+   "top_code": 0,
+   "top_code_share": 0.4986,
+   "top3_codes": [
+    [
+     0,
+     0.4986
+    ],
+    [
+     1,
+     0.2141
+    ],
+    [
+     2,
+     0.0976
+    ]
+   ],
+   "n_codes_peaking_here": 0,
+   "codes_peaking_here": [],
+   "top_label": "BinOp",
+   "top_label_share": 0.2439
+  },
+  {
+   "pos": 13,
+   "n": 338,
+   "n_distinct_codes": 15,
+   "top_code": 0,
+   "top_code_share": 0.4852,
+   "top3_codes": [
+    [
+     0,
+     0.4852
+    ],
+    [
+     1,
+     0.1805
+    ],
+    [
+     2,
+     0.0947
+    ]
+   ],
+   "n_codes_peaking_here": 1,
+   "codes_peaking_here": [
+    12
+   ],
+   "top_label": "Call",
+   "top_label_share": 0.2219
+  },
+  {
+   "pos": 14,
+   "n": 299,
+   "n_distinct_codes": 15,
+   "top_code": 0,
+   "top_code_share": 0.4682,
+   "top3_codes": [
+    [
+     0,
+     0.4682
+    ],
+    [
+     1,
+     0.2308
+    ],
+    [
+     2,
+     0.0736
+    ]
+   ],
+   "n_codes_peaking_here": 1,
+   "codes_peaking_here": [
+    13
+   ],
+   "top_label": "BinOp",
+   "top_label_share": 0.2977
+  },
+  {
+   "pos": 15,
+   "n": 271,
+   "n_distinct_codes": 13,
+   "top_code": 0,
+   "top_code_share": 0.4723,
+   "top3_codes": [
+    [
+     0,
+     0.4723
+    ],
+    [
+     1,
+     0.2362
+    ],
+    [
+     2,
+     0.0812
+    ]
+   ],
+   "n_codes_peaking_here": 0,
+   "codes_peaking_here": [],
+   "top_label": "BinOp",
+   "top_label_share": 0.2731
+  },
+  {
+   "pos": 16,
+   "n": 245,
+   "n_distinct_codes": 13,
+   "top_code": 0,
+   "top_code_share": 0.502,
+   "top3_codes": [
+    [
+     0,
+     0.502
+    ],
+    [
+     1,
+     0.1959
+    ],
+    [
+     2,
+     0.0816
+    ]
+   ],
+   "n_codes_peaking_here": 0,
+   "codes_peaking_here": [],
+   "top_label": "BinOp",
+   "top_label_share": 0.302
+  },
+  {
+   "pos": 17,
+   "n": 226,
+   "n_distinct_codes": 12,
+   "top_code": 0,
+   "top_code_share": 0.5044,
+   "top3_codes": [
+    [
+     0,
+     0.5044
+    ],
+    [
+     1,
+     0.208
+    ],
+    [
+     2,
+     0.1062
+    ]
+   ],
+   "n_codes_peaking_here": 0,
+   "codes_peaking_here": [],
+   "top_label": "BinOp",
+   "top_label_share": 0.2965
+  },
+  {
+   "pos": 18,
+   "n": 213,
+   "n_distinct_codes": 16,
+   "top_code": 0,
+   "top_code_share": 0.4742,
+   "top3_codes": [
+    [
+     0,
+     0.4742
+    ],
+    [
+     1,
+     0.1549
+    ],
+    [
+     2,
+     0.1127
+    ]
+   ],
+   "n_codes_peaking_here": 0,
+   "codes_peaking_here": [],
+   "top_label": "BinOp",
+   "top_label_share": 0.3333
+  },
+  {
+   "pos": 19,
+   "n": 195,
+   "n_distinct_codes": 14,
+   "top_code": 0,
+   "top_code_share": 0.5026,
+   "top3_codes": [
+    [
+     0,
+     0.5026
+    ],
+    [
+     1,
+     0.1846
+    ],
+    [
+     2,
+     0.0821
+    ]
+   ],
+   "n_codes_peaking_here": 0,
+   "codes_peaking_here": [],
+   "top_label": "Call",
+   "top_label_share": 0.2872
+  },
+  {
+   "pos": 20,
+   "n": 174,
+   "n_distinct_codes": 12,
+   "top_code": 0,
+   "top_code_share": 0.523,
+   "top3_codes": [
+    [
+     0,
+     0.523
+    ],
+    [
+     1,
+     0.1839
+    ],
+    [
+     2,
+     0.1034
+    ]
+   ],
+   "n_codes_peaking_here": 0,
+   "codes_peaking_here": [],
+   "top_label": "Call",
+   "top_label_share": 0.3793
+  },
+  {
+   "pos": 21,
+   "n": 160,
+   "n_distinct_codes": 11,
+   "top_code": 0,
+   "top_code_share": 0.6,
+   "top3_codes": [
+    [
+     0,
+     0.6
+    ],
+    [
+     1,
+     0.1313
+    ],
+    [
+     2,
+     0.0875
+    ]
+   ],
+   "n_codes_peaking_here": 0,
+   "codes_peaking_here": [],
+   "top_label": "Call",
+   "top_label_share": 0.3875
+  },
+  {
+   "pos": 22,
+   "n": 151,
+   "n_distinct_codes": 10,
+   "top_code": 0,
+   "top_code_share": 0.5563,
+   "top3_codes": [
+    [
+     0,
+     0.5563
+    ],
+    [
+     1,
+     0.1722
+    ],
+    [
+     2,
+     0.1325
+    ]
+   ],
+   "n_codes_peaking_here": 0,
+   "codes_peaking_here": [],
+   "top_label": "Call",
+   "top_label_share": 0.3974
+  },
+  {
+   "pos": 23,
+   "n": 143,
+   "n_distinct_codes": 11,
+   "top_code": 0,
+   "top_code_share": 0.5105,
+   "top3_codes": [
+    [
+     0,
+     0.5105
+    ],
+    [
+     1,
+     0.2308
+    ],
+    [
+     2,
+     0.1049
+    ]
+   ],
+   "n_codes_peaking_here": 0,
+   "codes_peaking_here": [],
+   "top_label": "Call",
+   "top_label_share": 0.4336
+  },
+  {
+   "pos": 24,
+   "n": 138,
+   "n_distinct_codes": 11,
+   "top_code": 0,
+   "top_code_share": 0.6014,
+   "top3_codes": [
+    [
+     0,
+     0.6014
+    ],
+    [
+     1,
+     0.1812
+    ],
+    [
+     2,
+     0.0942
+    ]
+   ],
+   "n_codes_peaking_here": 0,
+   "codes_peaking_here": [],
+   "top_label": "Call",
+   "top_label_share": 0.5145
+  },
+  {
+   "pos": 25,
+   "n": 133,
+   "n_distinct_codes": 10,
+   "top_code": 0,
+   "top_code_share": 0.6165,
+   "top3_codes": [
+    [
+     0,
+     0.6165
+    ],
+    [
+     1,
+     0.1429
+    ],
+    [
+     2,
+     0.1278
+    ]
+   ],
+   "n_codes_peaking_here": 0,
+   "codes_peaking_here": [],
+   "top_label": "Call",
+   "top_label_share": 0.5714
+  },
+  {
+   "pos": 26,
+   "n": 130,
+   "n_distinct_codes": 11,
+   "top_code": 0,
+   "top_code_share": 0.5769,
+   "top3_codes": [
+    [
+     0,
+     0.5769
+    ],
+    [
+     1,
+     0.1846
+    ],
+    [
+     2,
+     0.1
+    ]
+   ],
+   "n_codes_peaking_here": 0,
+   "codes_peaking_here": [],
+   "top_label": "Call",
+   "top_label_share": 0.5846
+  },
+  {
+   "pos": 27,
+   "n": 128,
+   "n_distinct_codes": 9,
+   "top_code": 0,
+   "top_code_share": 0.5781,
+   "top3_codes": [
+    [
+     0,
+     0.5781
+    ],
+    [
+     1,
+     0.1484
+    ],
+    [
+     2,
+     0.1484
+    ]
+   ],
+   "n_codes_peaking_here": 0,
+   "codes_peaking_here": [],
+   "top_label": "Call",
+   "top_label_share": 0.6875
+  },
+  {
+   "pos": 28,
+   "n": 125,
+   "n_distinct_codes": 10,
+   "top_code": 0,
+   "top_code_share": 0.488,
+   "top3_codes": [
+    [
+     0,
+     0.488
+    ],
+    [
+     1,
+     0.224
+    ],
+    [
+     2,
+     0.136
+    ]
+   ],
+   "n_codes_peaking_here": 0,
+   "codes_peaking_here": [],
+   "top_label": "Call",
+   "top_label_share": 0.648
+  },
+  {
+   "pos": 29,
+   "n": 120,
+   "n_distinct_codes": 11,
+   "top_code": 0,
+   "top_code_share": 0.4667,
+   "top3_codes": [
+    [
+     0,
+     0.4667
+    ],
+    [
+     1,
+     0.225
+    ],
+    [
+     2,
+     0.1417
+    ]
+   ],
+   "n_codes_peaking_here": 0,
+   "codes_peaking_here": [],
+   "top_label": "Call",
+   "top_label_share": 0.6833
+  },
+  {
+   "pos": 30,
+   "n": 118,
+   "n_distinct_codes": 9,
+   "top_code": 0,
+   "top_code_share": 0.5169,
+   "top3_codes": [
+    [
+     0,
+     0.5169
+    ],
+    [
+     1,
+     0.2288
+    ],
+    [
+     2,
+     0.1356
+    ]
+   ],
+   "n_codes_peaking_here": 0,
+   "codes_peaking_here": [],
+   "top_label": "Call",
+   "top_label_share": 0.7203
+  },
+  {
+   "pos": 31,
+   "n": 115,
+   "n_distinct_codes": 10,
+   "top_code": 0,
+   "top_code_share": 0.6261,
+   "top3_codes": [
+    [
+     0,
+     0.6261
+    ],
+    [
+     1,
+     0.1565
+    ],
+    [
+     2,
+     0.1304
+    ]
+   ],
+   "n_codes_peaking_here": 0,
+   "codes_peaking_here": [],
+   "top_label": "Call",
+   "top_label_share": 0.7739
+  }
+ ]
+}

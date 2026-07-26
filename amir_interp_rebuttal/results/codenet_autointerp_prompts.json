@@ -1,0 +1,62 @@
+[
+  {
+    "code": 20,
+    "n": 228,
+    "top_label": "FunctionDef",
+    "purity": 0.35100000000000003,
+    "lift": 3.84,
+    "top_pos": 0,
+    "n_positions": 1,
+    "prompt": "This code fired 228 times across chunks of Python source code (one code per 8-token chunk, chunks read in file order).\n\nObserved distribution for this code:\n  - appears most often at chunk index 0\n  - appears at 1 distinct chunk positions in total\n  - 35% of its firings land on one particular kind of syntactic construct, versus 9% if it fired at random\n\nWhat kind of Python code region does this code most plausibly mark? Name the specific construct (for example: a function definition, a loop header, a conditional, a call expression, an arithmetic expression, an assignment, a return statement)."
+  },
+  {
+    "code": 13,
+    "n": 38,
+    "top_label": "BinOp",
+    "purity": 0.447,
+    "lift": 3.31,
+    "top_pos": 18,
+    "n_positions": 18,
+    "prompt": "This code fired 38 times across chunks of Python source code (one code per 8-token chunk, chunks read in file order).\n\nObserved distribution for this code:\n  - appears most often at chunk index 18\n  - appears at 18 distinct chunk positions in total\n  - 45% of its firings land on one particular kind of syntactic construct, versus 14% if it fired at random\n\nWhat kind of Python code region does this code most plausibly mark? Name the specific construct (for example: a function definition, a loop header, a conditional, a call expression, an arithmetic expression, an assignment, a return statement)."
+  },
+  {
+    "code": 5,
+    "n": 457,
+    "top_label": "If",
+    "purity": 0.254,
+    "lift": 1.88,
+    "top_pos": 5,
+    "n_positions": 31,
+    "prompt": "This code fired 457 times across chunks of Python source code (one code per 8-token chunk, chunks read in file order).\n\nObserved distribution for this code:\n  - appears most often at chunk index 5\n  - appears at 31 distinct chunk positions in total\n  - 25% of its firings land on one particular kind of syntactic construct, versus 14% if it fired at random\n\nWhat kind of Python code region does this code most plausibly mark? Name the specific construct (for example: a function definition, a loop header, a conditional, a call expression, an arithmetic expression, an assignment, a return statement)."
+  },
+  {
+    "code": 8,
+    "n": 79,
+    "top_label": "Call",
+    "purity": 0.32899999999999996,
+    "lift": 1.12,
+    "top_pos": 7,
+    "n_positions": 20,
+    "prompt": "This code fired 79 times across chunks of Python source code (one code per 8-token chunk, chunks read in file order).\n\nObserved distribution for this code:\n  - appears most often at chunk index 7\n  - appears at 20 distinct chunk positions in total\n  - 33% of its firings land on one particular kind of syntactic construct, versus 29% if it fired at random\n\nWhat kind of Python code region does this code most plausibly mark? Name the specific construct (for example: a function definition, a loop header, a conditional, a call expression, an arithmetic expression, an assignment, a return statement)."
+  },
+  {
+    "code": 6,
+    "n": 73,
+    "top_label": "Call",
+    "purity": 0.32899999999999996,
+    "lift": 1.12,
+    "top_pos": 4,
+    "n_positions": 28,
+    "prompt": "This code fired 73 times across chunks of Python source code (one code per 8-token chunk, chunks read in file order).\n\nObserved distribution for this code:\n  - appears most often at chunk index 4\n  - appears at 28 distinct chunk positions in total\n  - 33% of its firings land on one particular kind of syntactic construct, versus 29% if it fired at random\n\nWhat kind of Python code region does this code most plausibly mark? Name the specific construct (for example: a function definition, a loop header, a conditional, a call expression, an arithmetic expression, an assignment, a return statement)."
+  },
+  {
+    "code": 2,
+    "n": 1275,
+    "top_label": "Call",
+    "purity": 0.311,
+    "lift": 1.06,
+    "top_pos": 1,
+    "n_positions": 31,
+    "prompt": "This code fired 1275 times across chunks of Python source code (one code per 8-token chunk, chunks read in file order).\n\nObserved distribution for this code:\n  - appears most often at chunk index 1\n  - appears at 31 distinct chunk positions in total\n  - 31% of its firings land on one particular kind of syntactic construct, versus 29% if it fired at random\n\nWhat kind of Python code region does this code most plausibly mark? Name the specific construct (for example: a function definition, a loop header, a conditional, a call expression, an arithmetic expression, an assignment, a return statement)."
+  }
+]

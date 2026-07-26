@@ -1,0 +1,32 @@
+[
+  {
+    "tag": "arith_12d_10k",
+    "digits": 12,
+    "size": 10000,
+    "scale": 0.1,
+    "alpha_info": 10.0,
+    "alpha_zipf": 1.0,
+    "target_vocab_util": 0.8,
+    "acc": 0.8296153846153846,
+    "delta_pp": 0.5384615384615432,
+    "delta_pp_decode_only": -0.2307692307692233,
+    "n_codes_active": 10,
+    "n_codes_used": 11,
+    "gate_open": false
+  },
+  {
+    "tag": "arith_12d_10k_s0.1_i10_z10u8",
+    "digits": 12,
+    "size": 10000,
+    "scale": 0.1,
+    "alpha_info": 10.0,
+    "alpha_zipf": 10.0,
+    "target_vocab_util": 0.8,
+    "acc": 0.8211538461538461,
+    "delta_pp": 0.2307692307692233,
+    "delta_pp_decode_only": -0.038461538461542766,
+    "n_codes_active": 7,
+    "n_codes_used": 11,
+    "gate_open": false
+  }
+]
