@@ -33,7 +33,6 @@ import random
 from pathlib import Path
 from typing import List, Optional
 
-import torch
 from torch.utils.data import Dataset
 
 from arithmetic.data.addition import (
