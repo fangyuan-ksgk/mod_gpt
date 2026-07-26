@@ -150,7 +150,32 @@ Reproduce: `repro/r1_purity.sh`, `repro/r5_sum9.sh`, `repro/f6_polysemanticity.s
 Raw results in `results/arithmetic_r1r2.json`,
 `results/arithmetic_autointerp_rawfirings.json`, `results/arith_firings.json`.
 
-**Scope.** These are claims about what the codes encode. On this checkpoint the
-codes are not causally load-bearing (removing them costs 0.15pp), so
-single-code repair is not measurable here; the causal result is reported on the
-CodeNet study, where a checkpoint with a 39% relative knockout was obtained.
+## Causal load in this domain
+
+On this checkpoint the codes are **not** causally load-bearing — removing them
+costs 0.15pp. A difficulty/sparsity sweep was run to find a regime where they
+would be, holding optimizer steps roughly constant so training budget is not the
+variable:
+
+```
+  ┌──────────────────────────────┬───────────┬──────────┬────────┐
+  │ Rung                         │   Δ abs   │  Δ rel   │  gate  │
+  ├──────────────────────────────┼───────────┼──────────┼────────┤
+  │ 6-digit  100K  s0.1 i10 z1   │  +0.15pp  │   +0.2%  │ closed │
+  │ 12-digit  10K  s0.1 i10 z1   │  +0.54pp  │   +0.6%  │ closed │
+  │ 12-digit  10K  s0.1 i10 z10  │  +0.23pp  │   +0.3%  │ closed │
+  │ 18-digit  500  s1.0 i30 z20  │  +1.69pp  │   +5.9%  │ closed │
+  └──────────────────────────────┴───────────┴──────────┴────────┘
+```
+
+Causal load rises by roughly 11× from the easiest rung to the hardest — the
+mechanism responds to difficulty and steering strength in the predicted
+direction — but does not reach the 3pp threshold within the range we could
+afford. A 596M-parameter pretrained backbone solves six-digit arithmetic with
+enough slack that the codes never have to carry it.
+
+**Scope.** The findings above are claims about what the codes *encode*, and they
+do not depend on causal load. The causal result is reported on the CodeNet
+study, where a checkpoint with a 39.3% relative knockout was obtained and
+single-code repair could therefore be measured (and did not replicate).
+Reproduce this table with `repro/f2_escalation.sh`.

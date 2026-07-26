@@ -5,7 +5,7 @@
 # locale) and is worth chasing down. Exits nonzero if anything differs.
 source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/_common.sh"
 
-SCRIPTS=(r1_purity.sh r3_position.sh r5_sum9.sh knockout.sh manifest.sh \
+SCRIPTS=(r1_purity.sh r3_position.sh r5_sum9.sh knockout.sh manifest.sh f2_escalation.sh \
          f3_codenet_purity.sh f6_polysemanticity.sh verify_claims.sh)
 
 TMP="$(mktemp -d)"
