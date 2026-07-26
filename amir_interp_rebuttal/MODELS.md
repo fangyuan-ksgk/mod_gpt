@@ -154,13 +154,19 @@ training run and a separate gate measurement, all on the identical recipe
   ├────────┼─────┼──────────┼──────────┼──────────┼──────────────────┼────────┤
   │  1:4   │   4 │   10.62% │   10.50% │   10.00% │ +0.62pp /  5.9%  │ closed │
   │  1:8   │   8 │   17.50% │   11.13% │   10.62% │ +6.87pp / 39.3%  │  OPEN  │
-  │  1:16  │  16 │    9.88% │        — │        — │ see below        │   —    │
+  │  1:16  │  16 │    9.88% │    6.25% │    7.50% │ +2.38pp / 24.1%  │  OPEN  │
   └────────┴─────┴──────────┴──────────┴──────────┴──────────────────┴────────┘
 ```
 
 1:4 fails on both axes at once: the model trains to 10.62% against 1:8's 17.50%,
-*and* its codes stop being load-bearing (5.9% relative, against a 15% bar). 1:16
-starts lower still at 9.88%.
+*and* its codes stop being load-bearing (5.9% relative, against a 15% bar).
+
+1:16 does open the gate, at 24.1% relative, and its RANDOM arm is striking —
+6.25% is *below* the 7.50% of removing steering entirely, so scrambling which
+code is which is worse than having no codes at all. But it reaches 9.88%
+accuracy, so that relative figure sits on a small denominator: 2.38pp absolute
+against 1:8's 6.87pp. A large ratio on a model that barely performs the task is
+weaker evidence than a large ratio on one that does.
 
 This is not a negative result to be reported as a finding — it is the
 justification for the reported configuration. `L=8` is not an unexamined default;
