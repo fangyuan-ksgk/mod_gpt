@@ -22,12 +22,10 @@ from __future__ import annotations
 
 import ast
 import hashlib
-import random
 from collections import Counter
 from pathlib import Path
-from typing import Dict, List, Optional, Sequence
+from typing import Dict, List, Optional
 
-import torch
 from torch.utils.data import Dataset
 
 HF_DATASET = "qiankunmu/Project_CodeNet_Python800_and_Java250"

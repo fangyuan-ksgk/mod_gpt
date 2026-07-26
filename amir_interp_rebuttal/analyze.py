@@ -17,11 +17,7 @@ from __future__ import annotations
 
 import argparse
 import json
-from collections import Counter, defaultdict
 from pathlib import Path
-
-import torch
-from transformers import AutoTokenizer
 
 from amir_interp_rebuttal.interp import (
     build_contingency, format_purity_table, purity_report, surgical_swap_sweep,

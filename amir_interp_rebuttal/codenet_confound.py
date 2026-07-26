@@ -19,8 +19,6 @@ import argparse, json
 from collections import Counter, defaultdict
 from pathlib import Path
 
-from transformers import AutoTokenizer
-
 from amir_interp_rebuttal.codenet_dataset import CodeNetDataset
 from amir_interp_rebuttal.load_local import load_local_steered
 from amir_interp_rebuttal.runner import batched_generate
@@ -28,7 +26,9 @@ from amir_interp_rebuttal.runner import batched_generate
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument("--ckpt", default="ckpt/codenet_v9")
+    # The reported CodeNet checkpoint. ckpt/codenet_v9 (scale=0.1) is SUPERSEDED
+    # and defaulting to it silently audits the wrong model.
+    p.add_argument("--ckpt", default="ckpt/codenet_s0.5_i10_z1_L8_n4000")
     p.add_argument("--eval_n", type=int, default=800)
     p.add_argument("--min_code_n", type=int, default=30)
     # Prefill chunks are cut from position 0 of the LEFT-PADDED row, so with pad
@@ -36,11 +36,18 @@ def main():
     # P % L == 0 (28.5% of rows at batch 32). Running at batch size 1 removes
     # padding entirely and makes the chunk<->label alignment exact for every
     # example — the only way to score R1 without the padding artifact that
-    # manufactured the t20 result.
-    p.add_argument("--eval_batch_size", type=int, default=32)
+    # manufactured the t20 result. Hence the default, and the guard below.
+    p.add_argument("--eval_batch_size", type=int, default=1)
     p.add_argument("--max_new_tokens", type=int, default=8)
     p.add_argument("--out", default="amir_interp_rebuttal/results/codenet_position_confound.json")
     args = p.parse_args()
+
+    if args.eval_batch_size != 1:
+        raise SystemExit(
+            f"--eval_batch_size {args.eval_batch_size}: prefill chunk k maps to "
+            "source chunk k only when pad_len % L == 0, so every purity number "
+            "above batch 1 is scored against misaligned source. This is the bug "
+            "that manufactured t20 -> FunctionDef 3.84x. Use 1.")
 
     wrapper, tok, ck = load_local_steered(args.ckpt, device="cuda")
     L, C_SIZE, scale = ck["L"], ck["C_SIZE"], float(ck["scale"])

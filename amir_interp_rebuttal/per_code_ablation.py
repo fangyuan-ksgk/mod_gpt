@@ -26,8 +26,6 @@ import json
 from collections import Counter
 from pathlib import Path
 
-import torch
-
 
 def build_dataset(study, tok, size):
     if study == "codenet":

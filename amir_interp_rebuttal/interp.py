@@ -14,13 +14,9 @@ so decode step i is answer digit i (verified by `arith_dataset.verify_alignment`
 from __future__ import annotations
 
 import contextlib
-import json
 import random
 from collections import Counter, defaultdict
 from typing import Dict, List, Optional, Sequence
-
-import numpy as np
-import torch
 
 ADD_LABELS = ["SA", "SC", "SS", "UC", "US"]
 SUB_LABELS = ["MD", "MB", "ME", "UB", "UD"]

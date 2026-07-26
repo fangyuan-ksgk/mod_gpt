@@ -51,7 +51,6 @@ from __future__ import annotations
 import json
 import os
 import subprocess
-import sys
 import time
 from pathlib import Path
 
@@ -166,7 +165,11 @@ def train(tag, digits, size, epochs, scale, a_info, a_zipf, tgt_util):
         "--num_rollouts", "4", "--search_temp", "1.0",
         "--eval_samples", "256", "--eval_batch_size", "32",
         "--eval_every", "400", "--max_new_tokens", str(digits + 2),
-        "--eval_decode_scale", "0.1",
+        # Training-time evals must use THIS rung's steering scale. Hardcoding
+        # 0.1 meant every rung above the first was scored on a model steered at
+        # a scale it was never trained for, so the eval curve described nothing
+        # the sweep was actually escalating.
+        "--eval_decode_scale", str(scale),
         "--log_every", "50", "--output_dir", str(ckpt),
     ], LOGS / f"{tag}_train.log",
         env={"ARITH_DIGITS": str(digits), "ARITH_SIZE": str(size)})

@@ -6,7 +6,7 @@ dragging in the trainer.
 """
 from __future__ import annotations
 
-from typing import Dict, List, Optional, Sequence
+from typing import List, Optional, Sequence
 
 import torch
 
@@ -117,16 +117,3 @@ def batched_generate_correct(wrapper, tokenizer, dataset, device, idxs,
                             max_new_tokens=max_new_tokens, record_codes=False,
                             decode_scale=decode_scale)
     return [r["correct"] for r in recs]
-
-
-def per_split_accuracy(records: Sequence[dict], dataset) -> Dict[str, dict]:
-    """Accuracy grouped by the canonical eval-set split (add_C6, sub_M4, ...)."""
-    from collections import defaultdict
-    agg = defaultdict(lambda: [0, 0])
-    for r in records:
-        split = dataset.split_of[r["ds_idx"]]
-        agg[split][1] += 1
-        if r["correct"]:
-            agg[split][0] += 1
-    return {k: {"correct": v[0], "n": v[1], "acc": v[0] / v[1] if v[1] else 0.0}
-            for k, v in sorted(agg.items())}

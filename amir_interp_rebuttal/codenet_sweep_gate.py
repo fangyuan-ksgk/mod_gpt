@@ -53,7 +53,6 @@ from __future__ import annotations
 import json
 import os
 import subprocess
-import sys
 import time
 from pathlib import Path
 
@@ -291,8 +290,13 @@ def main():
                 LOGS / f"{tag}_analyze.log")
             # Position-confound audit too: a purity number that survives the
             # gate still has to survive the control that killed t20.
+            # Batch 1 is not optional: at any larger batch the prefill chunk
+            # index only lines up with the source chunk when pad_len % L == 0,
+            # so the audit would be run against misaligned source and would
+            # silently reproduce the artifact it exists to catch.
             run([PY, "-u", "-W", "ignore", "-m",
                  "amir_interp_rebuttal.codenet_confound", "--ckpt", str(ckpt),
+                 "--eval_batch_size", "1",
                  "--out", f"amir_interp_rebuttal/results/{tag}_position_confound.json"],
                 LOGS / f"{tag}_confound.log")
             print(f"[sweep] DONE — R1/R2 measured on a load-bearing model ({tag})",
