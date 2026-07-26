@@ -54,6 +54,23 @@ chk("codenet R2 attempts 82",       float(r2["n_attempted"]), 82.0, 0.001)
 chk("codenet R2 matched 0%",        float(r2["targeted_fix_rate"]), 0.0, 0.001)
 chk("codenet R2 random 0%",         float(r2["random_fix_rate"]), 0.0, 0.001)
 
+# Arithmetic causal result. scale=0.5 is where arithmetic codes become
+# load-bearing while specialisation survives on the same checkpoint.
+ag = json.loads((R/"arith_s0.5_i10_z1_u8_knockout4.json").read_text())
+chk("arith gated ON 82.96%",       round(100*ag["codes_ON"], 2), 82.96)
+chk("arith gated OFF 75.08%",      round(100*ag["codes_OFF_full"], 2), 75.08)
+chk("arith gated RANDOM 69.88%",   round(100*ag["codes_RANDOM"], 2), 69.88)
+chk("arith gated knockout 7.88pp", round(ag["delta_pp"], 2), 7.88)
+# RANDOM below OFF_full is the identity claim: wrong codes worse than none.
+chk("arith RANDOM below OFF",
+    1.0 if ag["codes_RANDOM"] < ag["codes_OFF_full"] else 0.0, 1.0, 0.001)
+
+# Finding #2 robustness: same checkpoint, comment-normalised scoring.
+cc = json.loads((R/"codenet_knockout4_cleanscore.json").read_text())
+chk("codenet clean-score rel 29.1%", round(cc["delta_rel_pct"], 1), 29.1)
+chk("codenet clean RANDOM below OFF",
+    1.0 if cc["codes_RANDOM"] < cc["codes_OFF_full"] else 0.0, 1.0, 0.001)
+
 print(f"\n  {ok} verified, {fail} failed")
 sys.exit(1 if fail else 0)
 PY
