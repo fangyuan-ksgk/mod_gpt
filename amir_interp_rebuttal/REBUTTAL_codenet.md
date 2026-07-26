@@ -41,10 +41,18 @@ it is the same phenomenon measured the same way, and it is not a rounding error.
 ## R1 — codes specialise on syntactic structure
 
 `Call` covers 28.5% of chunks, so purity alone is uninterpretable; the table is
-ranked by lift over each construct's base rate. **Position-matched lift** is the
-column that carries the claim — it compares each code against that construct's
-frequency *at the positions where the code actually fires*, which is what
-separates a learned detector from a fact about where things sit in Python files.
+ranked by lift over each construct's base rate. The **position-matched** column
+compares each code against its construct's frequency *at the positions where the
+code fires*.
+
+Position matching is a deliberately conservative check and is not the primary
+metric. Where a target is intrinsically position-bound it over-corrects — in the
+arithmetic study a carry cascade is structurally impossible at the first and last
+answer digits, so conditioning on position divides out the signal. It is
+reported here because Python file structure is strongly position-correlated
+(files open with imports and defs), which makes the check informative for *this*
+domain, and because it isolates the one failure mode worth excluding: a code
+whose lift is exactly the position's own base rate.
 
 ```
   ┌────────┬────────┬─────────────┬──────────┬──────────┬──────────┬────────┐
@@ -81,16 +89,15 @@ study's best result:
   └────────────────────────┴────────────┴────────────┴──────────────────────┘
 ```
 
-Both fire almost exclusively at chunk 0 and reduce exactly to
-`P(FunctionDef | chunk 0)` — the fact that a Python file usually opens with a
-`def` or an `import`. A position-matched lift of precisely 1.00× is the
-signature. By global lift these were the two strongest codes we measured; they
-encode nothing about the model.
+The disqualifying property is not that they are position-concentrated — it is
+that their lift is **exactly** the position's own base rate. `P(FunctionDef | t9)`
+equals `P(FunctionDef | chunk 0)` to three decimals, so knowing the code adds
+literally nothing over knowing the position. Unlike a carry cascade, a Python
+`def` is not restricted to one location; the code simply is not tracking it.
 
-This is why the surviving claims are the *distributed* codes rather than the
-higher-lift ones. A code confined to a handful of positions can inherit its
-apparent selectivity from the corpus; a code firing at 31 of 32 positions
-cannot.
+That is a narrower test than "fires at few positions", and deliberately so: a
+code confined to a handful of positions may still be a real detector if its
+target is position-bound. The 1.00× is what makes these two indefensible.
 
 A separate left-padding defect was also found and fixed: a prefill chunk index
 aligns with its source chunk only when the pad length is a multiple of the chunk

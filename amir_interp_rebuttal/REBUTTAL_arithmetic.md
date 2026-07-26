@@ -29,10 +29,32 @@ occurring 38% of the time has learned nothing.
   └────────┴────────┴────────────┴──────────┴───────────┴────────┴────────┘
 ```
 
-**`t6` is a sum-9 carry-cascade detector at 6.21× base rate**, firing at the one
-answer position where multiple codes compete for the same slot — i.e. where
-routing is genuinely input-dependent rather than a function of position. `t17`
-and `t11` are the borrow- and carry-consumption analogues.
+**`t6` is a sum-9 carry-cascade detector at 6.21× base rate.** `t17` and `t11`
+are the borrow- and carry-consumption analogues.
+
+### Position concentration is expected here, not a defect
+
+These codes occupy one or two answer positions, which is what the sub-tasks
+themselves do. The labels are intrinsically position-bound: a carry cascade
+cannot begin at the overflow digit or complete at the last one.
+
+```
+  share of each sub-task's occurrences by answer position (2,600 problems)
+  ┌────────┬───────┬────┬────┬────┬────┬────┬────┬────┬──────────────┐
+  │ Label  │     n │ d0 │ d1 │ d2 │ d3 │ d4 │ d5 │ d6 │ positions    │
+  ├────────┼───────┼────┼────┼────┼────┼────┼────┼────┼──────────────┤
+  │ US     │  2296 │  0 │ 18 │ 22 │ 23 │ 22 │ 14 │  0 │ 5 of 7       │
+  │ UD     │  1520 │  0 │  0 │ 20 │ 29 │ 29 │ 21 │  0 │ 4 of 7       │
+  │ MB     │  1129 │  0 │  0 │  5 │  7 │ 12 │ 24 │ 51 │ 4 of 7       │
+  │ SS     │   341 │  0 │ 19 │ 15 │ 15 │ 20 │ 31 │  0 │ 5 of 7       │
+  │ SA     │  3244 │ 23 │ 11 │  9 │  8 │ 10 │ 13 │ 27 │ 7 of 7       │
+  └────────┴───────┴────┴────┴────┴────┴────┴────┴────┴──────────────┘
+```
+
+`US` is structurally impossible at d0 and d6, `UD` at four positions. A detector
+for a position-bound condition is necessarily position-bound, so conditioning on
+position would divide out the signal it is meant to validate. The claim rests on
+lift over base rate, which is unaffected by this.
 
 ## The tri-state carry classifier, recovered without supervision
 

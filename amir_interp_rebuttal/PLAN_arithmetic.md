@@ -36,13 +36,13 @@ forcing — over the frozen 2,600-problem eval set (24 difficulty splits).
 
 ### Two rules that changed conclusions
 
-**R3 needs the coverage column, not just the position count.** "Every code sits
-in ≤2 of 7 positions" sounds like specialisation and was in fact degenerate: at
-6 of 7 positions a *single* code covered ~100% of all 2,600 problems, making the
-code a deterministic function of position carrying zero information about the
-input. Only position 1 had competing codes. So R3 as originally framed was
-measuring the answer's length, not the model's structure — and R1's purity at
-those positions is inherited from `P(label|position)`, not learned.
+**Position concentration is expected, not disqualifying.** The sub-task labels
+are themselves position-bound: `US` occurs at 5 of 7 answer positions and is
+structurally impossible at d0 and d6; `UD` and `MB` span only 4. A detector for
+a position-bound condition is necessarily position-bound. The narrow failure
+mode worth excluding is a code whose lift *equals* the position's base rate,
+which adds no information over the position alone — see the two withdrawn
+CodeNet codes. Lift over base rate is the primary metric and is unaffected.
 
 **R5 is not independent of R1.** `US` is *defined* by sum-9 columns, so a code
 pure on `US` is necessarily sum-9 selective. R5 is a consistency check on a
