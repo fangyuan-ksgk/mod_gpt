@@ -45,6 +45,15 @@ ranked by lift over each construct's base rate. The **position-matched** column
 compares each code against its construct's frequency *at the positions where the
 code fires*.
 
+Position matching is a deliberately conservative check and is not the primary
+metric. Where a target is intrinsically position-bound it over-corrects — in the
+arithmetic study a carry cascade is structurally impossible at the first and last
+answer digits, so conditioning on position divides out the signal. It is
+reported here because Python file structure is strongly position-correlated
+(files open with imports and defs), which makes the check informative for *this*
+domain, and because it isolates the one failure mode worth excluding: a code
+whose lift is exactly the position's own base rate.
+
 ```
   ┌────────┬────────┬─────────────┬──────────┬──────────┬──────────┬────────┐
   │  Code  │      n │ Construct   │   Purity │   Lift   │ Lift     │  #Pos  │
@@ -66,6 +75,37 @@ expressions wherever those occur in a file. `t10` shows the largest effect
 (6.54× position-matched, essentially undiminished by the control) but rests on
 n=30 and should be read as suggestive.
 
+## What the position control removed
+
+The control is not decoration — it removed the code that *looked* like the
+study's best result:
+
+```
+  ┌────────────────────────┬────────────┬────────────┬──────────────────────┐
+  │ Candidate              │ Lift global│ Lift pos   │ Verdict              │
+  ├────────────────────────┼────────────┼────────────┼──────────────────────┤
+  │ t9  -> FunctionDef     │    4.40x   │   1.00x    │ withdrawn            │
+  │ t20 -> FunctionDef     │    3.84x   │   1.00x    │ withdrawn            │
+  └────────────────────────┴────────────┴────────────┴──────────────────────┘
+```
+
+The disqualifying property is not that they are position-concentrated — it is
+that their lift is **exactly** the position's own base rate. `P(FunctionDef | t9)`
+equals `P(FunctionDef | chunk 0)` to three decimals, so knowing the code adds
+literally nothing over knowing the position. Unlike a carry cascade, a Python
+`def` is not restricted to one location; the code simply is not tracking it.
+
+That is a narrower test than "fires at few positions", and deliberately so: a
+code confined to a handful of positions may still be a real detector if its
+target is position-bound. The 1.00× is what makes these two indefensible.
+
+A separate left-padding defect was also found and fixed: a prefill chunk index
+aligns with its source chunk only when the pad length is a multiple of the chunk
+size, true for 28.5% of rows at batch 32. All numbers here are measured at batch
+1, where no padding exists. Correcting it moved median lift from 1.10× to 2.06×
+and flipped R1 from not-replicated to replicated — the bug had been *hiding*
+real structure, not manufacturing it.
+
 ## Summary
 
 On a real pretrained LLM, in a syntactic domain with an entirely different label
@@ -81,3 +121,23 @@ set from the arithmetic case study:
 Reproduce: `repro/knockout.sh`, `repro/f3_codenet_purity.sh`. Raw results in
 `results/codenet_r1r2.json`, `results/codenet_s0.5_i10_z1_L8_n4000_knockout4.json`,
 `results/codenet_gated_confound_nopad.json`.
+
+**Scope.** Claims here are about what the codes encode and whether removing them
+costs accuracy. Single-code surgical repair was measured on this same
+load-bearing checkpoint and did not replicate. Two independent batch-1
+measurements, differing only in generation length, agree:
+
+```
+  ┌──────────────────────┬────────────┬────────────────┬──────────────┐
+  │ Run                  │ n attempts │ label-matched  │ random code  │
+  ├──────────────────────┼────────────┼────────────────┼──────────────┤
+  │ max_new_tokens = 8   │         82 │  0  (0.0%)     │  0  (0.0%)   │
+  │ max_new_tokens = 32  │         69 │  0  (0.0%)     │  1  (1.4%)   │
+  └──────────────────────┴────────────┴────────────────┴──────────────┘
+```
+
+Forcing the code that its own purity table associates with the correct
+construct repairs nothing, and never beats its random control. Because the
+knockout on this checkpoint is large, this is a **measured negative** rather
+than an underpowered null: the codes demonstrably carry information the model
+uses, and single-code edits still do not steer the prediction.

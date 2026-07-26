@@ -46,6 +46,10 @@ def main():
     p.add_argument("--min_fires", type=int, default=20,
                    help="skip codes firing on fewer than this many examples — "
                         "their affected set is too small to read")
+    p.add_argument("--coverage_thresholds", type=int, nargs="+",
+                   default=[1, 2, 4, 8],
+                   help="dose-response: report delta restricted to files where "
+                        "the code covers at least this many chunks")
     p.add_argument("--out_dir", default="amir_interp_rebuttal/results")
     args = p.parse_args()
 
@@ -68,16 +72,25 @@ def main():
     acc_base = sum(base_correct) / len(base_correct)
     print(f"baseline accuracy {acc_base:.4f}", flush=True)
 
-    # fires[c] = set of example indices where code c appears (prompt or decode)
-    fires = {}
+    # cover[c][i] = how many chunks of example i code c occupies.
+    #
+    # Counting files rather than chunks dilutes the measurement: a CodeNet file
+    # has 32 chunks, so a code touching 1 of them makes the whole file "affected"
+    # even though it controls 3% of the context. Those files cannot plausibly
+    # move, and they drag the mean toward zero. Keeping the count lets us ask the
+    # sharper question -- does ablation hurt MORE as the code covers more of the
+    # file? -- which is a dose-response curve rather than a single number.
+    cover = {}
     for i, r in enumerate(base):
-        seen = set()
+        n_at = {}
         for k in list(r.get("prompt_codes") or []) + list(r.get("codes") or []):
             k = int(k)
             if k >= 0:
-                seen.add(k)
-        for k in seen:
-            fires.setdefault(k, set()).add(i)
+                n_at[k] = n_at.get(k, 0) + 1
+        for k, n in n_at.items():
+            cover.setdefault(k, {})[i] = n
+
+    fires = {c: set(v) for c, v in cover.items()}
 
     counts = Counter({c: len(v) for c, v in fires.items()})
     todo = [c for c, n in counts.most_common() if n >= args.min_fires]
@@ -118,7 +131,26 @@ def main():
         row["delta_all_pp"] = 100 * (row["acc_base_all"] - row["acc_ablated_all"])
         # localisation: how much of the damage lands where the code actually fires
         row["localisation"] = (row["delta_affected_pp"] - row["delta_control_pp"])
+
+        # Dose-response: restrict the denominator to files the code actually
+        # controls a meaningful share of. If delta grows with coverage the code
+        # is doing the damage; if it stays flat, the null is real and not an
+        # artefact of counting barely-touched files as "affected".
+        row["by_coverage"] = []
+        for thr in args.coverage_thresholds:
+            sel = [i for i, n in cover[c].items() if n >= thr]
+            row["by_coverage"].append(dict(
+                min_chunks=thr,
+                n=len(sel),
+                acc_base=acc(sel, base_correct),
+                acc_ablated=acc(sel, abl_correct),
+                delta_pp=(100 * (acc(sel, base_correct) - acc(sel, abl_correct))
+                          if sel else float("nan")),
+            ))
         rows.append(row)
+        dose = "  ".join(f">={b['min_chunks']}ch n={b['n']} {b['delta_pp']:+.2f}"
+                         for b in row["by_coverage"] if b["n"])
+        print(f"       dose: {dose}", flush=True)
         print(f"  t{c:<3} fires_on={len(aff):<4} "
               f"Δaffected={row['delta_affected_pp']:+6.2f}pp  "
               f"Δcontrol={row['delta_control_pp']:+6.2f}pp  "

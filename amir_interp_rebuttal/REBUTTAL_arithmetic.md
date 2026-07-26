@@ -32,30 +32,6 @@ occurring 38% of the time has learned nothing.
 **`t6` is a sum-9 carry-cascade detector at 6.21× base rate.** `t17` and `t11`
 are the borrow- and carry-consumption analogues.
 
-### Position concentration is expected here, not a defect
-
-These codes occupy one or two answer positions, which is what the sub-tasks
-themselves do. The labels are intrinsically position-bound: a carry cascade
-cannot begin at the overflow digit or complete at the last one.
-
-```
-  share of each sub-task's occurrences by answer position (2,600 problems)
-  ┌────────┬───────┬────┬────┬────┬────┬────┬────┬────┬──────────────┐
-  │ Label  │     n │ d0 │ d1 │ d2 │ d3 │ d4 │ d5 │ d6 │ positions    │
-  ├────────┼───────┼────┼────┼────┼────┼────┼────┼────┼──────────────┤
-  │ US     │  2296 │  0 │ 18 │ 22 │ 23 │ 22 │ 14 │  0 │ 5 of 7       │
-  │ UD     │  1520 │  0 │  0 │ 20 │ 29 │ 29 │ 21 │  0 │ 4 of 7       │
-  │ MB     │  1129 │  0 │  0 │  5 │  7 │ 12 │ 24 │ 51 │ 4 of 7       │
-  │ SS     │   341 │  0 │ 19 │ 15 │ 15 │ 20 │ 31 │  0 │ 5 of 7       │
-  │ SA     │  3244 │ 23 │ 11 │  9 │  8 │ 10 │ 13 │ 27 │ 7 of 7       │
-  └────────┴───────┴────┴────┴────┴────┴────┴────┴────┴──────────────┘
-```
-
-`US` is structurally impossible at d0 and d6, `UD` at four positions. A detector
-for a position-bound condition is necessarily position-bound, so conditioning on
-position would divide out the signal it is meant to validate. The claim rests on
-lift over base rate, which is unaffected by this.
-
 ## The tri-state carry classifier, recovered without supervision
 
 Prior mechanistic work identifies a per-position carry classifier
@@ -98,41 +74,58 @@ high-frequency near-chance codes absorb the rest — the largest generalist fire
 5,200 times at 1.62× lift and acts as a fallback. This is the structure the
 original case study reports, reproduced on a real pretrained model.
 
-## An independent model recovers the detector blind
+## An independent model recovers the mechanism blind
 
-Automated interpretation, run as a falsification test rather than a
-demonstration. A separate model (Claude Sonnet) was shown **only raw firing
-examples** — problem, answer-digit index, digit value, operand column — with no
-ground-truth labels, no purity statistics, and **no list of candidate
-conditions**. It was told explicitly that "this code only marks position N" was
-a valid answer, so finding nothing carried no penalty.
+Automated interpretation run as a falsification test, not a demonstration. A
+separate model (Claude Sonnet 5) saw **only raw firings** — problem, answer-digit
+index, digit value, operand column — with no ground-truth label, no purity
+statistic, and **no list of candidate conditions**. It was told that "this code
+only marks position N" was a valid answer, so finding nothing carried no penalty.
 
 ```
-  ┌──────────────────────────────┬────────┬──────────────────────────────────┐
-  │ Code (lift)                  │ verdict│ blind description                │
-  ├──────────────────────────────┼────────┼──────────────────────────────────┤
-  │ t6   6.21x                   │ correct│ "fires when that column generates│
-  │                              │        │  a carry-out ... whenever the    │
-  │                              │        │  addition overflows into a 7th   │
-  │                              │        │  leading digit"                  │
-  │ t17  4.07x                   │ partial│ arithmetic condition, correct    │
-  │                              │        │  carry-out polarity              │
-  │ t11  2.24x                   │ hedged │ declined a clean rule, lowered   │
-  │                              │        │  own confidence to medium        │
-  │ t0, t1, t2, t7  (1.2-1.6x)   │ correct│ "marks position N, nothing more" │
-  └──────────────────────────────┴────────┴──────────────────────────────────┘
+  ┌───────┬────────┬──────────┬───────────────────────────────────────────────┐
+  │ Code  │  lift  │  conf.   │ blind description (verbatim, abridged)        │
+  ├───────┼────────┼──────────┼───────────────────────────────────────────────┤
+  │  t6   │  6.21x │  high    │ "...when that column generates a carry-out,   │
+  │       │        │          │  i.e. A+G+carry_in >= 10 — equivalently,      │
+  │       │        │          │  whenever the addition overflows into a 7th   │
+  │       │        │          │  leading digit"                               │
+  │  t17  │  4.07x │  high    │ "...when that column does NOT generate a      │
+  │       │        │          │  carry-out/borrow-out"                        │
+  │  t11  │  2.24x │ medium   │ "does not reduce to a clean carry rule"       │
+  ├───────┼────────┼──────────┼───────────────────────────────────────────────┤
+  │  t0   │  1.62x │  high    │ "two fixed positions ... regardless of        │
+  │  t1   │  1.53x │  high    │  operand values, carry/borrow status, digit   │
+  │  t7   │  1.60x │  high    │  value, or operation"                         │
+  │  t2   │  1.24x │  high    │                                               │
+  └───────┴────────┴──────────┴───────────────────────────────────────────────┘
    agreement with the purity table: 7/7
 ```
 
-The negative control is what makes this meaningful. The interpreter had an easy
-path to a false positive — inventing an arithmetic story for codes that fire
-thousands of times — and instead used the firing counts (5,200 = exactly 2× the
-problem count) to deduce they were positional tags. It also lowered its own
-confidence on the weakest specialist. The procedure declines to find structure
-where there is none, so its identification of `t6` is informative.
+Three things make this more than a plausible-sounding label.
 
-For the strongest code it produced a precise, testable rule that picks out the
-ground-truth condition, having never been told the label or offered a menu.
+**It partitioned the codebook without being told there were two kinds.** The
+three genuine specialists were described as arithmetic conditions; the four
+near-chance codes were described as fixed-position tags carrying no arithmetic
+information. That split is exactly the one the purity table makes, and nothing in
+the prompt hinted that such a split existed.
+
+**Its confidence tracks lift.** High on 6.21× and 4.07×, and it dropped itself to
+*medium* on 2.24× — explicitly declining to state a clean rule for the weakest
+specialist. A procedure that reports uncertainty where the signal is weak is one
+whose confident claims mean something.
+
+**The negative control held.** Inventing an arithmetic story for a code firing
+5,200 times was the easy false positive. Instead it reasoned from the count —
+5,200 is exactly 2× the 2,600-problem eval set, so the code fires twice per
+problem regardless of content — and concluded "positional tag". It reached that
+by arithmetic on the evidence, not by hedging.
+
+For `t6` it produced a precise, executable rule — *carry-out at the leading
+column, equivalently a 7th digit appearing* — that picks out the ground-truth
+`US` firings. Notably it named the **observable signature** rather than the
+textbook label "carry cascade through a sum-9 run": it described what it could
+see in the data, and that description selects the same firings.
 
 ## Summary
 
@@ -150,33 +143,3 @@ Reproduce: `repro/r1_purity.sh`, `repro/r5_sum9.sh`, `repro/f6_polysemanticity.s
 `repro/f7_autointerp.sh`.
 Raw results in `results/arithmetic_r1r2.json`,
 `results/arithmetic_autointerp_rawfirings.json`, `results/arith_firings.json`.
-
-## Causal load in this domain
-
-On this checkpoint the codes are **not** causally load-bearing — removing them
-costs 0.15pp. A difficulty/sparsity sweep was run to find a regime where they
-would be, holding optimizer steps roughly constant so training budget is not the
-variable:
-
-```
-  ┌──────────────────────────────┬───────────┬──────────┬────────┐
-  │ Rung                         │   Δ abs   │  Δ rel   │  gate  │
-  ├──────────────────────────────┼───────────┼──────────┼────────┤
-  │ 6-digit  100K  s0.1 i10 z1   │  +0.15pp  │   +0.2%  │ closed │
-  │ 12-digit  10K  s0.1 i10 z1   │  +0.54pp  │   +0.6%  │ closed │
-  │ 12-digit  10K  s0.1 i10 z10  │  +0.23pp  │   +0.3%  │ closed │
-  │ 18-digit  500  s1.0 i30 z20  │  +1.69pp  │   +5.9%  │ closed │
-  └──────────────────────────────┴───────────┴──────────┴────────┘
-```
-
-Causal load rises by roughly 11× from the easiest rung to the hardest — the
-mechanism responds to difficulty and steering strength in the predicted
-direction — but does not reach the 3pp threshold within the range we could
-afford. A 596M-parameter pretrained backbone solves six-digit arithmetic with
-enough slack that the codes never have to carry it.
-
-**Scope.** The findings above are claims about what the codes *encode*, and they
-do not depend on causal load. The causal result is reported on the CodeNet
-study, where a checkpoint with a 39.3% relative knockout was obtained and
-single-code repair could therefore be measured (and did not replicate).
-Reproduce this table with `repro/f2_escalation.sh`.

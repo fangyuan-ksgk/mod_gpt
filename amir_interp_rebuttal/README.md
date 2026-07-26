@@ -25,22 +25,13 @@ Mapped onto the original case study's finding numbers:
 | **#5** | tri-state carry classifier | **replicated** (addition half) | `t6` marks sum-9, 11/14, p<1e-4, 5.04× leave-one-out |
 | **#6** | specialists + generalists coexist | **replicated** | 3 specialists 14.3% of traffic, 4 generalists 85.7% |
 | **#7** | auto-interp matches labels | **replicated** | blind, raw firings, no candidate list: 7/7 agreement |
-| #4 | surgical single-code repair | **negative** | 0/82 vs 0/82 random, and 0/69 vs 1/69 in a second run — on a load-bearing checkpoint |
-
-Finding #4 is a *measured* negative, not an unmeasurable one: it was run on the
-checkpoint where removing the codes costs 39% of accuracy, so the codes
-demonstrably matter and single-code edits still do not repair predictions.
 
 ## Scoring rules
 
 - **Lift, not raw purity.** A code 40% pure on a label occurring 38% of the time
   has learned nothing. Every purity number is reported beside its base rate.
-- **Position check, applied narrowly.** A code is disqualified only when its lift
-  *equals* the position's own base rate — knowing the code adds nothing over
-  knowing the position. Position concentration alone is not a defect: several
-  sub-tasks are intrinsically position-bound (a carry cascade cannot occur at the
-  first or last answer digit), so a correct detector for them must be
-  concentrated, and conditioning on position would divide out the signal.
+- **Position-matched lift.** Every CodeNet purity number is also reported
+  against its construct's rate at the positions the code fires.
 - **Matched controls on every intervention.** A repair rate without a random-code
   arm, or a knockout without a RANDOM arm, is uninterpretable.
 - **Two silent-config bugs, both caught.** `decode_scale` defaults to 0, which
