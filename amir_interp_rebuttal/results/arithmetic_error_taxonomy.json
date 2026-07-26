@@ -1,0 +1,2500 @@
+{
+  "ckpt": "ckpt/arith_v9_paperhp",
+  "study": "arithmetic",
+  "n_eval": 2600,
+  "accuracy": 0.8634615384615385,
+  "n_wrong": 355,
+  "counts": {
+    "single_digit": 27,
+    "two_digit": 86,
+    "many_digit": 234,
+    "length_mismatch": 8
+  },
+  "errors": [
+    {
+      "ds_idx": 4,
+      "error_class": "length_mismatch",
+      "wrong_pos": null,
+      "gold": "0889977",
+      "pred": "08900000"
+    },
+    {
+      "ds_idx": 10,
+      "error_class": "many_digit",
+      "wrong_pos": 1,
+      "gold": "0399974",
+      "pred": "0400074"
+    },
+    {
+      "ds_idx": 39,
+      "error_class": "many_digit",
+      "wrong_pos": 1,
+      "gold": "0799889",
+      "pred": "0800889"
+    },
+    {
+      "ds_idx": 42,
+      "error_class": "length_mismatch",
+      "wrong_pos": null,
+      "gold": "0388999",
+      "pred": "03890000"
+    },
+    {
+      "ds_idx": 100,
+      "error_class": "two_digit",
+      "wrong_pos": 1,
+      "gold": "1056711",
+      "pred": "1106711"
+    },
+    {
+      "ds_idx": 130,
+      "error_class": "two_digit",
+      "wrong_pos": 1,
+      "gold": "1102052",
+      "pred": "1092052"
+    },
+    {
+      "ds_idx": 166,
+      "error_class": "two_digit",
+      "wrong_pos": 2,
+      "gold": "0919637",
+      "pred": "0920637"
+    },
+    {
+      "ds_idx": 225,
+      "error_class": "many_digit",
+      "wrong_pos": 2,
+      "gold": "1049969",
+      "pred": "1050009"
+    },
+    {
+      "ds_idx": 233,
+      "error_class": "two_digit",
+      "wrong_pos": 1,
+      "gold": "1200799",
+      "pred": "1190799"
+    },
+    {
+      "ds_idx": 238,
+      "error_class": "many_digit",
+      "wrong_pos": 1,
+      "gold": "0899904",
+      "pred": "0900904"
+    },
+    {
+      "ds_idx": 246,
+      "error_class": "many_digit",
+      "wrong_pos": 0,
+      "gold": "0980239",
+      "pred": "1000239"
+    },
+    {
+      "ds_idx": 264,
+      "error_class": "two_digit",
+      "wrong_pos": 2,
+      "gold": "1490036",
+      "pred": "1489036"
+    },
+    {
+      "ds_idx": 269,
+      "error_class": "single_digit",
+      "wrong_pos": 4,
+      "gold": "1096201",
+      "pred": "1096101"
+    },
+    {
+      "ds_idx": 278,
+      "error_class": "many_digit",
+      "wrong_pos": 1,
+      "gold": "0499029",
+      "pred": "0500029"
+    },
+    {
+      "ds_idx": 279,
+      "error_class": "many_digit",
+      "wrong_pos": 1,
+      "gold": "1102709",
+      "pred": "1098709"
+    },
+    {
+      "ds_idx": 286,
+      "error_class": "many_digit",
+      "wrong_pos": 0,
+      "gold": "1009847",
+      "pred": "0999847"
+    },
+    {
+      "ds_idx": 297,
+      "error_class": "two_digit",
+      "wrong_pos": 1,
+      "gold": "1300619",
+      "pred": "1290619"
+    },
+    {
+      "ds_idx": 303,
+      "error_class": "two_digit",
+      "wrong_pos": 2,
+      "gold": "0950009",
+      "pred": "0949009"
+    },
+    {
+      "ds_idx": 305,
+      "error_class": "two_digit",
+      "wrong_pos": 3,
+      "gold": "0984001",
+      "pred": "0983901"
+    },
+    {
+      "ds_idx": 307,
+      "error_class": "many_digit",
+      "wrong_pos": 0,
+      "gold": "1000398",
+      "pred": "0999398"
+    },
+    {
+      "ds_idx": 308,
+      "error_class": "many_digit",
+      "wrong_pos": 0,
+      "gold": "1001387",
+      "pred": "0999787"
+    },
+    {
+      "ds_idx": 314,
+      "error_class": "two_digit",
+      "wrong_pos": 3,
+      "gold": "0594004",
+      "pred": "0593904"
+    },
+    {
+      "ds_idx": 321,
+      "error_class": "single_digit",
+      "wrong_pos": 2,
+      "gold": "0020009",
+      "pred": "0010009"
+    },
+    {
+      "ds_idx": 322,
+      "error_class": "two_digit",
+      "wrong_pos": 3,
+      "gold": "1005003",
+      "pred": "1004903"
+    },
+    {
+      "ds_idx": 323,
+      "error_class": "many_digit",
+      "wrong_pos": 3,
+      "gold": "0958000",
+      "pred": "0957999"
+    },
+    {
+      "ds_idx": 335,
+      "error_class": "two_digit",
+      "wrong_pos": 2,
+      "gold": "0990019",
+      "pred": "0989019"
+    },
+    {
+      "ds_idx": 336,
+      "error_class": "many_digit",
+      "wrong_pos": 2,
+      "gold": "1250039",
+      "pred": "1249939"
+    },
+    {
+      "ds_idx": 337,
+      "error_class": "two_digit",
+      "wrong_pos": 2,
+      "gold": "1160039",
+      "pred": "1159039"
+    },
+    {
+      "ds_idx": 338,
+      "error_class": "two_digit",
+      "wrong_pos": 2,
+      "gold": "0950030",
+      "pred": "0949030"
+    },
+    {
+      "ds_idx": 345,
+      "error_class": "two_digit",
+      "wrong_pos": 2,
+      "gold": "1260019",
+      "pred": "1259019"
+    },
+    {
+      "ds_idx": 348,
+      "error_class": "two_digit",
+      "wrong_pos": 2,
+      "gold": "0858005",
+      "pred": "0860005"
+    },
+    {
+      "ds_idx": 350,
+      "error_class": "two_digit",
+      "wrong_pos": 2,
+      "gold": "0990049",
+      "pred": "0989049"
+    },
+    {
+      "ds_idx": 358,
+      "error_class": "two_digit",
+      "wrong_pos": 1,
+      "gold": "1200159",
+      "pred": "1190159"
+    },
+    {
+      "ds_idx": 362,
+      "error_class": "two_digit",
+      "wrong_pos": 3,
+      "gold": "0322003",
+      "pred": "0321903"
+    },
+    {
+      "ds_idx": 364,
+      "error_class": "two_digit",
+      "wrong_pos": 3,
+      "gold": "1025003",
+      "pred": "1024903"
+    },
+    {
+      "ds_idx": 366,
+      "error_class": "many_digit",
+      "wrong_pos": 1,
+      "gold": "0600031",
+      "pred": "0599031"
+    },
+    {
+      "ds_idx": 367,
+      "error_class": "two_digit",
+      "wrong_pos": 3,
+      "gold": "1001001",
+      "pred": "1000901"
+    },
+    {
+      "ds_idx": 368,
+      "error_class": "two_digit",
+      "wrong_pos": 3,
+      "gold": "0992004",
+      "pred": "0991904"
+    },
+    {
+      "ds_idx": 373,
+      "error_class": "two_digit",
+      "wrong_pos": 1,
+      "gold": "0900189",
+      "pred": "0890189"
+    },
+    {
+      "ds_idx": 378,
+      "error_class": "many_digit",
+      "wrong_pos": 2,
+      "gold": "1080007",
+      "pred": "1079997"
+    },
+    {
+      "ds_idx": 380,
+      "error_class": "two_digit",
+      "wrong_pos": 3,
+      "gold": "0678001",
+      "pred": "0677901"
+    },
+    {
+      "ds_idx": 381,
+      "error_class": "many_digit",
+      "wrong_pos": 1,
+      "gold": "1200099",
+      "pred": "1199999"
+    },
+    {
+      "ds_idx": 383,
+      "error_class": "two_digit",
+      "wrong_pos": 3,
+      "gold": "0653000",
+      "pred": "0652900"
+    },
+    {
+      "ds_idx": 389,
+      "error_class": "many_digit",
+      "wrong_pos": 0,
+      "gold": "1001140",
+      "pred": "0991140"
+    },
+    {
+      "ds_idx": 390,
+      "error_class": "two_digit",
+      "wrong_pos": 3,
+      "gold": "0429005",
+      "pred": "0428905"
+    },
+    {
+      "ds_idx": 397,
+      "error_class": "length_mismatch",
+      "wrong_pos": null,
+      "gold": "1003999",
+      "pred": "10039990"
+    },
+    {
+      "ds_idx": 399,
+      "error_class": "many_digit",
+      "wrong_pos": 3,
+      "gold": "1006999",
+      "pred": "1007000"
+    },
+    {
+      "ds_idx": 400,
+      "error_class": "many_digit",
+      "wrong_pos": 2,
+      "gold": "0990000",
+      "pred": "0989999"
+    },
+    {
+      "ds_idx": 402,
+      "error_class": "many_digit",
+      "wrong_pos": 1,
+      "gold": "0900003",
+      "pred": "0899903"
+    },
+    {
+      "ds_idx": 409,
+      "error_class": "many_digit",
+      "wrong_pos": 2,
+      "gold": "1330004",
+      "pred": "1329904"
+    },
+    {
+      "ds_idx": 413,
+      "error_class": "many_digit",
+      "wrong_pos": 1,
+      "gold": "1100015",
+      "pred": "1099915"
+    },
+    {
+      "ds_idx": 415,
+      "error_class": "many_digit",
+      "wrong_pos": 1,
+      "gold": "1300005",
+      "pred": "1299995"
+    },
+    {
+      "ds_idx": 418,
+      "error_class": "many_digit",
+      "wrong_pos": 2,
+      "gold": "0770001",
+      "pred": "0769901"
+    },
+    {
+      "ds_idx": 420,
+      "error_class": "many_digit",
+      "wrong_pos": 0,
+      "gold": "1000389",
+      "pred": "0999389"
+    },
+    {
+      "ds_idx": 422,
+      "error_class": "many_digit",
+      "wrong_pos": 0,
+      "gold": "1000175",
+      "pred": "0999175"
+    },
+    {
+      "ds_idx": 423,
+      "error_class": "many_digit",
+      "wrong_pos": 0,
+      "gold": "1000194",
+      "pred": "0999194"
+    },
+    {
+      "ds_idx": 424,
+      "error_class": "many_digit",
+      "wrong_pos": 0,
+      "gold": "1000355",
+      "pred": "0999355"
+    },
+    {
+      "ds_idx": 430,
+      "error_class": "many_digit",
+      "wrong_pos": 0,
+      "gold": "1000391",
+      "pred": "0999391"
+    },
+    {
+      "ds_idx": 433,
+      "error_class": "many_digit",
+      "wrong_pos": 1,
+      "gold": "1100009",
+      "pred": "1099909"
+    },
+    {
+      "ds_idx": 434,
+      "error_class": "many_digit",
+      "wrong_pos": 2,
+      "gold": "0720004",
+      "pred": "0719994"
+    },
+    {
+      "ds_idx": 435,
+      "error_class": "many_digit",
+      "wrong_pos": 1,
+      "gold": "0800006",
+      "pred": "0799996"
+    },
+    {
+      "ds_idx": 436,
+      "error_class": "many_digit",
+      "wrong_pos": 1,
+      "gold": "1400035",
+      "pred": "1399035"
+    },
+    {
+      "ds_idx": 440,
+      "error_class": "two_digit",
+      "wrong_pos": 2,
+      "gold": "0950007",
+      "pred": "0949007"
+    },
+    {
+      "ds_idx": 441,
+      "error_class": "many_digit",
+      "wrong_pos": 0,
+      "gold": "1000398",
+      "pred": "0999398"
+    },
+    {
+      "ds_idx": 442,
+      "error_class": "many_digit",
+      "wrong_pos": 1,
+      "gold": "0500041",
+      "pred": "0499941"
+    },
+    {
+      "ds_idx": 444,
+      "error_class": "many_digit",
+      "wrong_pos": 2,
+      "gold": "0690001",
+      "pred": "0689901"
+    },
+    {
+      "ds_idx": 445,
+      "error_class": "many_digit",
+      "wrong_pos": 2,
+      "gold": "1750003",
+      "pred": "1749903"
+    },
+    {
+      "ds_idx": 446,
+      "error_class": "many_digit",
+      "wrong_pos": 0,
+      "gold": "1000089",
+      "pred": "0999089"
+    },
+    {
+      "ds_idx": 447,
+      "error_class": "many_digit",
+      "wrong_pos": 1,
+      "gold": "0900003",
+      "pred": "0899993"
+    },
+    {
+      "ds_idx": 448,
+      "error_class": "many_digit",
+      "wrong_pos": 1,
+      "gold": "1200001",
+      "pred": "1199991"
+    },
+    {
+      "ds_idx": 449,
+      "error_class": "many_digit",
+      "wrong_pos": 0,
+      "gold": "1000697",
+      "pred": "0999697"
+    },
+    {
+      "ds_idx": 451,
+      "error_class": "many_digit",
+      "wrong_pos": 1,
+      "gold": "0700069",
+      "pred": "0699069"
+    },
+    {
+      "ds_idx": 455,
+      "error_class": "many_digit",
+      "wrong_pos": 1,
+      "gold": "1400043",
+      "pred": "1399043"
+    },
+    {
+      "ds_idx": 456,
+      "error_class": "many_digit",
+      "wrong_pos": 1,
+      "gold": "1100067",
+      "pred": "1099067"
+    },
+    {
+      "ds_idx": 459,
+      "error_class": "many_digit",
+      "wrong_pos": 0,
+      "gold": "1000499",
+      "pred": "0990499"
+    },
+    {
+      "ds_idx": 461,
+      "error_class": "many_digit",
+      "wrong_pos": 2,
+      "gold": "1080004",
+      "pred": "1079904"
+    },
+    {
+      "ds_idx": 462,
+      "error_class": "many_digit",
+      "wrong_pos": 1,
+      "gold": "1100008",
+      "pred": "1099908"
+    },
+    {
+      "ds_idx": 463,
+      "error_class": "many_digit",
+      "wrong_pos": 1,
+      "gold": "1600058",
+      "pred": "1599058"
+    },
+    {
+      "ds_idx": 464,
+      "error_class": "many_digit",
+      "wrong_pos": 2,
+      "gold": "1040005",
+      "pred": "1039905"
+    },
+    {
+      "ds_idx": 465,
+      "error_class": "many_digit",
+      "wrong_pos": 0,
+      "gold": "1000159",
+      "pred": "0999159"
+    },
+    {
+      "ds_idx": 466,
+      "error_class": "many_digit",
+      "wrong_pos": 2,
+      "gold": "0980000",
+      "pred": "0979999"
+    },
+    {
+      "ds_idx": 469,
+      "error_class": "many_digit",
+      "wrong_pos": 2,
+      "gold": "0930000",
+      "pred": "0929999"
+    },
+    {
+      "ds_idx": 477,
+      "error_class": "many_digit",
+      "wrong_pos": 1,
+      "gold": "0700019",
+      "pred": "0699019"
+    },
+    {
+      "ds_idx": 478,
+      "error_class": "many_digit",
+      "wrong_pos": 2,
+      "gold": "1010001",
+      "pred": "1009991"
+    },
+    {
+      "ds_idx": 480,
+      "error_class": "many_digit",
+      "wrong_pos": 1,
+      "gold": "0600009",
+      "pred": "0599909"
+    },
+    {
+      "ds_idx": 481,
+      "error_class": "many_digit",
+      "wrong_pos": 1,
+      "gold": "1100007",
+      "pred": "1099907"
+    },
+    {
+      "ds_idx": 483,
+      "error_class": "many_digit",
+      "wrong_pos": 2,
+      "gold": "0950001",
+      "pred": "0949991"
+    },
+    {
+      "ds_idx": 488,
+      "error_class": "many_digit",
+      "wrong_pos": 1,
+      "gold": "0900016",
+      "pred": "0899016"
+    },
+    {
+      "ds_idx": 489,
+      "error_class": "many_digit",
+      "wrong_pos": 1,
+      "gold": "0800029",
+      "pred": "0799029"
+    },
+    {
+      "ds_idx": 492,
+      "error_class": "many_digit",
+      "wrong_pos": 2,
+      "gold": "1020004",
+      "pred": "1019904"
+    },
+    {
+      "ds_idx": 495,
+      "error_class": "many_digit",
+      "wrong_pos": 2,
+      "gold": "0780000",
+      "pred": "0779999"
+    },
+    {
+      "ds_idx": 496,
+      "error_class": "many_digit",
+      "wrong_pos": 1,
+      "gold": "1200045",
+      "pred": "1199945"
+    },
+    {
+      "ds_idx": 497,
+      "error_class": "many_digit",
+      "wrong_pos": 1,
+      "gold": "1500019",
+      "pred": "1499919"
+    },
+    {
+      "ds_idx": 498,
+      "error_class": "many_digit",
+      "wrong_pos": 0,
+      "gold": "1000689",
+      "pred": "0990689"
+    },
+    {
+      "ds_idx": 501,
+      "error_class": "many_digit",
+      "wrong_pos": 1,
+      "gold": "0300002",
+      "pred": "0299902"
+    },
+    {
+      "ds_idx": 504,
+      "error_class": "many_digit",
+      "wrong_pos": 1,
+      "gold": "0900002",
+      "pred": "0899902"
+    },
+    {
+      "ds_idx": 505,
+      "error_class": "many_digit",
+      "wrong_pos": 0,
+      "gold": "1000075",
+      "pred": "0999975"
+    },
+    {
+      "ds_idx": 507,
+      "error_class": "many_digit",
+      "wrong_pos": 0,
+      "gold": "1000017",
+      "pred": "0999017"
+    },
+    {
+      "ds_idx": 508,
+      "error_class": "many_digit",
+      "wrong_pos": 1,
+      "gold": "0600003",
+      "pred": "0599903"
+    },
+    {
+      "ds_idx": 509,
+      "error_class": "many_digit",
+      "wrong_pos": 1,
+      "gold": "0700000",
+      "pred": "0699999"
+    },
+    {
+      "ds_idx": 510,
+      "error_class": "many_digit",
+      "wrong_pos": 0,
+      "gold": "1000037",
+      "pred": "0999937"
+    },
+    {
+      "ds_idx": 511,
+      "error_class": "many_digit",
+      "wrong_pos": 1,
+      "gold": "0700003",
+      "pred": "0699903"
+    },
+    {
+      "ds_idx": 512,
+      "error_class": "many_digit",
+      "wrong_pos": 1,
+      "gold": "0400000",
+      "pred": "0399999"
+    },
+    {
+      "ds_idx": 515,
+      "error_class": "many_digit",
+      "wrong_pos": 1,
+      "gold": "0800000",
+      "pred": "0799999"
+    },
+    {
+      "ds_idx": 518,
+      "error_class": "many_digit",
+      "wrong_pos": 1,
+      "gold": "0100000",
+      "pred": "0099999"
+    },
+    {
+      "ds_idx": 519,
+      "error_class": "many_digit",
+      "wrong_pos": 0,
+      "gold": "1000004",
+      "pred": "0999994"
+    },
+    {
+      "ds_idx": 523,
+      "error_class": "many_digit",
+      "wrong_pos": 1,
+      "gold": "0600000",
+      "pred": "0599999"
+    },
+    {
+      "ds_idx": 528,
+      "error_class": "many_digit",
+      "wrong_pos": 0,
+      "gold": "1000017",
+      "pred": "0999017"
+    },
+    {
+      "ds_idx": 530,
+      "error_class": "many_digit",
+      "wrong_pos": 0,
+      "gold": "1000014",
+      "pred": "0999914"
+    },
+    {
+      "ds_idx": 531,
+      "error_class": "many_digit",
+      "wrong_pos": 0,
+      "gold": "1000043",
+      "pred": "0999043"
+    },
+    {
+      "ds_idx": 534,
+      "error_class": "many_digit",
+      "wrong_pos": 0,
+      "gold": "1000013",
+      "pred": "0999913"
+    },
+    {
+      "ds_idx": 537,
+      "error_class": "many_digit",
+      "wrong_pos": 0,
+      "gold": "1000008",
+      "pred": "0999008"
+    },
+    {
+      "ds_idx": 539,
+      "error_class": "many_digit",
+      "wrong_pos": 1,
+      "gold": "0200001",
+      "pred": "0199901"
+    },
+    {
+      "ds_idx": 540,
+      "error_class": "many_digit",
+      "wrong_pos": 0,
+      "gold": "1000001",
+      "pred": "0999991"
+    },
+    {
+      "ds_idx": 543,
+      "error_class": "length_mismatch",
+      "wrong_pos": null,
+      "gold": "1000003",
+      "pred": "09999930"
+    },
+    {
+      "ds_idx": 544,
+      "error_class": "many_digit",
+      "wrong_pos": 1,
+      "gold": "0900005",
+      "pred": "0899905"
+    },
+    {
+      "ds_idx": 546,
+      "error_class": "many_digit",
+      "wrong_pos": 1,
+      "gold": "0200007",
+      "pred": "0199907"
+    },
+    {
+      "ds_idx": 547,
+      "error_class": "many_digit",
+      "wrong_pos": 1,
+      "gold": "0400002",
+      "pred": "0399902"
+    },
+    {
+      "ds_idx": 548,
+      "error_class": "many_digit",
+      "wrong_pos": 0,
+      "gold": "1000011",
+      "pred": "0999911"
+    },
+    {
+      "ds_idx": 550,
+      "error_class": "many_digit",
+      "wrong_pos": 0,
+      "gold": "1000007",
+      "pred": "0999907"
+    },
+    {
+      "ds_idx": 551,
+      "error_class": "many_digit",
+      "wrong_pos": 1,
+      "gold": "0800000",
+      "pred": "0799999"
+    },
+    {
+      "ds_idx": 552,
+      "error_class": "many_digit",
+      "wrong_pos": 0,
+      "gold": "1000065",
+      "pred": "0999065"
+    },
+    {
+      "ds_idx": 553,
+      "error_class": "many_digit",
+      "wrong_pos": 0,
+      "gold": "1000002",
+      "pred": "0999992"
+    },
+    {
+      "ds_idx": 555,
+      "error_class": "many_digit",
+      "wrong_pos": 0,
+      "gold": "1000031",
+      "pred": "0999031"
+    },
+    {
+      "ds_idx": 556,
+      "error_class": "many_digit",
+      "wrong_pos": 0,
+      "gold": "1000033",
+      "pred": "0999033"
+    },
+    {
+      "ds_idx": 557,
+      "error_class": "many_digit",
+      "wrong_pos": 1,
+      "gold": "0200003",
+      "pred": "0199903"
+    },
+    {
+      "ds_idx": 558,
+      "error_class": "many_digit",
+      "wrong_pos": 0,
+      "gold": "1000071",
+      "pred": "0999971"
+    },
+    {
+      "ds_idx": 562,
+      "error_class": "many_digit",
+      "wrong_pos": 1,
+      "gold": "0900002",
+      "pred": "0899902"
+    },
+    {
+      "ds_idx": 563,
+      "error_class": "many_digit",
+      "wrong_pos": 0,
+      "gold": "1000000",
+      "pred": "0999990"
+    },
+    {
+      "ds_idx": 564,
+      "error_class": "many_digit",
+      "wrong_pos": 1,
+      "gold": "0700002",
+      "pred": "0699902"
+    },
+    {
+      "ds_idx": 565,
+      "error_class": "many_digit",
+      "wrong_pos": 0,
+      "gold": "1000028",
+      "pred": "0999028"
+    },
+    {
+      "ds_idx": 569,
+      "error_class": "many_digit",
+      "wrong_pos": 1,
+      "gold": "0100002",
+      "pred": "0099902"
+    },
+    {
+      "ds_idx": 571,
+      "error_class": "many_digit",
+      "wrong_pos": 1,
+      "gold": "0300000",
+      "pred": "0299999"
+    },
+    {
+      "ds_idx": 573,
+      "error_class": "many_digit",
+      "wrong_pos": 1,
+      "gold": "0900002",
+      "pred": "0899902"
+    },
+    {
+      "ds_idx": 574,
+      "error_class": "many_digit",
+      "wrong_pos": 1,
+      "gold": "0800005",
+      "pred": "0799905"
+    },
+    {
+      "ds_idx": 575,
+      "error_class": "many_digit",
+      "wrong_pos": 1,
+      "gold": "0900000",
+      "pred": "0899999"
+    },
+    {
+      "ds_idx": 576,
+      "error_class": "many_digit",
+      "wrong_pos": 1,
+      "gold": "0900000",
+      "pred": "0899900"
+    },
+    {
+      "ds_idx": 577,
+      "error_class": "many_digit",
+      "wrong_pos": 0,
+      "gold": "1000002",
+      "pred": "0999902"
+    },
+    {
+      "ds_idx": 579,
+      "error_class": "many_digit",
+      "wrong_pos": 1,
+      "gold": "0900002",
+      "pred": "0899902"
+    },
+    {
+      "ds_idx": 580,
+      "error_class": "many_digit",
+      "wrong_pos": 0,
+      "gold": "1000015",
+      "pred": "0999915"
+    },
+    {
+      "ds_idx": 581,
+      "error_class": "length_mismatch",
+      "wrong_pos": null,
+      "gold": "1000004",
+      "pred": "09999940"
+    },
+    {
+      "ds_idx": 582,
+      "error_class": "many_digit",
+      "wrong_pos": 0,
+      "gold": "1000022",
+      "pred": "0999922"
+    },
+    {
+      "ds_idx": 584,
+      "error_class": "many_digit",
+      "wrong_pos": 1,
+      "gold": "0200004",
+      "pred": "0199904"
+    },
+    {
+      "ds_idx": 586,
+      "error_class": "many_digit",
+      "wrong_pos": 1,
+      "gold": "0300000",
+      "pred": "0299999"
+    },
+    {
+      "ds_idx": 587,
+      "error_class": "many_digit",
+      "wrong_pos": 1,
+      "gold": "0900004",
+      "pred": "0899904"
+    },
+    {
+      "ds_idx": 590,
+      "error_class": "many_digit",
+      "wrong_pos": 1,
+      "gold": "0300005",
+      "pred": "0299905"
+    },
+    {
+      "ds_idx": 591,
+      "error_class": "many_digit",
+      "wrong_pos": 1,
+      "gold": "0300001",
+      "pred": "0299999"
+    },
+    {
+      "ds_idx": 593,
+      "error_class": "many_digit",
+      "wrong_pos": 0,
+      "gold": "1000007",
+      "pred": "0999907"
+    },
+    {
+      "ds_idx": 594,
+      "error_class": "many_digit",
+      "wrong_pos": 0,
+      "gold": "1000003",
+      "pred": "0999993"
+    },
+    {
+      "ds_idx": 596,
+      "error_class": "many_digit",
+      "wrong_pos": 1,
+      "gold": "0300001",
+      "pred": "0299901"
+    },
+    {
+      "ds_idx": 598,
+      "error_class": "many_digit",
+      "wrong_pos": 0,
+      "gold": "1000038",
+      "pred": "0999038"
+    },
+    {
+      "ds_idx": 599,
+      "error_class": "many_digit",
+      "wrong_pos": 0,
+      "gold": "1000014",
+      "pred": "0999014"
+    },
+    {
+      "ds_idx": 600,
+      "error_class": "many_digit",
+      "wrong_pos": 0,
+      "gold": "1000003",
+      "pred": "0999903"
+    },
+    {
+      "ds_idx": 601,
+      "error_class": "many_digit",
+      "wrong_pos": 0,
+      "gold": "1000007",
+      "pred": "0999907"
+    },
+    {
+      "ds_idx": 605,
+      "error_class": "many_digit",
+      "wrong_pos": 0,
+      "gold": "1000005",
+      "pred": "0999905"
+    },
+    {
+      "ds_idx": 610,
+      "error_class": "many_digit",
+      "wrong_pos": 0,
+      "gold": "1000002",
+      "pred": "0999902"
+    },
+    {
+      "ds_idx": 611,
+      "error_class": "many_digit",
+      "wrong_pos": 0,
+      "gold": "1000001",
+      "pred": "0999901"
+    },
+    {
+      "ds_idx": 614,
+      "error_class": "many_digit",
+      "wrong_pos": 0,
+      "gold": "1000003",
+      "pred": "0999993"
+    },
+    {
+      "ds_idx": 616,
+      "error_class": "many_digit",
+      "wrong_pos": 0,
+      "gold": "1000000",
+      "pred": "0999999"
+    },
+    {
+      "ds_idx": 617,
+      "error_class": "many_digit",
+      "wrong_pos": 0,
+      "gold": "1000000",
+      "pred": "0999999"
+    },
+    {
+      "ds_idx": 618,
+      "error_class": "many_digit",
+      "wrong_pos": 0,
+      "gold": "1000000",
+      "pred": "0999999"
+    },
+    {
+      "ds_idx": 619,
+      "error_class": "many_digit",
+      "wrong_pos": 0,
+      "gold": "1000002",
+      "pred": "0999902"
+    },
+    {
+      "ds_idx": 625,
+      "error_class": "many_digit",
+      "wrong_pos": 0,
+      "gold": "1000001",
+      "pred": "0999901"
+    },
+    {
+      "ds_idx": 627,
+      "error_class": "many_digit",
+      "wrong_pos": 0,
+      "gold": "1000005",
+      "pred": "0999905"
+    },
+    {
+      "ds_idx": 628,
+      "error_class": "many_digit",
+      "wrong_pos": 0,
+      "gold": "1000001",
+      "pred": "0999901"
+    },
+    {
+      "ds_idx": 630,
+      "error_class": "many_digit",
+      "wrong_pos": 0,
+      "gold": "1000001",
+      "pred": "0999901"
+    },
+    {
+      "ds_idx": 631,
+      "error_class": "many_digit",
+      "wrong_pos": 0,
+      "gold": "1000005",
+      "pred": "0999905"
+    },
+    {
+      "ds_idx": 632,
+      "error_class": "many_digit",
+      "wrong_pos": 0,
+      "gold": "1000002",
+      "pred": "0999902"
+    },
+    {
+      "ds_idx": 634,
+      "error_class": "many_digit",
+      "wrong_pos": 0,
+      "gold": "1000000",
+      "pred": "0999999"
+    },
+    {
+      "ds_idx": 635,
+      "error_class": "many_digit",
+      "wrong_pos": 0,
+      "gold": "1000000",
+      "pred": "0999999"
+    },
+    {
+      "ds_idx": 636,
+      "error_class": "many_digit",
+      "wrong_pos": 0,
+      "gold": "1000006",
+      "pred": "0999906"
+    },
+    {
+      "ds_idx": 637,
+      "error_class": "many_digit",
+      "wrong_pos": 0,
+      "gold": "1000002",
+      "pred": "0999902"
+    },
+    {
+      "ds_idx": 638,
+      "error_class": "many_digit",
+      "wrong_pos": 0,
+      "gold": "1000002",
+      "pred": "0999902"
+    },
+    {
+      "ds_idx": 639,
+      "error_class": "many_digit",
+      "wrong_pos": 0,
+      "gold": "1000003",
+      "pred": "0999993"
+    },
+    {
+      "ds_idx": 642,
+      "error_class": "many_digit",
+      "wrong_pos": 0,
+      "gold": "1000001",
+      "pred": "0999991"
+    },
+    {
+      "ds_idx": 644,
+      "error_class": "many_digit",
+      "wrong_pos": 0,
+      "gold": "1000001",
+      "pred": "0999901"
+    },
+    {
+      "ds_idx": 646,
+      "error_class": "many_digit",
+      "wrong_pos": 0,
+      "gold": "1000003",
+      "pred": "0999903"
+    },
+    {
+      "ds_idx": 651,
+      "error_class": "many_digit",
+      "wrong_pos": 0,
+      "gold": "1000001",
+      "pred": "0999991"
+    },
+    {
+      "ds_idx": 652,
+      "error_class": "many_digit",
+      "wrong_pos": 0,
+      "gold": "1000003",
+      "pred": "0999903"
+    },
+    {
+      "ds_idx": 655,
+      "error_class": "many_digit",
+      "wrong_pos": 0,
+      "gold": "1000002",
+      "pred": "0999902"
+    },
+    {
+      "ds_idx": 658,
+      "error_class": "many_digit",
+      "wrong_pos": 0,
+      "gold": "1000001",
+      "pred": "0999901"
+    },
+    {
+      "ds_idx": 664,
+      "error_class": "many_digit",
+      "wrong_pos": 0,
+      "gold": "1000003",
+      "pred": "0999903"
+    },
+    {
+      "ds_idx": 665,
+      "error_class": "many_digit",
+      "wrong_pos": 0,
+      "gold": "1000003",
+      "pred": "0999903"
+    },
+    {
+      "ds_idx": 666,
+      "error_class": "many_digit",
+      "wrong_pos": 0,
+      "gold": "1000005",
+      "pred": "0999995"
+    },
+    {
+      "ds_idx": 667,
+      "error_class": "many_digit",
+      "wrong_pos": 0,
+      "gold": "1000003",
+      "pred": "0999903"
+    },
+    {
+      "ds_idx": 668,
+      "error_class": "many_digit",
+      "wrong_pos": 0,
+      "gold": "1000003",
+      "pred": "0999903"
+    },
+    {
+      "ds_idx": 671,
+      "error_class": "many_digit",
+      "wrong_pos": 0,
+      "gold": "1000002",
+      "pred": "0999902"
+    },
+    {
+      "ds_idx": 680,
+      "error_class": "many_digit",
+      "wrong_pos": 0,
+      "gold": "1000002",
+      "pred": "0999992"
+    },
+    {
+      "ds_idx": 683,
+      "error_class": "many_digit",
+      "wrong_pos": 0,
+      "gold": "1000000",
+      "pred": "0999999"
+    },
+    {
+      "ds_idx": 687,
+      "error_class": "many_digit",
+      "wrong_pos": 0,
+      "gold": "1000004",
+      "pred": "0999904"
+    },
+    {
+      "ds_idx": 690,
+      "error_class": "many_digit",
+      "wrong_pos": 0,
+      "gold": "1000001",
+      "pred": "0999901"
+    },
+    {
+      "ds_idx": 691,
+      "error_class": "many_digit",
+      "wrong_pos": 0,
+      "gold": "1000003",
+      "pred": "0999903"
+    },
+    {
+      "ds_idx": 692,
+      "error_class": "many_digit",
+      "wrong_pos": 0,
+      "gold": "1000000",
+      "pred": "0999999"
+    },
+    {
+      "ds_idx": 694,
+      "error_class": "many_digit",
+      "wrong_pos": 0,
+      "gold": "1000005",
+      "pred": "0999995"
+    },
+    {
+      "ds_idx": 696,
+      "error_class": "many_digit",
+      "wrong_pos": 0,
+      "gold": "1000001",
+      "pred": "0999901"
+    },
+    {
+      "ds_idx": 699,
+      "error_class": "many_digit",
+      "wrong_pos": 0,
+      "gold": "1000001",
+      "pred": "0999901"
+    },
+    {
+      "ds_idx": 705,
+      "error_class": "two_digit",
+      "wrong_pos": 2,
+      "gold": "1380418",
+      "pred": "1378418"
+    },
+    {
+      "ds_idx": 753,
+      "error_class": "many_digit",
+      "wrong_pos": 1,
+      "gold": "0799412",
+      "pred": "0800412"
+    },
+    {
+      "ds_idx": 779,
+      "error_class": "single_digit",
+      "wrong_pos": 1,
+      "gold": "1311474",
+      "pred": "1211474"
+    },
+    {
+      "ds_idx": 787,
+      "error_class": "many_digit",
+      "wrong_pos": 1,
+      "gold": "0899087",
+      "pred": "0900087"
+    },
+    {
+      "ds_idx": 801,
+      "error_class": "two_digit",
+      "wrong_pos": 3,
+      "gold": "1423005",
+      "pred": "1422905"
+    },
+    {
+      "ds_idx": 830,
+      "error_class": "two_digit",
+      "wrong_pos": 1,
+      "gold": "1306918",
+      "pred": "1296918"
+    },
+    {
+      "ds_idx": 840,
+      "error_class": "two_digit",
+      "wrong_pos": 3,
+      "gold": "1269015",
+      "pred": "1268915"
+    },
+    {
+      "ds_idx": 849,
+      "error_class": "many_digit",
+      "wrong_pos": 2,
+      "gold": "0720003",
+      "pred": "0719993"
+    },
+    {
+      "ds_idx": 863,
+      "error_class": "two_digit",
+      "wrong_pos": 4,
+      "gold": "1669700",
+      "pred": "1669690"
+    },
+    {
+      "ds_idx": 883,
+      "error_class": "length_mismatch",
+      "wrong_pos": null,
+      "gold": "1036011",
+      "pred": "10359110"
+    },
+    {
+      "ds_idx": 884,
+      "error_class": "many_digit",
+      "wrong_pos": 1,
+      "gold": "0699519",
+      "pred": "0700519"
+    },
+    {
+      "ds_idx": 888,
+      "error_class": "two_digit",
+      "wrong_pos": 4,
+      "gold": "0792501",
+      "pred": "0792491"
+    },
+    {
+      "ds_idx": 909,
+      "error_class": "two_digit",
+      "wrong_pos": 3,
+      "gold": "0207136",
+      "pred": "0206936"
+    },
+    {
+      "ds_idx": 934,
+      "error_class": "two_digit",
+      "wrong_pos": 1,
+      "gold": "0103116",
+      "pred": "0093116"
+    },
+    {
+      "ds_idx": 963,
+      "error_class": "two_digit",
+      "wrong_pos": 1,
+      "gold": "0203623",
+      "pred": "0193623"
+    },
+    {
+      "ds_idx": 974,
+      "error_class": "single_digit",
+      "wrong_pos": 3,
+      "gold": "0003127",
+      "pred": "0001127"
+    },
+    {
+      "ds_idx": 978,
+      "error_class": "single_digit",
+      "wrong_pos": 0,
+      "gold": "1035460",
+      "pred": "0035460"
+    },
+    {
+      "ds_idx": 1002,
+      "error_class": "two_digit",
+      "wrong_pos": 2,
+      "gold": "0140116",
+      "pred": "0139116"
+    },
+    {
+      "ds_idx": 1003,
+      "error_class": "single_digit",
+      "wrong_pos": 1,
+      "gold": "0601640",
+      "pred": "0501640"
+    },
+    {
+      "ds_idx": 1008,
+      "error_class": "single_digit",
+      "wrong_pos": 3,
+      "gold": "0031020",
+      "pred": "0030020"
+    },
+    {
+      "ds_idx": 1026,
+      "error_class": "single_digit",
+      "wrong_pos": 3,
+      "gold": "0762064",
+      "pred": "0761064"
+    },
+    {
+      "ds_idx": 1037,
+      "error_class": "single_digit",
+      "wrong_pos": 4,
+      "gold": "0511103",
+      "pred": "0511003"
+    },
+    {
+      "ds_idx": 1038,
+      "error_class": "many_digit",
+      "wrong_pos": 2,
+      "gold": "0110052",
+      "pred": "0109952"
+    },
+    {
+      "ds_idx": 1043,
+      "error_class": "two_digit",
+      "wrong_pos": 4,
+      "gold": "0045733",
+      "pred": "0045693"
+    },
+    {
+      "ds_idx": 1054,
+      "error_class": "many_digit",
+      "wrong_pos": 0,
+      "gold": "1014050",
+      "pred": "0954050"
+    },
+    {
+      "ds_idx": 1058,
+      "error_class": "two_digit",
+      "wrong_pos": 1,
+      "gold": "1100005",
+      "pred": "1090005"
+    },
+    {
+      "ds_idx": 1081,
+      "error_class": "single_digit",
+      "wrong_pos": 1,
+      "gold": "0202307",
+      "pred": "0102307"
+    },
+    {
+      "ds_idx": 1086,
+      "error_class": "two_digit",
+      "wrong_pos": 2,
+      "gold": "0120074",
+      "pred": "0119074"
+    },
+    {
+      "ds_idx": 1088,
+      "error_class": "two_digit",
+      "wrong_pos": 2,
+      "gold": "0041062",
+      "pred": "0034062"
+    },
+    {
+      "ds_idx": 1089,
+      "error_class": "many_digit",
+      "wrong_pos": 2,
+      "gold": "0110061",
+      "pred": "0109961"
+    },
+    {
+      "ds_idx": 1095,
+      "error_class": "single_digit",
+      "wrong_pos": 4,
+      "gold": "0040023",
+      "pred": "0040123"
+    },
+    {
+      "ds_idx": 1096,
+      "error_class": "many_digit",
+      "wrong_pos": 4,
+      "gold": "0642200",
+      "pred": "0642199"
+    },
+    {
+      "ds_idx": 1097,
+      "error_class": "two_digit",
+      "wrong_pos": 1,
+      "gold": "0501027",
+      "pred": "0491027"
+    },
+    {
+      "ds_idx": 1101,
+      "error_class": "two_digit",
+      "wrong_pos": 3,
+      "gold": "0256022",
+      "pred": "0255622"
+    },
+    {
+      "ds_idx": 1102,
+      "error_class": "many_digit",
+      "wrong_pos": 2,
+      "gold": "0140010",
+      "pred": "0139910"
+    },
+    {
+      "ds_idx": 1103,
+      "error_class": "many_digit",
+      "wrong_pos": 0,
+      "gold": "1000270",
+      "pred": "0999270"
+    },
+    {
+      "ds_idx": 1117,
+      "error_class": "two_digit",
+      "wrong_pos": 2,
+      "gold": "0530130",
+      "pred": "0529130"
+    },
+    {
+      "ds_idx": 1118,
+      "error_class": "many_digit",
+      "wrong_pos": 3,
+      "gold": "0011010",
+      "pred": "0010990"
+    },
+    {
+      "ds_idx": 1122,
+      "error_class": "two_digit",
+      "wrong_pos": 1,
+      "gold": "1500466",
+      "pred": "1490466"
+    },
+    {
+      "ds_idx": 1127,
+      "error_class": "two_digit",
+      "wrong_pos": 3,
+      "gold": "0300244",
+      "pred": "0309444"
+    },
+    {
+      "ds_idx": 1128,
+      "error_class": "two_digit",
+      "wrong_pos": 1,
+      "gold": "1100676",
+      "pred": "1090676"
+    },
+    {
+      "ds_idx": 1131,
+      "error_class": "two_digit",
+      "wrong_pos": 3,
+      "gold": "0262001",
+      "pred": "0261901"
+    },
+    {
+      "ds_idx": 1133,
+      "error_class": "two_digit",
+      "wrong_pos": 2,
+      "gold": "0310134",
+      "pred": "0304134"
+    },
+    {
+      "ds_idx": 1135,
+      "error_class": "two_digit",
+      "wrong_pos": 2,
+      "gold": "0710132",
+      "pred": "0702132"
+    },
+    {
+      "ds_idx": 1139,
+      "error_class": "two_digit",
+      "wrong_pos": 2,
+      "gold": "1730011",
+      "pred": "1729011"
+    },
+    {
+      "ds_idx": 1153,
+      "error_class": "two_digit",
+      "wrong_pos": 4,
+      "gold": "0730901",
+      "pred": "0730891"
+    },
+    {
+      "ds_idx": 1155,
+      "error_class": "two_digit",
+      "wrong_pos": 2,
+      "gold": "0640125",
+      "pred": "0639125"
+    },
+    {
+      "ds_idx": 1157,
+      "error_class": "many_digit",
+      "wrong_pos": 3,
+      "gold": "0436001",
+      "pred": "0435991"
+    },
+    {
+      "ds_idx": 1163,
+      "error_class": "many_digit",
+      "wrong_pos": 0,
+      "gold": "1001116",
+      "pred": "0991116"
+    },
+    {
+      "ds_idx": 1166,
+      "error_class": "single_digit",
+      "wrong_pos": 2,
+      "gold": "1310653",
+      "pred": "1300653"
+    },
+    {
+      "ds_idx": 1173,
+      "error_class": "many_digit",
+      "wrong_pos": 1,
+      "gold": "0100051",
+      "pred": "0099951"
+    },
+    {
+      "ds_idx": 1174,
+      "error_class": "two_digit",
+      "wrong_pos": 2,
+      "gold": "0610047",
+      "pred": "0609047"
+    },
+    {
+      "ds_idx": 1178,
+      "error_class": "two_digit",
+      "wrong_pos": 1,
+      "gold": "1200210",
+      "pred": "1190210"
+    },
+    {
+      "ds_idx": 1179,
+      "error_class": "two_digit",
+      "wrong_pos": 3,
+      "gold": "0217001",
+      "pred": "0216901"
+    },
+    {
+      "ds_idx": 1181,
+      "error_class": "two_digit",
+      "wrong_pos": 3,
+      "gold": "0344001",
+      "pred": "0343901"
+    },
+    {
+      "ds_idx": 1182,
+      "error_class": "two_digit",
+      "wrong_pos": 2,
+      "gold": "0040021",
+      "pred": "0032021"
+    },
+    {
+      "ds_idx": 1183,
+      "error_class": "single_digit",
+      "wrong_pos": 4,
+      "gold": "0305101",
+      "pred": "0305001"
+    },
+    {
+      "ds_idx": 1206,
+      "error_class": "two_digit",
+      "wrong_pos": 2,
+      "gold": "0280014",
+      "pred": "0279014"
+    },
+    {
+      "ds_idx": 1214,
+      "error_class": "single_digit",
+      "wrong_pos": 2,
+      "gold": "1010250",
+      "pred": "1000250"
+    },
+    {
+      "ds_idx": 1218,
+      "error_class": "two_digit",
+      "wrong_pos": 2,
+      "gold": "0130025",
+      "pred": "0129025"
+    },
+    {
+      "ds_idx": 1220,
+      "error_class": "two_digit",
+      "wrong_pos": 0,
+      "gold": "1003135",
+      "pred": "0903135"
+    },
+    {
+      "ds_idx": 1223,
+      "error_class": "many_digit",
+      "wrong_pos": 2,
+      "gold": "0610035",
+      "pred": "0609935"
+    },
+    {
+      "ds_idx": 1225,
+      "error_class": "many_digit",
+      "wrong_pos": 2,
+      "gold": "1210013",
+      "pred": "1209913"
+    },
+    {
+      "ds_idx": 1229,
+      "error_class": "many_digit",
+      "wrong_pos": 3,
+      "gold": "0205005",
+      "pred": "0204995"
+    },
+    {
+      "ds_idx": 1231,
+      "error_class": "two_digit",
+      "wrong_pos": 4,
+      "gold": "0300200",
+      "pred": "0300190"
+    },
+    {
+      "ds_idx": 1236,
+      "error_class": "two_digit",
+      "wrong_pos": 3,
+      "gold": "0574001",
+      "pred": "0573901"
+    },
+    {
+      "ds_idx": 1243,
+      "error_class": "many_digit",
+      "wrong_pos": 2,
+      "gold": "1750005",
+      "pred": "1749905"
+    },
+    {
+      "ds_idx": 1245,
+      "error_class": "two_digit",
+      "wrong_pos": 1,
+      "gold": "1600331",
+      "pred": "1590331"
+    },
+    {
+      "ds_idx": 1254,
+      "error_class": "many_digit",
+      "wrong_pos": 1,
+      "gold": "1500114",
+      "pred": "1499114"
+    },
+    {
+      "ds_idx": 1264,
+      "error_class": "many_digit",
+      "wrong_pos": 2,
+      "gold": "0550002",
+      "pred": "0549902"
+    },
+    {
+      "ds_idx": 1265,
+      "error_class": "single_digit",
+      "wrong_pos": 3,
+      "gold": "0532016",
+      "pred": "0531016"
+    },
+    {
+      "ds_idx": 1268,
+      "error_class": "single_digit",
+      "wrong_pos": 2,
+      "gold": "0520063",
+      "pred": "0510063"
+    },
+    {
+      "ds_idx": 1273,
+      "error_class": "two_digit",
+      "wrong_pos": 2,
+      "gold": "0360014",
+      "pred": "0359014"
+    },
+    {
+      "ds_idx": 1274,
+      "error_class": "two_digit",
+      "wrong_pos": 3,
+      "gold": "0721004",
+      "pred": "0720904"
+    },
+    {
+      "ds_idx": 1275,
+      "error_class": "two_digit",
+      "wrong_pos": 3,
+      "gold": "1002001",
+      "pred": "1001901"
+    },
+    {
+      "ds_idx": 1279,
+      "error_class": "many_digit",
+      "wrong_pos": 2,
+      "gold": "0360041",
+      "pred": "0359941"
+    },
+    {
+      "ds_idx": 1280,
+      "error_class": "two_digit",
+      "wrong_pos": 2,
+      "gold": "0460012",
+      "pred": "0459012"
+    },
+    {
+      "ds_idx": 1286,
+      "error_class": "two_digit",
+      "wrong_pos": 3,
+      "gold": "1451002",
+      "pred": "1450902"
+    },
+    {
+      "ds_idx": 1292,
+      "error_class": "many_digit",
+      "wrong_pos": 2,
+      "gold": "0160001",
+      "pred": "0159991"
+    },
+    {
+      "ds_idx": 1294,
+      "error_class": "two_digit",
+      "wrong_pos": 1,
+      "gold": "1600140",
+      "pred": "1590140"
+    },
+    {
+      "ds_idx": 1297,
+      "error_class": "many_digit",
+      "wrong_pos": 2,
+      "gold": "1020025",
+      "pred": "1019925"
+    },
+    {
+      "ds_idx": 1303,
+      "error_class": "many_digit",
+      "wrong_pos": 2,
+      "gold": "0430005",
+      "pred": "0429905"
+    },
+    {
+      "ds_idx": 1305,
+      "error_class": "many_digit",
+      "wrong_pos": 3,
+      "gold": "0774001",
+      "pred": "0773991"
+    },
+    {
+      "ds_idx": 1310,
+      "error_class": "many_digit",
+      "wrong_pos": 2,
+      "gold": "0530002",
+      "pred": "0529902"
+    },
+    {
+      "ds_idx": 1312,
+      "error_class": "many_digit",
+      "wrong_pos": 3,
+      "gold": "1001003",
+      "pred": "1000993"
+    },
+    {
+      "ds_idx": 1313,
+      "error_class": "single_digit",
+      "wrong_pos": 3,
+      "gold": "0612021",
+      "pred": "0618021"
+    },
+    {
+      "ds_idx": 1315,
+      "error_class": "many_digit",
+      "wrong_pos": 4,
+      "gold": "0650400",
+      "pred": "0650399"
+    },
+    {
+      "ds_idx": 1316,
+      "error_class": "single_digit",
+      "wrong_pos": 4,
+      "gold": "0740200",
+      "pred": "0740100"
+    },
+    {
+      "ds_idx": 1319,
+      "error_class": "many_digit",
+      "wrong_pos": 3,
+      "gold": "1502000",
+      "pred": "1501990"
+    },
+    {
+      "ds_idx": 1322,
+      "error_class": "many_digit",
+      "wrong_pos": 3,
+      "gold": "0114000",
+      "pred": "0113999"
+    },
+    {
+      "ds_idx": 1326,
+      "error_class": "many_digit",
+      "wrong_pos": 2,
+      "gold": "0620003",
+      "pred": "0619903"
+    },
+    {
+      "ds_idx": 1333,
+      "error_class": "many_digit",
+      "wrong_pos": 3,
+      "gold": "0214001",
+      "pred": "0213991"
+    },
+    {
+      "ds_idx": 1341,
+      "error_class": "many_digit",
+      "wrong_pos": 1,
+      "gold": "0100101",
+      "pred": "0099901"
+    },
+    {
+      "ds_idx": 1344,
+      "error_class": "two_digit",
+      "wrong_pos": 3,
+      "gold": "1111006",
+      "pred": "1110906"
+    },
+    {
+      "ds_idx": 1345,
+      "error_class": "two_digit",
+      "wrong_pos": 2,
+      "gold": "0530023",
+      "pred": "0529023"
+    },
+    {
+      "ds_idx": 1352,
+      "error_class": "many_digit",
+      "wrong_pos": 2,
+      "gold": "0620005",
+      "pred": "0619995"
+    },
+    {
+      "ds_idx": 1356,
+      "error_class": "many_digit",
+      "wrong_pos": 0,
+      "gold": "1002000",
+      "pred": "0999990"
+    },
+    {
+      "ds_idx": 1358,
+      "error_class": "length_mismatch",
+      "wrong_pos": null,
+      "gold": "0331000",
+      "pred": "03309999"
+    },
+    {
+      "ds_idx": 1359,
+      "error_class": "many_digit",
+      "wrong_pos": 1,
+      "gold": "1200051",
+      "pred": "1199951"
+    },
+    {
+      "ds_idx": 1368,
+      "error_class": "two_digit",
+      "wrong_pos": 3,
+      "gold": "0465002",
+      "pred": "0464902"
+    },
+    {
+      "ds_idx": 1379,
+      "error_class": "many_digit",
+      "wrong_pos": 1,
+      "gold": "0102000",
+      "pred": "0099999"
+    },
+    {
+      "ds_idx": 1383,
+      "error_class": "many_digit",
+      "wrong_pos": 2,
+      "gold": "1320002",
+      "pred": "1319992"
+    },
+    {
+      "ds_idx": 1390,
+      "error_class": "many_digit",
+      "wrong_pos": 4,
+      "gold": "0673500",
+      "pred": "0673499"
+    },
+    {
+      "ds_idx": 1392,
+      "error_class": "two_digit",
+      "wrong_pos": 2,
+      "gold": "0610054",
+      "pred": "0609054"
+    },
+    {
+      "ds_idx": 1393,
+      "error_class": "many_digit",
+      "wrong_pos": 1,
+      "gold": "0100001",
+      "pred": "0099991"
+    },
+    {
+      "ds_idx": 1397,
+      "error_class": "many_digit",
+      "wrong_pos": 0,
+      "gold": "1000035",
+      "pred": "0999035"
+    },
+    {
+      "ds_idx": 1401,
+      "error_class": "single_digit",
+      "wrong_pos": 2,
+      "gold": "1110140",
+      "pred": "1100140"
+    },
+    {
+      "ds_idx": 1402,
+      "error_class": "two_digit",
+      "wrong_pos": 2,
+      "gold": "1030090",
+      "pred": "1029090"
+    },
+    {
+      "ds_idx": 1405,
+      "error_class": "many_digit",
+      "wrong_pos": 0,
+      "gold": "1000013",
+      "pred": "0999913"
+    },
+    {
+      "ds_idx": 1406,
+      "error_class": "many_digit",
+      "wrong_pos": 3,
+      "gold": "1025000",
+      "pred": "1024999"
+    },
+    {
+      "ds_idx": 1409,
+      "error_class": "two_digit",
+      "wrong_pos": 2,
+      "gold": "1020021",
+      "pred": "1019021"
+    },
+    {
+      "ds_idx": 1420,
+      "error_class": "many_digit",
+      "wrong_pos": 2,
+      "gold": "1250000",
+      "pred": "1249999"
+    },
+    {
+      "ds_idx": 1432,
+      "error_class": "length_mismatch",
+      "wrong_pos": null,
+      "gold": "1430000",
+      "pred": "14299999"
+    },
+    {
+      "ds_idx": 1434,
+      "error_class": "many_digit",
+      "wrong_pos": 2,
+      "gold": "1010001",
+      "pred": "1009901"
+    },
+    {
+      "ds_idx": 1438,
+      "error_class": "many_digit",
+      "wrong_pos": 0,
+      "gold": "1000000",
+      "pred": "0999999"
+    },
+    {
+      "ds_idx": 1441,
+      "error_class": "two_digit",
+      "wrong_pos": 3,
+      "gold": "1034001",
+      "pred": "1033901"
+    },
+    {
+      "ds_idx": 1444,
+      "error_class": "many_digit",
+      "wrong_pos": 3,
+      "gold": "1017003",
+      "pred": "1016993"
+    },
+    {
+      "ds_idx": 1445,
+      "error_class": "many_digit",
+      "wrong_pos": 3,
+      "gold": "1111001",
+      "pred": "1110991"
+    },
+    {
+      "ds_idx": 1449,
+      "error_class": "many_digit",
+      "wrong_pos": 0,
+      "gold": "1000023",
+      "pred": "0999923"
+    },
+    {
+      "ds_idx": 1452,
+      "error_class": "many_digit",
+      "wrong_pos": 3,
+      "gold": "1114001",
+      "pred": "1113991"
+    },
+    {
+      "ds_idx": 1454,
+      "error_class": "two_digit",
+      "wrong_pos": 3,
+      "gold": "1702001",
+      "pred": "1701901"
+    },
+    {
+      "ds_idx": 1458,
+      "error_class": "many_digit",
+      "wrong_pos": 1,
+      "gold": "1500001",
+      "pred": "1499901"
+    },
+    {
+      "ds_idx": 1469,
+      "error_class": "many_digit",
+      "wrong_pos": 2,
+      "gold": "1140002",
+      "pred": "1139902"
+    },
+    {
+      "ds_idx": 1472,
+      "error_class": "two_digit",
+      "wrong_pos": 3,
+      "gold": "1073001",
+      "pred": "1072901"
+    },
+    {
+      "ds_idx": 1475,
+      "error_class": "many_digit",
+      "wrong_pos": 3,
+      "gold": "1617001",
+      "pred": "1616991"
+    },
+    {
+      "ds_idx": 1479,
+      "error_class": "two_digit",
+      "wrong_pos": 2,
+      "gold": "1050043",
+      "pred": "1049043"
+    },
+    {
+      "ds_idx": 1482,
+      "error_class": "two_digit",
+      "wrong_pos": 3,
+      "gold": "1315003",
+      "pred": "1314903"
+    },
+    {
+      "ds_idx": 1484,
+      "error_class": "single_digit",
+      "wrong_pos": 3,
+      "gold": "1201031",
+      "pred": "1200031"
+    },
+    {
+      "ds_idx": 1486,
+      "error_class": "many_digit",
+      "wrong_pos": 2,
+      "gold": "1010001",
+      "pred": "1009991"
+    },
+    {
+      "ds_idx": 1487,
+      "error_class": "many_digit",
+      "wrong_pos": 1,
+      "gold": "1200000",
+      "pred": "1199900"
+    },
+    {
+      "ds_idx": 1490,
+      "error_class": "many_digit",
+      "wrong_pos": 0,
+      "gold": "1000227",
+      "pred": "0999227"
+    },
+    {
+      "ds_idx": 1492,
+      "error_class": "many_digit",
+      "wrong_pos": 3,
+      "gold": "1012000",
+      "pred": "1011999"
+    },
+    {
+      "ds_idx": 1495,
+      "error_class": "many_digit",
+      "wrong_pos": 2,
+      "gold": "1310003",
+      "pred": "1309993"
+    },
+    {
+      "ds_idx": 1497,
+      "error_class": "two_digit",
+      "wrong_pos": 3,
+      "gold": "1401001",
+      "pred": "1400901"
+    },
+    {
+      "ds_idx": 1499,
+      "error_class": "many_digit",
+      "wrong_pos": 1,
+      "gold": "1100001",
+      "pred": "1099901"
+    },
+    {
+      "ds_idx": 1507,
+      "error_class": "two_digit",
+      "wrong_pos": 4,
+      "gold": "0173701",
+      "pred": "0173691"
+    },
+    {
+      "ds_idx": 1667,
+      "error_class": "two_digit",
+      "wrong_pos": 4,
+      "gold": "0288901",
+      "pred": "0288891"
+    },
+    {
+      "ds_idx": 1721,
+      "error_class": "many_digit",
+      "wrong_pos": 1,
+      "gold": "0099300",
+      "pred": "0100300"
+    },
+    {
+      "ds_idx": 1792,
+      "error_class": "single_digit",
+      "wrong_pos": 1,
+      "gold": "0183096",
+      "pred": "0283096"
+    },
+    {
+      "ds_idx": 1897,
+      "error_class": "single_digit",
+      "wrong_pos": 2,
+      "gold": "0089965",
+      "pred": "0079965"
+    },
+    {
+      "ds_idx": 2003,
+      "error_class": "many_digit",
+      "wrong_pos": 1,
+      "gold": "0299999",
+      "pred": "0300000"
+    },
+    {
+      "ds_idx": 2012,
+      "error_class": "many_digit",
+      "wrong_pos": 1,
+      "gold": "0599999",
+      "pred": "0600000"
+    },
+    {
+      "ds_idx": 2018,
+      "error_class": "many_digit",
+      "wrong_pos": 1,
+      "gold": "0099999",
+      "pred": "0100000"
+    },
+    {
+      "ds_idx": 2039,
+      "error_class": "many_digit",
+      "wrong_pos": 1,
+      "gold": "0899997",
+      "pred": "0900000"
+    },
+    {
+      "ds_idx": 2043,
+      "error_class": "many_digit",
+      "wrong_pos": 1,
+      "gold": "0599994",
+      "pred": "0600000"
+    },
+    {
+      "ds_idx": 2053,
+      "error_class": "many_digit",
+      "wrong_pos": 1,
+      "gold": "0399999",
+      "pred": "0400000"
+    },
+    {
+      "ds_idx": 2056,
+      "error_class": "many_digit",
+      "wrong_pos": 1,
+      "gold": "0099999",
+      "pred": "0100000"
+    },
+    {
+      "ds_idx": 2086,
+      "error_class": "many_digit",
+      "wrong_pos": 1,
+      "gold": "0299999",
+      "pred": "0300000"
+    },
+    {
+      "ds_idx": 2098,
+      "error_class": "many_digit",
+      "wrong_pos": 1,
+      "gold": "0099996",
+      "pred": "0100000"
+    },
+    {
+      "ds_idx": 2196,
+      "error_class": "two_digit",
+      "wrong_pos": 1,
+      "gold": "0501132",
+      "pred": "0491132"
+    },
+    {
+      "ds_idx": 2280,
+      "error_class": "single_digit",
+      "wrong_pos": 2,
+      "gold": "0396461",
+      "pred": "0386461"
+    },
+    {
+      "ds_idx": 2287,
+      "error_class": "single_digit",
+      "wrong_pos": 2,
+      "gold": "0869838",
+      "pred": "0879838"
+    },
+    {
+      "ds_idx": 2299,
+      "error_class": "single_digit",
+      "wrong_pos": 3,
+      "gold": "0428253",
+      "pred": "0427253"
+    },
+    {
+      "ds_idx": 2313,
+      "error_class": "two_digit",
+      "wrong_pos": 1,
+      "gold": "0121988",
+      "pred": "0011988"
+    },
+    {
+      "ds_idx": 2356,
+      "error_class": "two_digit",
+      "wrong_pos": 1,
+      "gold": "0096825",
+      "pred": "0106825"
+    },
+    {
+      "ds_idx": 2362,
+      "error_class": "many_digit",
+      "wrong_pos": 3,
+      "gold": "0228992",
+      "pred": "0229002"
+    },
+    {
+      "ds_idx": 2399,
+      "error_class": "single_digit",
+      "wrong_pos": 1,
+      "gold": "0402971",
+      "pred": "0302971"
+    },
+    {
+      "ds_idx": 2465,
+      "error_class": "single_digit",
+      "wrong_pos": 1,
+      "gold": "0308876",
+      "pred": "0208876"
+    },
+    {
+      "ds_idx": 2598,
+      "error_class": "many_digit",
+      "wrong_pos": 3,
+      "gold": "0076996",
+      "pred": "0077006"
+    }
+  ]
+}

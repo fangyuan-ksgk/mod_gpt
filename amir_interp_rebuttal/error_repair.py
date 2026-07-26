@@ -40,6 +40,29 @@ def _toks(s):
     return re.findall(r"[A-Za-z_]\w*|\d+|\S", s or "")
 
 
+def classify_arithmetic(pred, gold):
+    """Bucket one wrong arithmetic answer.
+
+    The arithmetic model is 86% accurate, so its errors are mostly a correct
+    answer with one digit wrong -- the case a per-digit steering code could
+    plausibly repair, since the code at answer position d is exactly the
+    intervention that governs digit d. `single_digit` also records WHICH
+    position differs, which turns best-of-C into a targeted C-attempt sweep at
+    one position instead of a blind search over all of them.
+    """
+    p, g = (pred or "").strip(), (gold or "").strip()
+    if not p:
+        return "empty", None
+    if len(p) != len(g):
+        return "length_mismatch", None
+    diff = [i for i, (a, b) in enumerate(zip(p, g)) if a != b]
+    if len(diff) == 1:
+        return "single_digit", diff[0]
+    if len(diff) == 2:
+        return "two_digit", diff[0]
+    return "many_digit", (diff[0] if diff else None)
+
+
 def classify(pred, gold):
     """Bucket one wrong prediction. Ordered: first match wins.
 
@@ -69,7 +92,9 @@ def classify(pred, gold):
 
 
 CLASS_ORDER = ["empty", "whitespace_only", "truncation", "reordering",
-               "identifier_swap", "same_construct", "different_construct", "other"]
+               "identifier_swap", "same_construct", "different_construct", "other",
+               # arithmetic
+               "single_digit", "two_digit", "many_digit", "length_mismatch"]
 
 
 def build_dataset(study, tok, size):
@@ -91,7 +116,7 @@ def main():
     p.add_argument("--repair", action="store_true", help="stage 2: best-of-C sweep")
     p.add_argument("--error_class", default=None,
                    help="stage 2: which class to attempt (from stage 1)")
-    p.add_argument("--mode", default="single", choices=["single", "all"],
+    p.add_argument("--mode", default="single", choices=["single", "all", "targeted"],
                    help="single: force one code at one decode step (weakest "
                         "intervention). all: force it at EVERY decode step -- "
                         "the right shape when a code's role is sustained, e.g. "
@@ -100,6 +125,14 @@ def main():
                    help="stage 2: cap attempts; C x positions x N gets large")
     p.add_argument("--show", type=int, default=8,
                    help="stage 1: sample errors printed per class for eyeballing")
+    p.add_argument("--repair_scale", type=float, default=None,
+                   help="decode_scale to use DURING repair attempts. The "
+                        "arithmetic checkpoint trains at scale=0.1, so swapping "
+                        "one learned code for another barely perturbs the "
+                        "residual stream. Amplifying asks whether the code "
+                        "CARRIES the sub-task, separately from whether it does "
+                        "so loudly enough at its native strength. Applied to "
+                        "both arms equally.")
     p.add_argument("--from_taxonomy", action="store_true",
                    help="skip the 800-example baseline pass and read the error "
                         "list from {study}_error_taxonomy.json. The baseline is "
@@ -144,7 +177,12 @@ def main():
         wrong = [r for r in recs if not r["correct"]]
         print(f"accuracy {acc:.4f} | {len(wrong)} wrong of {len(recs)}", flush=True)
         for r in wrong:
-            r["error_class"] = classify(r.get("pred"), r.get("gold"))
+            if args.study == "arithmetic":
+                cls, wpos = classify_arithmetic(r.get("pred"), r.get("gold"))
+                r["error_class"], r["wrong_pos"] = cls, wpos
+            else:
+                r["error_class"], r["wrong_pos"] = classify(r.get("pred"),
+                                                            r.get("gold")), None
         counts = Counter(r["error_class"] for r in wrong)
 
     out = Path(args.out_dir)
@@ -171,6 +209,7 @@ def main():
             "accuracy": acc, "n_wrong": len(wrong),
             "counts": {k: counts.get(k, 0) for k in CLASS_ORDER if counts.get(k)},
             "errors": [{"ds_idx": r["ds_idx"], "error_class": r["error_class"],
+                        "wrong_pos": r.get("wrong_pos"),
                         "gold": r.get("gold"), "pred": r.get("pred")}
                        for r in wrong],
         }
@@ -188,20 +227,30 @@ def main():
         target = target[:args.max_examples]
         n_chunks = max(1, args.max_new_tokens // L)
         # Each entry is what gets handed to force_code_at as `position`.
-        posspecs = list(range(n_chunks)) if args.mode == "single" else [None]
-        budget = C * len(posspecs)
+        if args.mode == "targeted":
+            # one attempt-set per example, at the digit that is actually wrong
+            posspecs = "PER_EXAMPLE"
+        else:
+            posspecs = list(range(n_chunks)) if args.mode == "single" else [None]
+        budget = C * (1 if posspecs == "PER_EXAMPLE" else len(posspecs))
         print(f"\n  repairing class {args.error_class!r} [mode={args.mode}]: "
-              f"{len(target)} examples x {C} codes x {len(posspecs)} position-set(s) "
+              f"{len(target)} examples x {C} codes x "
+              f"{1 if posspecs == 'PER_EXAMPLE' else len(posspecs)} position-set(s) "
               f"= {budget} attempts/arm", flush=True)
 
         import torch
+
+        rscale = args.repair_scale if args.repair_scale is not None else scale
+        if rscale != scale:
+            print(f"  intervention amplified: decode_scale {scale} -> {rscale} "
+                  f"(both arms)", flush=True)
 
         def try_one(i, pos, c):
             with force_code_at(wrapper, pos, c):
                 o = batched_generate(wrapper, tok, ds, args.device, [i],
                                      eval_batch_size=1,
                                      max_new_tokens=args.max_new_tokens,
-                                     record_codes=False, decode_scale=scale)
+                                     record_codes=False, decode_scale=rscale)
             return bool(o[0]["correct"])
 
         # MATCHED-EFFORT CONTROL.
@@ -223,8 +272,15 @@ def main():
         for n, r in enumerate(target, 1):
             i = r["ds_idx"]
 
+            if posspecs == "PER_EXAMPLE":
+                wp = r.get("wrong_pos")
+                if wp is None:
+                    continue
+                spec = [wp]
+            else:
+                spec = posspecs
             got = False
-            for pos in posspecs:
+            for pos in spec:
                 for c in range(C):
                     if try_one(i, pos, c):
                         got, fixed_by[c] = True, fixed_by[c] + 1
@@ -241,8 +297,12 @@ def main():
                 v = torch.randn(saved_emb.shape[1], generator=gen)
                 v = (v / v.norm() * mean_norm).to(saved_emb.dtype)
                 wrapper.steering_emb.weight.data[SCRATCH] = v.to(saved_emb.device)
-                pos = (None if args.mode == "all" else
-                       int(torch.randint(n_chunks, (1,), generator=gen).item()))
+                if args.mode == "all":
+                    pos = None
+                elif args.mode == "targeted":
+                    pos = spec[0]
+                else:
+                    pos = int(torch.randint(n_chunks, (1,), generator=gen).item())
                 if try_one(i, pos, SCRATCH):
                     rgot = True
                     break
@@ -256,20 +316,24 @@ def main():
         payload = {
             "ckpt": args.ckpt, "study": args.study,
             "error_class": args.error_class, "mode": args.mode,
+            "native_scale": scale, "repair_scale": rscale,
             "n_attempted": len(target), "C": C, "n_positions": n_chunks,
             "fixed_best_of_C": fixed_any,
             "fix_rate_best_of_C": fixed_any / len(target),
-            "attempt_budget_per_example": C * n_chunks,
+            "attempt_budget_per_example": budget,
             "fixed_random_matched": rand_fixed,
             "fix_rate_random_matched": rand_fixed / len(target),
             "fixing_codes": dict(fixed_by.most_common()),
             "first_hits": first_hit,
         }
-        path = out / f"{args.study}_error_repair_{args.error_class}_{args.mode}.json"
+        tag = f"{args.error_class}_{args.mode}"
+        if rscale != scale:
+            tag += f"_s{rscale}"
+        path = out / f"{args.study}_error_repair_{tag}.json"
         path.write_text(json.dumps(payload, indent=2))
         print(f"\n  best-of-{C}: {fixed_any}/{len(target)} "
               f"({fixed_any/len(target):.1%})")
-        print(f"  random matched (same {C*n_chunks}-attempt budget): "
+        print(f"  random matched (same {budget}-attempt budget): "
               f"{rand_fixed}/{len(target)} ({rand_fixed/len(target):.1%})")
         if fixed_by:
             print("  codes that produced a fix: " +

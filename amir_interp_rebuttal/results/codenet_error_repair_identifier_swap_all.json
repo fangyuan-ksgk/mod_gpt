@@ -1,0 +1,24 @@
+{
+  "ckpt": "ckpt/codenet_s0.5_i10_z1_L8_n4000",
+  "study": "codenet",
+  "error_class": "identifier_swap",
+  "mode": "all",
+  "n_attempted": 24,
+  "C": 30,
+  "n_positions": 4,
+  "fixed_best_of_C": 1,
+  "fix_rate_best_of_C": 0.041666666666666664,
+  "attempt_budget_per_example": 120,
+  "fixed_random_matched": 1,
+  "fix_rate_random_matched": 0.041666666666666664,
+  "fixing_codes": {
+    "4": 1
+  },
+  "first_hits": [
+    {
+      "ds_idx": 674,
+      "code": 4,
+      "position": "all"
+    }
+  ]
+}
