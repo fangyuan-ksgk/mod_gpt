@@ -66,6 +66,59 @@ expressions wherever those occur in a file. `t10` shows the largest effect
 (6.54× position-matched, essentially undiminished by the control) but rests on
 n=30 and should be read as suggestive.
 
+## An independent model recovers the structure blind — and catches a confound
+
+The same falsification test as the arithmetic study, in a second domain. An
+independent model saw **only raw firings** — the 8-token source chunk plus
+surrounding context — with no AST label, no purity statistic, no candidate list,
+and no access to the repository. It was told a positional or null answer carried
+no penalty.
+
+```
+  ┌───────┬──────────────┬──────────┬────────┬──────────────────────────────────┐
+  │ Code  │ ground truth │ lift_pos │  conf. │ blind description                │
+  ├───────┼──────────────┼──────────┼────────┼──────────────────────────────────┤
+  │  t10  │ For          │   6.54x  │ medium │ "for <var> in <iterable>: loop   │
+  │       │              │          │        │  header"                      ✓  │
+  │  t3   │ If           │   1.88x  │  low   │ "bare `else:` / branch tail"  ✓  │
+  │  t6   │ BinOp        │   1.80x  │  low   │ "multi-term arithmetic expr"  ✓  │
+  │  t7   │ BinOp        │   1.53x  │  low   │ "operator-dense float expr"   ✓  │
+  │  t5   │ If           │   1.88x  │  low   │ "indentation run"             ✗  │
+  ├───────┼──────────────┼──────────┼────────┼──────────────────────────────────┤
+  │  t0   │ Call         │   1.15x  │  high  │ "no content rule; the default │
+  │       │              │          │        │  majority code"               ✓  │
+  │  t1   │ Call         │   0.77x  │ medium │ "no discernible rule"         ✓  │
+  │  t2,t4│ Call         │  ≤1.30x  │  low   │ "no clean rule"               ✓  │
+  │  t8   │ Call         │   0.95x  │  low   │ "may be no better than chance"✓  │
+  ├───────┼──────────────┼──────────┼────────┼──────────────────────────────────┤
+  │  t9   │ FunctionDef  │   1.00x  │  high  │ "the FIRST chunk of a file,      │
+  │       │ (4.40x glob) │          │        │  regardless of content"       ✓✓ │
+  └───────┴──────────────┴──────────┴────────┴──────────────────────────────────┘
+   agreement with the purity table: 10/11
+```
+
+It named the strongest detector — `t10`, the highest position-matched lift in
+the codebook — as a `for` loop header, citing that 8 of 12 sampled chunks begin
+with `for` against 1 of the other 120 firings. It described both `BinOp` codes as
+arithmetic expressions and reached the `If` code `t3` through its `else:`
+branches. It declined to find structure in all five near-chance `Call` codes.
+
+**The `t9` row is the result worth the space.** `t9` has the second-highest
+*global* lift in the table, 4.40×, and reads as the best `FunctionDef` detector
+in the codebook. It is an artefact: it fires on chunk 0, and Python files open
+with `def`/`import`, so its position-matched lift is exactly **1.00×** — knowing
+the code adds nothing over knowing the position. We caught that with an explicit
+position control. The interpreter caught it from raw firings with no statistics
+at all, at high confidence, by arithmetic on the data: sampled file indices
+spaced ≈67 apart, i.e. 809/12 — one firing per file — and across the other 120
+sampled firings, not one had chunk index 0.
+
+That is the negative control doing real work. The interpreter's two
+high-confidence calls are both content-free codes and both correct, while every
+genuinely ambiguous code is marked low. A procedure that reports uncertainty
+where the signal is weak, and that rejects the most impressive-looking number in
+the table on evidence, is one whose positive identifications carry weight.
+
 ## Summary
 
 On a real pretrained LLM, in a syntactic domain with an entirely different label
@@ -76,8 +129,13 @@ set from the arithmetic case study:
 - **codes specialise on ground-truth structure** — conditional and
   binary-expression detectors at 1.8–1.9× position-matched lift, distributed
   across nearly every chunk position
-- both measured on the **same checkpoint**
+- **an independent model recovers that structure blind** — 10/11 agreement on
+  raw source chunks, including rejecting the codebook's second-highest global
+  lift as a position artefact
+- all measured on the **same checkpoint**
 
-Reproduce: `repro/knockout.sh`, `repro/f3_codenet_purity.sh`. Raw results in
+Reproduce: `repro/knockout.sh`, `repro/f3_codenet_purity.sh`,
+`repro/f7_autointerp.sh`. Raw results in
+`results/codenet_autointerp_rawfirings.json`,
 `results/codenet_r1r2.json`, `results/codenet_s0.5_i10_z1_L8_n4000_knockout4.json`,
 `results/codenet_gated_confound_nopad.json`.

@@ -12,7 +12,7 @@ variant).
 | File | Domain | Headline |
 |---|---|---|
 | [REBUTTAL_arithmetic.md](REBUTTAL_arithmetic.md) | six-digit add/sub | sum-9 cascade detector, 78.3% purity, **6.21× lift**; blind auto-interp 7/7 |
-| [REBUTTAL_codenet.md](REBUTTAL_codenet.md) | Python source | codes causally necessary, **−39.3% relative** on removal; `If`/`BinOp` detectors at 1.8–1.9× position-matched |
+| [REBUTTAL_codenet.md](REBUTTAL_codenet.md) | Python source | codes causally necessary, **−39.3% relative** on removal; `If`/`BinOp` detectors at 1.8–1.9×; blind auto-interp **10/11** |
 
 ## What replicates
 
@@ -24,7 +24,7 @@ Mapped onto the original case study's finding numbers:
 | **#3** | sub-task-specialised routing | **replicated** | arith `t6` 78.3%/6.21×; CodeNet `t5`,`t3`,`t6` at 1.88/1.88/1.80× position-matched |
 | **#5** | tri-state carry classifier | **replicated** (addition half) | `t6` marks sum-9, 11/14, p<1e-4, 5.04× leave-one-out |
 | **#6** | specialists + generalists coexist | **replicated** | 3 specialists 14.3% of traffic, 4 generalists 85.7% |
-| **#7** | auto-interp matches labels | **replicated** | blind, raw firings, no candidate list: 7/7 agreement |
+| **#7** | auto-interp matches labels | **replicated, both domains** | arithmetic 7/7; CodeNet 10/11 — and blind it rejected the codebook's 2nd-highest global lift (4.40×) as a position artefact |
 
 ## Scoring rules
 
