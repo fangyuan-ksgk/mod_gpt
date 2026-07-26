@@ -91,8 +91,9 @@ CHECKPOINTS = {
                       "codenet_gated_confound_nopad.json",
                       "codenet_r1r2.json"],
         deliverables=["REBUTTAL_codenet.md (Finding #2 knockout, R1 purity)",
-                      "PLAN_codenet.md",
-                      "repro/knockout.sh", "repro/f3_codenet_purity.sh"],
+                      "PLAN.md",
+                      "repro/knockout.sh", "repro/f3_codenet_purity.sh",
+                      "repro/f4_per_code_ablation.sh"],
         recommend="push", provisional=False,
         reason="THE causal result of the rebuttal. Removing the codes costs "
                "39.3% of relative accuracy, and both reported CodeNet tables "
@@ -147,9 +148,10 @@ CHECKPOINTS = {
                       "arithmetic_autointerp_rawfirings.json",
                       "arith_firings.json"],
         deliverables=["REBUTTAL_arithmetic.md (R1, Finding #5, #6, #7)",
-                      "PLAN_arithmetic.md",
+                      "PLAN.md",
                       "repro/r1_purity.sh", "repro/r5_sum9.sh",
-                      "repro/f6_polysemanticity.sh"],
+                      "repro/f6_polysemanticity.sh",
+                      "repro/f7_autointerp.sh"],
         recommend="push", provisional=False,
         reason="Behind every arithmetic number in the rebuttal. The gate sweep "
                "has settled: four rungs were tried and none opened the causal "

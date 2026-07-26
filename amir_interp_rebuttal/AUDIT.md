@@ -132,6 +132,14 @@ until `results/codenet_per_code_ablation.json` exists, which would abort
 tooling with a large embedded `CHECKPOINTS` registry of prose model cards. The
 Python in it is thin; the bulk is content, and content is not sprawl.
 
+**Checked and *not* a defect:** the CodeNet eval pool is built with `size=1500`
+in `analyze.py` and `codenet_confound.py` but `size=eval_n` (800) in
+`dump_firings.py` and `per_code_ablation.py`. This looked like it would make
+example *i* a different file between the R1 table and the firing dump. It does
+not: `CodeNetDataset` applies `size` as a truncation cap over a deterministic
+sorted walk of sorted problem directories, so the first 800 examples of a
+1500-pool are the same 800 files, in the same order. Left as-is.
+
 ## File count
 
 | | before | after |
