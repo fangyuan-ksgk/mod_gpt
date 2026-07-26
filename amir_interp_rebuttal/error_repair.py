@@ -127,6 +127,20 @@ def main():
                    help="stage 2: cap attempts; C x positions x N gets large")
     p.add_argument("--show", type=int, default=8,
                    help="stage 1: sample errors printed per class for eyeballing")
+    p.add_argument("--seed", type=int, default=0,
+                   help="seed for the random-control arm. A positive cell must "
+                        "survive a fresh seed; with ~18 cells swept, a single "
+                        "unreplicated positive is what multiple comparisons "
+                        "produces.")
+    p.add_argument("--digit_level", action="store_true",
+                   help="arithmetic only. Score a repair as successful when the "
+                        "TARGET DIGIT becomes correct, rather than requiring the "
+                        "whole answer. Forcing a code at position d changes digit "
+                        "d and everything downstream autoregressively, so a code "
+                        "can fix its own digit and still fail a whole-answer test "
+                        "by disturbing a later one. This asks the narrower "
+                        "question the codes are actually supposed to answer: does "
+                        "this code control this digit?")
     p.add_argument("--max_gold_tokens", type=int, default=None,
                    help="restrict to examples whose gold answer is at most this "
                         "many tokens. At 17%% accuracy most CodeNet errors are "
@@ -259,13 +273,19 @@ def main():
             print(f"  intervention amplified: decode_scale {scale} -> {rscale} "
                   f"(both arms)", flush=True)
 
-        def try_one(i, pos, c):
+        def try_one(i, pos, c, want_digit=None, gold=None):
             with force_code_at(wrapper, pos, c):
                 o = batched_generate(wrapper, tok, ds, args.device, [i],
                                      eval_batch_size=1,
                                      max_new_tokens=args.max_new_tokens,
                                      record_codes=False, decode_scale=rscale)
-            return bool(o[0]["correct"])
+            if not args.digit_level or want_digit is None:
+                return bool(o[0]["correct"])
+            pr = (o[0].get("pred") or "").strip()
+            g = (gold or "").strip()
+            if len(pr) != len(g) or want_digit >= len(pr):
+                return False
+            return pr[want_digit] == g[want_digit]
 
         # MATCHED-EFFORT CONTROL.
         #
@@ -278,7 +298,7 @@ def main():
         # same way.
         saved_emb = wrapper.steering_emb.weight.data.clone()
         mean_norm = saved_emb.norm(dim=1).mean().item()
-        gen = torch.Generator(device="cpu").manual_seed(0)
+        gen = torch.Generator(device="cpu").manual_seed(args.seed)
         SCRATCH = 0
 
         fixed_any, fixed_by, first_hit = 0, Counter(), []
@@ -296,7 +316,7 @@ def main():
             got = False
             for pos in spec:
                 for c in range(C):
-                    if try_one(i, pos, c):
+                    if try_one(i, pos, c, r.get("wrong_pos"), r.get("gold")):
                         got, fixed_by[c] = True, fixed_by[c] + 1
                         first_hit.append({"ds_idx": i, "code": c,
                                           "position": ("all" if pos is None else pos)})
@@ -317,7 +337,7 @@ def main():
                     pos = spec[0]
                 else:
                     pos = int(torch.randint(n_chunks, (1,), generator=gen).item())
-                if try_one(i, pos, SCRATCH):
+                if try_one(i, pos, SCRATCH, r.get("wrong_pos"), r.get("gold")):
                     rgot = True
                     break
             wrapper.steering_emb.weight.data.copy_(saved_emb)
@@ -332,6 +352,9 @@ def main():
             "error_class": args.error_class, "mode": args.mode,
             "native_scale": scale, "repair_scale": rscale,
             "max_gold_tokens": args.max_gold_tokens,
+            "seed": args.seed,
+            "success_criterion": ("target digit correct" if args.digit_level
+                                  else "whole answer correct"),
             "n_attempted": len(target), "C": C, "n_positions": n_chunks,
             "fixed_best_of_C": fixed_any,
             "fix_rate_best_of_C": fixed_any / len(target),
@@ -346,6 +369,10 @@ def main():
             tag += f"_s{rscale}"
         if args.max_gold_tokens:
             tag += f"_g{args.max_gold_tokens}"
+        if args.digit_level:
+            tag += "_digit"
+        if args.seed:
+            tag += f"_seed{args.seed}"
         path = out / f"{args.study}_error_repair_{tag}.json"
         path.write_text(json.dumps(payload, indent=2))
         print(f"\n  best-of-{C}: {fixed_any}/{len(target)} "
