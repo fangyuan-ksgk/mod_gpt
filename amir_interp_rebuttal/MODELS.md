@@ -22,32 +22,56 @@ disagree silently.
 
 ## 1. Registry
 
-Two checkpoints are published — the two that the deliverables actually cite.
-Everything else is a supporting row in a table or a negative result, and stays
-local.
+**Three** checkpoints are published. This table lists every one of the 20
+directories under `ckpt/`, so it can be diffed against the disk.
 
 ```
-┌──────────────────────────────────┬────────────┬───────┬──────────────────────────────┐
-│ Local checkpoint                 │ Study      │ Push? │ Role                         │
-├──────────────────────────────────┼────────────┼───────┼──────────────────────────────┤
-│ ckpt/codenet_s0.5_i10_z1_L8_n4000│ codenet    │ YES   │ the causal result (gate open)│
-│ ckpt/arith_s0.5_i10_z1_u8        │ arithmetic │ YES   │ arithmetic causal (gate open)│
-│ ckpt/arith_v9_paperhp            │ arithmetic │ YES   │ arithmetic R1 / #5 / #6 / #7 │
-├──────────────────────────────────┼────────────┼───────┼──────────────────────────────┤
-│ ckpt/arith_18d_500_MAX           │ arithmetic │ hold  │ escalation row 4             │
-│ ckpt/arith_12d_10k               │ arithmetic │ hold  │ escalation row 2             │
-│ ckpt/arith_12d_10k_s0.1_i10_z10u8│ arithmetic │ hold  │ escalation row 3             │
-├──────────────────────────────────┼────────────┼───────┼──────────────────────────────┤
-│ ckpt/codenet_FROZEN              │ codenet    │ hold  │ negative result, on record   │
-│ ckpt/codenet_v9                  │ codenet    │ hold  │ superseded (scale=0.1)       │
-│ ckpt/arith_v9                    │ arithmetic │ hold  │ no longer cited              │
-│ ckpt/codenet_v9_20k              │ codenet    │ hold  │ budget control               │
-└──────────────────────────────────┴────────────┴───────┴──────────────────────────────┘
+┌─────────────────────────────────────┬────────────┬───────┬────────────────────────────────────────┐
+│          Local checkpoint           │   Study    │ Push? │                  Role                  │
+├─────────────────────────────────────┼────────────┼───────┼────────────────────────────────────────┤
+│ ckpt/codenet_s0.5_i10_z1_L8_n4000   │ codenet    │  YES  │ the CodeNet causal result (gate open)  │
+│ ckpt/arith_s0.5_i10_z1_u8           │ arithmetic │  YES  │ arithmetic causal result (gate open)   │
+│ ckpt/arith_v9_paperhp               │ arithmetic │  YES  │ arithmetic R1 / #5 / #6 / #7           │
+├─────────────────────────────────────┼────────────┼───────┼────────────────────────────────────────┤
+│ ckpt/arith_s0.5_REPLICATE           │ arithmetic │ hold  │ independent retrain of the row above   │
+│ ckpt/arith_s0.3_i10_z1_u8           │ arithmetic │ hold  │ scale sweep, closed                    │
+│ ckpt/arith_s0.7_i10_z1_u8           │ arithmetic │ hold  │ scale sweep, closed                    │
+│ ckpt/arith_s1.0_i10_z1_u8           │ arithmetic │ hold  │ scale sweep, closed                    │
+├─────────────────────────────────────┼────────────┼───────┼────────────────────────────────────────┤
+│ ckpt/arith_12d_10k                  │ arithmetic │ hold  │ escalation row 2                       │
+│ ckpt/arith_12d_10k_s0.1_i10_z10u8   │ arithmetic │ hold  │ escalation row 3                       │
+│ ckpt/arith_18d_500_MAX              │ arithmetic │ hold  │ escalation row 4                       │
+│ ckpt/arith_12d_s0.5                 │ arithmetic │ hold  │ difficulty x scale grid cell           │
+│ ckpt/arith_12d_10k_s0.5_i10_z10u8   │ arithmetic │ hold  │ trained, NEVER GATED — no knockout     │
+│ ckpt/FAILED_arith_degenerate_aug0.8 │ arithmetic │ hold  │ degenerate data, 99.35% — see below    │
+│ ckpt/arith_cascade_h2a2_s0.5        │ arithmetic │ hold  │ cascade enrichment, closed             │
+├─────────────────────────────────────┼────────────┼───────┼────────────────────────────────────────┤
+│ ckpt/codenet_s0.5_i10_z1_L4_n4000   │ codenet    │ hold  │ ratio sweep 1:4, closed                │
+│ ckpt/codenet_s0.5_i10_z1_L16_n4000  │ codenet    │ hold  │ ratio sweep 1:16, open on a small base │
+│ ckpt/codenet_FROZEN                 │ codenet    │ hold  │ negative result, on record             │
+│ ckpt/codenet_v9                     │ codenet    │ hold  │ superseded (scale=0.1)                 │
+│ ckpt/codenet_v9_20k                 │ codenet    │ hold  │ budget control                         │
+│ ckpt/arith_v9                       │ arithmetic │ hold  │ no longer cited                        │
+└─────────────────────────────────────┴────────────┴───────┴────────────────────────────────────────┘
 ```
 
 **Rule: only push a checkpoint whose numbers appear in a deliverable.** A
 checkpoint that supports one row of a sweep table is documented by its knockout
 JSON, which is kilobytes; publishing 1.2 GB of weights for it is a bad trade.
+
+**The rule has one deliberate exception.** `arith_s0.5_REPLICATE` *is* cited by
+a deliverable — it is run 2 of the causal table in `REBUTTAL_arithmetic.md` —
+and is still held. It is an independent retrain of an already-published
+configuration, so the weights carry nothing that `arith_s0.5_i10_z1_u8` plus
+`results/arith_s0.5_REPLICATE_knockout4.json` do not already carry. The point of
+the row is that the number reproduced, and the number is in the JSON.
+
+**Scope note on `push_models.py`.** Its `CHECKPOINTS` registry holds the 10
+checkpoints that were *considered for publication*; it is the source of truth
+for what `--push` uploads and why. It is not an inventory of `ckpt/` — the 10
+rows above that it omits are sweep rungs that were never publication candidates.
+This table is the inventory. Do not read a missing `push_models.py` entry as a
+missing checkpoint.
 
 ## 2. Training config
 
@@ -63,14 +87,29 @@ launch command and the run log.
 │ Checkpoint                   │  C │ L │ scale │ a_info │ a_abs │ a_zipf │ tgt_util │ steer_lr │ epochs │ batch │ digits/chunk  │ train size │
 ├──────────────────────────────┼────┼───┼───────┼────────┼───────┼────────┼──────────┼──────────┼────────┼───────┼───────────────┼────────────┤
 │ codenet_s0.5_i10_z1_L8_n4000 │ 30 │ 8 │   0.5 │   10.0 │   0.1 │    1.0 │      0.8 │     1e-3 │      2 │     8 │  8-tok chunk  │      4,000 │
+│ arith_s0.5_i10_z1_u8         │ 30 │ 1 │   0.5 │   10.0 │   0.1 │    1.0 │      0.8 │     1e-3 │      1 │    32 │      6-digit  │    100,000 │
+│ arith_s0.5_REPLICATE         │ 30 │ 1 │   0.5 │   10.0 │   0.1 │    1.0 │      0.8 │     1e-3 │      1 │    32 │      6-digit  │    100,000 │
 │ arith_v9_paperhp             │ 30 │ 1 │   0.1 │   10.0 │   0.1 │    1.0 │    unset │     1e-3 │      1 │    32 │      6-digit  │    100,000 │
+├──────────────────────────────┼────┼───┼───────┼────────┼───────┼────────┼──────────┼──────────┼────────┼───────┼───────────────┼────────────┤
+│ arith_s0.3_i10_z1_u8         │ 30 │ 1 │   0.3 │   10.0 │   0.1 │    1.0 │      0.8 │     1e-3 │      1 │    32 │      6-digit  │    100,000 │
+│ arith_s0.7_i10_z1_u8         │ 30 │ 1 │   0.7 │   10.0 │   0.1 │    1.0 │      0.8 │     1e-3 │      1 │    32 │      6-digit  │    100,000 │
+│ arith_s1.0_i10_z1_u8         │ 30 │ 1 │   1.0 │   10.0 │   0.1 │    1.0 │      0.8 │     1e-3 │      1 │    32 │      6-digit  │    100,000 │
 ├──────────────────────────────┼────┼───┼───────┼────────┼───────┼────────┼──────────┼──────────┼────────┼───────┼───────────────┼────────────┤
 │ arith_12d_10k                │ 30 │ 1 │   0.1 │   10.0 │   0.1 │    1.0 │    unset │     1e-3 │     10 │    32 │     12-digit  │     10,000 │
 │ arith_12d_10k_s0.1_i10_z10u8 │ 30 │ 1 │   0.1 │   10.0 │   0.1 │   10.0 │      0.8 │     1e-3 │     10 │    32 │     12-digit  │     10,000 │
+│ arith_12d_10k_s0.5_i10_z10u8 │ 30 │ 1 │   0.5 │   10.0 │   0.1 │   10.0 │      0.8 │     1e-3 │     10 │    32 │     12-digit  │     10,000 │
+│ arith_12d_s0.5               │ 30 │ 1 │   0.5 │   10.0 │   0.1 │    1.0 │      0.8 │     1e-3 │      1 │    32 │     12-digit  │    100,000 │
 │ arith_18d_500_MAX            │ 30 │ 1 │   1.0 │   30.0 │   0.1 │   20.0 │      0.9 │     1e-3 │    200 │    32 │     18-digit  │        500 │
 ├──────────────────────────────┼────┼───┼───────┼────────┼───────┼────────┼──────────┼──────────┼────────┼───────┼───────────────┼────────────┤
+│ FAILED_arith_degen_aug0.8    │ 30 │ 1 │   0.5 │   10.0 │   0.1 │    1.0 │      0.8 │     1e-3 │      1 │    32 │      6-digit  │    100,000 │
+│ arith_cascade_h2a2_s0.5      │ 30 │ 1 │   0.5 │   10.0 │   0.1 │    1.0 │      0.8 │     1e-3 │      1 │    32 │      6-digit  │    100,000 │
+├──────────────────────────────┼────┼───┼───────┼────────┼───────┼────────┼──────────┼──────────┼────────┼───────┼───────────────┼────────────┤
+│ codenet_s0.5_i10_z1_L4_n4000 │ 30 │ 4 │   0.5 │   10.0 │   0.1 │    1.0 │      0.8 │     1e-3 │      2 │     8 │  4-tok chunk  │      4,000 │
+│ codenet_s0.5_i10_z1_L16_n4000│ 30 │16 │   0.5 │   10.0 │   0.1 │    1.0 │      0.8 │     1e-3 │      2 │     8 │ 16-tok chunk  │      4,000 │
 │ codenet_FROZEN  (--freeze)   │ 30 │ 8 │   1.0 │   30.0 │   0.1 │   20.0 │      0.9 │     1e-2 │      8 │     8 │  8-tok chunk  │      4,000 │
 │ codenet_v9                   │ 30 │ 8 │   0.1 │   10.0 │   0.1 │    1.0 │    unset │     1e-3 │      1 │     8 │  8-tok chunk  │      4,000 │
+│ codenet_v9_20k               │ 30 │ 8 │   0.1 │   10.0 │   0.1 │    1.0 │    unset │     1e-3 │      1 │     8 │  8-tok chunk  │     20,000 │
+│ arith_v9                     │ 30 │ 1 │   0.1 │    1.0 │   0.5 │   0.01 │    unset │     1e-3 │      1 │    32 │      6-digit  │    100,000 │
 └──────────────────────────────┴────┴───┴───────┴────────┴───────┴────────┴──────────┴──────────┴────────┴───────┴───────────────┴────────────┘
 ```
 
@@ -80,34 +119,63 @@ ran — the Zipf prior used its hardcoded 0.8 target. Both are now exposed on
 
 ## 3. Headline metrics
 
+Every checkpoint that was ever gated, with all arms from its own knockout JSON.
+
 ```
-┌──────────────────────────────┬──────────┬──────────────┬────────────────────────────────┬──────────────────────┐
-│ Checkpoint                   │ Accuracy │ Active codes │ Best code                      │ Knockout (OFF_full)  │
-├──────────────────────────────┼──────────┼──────────────┼────────────────────────────────┼──────────────────────┤
-│ codenet_s0.5_i10_z1_L8_n4000 │   17.50% │  8 (23 used) │ t5 -> If 1.88x position-matched│ −6.87pp / −39.3% rel │
-│ arith_v9_paperhp             │   86.35% │       7 / 30 │ t6 -> US 78.3% (6.21x lift)    │ +0.15pp / +0.2%  rel │
-├──────────────────────────────┼──────────┼──────────────┼────────────────────────────────┼──────────────────────┤
-│ arith_12d_10k                │   82.96% │      10 / 30 │ not measured                   │ +0.54pp / +0.6%  rel │
-│ arith_12d_10k_s0.1_i10_z10u8 │      —   │ not measured │ not measured                   │ +0.23pp / +0.3%  rel │
-│ arith_18d_500_MAX            │      —   │ not measured │ not measured                   │ +1.69pp / +5.9%  rel │
-├──────────────────────────────┼──────────┼──────────────┼────────────────────────────────┼──────────────────────┤
-│ codenet_FROZEN               │    9.25% │  — (23 used) │ not measured                   │ −1.12pp / −12.2% rel │
-└──────────────────────────────┴──────────┴──────────────┴────────────────────────────────┴──────────────────────┘
+┌────────────────────────────────┬──────────┬────────┬──────────┬──────────────────────────┬────────────┐
+│           Checkpoint           │ codes ON │ RANDOM │ OFF_full │ Knockout (ON - OFF_full) │    Gate    │
+├────────────────────────────────┼──────────┼────────┼──────────┼──────────────────────────┼────────────┤
+│ codenet_s0.5_i10_z1_L8_n4000   │   17.50% │ 11.13% │   10.62% │      +6.87pp / 39.3% rel │    OPEN    │
+│ arith_s0.5_i10_z1_u8           │   82.96% │ 69.88% │   75.08% │      +7.88pp /  9.5% rel │    OPEN    │
+│ arith_s0.5_REPLICATE           │   84.73% │ 69.58% │   68.96% │     +15.77pp / 18.6% rel │    OPEN    │
+│ arith_v9_paperhp               │   86.35% │      — │   86.19% │      +0.15pp /  0.2% rel │   closed   │
+├────────────────────────────────┼──────────┼────────┼──────────┼──────────────────────────┼────────────┤
+│ arith_s0.3_i10_z1_u8           │   83.19% │ 89.92% │   90.08% │      -6.88pp / -8.3% rel │   closed   │
+│ arith_s0.7_i10_z1_u8           │   82.38% │ 84.65% │   90.50% │      -8.12pp / -9.9% rel │   closed   │
+│ arith_s1.0_i10_z1_u8           │   84.23% │ 84.42% │   86.27% │      -2.04pp / -2.4% rel │   closed   │
+├────────────────────────────────┼──────────┼────────┼──────────┼──────────────────────────┼────────────┤
+│ arith_12d_10k                  │   82.96% │      — │   82.42% │      +0.54pp /  0.6% rel │   closed   │
+│ arith_12d_10k_s0.1_i10_z10u8   │   82.12% │      — │   81.88% │      +0.23pp /  0.3% rel │   closed   │
+│ arith_12d_s0.5                 │   70.08% │ 69.96% │   69.85% │      +0.23pp /  0.3% rel │   closed   │
+│ arith_18d_500_MAX              │   28.77% │      — │   27.08% │      +1.69pp /  5.9% rel │   closed   │
+│ arith_12d_10k_s0.5_i10_z10u8   │        — │      — │        — │           never measured │     —      │
+├────────────────────────────────┼──────────┼────────┼──────────┼──────────────────────────┼────────────┤
+│ FAILED_arith_degenerate_aug0.8 │   99.35% │ 99.35% │   99.35% │      +0.00pp /  0.0% rel │ degenerate │
+│ arith_cascade_h2a2_s0.5        │   97.31% │ 95.12% │   95.92% │      +1.38pp /  1.4% rel │   closed   │
+├────────────────────────────────┼──────────┼────────┼──────────┼──────────────────────────┼────────────┤
+│ codenet_s0.5_i10_z1_L4_n4000   │   10.62% │ 10.50% │   10.00% │      +0.62pp /  5.9% rel │   closed   │
+│ codenet_s0.5_i10_z1_L16_n4000  │    9.88% │  6.25% │    7.50% │      +2.38pp / 24.1% rel │    OPEN    │
+│ codenet_FROZEN                 │    9.25% │      — │   10.37% │     -1.12pp / -12.2% rel │   closed   │
+│ codenet_v9                     │   22.38% │ 22.13% │   21.50% │      +0.88pp /  3.9% rel │   closed   │
+│ codenet_v9_20k                 │     5.1% │      — │     5.4% │      -0.3pp  / -5.9% rel │   closed   │
+│ arith_v9                       │    83.6% │      — │        — │           never measured │     —      │
+└────────────────────────────────┴──────────┴────────┴──────────┴──────────────────────────┴────────────┘
 ```
 
 Reading the columns:
 
-- **Accuracy** is exact match, generated autoregressively from the model's own
+- **codes ON** is exact match, generated autoregressively from the model's own
   predictions, no teacher forcing.
-- **Active codes** = codes above the 1%-of-firings threshold; "used" = codes that
-  fire at all.
-- **Knockout** = `acc(codes ON) − acc(steering_emb zeroed)`. Negative means
-  removing the codes *costs* accuracy, i.e. the codes are load-bearing. The gate
-  opens at ≥3pp **or** ≥15% relative.
+- **RANDOM** substitutes scrambled code identities at unchanged vector
+  magnitude. `—` means the run predates the 4-arm harness and has no such arm.
+- **Knockout** = `acc(codes ON) − acc(steering_emb zeroed)`. **Positive means
+  removing the codes costs accuracy, i.e. the codes are load-bearing.** The gate
+  opens at ≥3pp **or** ≥15% relative. A *negative* row means the model does
+  better with its steering deleted.
+- Sign convention differs from `REBUTTAL_arithmetic.md`, which tabulates
+  `Δ = OFF − ON` so that damage reads negative. Same measurements.
 
-**Only `codenet_s0.5_i10_z1_L8_n4000` opens the gate.** Every causal claim in the
-rebuttal rests on it; the arithmetic checkpoints support claims about what the
-codes *encode*, which do not depend on causal load.
+Best codes, where measured: `codenet_s0.5_i10_z1_L8_n4000` → `t5` → `If` at
+1.88x position-matched, 8 active of 23 used; `arith_v9_paperhp` → `t6` → `US`
+78.3% at 6.21x lift, 7 active of 30; `arith_s0.5_i10_z1_u8` → `t19` → `UD` 78.1%
+at 9.35x, 7 active of 30; `arith_12d_10k` 10 active of 30; `codenet_FROZEN` 23
+of 30 used.
+
+**Four checkpoints open the gate**, and only two of them carry a reported causal
+claim: `codenet_s0.5_i10_z1_L8_n4000` and `arith_s0.5_i10_z1_u8` (with
+`arith_s0.5_REPLICATE` as its independent replication). `codenet_..._L16` opens
+on a 9.88% base and is reported as a ratio-sweep row, not as a finding — see the
+abstraction-ratio section below.
 
 ### Accuracy is quoted per-harness, deliberately
 
@@ -118,23 +186,50 @@ knockout, 8 for `codenet_confound.py` and `analyze.py`). Each table quotes the
 figure from the run that produced the rest of its numbers; the four knockout arms
 all come from a single file, so that comparison is internally consistent.
 
+`codenet_v9_20k` is the same story in miniature: **4.9%** in
+`logs/codenet_analyze_20k.log` (39 of 800) and **5.1%** in its knockout run.
+The metrics table quotes 5.1% / 5.4%, because those two are the arms of one
+comparison; `push_models.py` quotes 4.88% from the analysis pass. Both are the
+same weights under different generation settings, and both are below this
+study's 10% analysis floor, which is the only thing the row is used for.
+
+A **fourth** figure, 20.6%, also sits on disk, in
+`results/codenet_s0.5_i10_z1_L8_n4000_position_confound.json`. It is *not* a
+harness variant and must not be quoted: it is the batch-32 run, where left
+padding misaligns prefill chunk indices unless `pad_len % L == 0`. That file is
+the withdrawn measurement, kept deliberately as the record of what the bug
+produced. The reported position-confound file is `..._nopad.json` at batch 1.
+
 ## 4. Which deliverable cites which checkpoint
 
 ```
-┌──────────────────────────────┬────────────────────────────────────────────────────────┐
-│ Checkpoint                   │ Deliverable / table                                    │
-├──────────────────────────────┼────────────────────────────────────────────────────────┤
-│ codenet_s0.5_i10_z1_L8_n4000 │ REBUTTAL_codenet.md — Finding #2 knockout, R1 purity   │
-│                              │ repro/knockout.sh, repro/f3_codenet_purity.sh          │
-│ arith_v9_paperhp             │ REBUTTAL_arithmetic.md — R1, Findings #5, #6, #7       │
-│                              │ repro/r1_purity.sh, r5_sum9.sh, f6_polysemanticity.sh  │
-│ arith_12d_10k                │ REBUTTAL_arithmetic.md — escalation table, row 2       │
-│ arith_12d_10k_s0.1_i10_z10u8 │ REBUTTAL_arithmetic.md — escalation table, row 3       │
-│ arith_18d_500_MAX            │ REBUTTAL_arithmetic.md — escalation table, row 4       │
-│ codenet_FROZEN               │ MODELS.md — negative result (below)                    │
-│ codenet_v9, arith_v9,        │ none — retained for provenance only                    │
-│ codenet_v9_20k               │                                                        │
-└──────────────────────────────┴────────────────────────────────────────────────────────┘
+┌────────────────────────────────┬────────────────────────────────────────────────────────┐
+│ Checkpoint                     │ Deliverable / table                                    │
+├────────────────────────────────┼────────────────────────────────────────────────────────┤
+│ codenet_s0.5_i10_z1_L8_n4000   │ REBUTTAL_codenet.md — Finding #2 knockout, R1 purity   │
+│                                │ repro/knockout.sh, repro/f3_codenet_purity.sh          │
+│ arith_v9_paperhp               │ REBUTTAL_arithmetic.md — R1, Findings #5, #6, #7       │
+│                                │ repro/r1_purity.sh, r5_sum9.sh, f6_polysemanticity.sh  │
+│ arith_s0.5_i10_z1_u8           │ REBUTTAL_arithmetic.md — causal table run 1, second R1 │
+│                                │ purity table, blind auto-interp; repro/verify_claims.sh│
+│ arith_s0.5_REPLICATE           │ REBUTTAL_arithmetic.md — causal table run 2 (retrain)  │
+│ arith_s0.3_i10_z1_u8           │ REBUTTAL_arithmetic.md — scale prose ("0.3 … 0.7 leave │
+│ arith_s0.7_i10_z1_u8           │ them unhelpful"); repro/verify_claims.sh               │
+│ arith_12d_10k                  │ REBUTTAL_arithmetic.md — escalation table, row 2       │
+│ arith_12d_10k_s0.1_i10_z10u8   │ REBUTTAL_arithmetic.md — escalation table, row 3       │
+│ arith_18d_500_MAX              │ REBUTTAL_arithmetic.md — escalation table, row 4       │
+│ codenet_s0.5_i10_z1_L16_n4000  │ REBUTTAL_arithmetic.md — the RANDOM-below-OFF          │
+│                                │ inversion; MODELS.md — abstraction-ratio table         │
+│ codenet_s0.5_i10_z1_L4_n4000   │ MODELS.md — abstraction-ratio table                    │
+│ arith_12d_s0.5                 │ MODELS.md — difficulty x scale grid                     │
+│ FAILED_arith_degenerate_aug0.8 │ MODELS.md — degenerate-data negative result            │
+│ arith_cascade_h2a2_s0.5        │ MODELS.md — cascade-enrichment negative result         │
+│ codenet_FROZEN                 │ MODELS.md — negative result (below)                    │
+│ arith_s1.0_i10_z1_u8           │ MODELS.md — scale sweep table only                     │
+│ codenet_v9, arith_v9,          │ none — retained for provenance only                    │
+│ codenet_v9_20k,                │                                                        │
+│ arith_12d_10k_s0.5_i10_z10u8   │                                                        │
+└────────────────────────────────┴────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -174,7 +269,14 @@ justification for the reported configuration. `L=8` is not an unexamined default
 it is the setting at which the codes carry the computation, and the two
 neighbouring ratios were trained and gated to establish that.
 
-### `arith_HARD_cascade_s0.5` — enriching for cascades made the task EASIER
+### Degenerate cascade data — enriching for cascades made the task EASIER
+
+On disk as **`ckpt/FAILED_arith_degenerate_aug0.8`**; its results and logs use
+the earlier run tag `arith_HARD_cascade_s0.5`
+(`results/arith_HARD_cascade_s0.5_knockout4.json`,
+`logs/chain_arith_HARD.log`). The directory was renamed after the diagnosis; the
+result files were not, so both names appear.
+
 
 The intent was right and the implementation was wrong. To make the codes more
 meaningful, the training data was reject-sampled for multi-column carry
@@ -223,11 +325,16 @@ them:
   ┌───────────┬──────────────────────┬──────────────────────────────────┐
   │           │      scale 0.1       │            scale 0.5             │
   ├───────────┼──────────────────────┼──────────────────────────────────┤
-  │  6-digit  │  +0.15pp   closed    │  −13 to −15pp  OPEN (2 retrains) │
-  │ 12-digit  │  +0.54pp   closed    │  +0.23pp       closed            │
+  │  6-digit  │  +0.15pp   closed    │ +7.9 / +15.8pp  OPEN (2 retrains)│
+  │ 12-digit  │  +0.54pp   closed    │  +0.23pp        closed           │
   │ 18-digit  │  +1.69pp   closed    │  not run                         │
   └───────────┴──────────────────────┴──────────────────────────────────┘
+   all cells are ON - OFF_full; positive = removing the codes costs accuracy
 ```
+
+(The 6-digit / `scale=0.5` cell reads `−13 to −15pp` in `REBUTTAL_arithmetic.md`
+because that document tabulates the **scramble** arm, `ON − RANDOM`, with the
+opposite sign. Same two runs: +7.88/+15.77pp delete, −13.08/−15.15pp scramble.)
 
 **Difficulty is not the axis.** At 12 digits the model reaches 70.08% — far from
 saturated — and its codes remain inert at the scale that works for 6 digits
@@ -283,6 +390,20 @@ that baseline was measured under different generation settings and is not
 matched to these arms. The three rows above are matched, and are the comparison
 to quote.
 
+### Two CodeNet error classes were started and abandoned
+
+Repair was attempted on the `ran_on` and `stopped_early` error classes of the
+gated CodeNet checkpoint, in both `--mode all` and `--mode single`, and again
+with the intervention amplified to `decode_scale 1.0` in both arms. None of the
+six runs finished; they were killed after the class-size filter, at 29 and 23
+examples surviving the `gold-length <= 5 tokens` filter out of 50 and 44. No
+result JSON was written and no number from them appears anywhere.
+
+They are recorded here rather than as truncated logs, because that is all they
+are: an attempt, not a measurement. The reported CodeNet repair result stands on
+the classes that did complete — `truncation`, `same_construct`,
+`identifier_swap` and `reordering` — whose JSONs are in `results/`.
+
 ### The frozen arithmetic counterpart was deliberately not completed
 
 A frozen Qwen3-0.6B cannot produce the `123456+654321=` answer format at all, so
@@ -291,14 +412,49 @@ its knockout would measure *"the codes taught the output format"* rather than
 exist, so the result would not be reportable under this study's own rules. The
 run was started, OOM'd against concurrent jobs, and was not relaunched.
 
-### The arithmetic gate never opened
+### The escalation sweep never opened the arithmetic gate — scale did
 
-Four rungs, optimizer steps held roughly constant so training budget is not the
-variable: +0.15pp → +0.54pp → +0.23pp → +1.69pp. Causal load rises ~11× with
-difficulty and steering scale, in the predicted direction, without reaching the
-3pp threshold. A 596M pretrained backbone solves six-digit arithmetic with enough
-slack that the codes never have to carry it. Reproduce with
-`repro/f2_escalation.sh`.
+This section records a superseded conclusion and the result that replaced it,
+because the first is what the escalation table still shows.
+
+Four escalation rungs, optimizer steps held roughly constant so training budget
+is not the variable: +0.15pp → +0.54pp → +0.23pp → +1.69pp. Causal load rises
+~11× with difficulty, in the predicted direction, without reaching the 3pp
+threshold. Reproduce with `repro/f2_escalation.sh`.
+
+The conclusion drawn at the time — "a 596M backbone solves six-digit arithmetic
+with too much slack for the codes to carry anything" — **was wrong about the
+cause.** Every one of those four rungs sat at or near `scale=0.1`. Difficulty
+was being varied along an axis that was dead for a different reason. Sweeping
+steering scale instead, at fixed 6-digit difficulty, opened the gate at
+`scale=0.5` (+7.88pp) and replicated it on an independent retrain (+15.77pp).
+
+### The scale sweep: 0.5 is a narrow, non-monotonic window
+
+```
+  ┌─────────┬──────────┬──────────┬──────────┬──────────────────┬────────┐
+  │  scale  │ codes ON │  RANDOM  │ OFF_full │ knockout         │  gate  │
+  ├─────────┼──────────┼──────────┼──────────┼──────────────────┼────────┤
+  │   0.1   │   86.35% │       —  │   86.19% │ +0.15pp /  0.2%  │ closed │
+  │   0.3   │   83.19% │   89.92% │   90.08% │ -6.88pp / -8.3%  │ closed │
+  │   0.5   │   82.96% │   69.88% │   75.08% │ +7.88pp /  9.5%  │  OPEN  │
+  │   0.5 † │   84.73% │   69.58% │   68.96% │ +15.77pp / 18.6% │  OPEN  │
+  │   0.7   │   82.38% │   84.65% │   90.50% │ -8.12pp / -9.9%  │ closed │
+  │   1.0   │   84.23% │   84.42% │   86.27% │ -2.04pp / -2.4%  │ closed │
+  └─────────┴──────────┴──────────┴──────────┴──────────────────┴────────┘
+   † arith_s0.5_REPLICATE — independent retrain, same configuration
+```
+
+The window is narrow and the effect is not monotonic in scale, which is the
+honest caveat on the arithmetic causal result. At 0.3, 0.7 and 1.0 the knockout
+is *negative*: the model scores better with steering deleted, so injection at
+those magnitudes is net harmful rather than merely unused. Only at 0.5 does the
+model route through the codes, and there it does so twice, on two separately
+trained models whose RANDOM arms agree to 0.3pp (69.88% and 69.58%).
+
+Two rungs were trained at 6 digits and never gated, so they are absent above:
+`arith_12d_10k_s0.5_i10_z10u8` (12-digit, different recipe) has no knockout JSON
+at all, and `arith_v9` was only ever measured for accuracy.
 
 ---
 
@@ -321,6 +477,10 @@ The optimizer state is 67% of the file and no interpretability code path reads
 it. `push_models.py` **strips it by default**, taking each upload from 3.58 GB to
 ~1.19 GB; the result still loads through `load_local_steered` but will not resume
 training. Pass `--keep-optimizer` to publish resumable weights.
+
+One checkpoint on disk is already 1.19 GB: `codenet_FROZEN`. Its backbone was
+frozen, so there was no optimizer state over the model to save in the first
+place. Its size is not evidence that it was stripped.
 
 Also uploaded per checkpoint: `history.json`, `steer_v9.pt` (the steering wrapper
 alone, ~190 KB), and an auto-generated `README.md` model card carrying the exact

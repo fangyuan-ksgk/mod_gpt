@@ -1,19 +1,26 @@
 #!/usr/bin/env bash
-# Gate a freshly-trained arithmetic checkpoint, then -- only if the gate opens --
-# run the targeted repair sweep on it.
+# Gate an already-trained arithmetic checkpoint, then -- only if the gate opens
+# -- run the targeted repair sweep on it. It does not train; pass it a ckpt dir.
 #
-# The whole repair programme has been blocked on one thing: repair is gated on
-# causal load. arith_v9_paperhp answers arithmetic well (86.35%) but its codes
-# are a read-out (+0.15pp knockout), and you cannot repair a computation through
-# a channel it ignores. The gated CodeNet checkpoint has the causal load
-# (-39.3%) but only 17% accuracy, so its errors are unfixable for the opposite
-# reason. Neither can show repair working.
+# Why the gate comes first: repair is conditional on causal load.
+# arith_v9_paperhp answers arithmetic well (86.35%) but its codes are a read-out
+# (+0.15pp knockout), and you cannot repair a computation through a channel the
+# model ignores. The gated CodeNet checkpoint has the causal load (-39.3%) but
+# only 17% accuracy, so its errors are unfixable for the opposite reason.
+# Neither can show repair working, so neither is worth a repair sweep.
 #
-# These runs train arithmetic at scale 0.5 / 1.0 -- the knob that opened the
-# CodeNet gate and the one dimension the earlier escalation sweep never varied.
-# If the gate opens we finally have the missing quadrant: a competent model with
-# load-bearing codes, which is the only place targeted repair could show a
-# positive.
+# Steering scale is the knob that opened the CodeNet gate and the one dimension
+# the earlier escalation sweep never varied. Sweeping it at 6 digits found the
+# missing quadrant: at scale=0.5 the gate OPENS (+7.88pp, replicated at
+# +15.77pp on an independent retrain), giving a competent model with
+# load-bearing codes. Repair was then run there and still repaired nothing --
+# which is the point: it is a measured negative, not an underpowered one.
+# 0.3, 0.7 and 1.0 all stay closed. See MODELS.md.
+#
+# Generation length is derived from the dataset, never hardcoded: at 12 digits a
+# hardcoded 8 truncates every answer and scores 0.0% in ALL arms, which reads as
+# "the codes do nothing" rather than as a bug. logs/chain_arith_12d_s0.5.log is
+# that failure and logs/chain_arith_12d_s0.5_FIXED.log is the same run repaired.
 #
 # Usage: bash gate_then_repair.sh ckpt/arith_s0.5_i10_z1_u8
 set -euo pipefail

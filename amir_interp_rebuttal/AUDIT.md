@@ -4,6 +4,15 @@ Scope: every `.py` and `.sh` in `amir_interp_rebuttal/`. No reported number
 moved. `repro/verify_claims.sh` stays **19 verified, 0 failed**;
 `repro/determinism.sh` stays **all-PASS** (now 10 tables, up from 9).
 
+> **This document is a snapshot of one audit pass, not a live inventory.** The
+> counts above and in "File count" below were true when it was written and have
+> since moved: `verify_claims.sh` is now **242 verified, 0 failed** (19 → 31 →
+> 238 → 242, as coverage went from headline numbers to every table cell — see
+> `DATA_AUDIT.md`), and the package is back to 14 `.py` files with the addition
+> of `error_repair.py`. `determinism.sh` is unchanged at 10/10 PASS. The
+> defects, decisions and rationale below all still stand; a later cleanup pass
+> is recorded in git history rather than appended here.
+
 ## Defects found
 
 | # | Defect | Severity | Status |

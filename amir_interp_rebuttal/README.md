@@ -43,12 +43,16 @@ Mapped onto the original case study's finding numbers:
 
 ```
 REBUTTAL_arithmetic.md  REBUTTAL_codenet.md   the deliverables — read these
-PLAN.md                                       objectives, metrics, checklist
-MODELS.md                                     checkpoints, configs, HF links
+PLAN.md                                       objectives, metrics, checklist,
+                                              and what was tried and abandoned
+MODELS.md                                     all 20 checkpoints, configs, HF links
 AUDIT.md                                      code audit: defects, fixes, what was left
+DATA_AUDIT.md                                 every table number traced to its JSON
+gate_then_repair.sh                           gate a checkpoint, repair only if it opens
 repro/                                        one script per table + verification
-results/                                      all raw JSON
-logs/                                         every run
+results/                                      all raw JSON (+ results/gated/ for the
+                                              load-bearing arithmetic checkpoint)
+logs/                                         run logs — NOT in git, see below
 notes/                                        working notes, not deliverables
   arithmetic.md                                 the original case study, extracted
   codenet_gate.md                               confound audit for the SUPERSEDED
@@ -61,19 +65,31 @@ the scale sweep replaced, and `r1_r3_r5_tables.md` includes an R3 section that
 neither deliverable claims. Both are kept because they document *why* a result
 was withdrawn, which is worth more than a clean-looking directory.
 
-Code: `arith_dataset.py`, `codenet_dataset.py` (data + labels) · `interp.py`
+`logs/` is **gitignored** — it is a local working record, not part of the
+deliverable, and nothing in `repro/` or `results/` reads it. It holds one log per
+run that produced a result file, plus the runs that document a withdrawn number:
+`chain_arith_12d_s0.5.log` (the hardcoded-`max_new_tokens` bug scoring 0.0% in
+every arm) beside `..._FIXED.log`, `arith_analyze{,2}.log` (before and after the
+`decode_scale` fix), `codenet_s0.5_..._confound.log` (the batch-32 misalignment),
+and `arith_6d_FROZEN.log` (the OOM that ended the frozen arithmetic arm).
+Superseded and aborted runs have been removed; what they were is recorded in
+`MODELS.md` and in PLAN.md's "Tried and abandoned" table.
+
+Code — 14 modules:
+`arith_dataset.py`, `codenet_dataset.py` (data + labels) · `interp.py`
 (purity, swaps) · `runner.py` (generation + code capture) · `analyze.py` (entry
-point, `--study {arithmetic,codenet}`) · `load_local.py` (local checkpoints;
-`sorl.analyze` only reads the Hub) · `sweep_gate.py`, `codenet_sweep_gate.py`
-(gate sweeps — deliberately not merged, see `AUDIT.md`) · `codenet_confound.py`
-(position control) · `per_code_ablation.py` (single-code knockout) ·
+point, `--study {arithmetic,codenet}`) · `load_local.py` (local checkpoints, plus
+the shared `build_dataset`; `sorl.analyze` only reads the Hub) · `sweep_gate.py`,
+`codenet_sweep_gate.py` (gate sweeps — deliberately not merged, see `AUDIT.md`) ·
+`codenet_confound.py` (position control) · `per_code_ablation.py` (single-code
+knockout) · `error_repair.py` (error taxonomy + targeted repair) ·
 `dump_firings.py` then `autointerp.py` (auto-interp, both `--study`) ·
 `push_models.py` (HF).
 
 ## Reproduction
 
 ```bash
-bash amir_interp_rebuttal/repro/verify_claims.sh    # every headline number vs source JSON
+bash amir_interp_rebuttal/repro/verify_claims.sh    # every table number vs source JSON
 bash amir_interp_rebuttal/repro/knockout.sh         # Finding #2
 bash amir_interp_rebuttal/repro/f3_codenet_purity.sh # CodeNet R1, position-controlled
 bash amir_interp_rebuttal/repro/f6_polysemanticity.sh # Finding #6
@@ -90,7 +106,7 @@ between runs, is a claim that cannot be defended.
 
 ## Reported models
 
-Both checkpoints behind the reported numbers are published to
+The three checkpoints behind the reported numbers are published to
 **[`thoughtworks/dlr-rebuttal-interp`](https://huggingface.co/thoughtworks/dlr-rebuttal-interp)**
 (currently **private** — the repo is under a named org and the submission is
 still under review; flip it public from the HF UI when that no longer matters).
