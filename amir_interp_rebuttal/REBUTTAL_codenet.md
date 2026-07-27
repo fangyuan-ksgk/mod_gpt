@@ -115,27 +115,33 @@ the table on evidence, is one whose positive identifications carry weight.
 
 ## Specialists and polysemantic generalists coexist
 
-The codebook splits into two regimes, exactly as in the arithmetic study:
+Splitting the codebook at 2.0× lift — the same threshold used in the arithmetic
+study — gives two regimes:
 
 ```
   ┌──────────────┬────────┬───────────┬──────────┬──────────┬────────────┐
   │ Role         │  codes │  firings  │ share of │ best     │ lift range │
   │              │        │           │ traffic  │ purity   │            │
   ├──────────────┼────────┼───────────┼──────────┼──────────┼────────────┤
-  │ specialists  │      5 │     1,578 │   13.7%  │   33.3%  │ 1.53-6.54x │
-  │ generalists  │      6 │     9,960 │   86.3%  │   40.8%  │ 0.77-1.30x │
+  │ specialists  │      5 │     1,578 │   14.7%  │   33.3%  │ 2.06-6.57x │
+  │ generalists  │      5 │     9,151 │   85.3%  │   35.3%  │ 0.75-1.24x │
   └──────────────┴────────┴───────────┴──────────┴──────────┴────────────┘
+   t9 excluded as the file-start artefact, as in the R1 table
 ```
 
 A handful of sharp detectors carry a small minority of the traffic while
 high-frequency near-chance codes absorb the rest — `t0` alone fires 4,978 times
-at 1.15× and acts as a fallback.
+at 1.18× and acts as a fallback.
 
 The cross-domain agreement is the interesting part. Arithmetic splits 3
 specialists over **14.3%** of firings against 4 generalists over 85.7%; CodeNet
-splits 5 over **13.7%** against 6 over 86.3%. Two entirely different label sets
-— carry/borrow sub-tasks versus Python AST constructs — and the same ~14/86
-division of labour.
+splits 5 over **14.7%** against 5 over 85.3%. Two entirely different label sets
+— carry/borrow sub-tasks versus Python AST constructs — and the same ~15/85
+division of labour, under the same metric and threshold.
+
+Note also that the highest *purity* in each band is not the highest lift: the
+best-purity generalist (`t4`, 35.3%) outranks every specialist on purity alone.
+Purity without a base rate is not a measure of specialisation.
 
 ## Summary
 
@@ -145,7 +151,7 @@ set from the arithmetic case study:
 - **codes are causally necessary** — 39% relative accuracy loss on removal, with
   identity (not magnitude) accounting for 93% of that loss
 - **codes specialise on ground-truth structure** — conditional and
-  binary-expression detectors at 2.1–2.3× lift, on hundreds of firings each
+  binary-expression detectors at 2.06–2.40× lift (n = 58 to 608)
 - **an independent model recovers that structure blind** — 10/11 agreement on
   raw source chunks, including rejecting the codebook's second-highest global
   lift as a position artefact

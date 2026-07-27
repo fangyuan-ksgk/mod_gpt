@@ -94,7 +94,7 @@ across two independently trained models with that config
   │ run 1            │  82.96%  │  69.88%  │  75.08%  │ −13.08pp  │  −7.88pp  │
   │ run 2 (retrain)  │  84.73%  │  69.58%  │  68.96%  │ −15.15pp  │ −15.77pp  │
   └──────────────────┴──────────┴──────────┴──────────┴───────────┴───────────┘
-   both gates OPEN · relative loss 15.8% and 18.6%
+   both gates OPEN · scrambling costs 15.8% and 17.9% of accuracy
 ```
 
 **Scrambling which code is which costs 13–15 points of accuracy.** The two runs

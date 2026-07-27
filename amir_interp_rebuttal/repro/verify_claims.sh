@@ -281,28 +281,33 @@ chks("codenet t5 is the one miss", cir[5]["verdict"], "miss")
 chk("codenet t9 spacing 809/12 = 67", round(cw[9]["n"]/12), 67.0, 0.5)
 
 print("\n  -- REBUTTAL_codenet.md | specialists vs generalists --")
-# NOTE: this table's lift RANGE column is position-matched lift (lift_pos), not
-# the global lift used by every other table in the same document. Asserted here
-# against lift_pos so the provenance is explicit rather than implied.
+# Global lift with a 2.0x threshold -- the same metric and cut the arithmetic
+# table uses, so the two are directly comparable. t9 is excluded as the
+# file-start artefact (as in the R1 table); on global lift it sits at 4.40x and
+# would otherwise land inside the generalist band above three real specialists.
 cd_ = json.loads((R/"codenet_gated_confound_nopad.json").read_text())
 chks("codenet confound ckpt", cd_["ckpt"], "ckpt/codenet_s0.5_i10_z1_L8_n4000")
 chk("codenet confound n_eval 800", float(cd_["n_eval"]), 800.0, 0.001)
 chk("codenet confound C=30",       float(cd_["C_SIZE"]), 30.0, 0.001)
 chk("codenet confound L=8",        float(cd_["L"]), 8.0, 0.001)
-crow = cd_["code_rows"]
-sp = [r for r in crow if r["lift_pos"] >= 1.5]
-ge = [r for r in crow if r["lift_pos"] <  1.5]
+crow = [r for r in cd_["code_rows"] if r["code"] != 9]
+sp = [r for r in crow if r["lift_global"] >= 2.0]
+ge = [r for r in crow if r["lift_global"] <  2.0]
 ns, nge = sum(r["n"] for r in sp), sum(r["n"] for r in ge)
 chk("codenet specialists 5 codes",     float(len(sp)), 5.0, 0.001)
 chk("codenet specialists 1,578 fires", float(ns), 1578.0, 0.001)
-chk("codenet specialists 13.7% share", round(100*ns/(ns+nge), 1), 13.7)
-chk("codenet specialists best purity 33.3%", round(100*max(r["purity"] for r in sp), 1), 33.3)
+chk("codenet specialists 14.7% share", round(100*ns/(ns+nge), 1), 14.7)
+chk("codenet specialists lift lo 2.06x", round(min(r["lift_global"] for r in sp), 2), 2.06)
+chk("codenet specialists lift hi 6.57x", round(max(r["lift_global"] for r in sp), 2), 6.57)
+chk("codenet generalists 5 codes",     float(len(ge)), 5.0, 0.001)
+chk("codenet generalists 9,151 fires", float(nge), 9151.0, 0.001)
+chk("codenet generalists 85.3% share", round(100*nge/(ns+nge), 1), 85.3)
+chk("codenet generalists lift lo 0.75x", round(min(r["lift_global"] for r in ge), 2), 0.75)
+chk("codenet generalists lift hi 1.24x", round(max(r["lift_global"] for r in ge), 2), 1.24)
+chk("codenet generalists best purity 35.3%", round(100*max(r["purity"] for r in ge), 1), 35.3)
+chk("codenet t0 global lift 1.18x", round([r for r in crow if r["code"]==0][0]["lift_global"], 2), 1.18)
 chk("codenet specialists lift_pos lo 1.53x", round(min(r["lift_pos"] for r in sp), 2), 1.53)
 chk("codenet specialists lift_pos hi 6.54x", round(max(r["lift_pos"] for r in sp), 2), 6.54)
-chk("codenet generalists 6 codes",     float(len(ge)), 6.0, 0.001)
-chk("codenet generalists 9,960 fires", float(nge), 9960.0, 0.001)
-chk("codenet generalists 86.3% share", round(100*nge/(ns+nge), 1), 86.3)
-chk("codenet generalists best purity 40.8%", round(100*max(r["purity"] for r in ge), 1), 40.8)
 chk("codenet generalists lift_pos lo 0.77x", round(min(r["lift_pos"] for r in ge), 2), 0.77)
 chk("codenet generalists lift_pos hi 1.30x", round(max(r["lift_pos"] for r in ge), 2), 1.30)
 c0 = next(r for r in crow if r["code"] == 0)
@@ -333,8 +338,10 @@ chk("codenet If/BinOp detector lift lo 2.06x", round(min(det), 2), 2.06)
 chk("codenet If/BinOp detector lift hi 2.40x", round(max(det), 2), 2.40)
 
 print("\n  -- cross-document consistency --")
-chk("arith 14.3% vs codenet 13.7% split (both ~14%)",
-    round(100*na/(na+ng), 1) - round(100*ns/(ns+nge), 1), 0.6, 0.05)
+# The cross-domain claim: two different label sets, same division of labour,
+# now measured with the same metric (global lift) and the same 2.0x threshold.
+chk("arith 14.3% vs codenet 14.7% split (both ~15%)",
+    round(100*na/(na+ng), 1) - round(100*ns/(ns+nge), 1), -0.4, 0.05)
 
 print(f"\n  {ok} verified, {fail} failed")
 sys.exit(1 if fail else 0)

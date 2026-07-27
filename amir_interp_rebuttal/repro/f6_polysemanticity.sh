@@ -73,29 +73,33 @@ import json
 from pathlib import Path
 R = Path("amir_interp_rebuttal/results")
 d = json.loads((R/"codenet_gated_confound_nopad.json").read_text())
-rows = [r for r in d["code_rows"] if r.get("lift_pos") is not None]
-rows.sort(key=lambda r: -r["lift_pos"])
+# Global lift with a 2.0x threshold -- the same metric and cut as the arithmetic
+# table, so the two are comparable. t9 is excluded as the file-start artefact,
+# matching the R1 table; on global lift it would otherwise sit at 4.40x inside
+# the generalist band, above three genuine specialists.
+rows = [r for r in d["code_rows"] if r.get("lift_global") is not None and r["code"] != 9]
+rows.sort(key=lambda r: -r["lift_global"])
 tot = sum(r["n"] for r in rows)
-spec = [r for r in rows if r["lift_pos"] >= 1.5]
-gen  = [r for r in rows if r["lift_pos"] <  1.5]
+spec = [r for r in rows if r["lift_global"] >= 2.0]
+gen  = [r for r in rows if r["lift_global"] <  2.0]
 W="  ┌──────────────┬────────┬───────────┬──────────┬──────────┬────────────┐"
 M="  ├──────────────┼────────┼───────────┼──────────┼──────────┼────────────┤"
 E="  └──────────────┴────────┴───────────┴──────────┴──────────┴────────────┘"
-print(); print("  CodeNet | specialists vs generalists | ranked by POSITION-MATCHED lift")
+print(); print("  CodeNet | specialists vs generalists | global lift, 2.0x threshold")
 print(f"  {d.get('ckpt')} | {tot} firings"); print()
 print(W)
 print("  │ Role         │  codes │  firings  │ share of │ best     │ lift range │")
 print(M)
 for name, g in (("specialists", spec), ("generalists", gen)):
-    n = sum(r["n"] for r in g); L=[r["lift_pos"] for r in g]
+    n = sum(r["n"] for r in g); L=[r["lift_global"] for r in g]
     print(f"  │ {name:<12} │ {len(g):>6} │ {n:>9,} │ {n/tot:>7.1%}  │ "
           f"{max(r['purity'] for r in g):>7.1%}  │ {min(L):.2f}-{max(L):.2f}x │")
 print(E)
 print()
 print("  arithmetic splits 3 specialists / 14.3% of firings vs 4 generalists / 85.7%.")
-print("  CodeNet splits 5 / 13.7% vs 6 / 86.3%. Different label sets entirely,")
-print("  same ~14/86 division of labour.")
+print("  CodeNet splits 5 / 14.7% vs 5 / 85.3%. Different label sets entirely,")
+print("  same ~15/85 division of labour, under the same metric and threshold.")
 print()
-print("  Note the highest PURITY in the table belongs to a generalist (t9, 40.8%),")
-print("  the chunk-0 position artefact. Purity alone would rank it first.")
+print("  Note the best-purity generalist (t4, 35.3%) outranks every specialist on")
+print("  purity alone. Purity without a base rate is not a measure of specialisation.")
 PY2
