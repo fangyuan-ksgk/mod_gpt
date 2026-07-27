@@ -55,12 +55,10 @@ chk("codenet R2 matched 0%",        float(r2["targeted_fix_rate"]), 0.0, 0.001)
 chk("codenet R2 random 0%",         float(r2["random_fix_rate"]), 0.0, 0.001)
 
 # Arithmetic causal result at scale=0.5, reported in REBUTTAL_arithmetic.md.
-# The effect is non-monotonic: this is the only rung with a positive knockout,
-# and its OFF_full (75.08%) sits below the ~86-90% of neighbouring scales while
-# codes_ON is flat at 82-84%. Adjacent scales are different models, not
-# replicates, so they cannot distinguish "narrow band where the model routes
-# through the codes" from "property of this run". A same-config retrain is the
-# test; the caveat is stated inline in the deliverable.
+# REPLICATED: an independent retrain on the same config gives ON 84.73 /
+# RANDOM 69.58 / OFF 68.96, i.e. -15.77pp and gate OPEN. The two runs' RANDOM
+# arms agree to 0.3pp (69.88 vs 69.58), so scrambled-identity accuracy is the
+# stable quantity. The earlier "per-run artefact" reading is refuted.
 ag = json.loads((R/"arith_s0.5_i10_z1_u8_knockout4.json").read_text())
 chk("arith gated ON 82.96%",       round(100*ag["codes_ON"], 2), 82.96)
 chk("arith gated OFF 75.08%",      round(100*ag["codes_OFF_full"], 2), 75.08)
@@ -69,6 +67,16 @@ chk("arith gated knockout 7.88pp", round(ag["delta_pp"], 2), 7.88)
 # RANDOM below OFF_full is the identity claim: wrong codes worse than none.
 chk("arith RANDOM below OFF",
     1.0 if ag["codes_RANDOM"] < ag["codes_OFF_full"] else 0.0, 1.0, 0.001)
+
+# Independent retrain, same config -- the replication that settles it.
+rp = json.loads((R/"arith_s0.5_REPLICATE_knockout4.json").read_text())
+chk("arith replicate ON 84.73%",     round(100*rp["codes_ON"], 2), 84.73)
+chk("arith replicate RANDOM 69.58%", round(100*rp["codes_RANDOM"], 2), 69.58)
+chk("arith replicate knockout 15.77pp", round(rp["delta_pp"], 2), 15.77)
+chk("arith replicate gate OPEN", 1.0 if rp["gate_open"] else 0.0, 1.0, 0.001)
+# The two runs' RANDOM arms agree to within 0.5pp -- stability of the claim.
+chk("RANDOM stable across retrains",
+    round(abs(100*(ag["codes_RANDOM"] - rp["codes_RANDOM"])), 2), 0.30, 0.5)
 
 # Finding #2 robustness: same checkpoint, comment-normalised scoring.
 cc = json.loads((R/"codenet_knockout4_cleanscore.json").read_text())

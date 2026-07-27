@@ -1,0 +1,101 @@
+{
+  "ckpt": "ckpt/arith_s0.5_i10_z1_u8",
+  "study": "arithmetic",
+  "method": "raw-firing examples, blind: interpreter read ONLY the firing dump, no labels, no purity statistics, no candidate list, repository access barred",
+  "interpreter": "independent agent, isolated context",
+  "source_data": "amir_interp_rebuttal/results/arith_gated_autointerp_prompts.json",
+  "results": [
+    {
+      "code": 19,
+      "fires_when": "equal digits consuming a borrow-in at position 4; the digit is 9, produced by a borrow, and the answer is small (near-equal operands)",
+      "confidence": "medium",
+      "is_positional_only": false,
+      "evidence": "13/14 have answer_digit=9 and op=sub; 11 are equal-digit columns consuming a borrow-in",
+      "ground_truth_top_label": "UD",
+      "gt_purity": 0.781,
+      "gt_lift": 9.35,
+      "gt_n": 32,
+      "verdict": "correct-specialist"
+    },
+    {
+      "code": 12,
+      "fires_when": "addition at position 1 where the two leading operand digits sum to >=15, i.e. the leading column carries out",
+      "confidence": "medium",
+      "is_positional_only": false,
+      "evidence": "all 14 are op=add with answer starting '1'; leading column sums 15-17, never below 15",
+      "ground_truth_top_label": "UC",
+      "gt_purity": 0.631,
+      "gt_lift": 3.86,
+      "gt_n": 65,
+      "verdict": "correct-specialist"
+    },
+    {
+      "code": 14,
+      "fires_when": "position 4, subtraction columns where the two digits are equal or differ by exactly one -- borrow-critical columns that propagate or absorb a borrow",
+      "confidence": "low",
+      "is_positional_only": false,
+      "evidence": "all 11 subtraction examples have minuend-subtrahend in {0,1}; resulting digit is 0 or 9 in 12/14",
+      "ground_truth_top_label": "UB",
+      "gt_purity": 0.294,
+      "gt_lift": 2.75,
+      "gt_n": 180,
+      "verdict": "correct-specialist"
+    },
+    {
+      "code": 3,
+      "fires_when": "pure position marker for answer position 3, once per problem",
+      "confidence": "high",
+      "is_positional_only": true,
+      "evidence": "n_total=2600 = one per problem; all examples at answer_pos=3 across both ops",
+      "ground_truth_top_label": "US",
+      "gt_purity": 0.205,
+      "gt_lift": 1.62,
+      "gt_n": 2600,
+      "verdict": "correct-positional"
+    },
+    {
+      "code": 1,
+      "fires_when": "position marker for positions 1 and 4, except where codes 12/14/19 take over",
+      "confidence": "high",
+      "is_positional_only": true,
+      "evidence": "4923 + 65 + 180 + 32 = 5200 = 2 x 2600 exactly -- t1 is the default filler and the specialists carve cases out of it",
+      "ground_truth_top_label": "US",
+      "gt_purity": 0.184,
+      "gt_lift": 1.46,
+      "gt_n": 4923,
+      "verdict": "correct-positional"
+    },
+    {
+      "code": 0,
+      "fires_when": "position marker: exactly three times per problem at positions 0, 2 and 6, regardless of content",
+      "confidence": "high",
+      "is_positional_only": true,
+      "evidence": "n_total=7800 = 3 x 2600; content spans no-carry, sum-9 and borrow columns alike",
+      "ground_truth_top_label": "SA",
+      "gt_purity": 0.241,
+      "gt_lift": 1.35,
+      "gt_n": 7800,
+      "verdict": "correct-positional"
+    },
+    {
+      "code": 2,
+      "fires_when": "pure position marker for answer position 5, once per problem",
+      "confidence": "high",
+      "is_positional_only": true,
+      "evidence": "n_total=2600 = one per problem; all examples at answer_pos=5",
+      "ground_truth_top_label": "SA",
+      "gt_purity": 0.162,
+      "gt_lift": 0.91,
+      "gt_n": 2600,
+      "verdict": "correct-positional"
+    }
+  ],
+  "summary": {
+    "n_codes": 7,
+    "n_agree": 7,
+    "agreement_with_purity_table": "7/7",
+    "n_specialists_identified": 3,
+    "n_positional_identified": 4,
+    "headline": "On the checkpoint where the codes are causally load-bearing, a blind interpreter named all three specialists as the arithmetic conditions the purity table assigns them -- borrow-through-equal-digits (UD), leading-column carry-out (UC), and borrow-critical columns (UB) -- and correctly called the four near-chance codes content-free position markers. It also derived the codebook's structure from firing counts alone: 4923+65+180+32 = 5200 = 2x2600, so t1 is the default filler at positions 1 and 4 and the specialists carve specific arithmetic cases out of it."
+  }
+}

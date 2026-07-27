@@ -1,0 +1,1220 @@
+[
+  {
+    "code": 0,
+    "n_total": 7800,
+    "examples": [
+      {
+        "problem": "417080+531003=0948083",
+        "op": "add",
+        "answer_pos": 0,
+        "answer_digit": 0,
+        "operand_digits": [
+          null,
+          null
+        ],
+        "column_sum": null,
+        "split": "add_S0"
+      },
+      {
+        "problem": "036067+787192=0823259",
+        "op": "add",
+        "answer_pos": 6,
+        "answer_digit": 9,
+        "operand_digits": [
+          7,
+          2
+        ],
+        "column_sum": 9,
+        "split": "add_S1"
+      },
+      {
+        "problem": "909590+099904=1009494",
+        "op": "add",
+        "answer_pos": 2,
+        "answer_digit": 0,
+        "operand_digits": [
+          0,
+          9
+        ],
+        "column_sum": 9,
+        "split": "add_S3"
+      },
+      {
+        "problem": "184598+015405=0200003",
+        "op": "add",
+        "answer_pos": 0,
+        "answer_digit": 0,
+        "operand_digits": [
+          null,
+          null
+        ],
+        "column_sum": null,
+        "split": "add_S5"
+      },
+      {
+        "problem": "452761+988024=1440785",
+        "op": "add",
+        "answer_pos": 6,
+        "answer_digit": 5,
+        "operand_digits": [
+          1,
+          4
+        ],
+        "column_sum": 5,
+        "split": "add_random"
+      },
+      {
+        "problem": "340212+832042=1172254",
+        "op": "add",
+        "answer_pos": 2,
+        "answer_digit": 7,
+        "operand_digits": [
+          4,
+          3
+        ],
+        "column_sum": 7,
+        "split": "add_C1"
+      },
+      {
+        "problem": "125561+176502=0302063",
+        "op": "add",
+        "answer_pos": 0,
+        "answer_digit": 0,
+        "operand_digits": [
+          null,
+          null
+        ],
+        "column_sum": null,
+        "split": "add_C3"
+      },
+      {
+        "problem": "318957+891710=1210667",
+        "op": "add",
+        "answer_pos": 6,
+        "answer_digit": 7,
+        "operand_digits": [
+          7,
+          0
+        ],
+        "column_sum": 7,
+        "split": "add_C4"
+      },
+      {
+        "problem": "184587+819416=1004003",
+        "op": "add",
+        "answer_pos": 2,
+        "answer_digit": 0,
+        "operand_digits": [
+          8,
+          1
+        ],
+        "column_sum": 9,
+        "split": "add_C6"
+      },
+      {
+        "problem": "862853-506315=0356538",
+        "op": "sub",
+        "answer_pos": 0,
+        "answer_digit": 0,
+        "operand_digits": [
+          null,
+          null
+        ],
+        "column_sum": null,
+        "split": "sub_M1"
+      },
+      {
+        "problem": "058654-018697=0039957",
+        "op": "sub",
+        "answer_pos": 6,
+        "answer_digit": 7,
+        "operand_digits": [
+          4,
+          7
+        ],
+        "column_sum": 11,
+        "split": "sub_M3"
+      },
+      {
+        "problem": "374200-074201=0299999",
+        "op": "sub",
+        "answer_pos": 2,
+        "answer_digit": 9,
+        "operand_digits": [
+          7,
+          7
+        ],
+        "column_sum": 14,
+        "split": "sub_M5"
+      },
+      {
+        "problem": "684365-169107=0515258",
+        "op": "sub",
+        "answer_pos": 0,
+        "answer_digit": 0,
+        "operand_digits": [
+          null,
+          null
+        ],
+        "column_sum": null,
+        "split": "sub_random"
+      },
+      {
+        "problem": "817921-249960=0567961",
+        "op": "sub",
+        "answer_pos": 6,
+        "answer_digit": 1,
+        "operand_digits": [
+          1,
+          0
+        ],
+        "column_sum": 1,
+        "split": "sub_B4"
+      }
+    ]
+  },
+  {
+    "code": 1,
+    "n_total": 4923,
+    "examples": [
+      {
+        "problem": "417080+531003=0948083",
+        "op": "add",
+        "answer_pos": 1,
+        "answer_digit": 9,
+        "operand_digits": [
+          4,
+          5
+        ],
+        "column_sum": 9,
+        "split": "add_S0"
+      },
+      {
+        "problem": "289513+403997=0693510",
+        "op": "add",
+        "answer_pos": 4,
+        "answer_digit": 5,
+        "operand_digits": [
+          5,
+          9
+        ],
+        "column_sum": 14,
+        "split": "add_S1"
+      },
+      {
+        "problem": "300398+790606=1091004",
+        "op": "add",
+        "answer_pos": 4,
+        "answer_digit": 0,
+        "operand_digits": [
+          3,
+          6
+        ],
+        "column_sum": 9,
+        "split": "add_S3"
+      },
+      {
+        "problem": "147605+052396=0200001",
+        "op": "add",
+        "answer_pos": 4,
+        "answer_digit": 0,
+        "operand_digits": [
+          6,
+          3
+        ],
+        "column_sum": 9,
+        "split": "add_S5"
+      },
+      {
+        "problem": "066525+670553=0737078",
+        "op": "add",
+        "answer_pos": 4,
+        "answer_digit": 0,
+        "operand_digits": [
+          5,
+          5
+        ],
+        "column_sum": 10,
+        "split": "add_random"
+      },
+      {
+        "problem": "121837+110700=0232537",
+        "op": "add",
+        "answer_pos": 1,
+        "answer_digit": 2,
+        "operand_digits": [
+          1,
+          1
+        ],
+        "column_sum": 2,
+        "split": "add_C1"
+      },
+      {
+        "problem": "591631+582016=1173647",
+        "op": "add",
+        "answer_pos": 4,
+        "answer_digit": 6,
+        "operand_digits": [
+          6,
+          0
+        ],
+        "column_sum": 6,
+        "split": "add_C2"
+      },
+      {
+        "problem": "002025+007989=0010014",
+        "op": "add",
+        "answer_pos": 1,
+        "answer_digit": 0,
+        "operand_digits": [
+          0,
+          0
+        ],
+        "column_sum": 0,
+        "split": "add_C4"
+      },
+      {
+        "problem": "269995+733476=1003471",
+        "op": "add",
+        "answer_pos": 4,
+        "answer_digit": 4,
+        "operand_digits": [
+          9,
+          4
+        ],
+        "column_sum": 13,
+        "split": "add_C6"
+      },
+      {
+        "problem": "690371-409059=0281312",
+        "op": "sub",
+        "answer_pos": 4,
+        "answer_digit": 3,
+        "operand_digits": [
+          3,
+          0
+        ],
+        "column_sum": 3,
+        "split": "sub_M1"
+      },
+      {
+        "problem": "834459-644499=0189960",
+        "op": "sub",
+        "answer_pos": 4,
+        "answer_digit": 9,
+        "operand_digits": [
+          4,
+          4
+        ],
+        "column_sum": 8,
+        "split": "sub_M3"
+      },
+      {
+        "problem": "782352-282353=0499999",
+        "op": "sub",
+        "answer_pos": 1,
+        "answer_digit": 4,
+        "operand_digits": [
+          7,
+          2
+        ],
+        "column_sum": 9,
+        "split": "sub_M5"
+      },
+      {
+        "problem": "837198-375520=0461678",
+        "op": "sub",
+        "answer_pos": 1,
+        "answer_digit": 4,
+        "operand_digits": [
+          8,
+          3
+        ],
+        "column_sum": 11,
+        "split": "sub_random"
+      },
+      {
+        "problem": "817921-249960=0567961",
+        "op": "sub",
+        "answer_pos": 4,
+        "answer_digit": 9,
+        "operand_digits": [
+          9,
+          9
+        ],
+        "column_sum": 18,
+        "split": "sub_B4"
+      }
+    ]
+  },
+  {
+    "code": 3,
+    "n_total": 2600,
+    "examples": [
+      {
+        "problem": "417080+531003=0948083",
+        "op": "add",
+        "answer_pos": 3,
+        "answer_digit": 8,
+        "operand_digits": [
+          7,
+          1
+        ],
+        "column_sum": 8,
+        "split": "add_S0"
+      },
+      {
+        "problem": "036067+787192=0823259",
+        "op": "add",
+        "answer_pos": 3,
+        "answer_digit": 3,
+        "operand_digits": [
+          6,
+          7
+        ],
+        "column_sum": 13,
+        "split": "add_S1"
+      },
+      {
+        "problem": "668637+338589=1007226",
+        "op": "add",
+        "answer_pos": 3,
+        "answer_digit": 7,
+        "operand_digits": [
+          8,
+          8
+        ],
+        "column_sum": 16,
+        "split": "add_S3"
+      },
+      {
+        "problem": "986840+013191=1000031",
+        "op": "add",
+        "answer_pos": 3,
+        "answer_digit": 0,
+        "operand_digits": [
+          6,
+          3
+        ],
+        "column_sum": 9,
+        "split": "add_S5"
+      },
+      {
+        "problem": "544863+487183=1032046",
+        "op": "add",
+        "answer_pos": 3,
+        "answer_digit": 2,
+        "operand_digits": [
+          4,
+          7
+        ],
+        "column_sum": 11,
+        "split": "add_random"
+      },
+      {
+        "problem": "351236+314327=0665563",
+        "op": "add",
+        "answer_pos": 3,
+        "answer_digit": 5,
+        "operand_digits": [
+          1,
+          4
+        ],
+        "column_sum": 5,
+        "split": "add_C1"
+      },
+      {
+        "problem": "458010+546320=1004330",
+        "op": "add",
+        "answer_pos": 3,
+        "answer_digit": 4,
+        "operand_digits": [
+          8,
+          6
+        ],
+        "column_sum": 14,
+        "split": "add_C3"
+      },
+      {
+        "problem": "662597+007946=0670543",
+        "op": "add",
+        "answer_pos": 3,
+        "answer_digit": 0,
+        "operand_digits": [
+          2,
+          7
+        ],
+        "column_sum": 9,
+        "split": "add_C4"
+      },
+      {
+        "problem": "669395+630865=1300260",
+        "op": "add",
+        "answer_pos": 3,
+        "answer_digit": 0,
+        "operand_digits": [
+          9,
+          0
+        ],
+        "column_sum": 9,
+        "split": "add_C6"
+      },
+      {
+        "problem": "450786-409777=0041009",
+        "op": "sub",
+        "answer_pos": 3,
+        "answer_digit": 1,
+        "operand_digits": [
+          0,
+          9
+        ],
+        "column_sum": 9,
+        "split": "sub_M1"
+      },
+      {
+        "problem": "404560-106567=0297993",
+        "op": "sub",
+        "answer_pos": 3,
+        "answer_digit": 7,
+        "operand_digits": [
+          4,
+          6
+        ],
+        "column_sum": 10,
+        "split": "sub_M3"
+      },
+      {
+        "problem": "782352-282353=0499999",
+        "op": "sub",
+        "answer_pos": 3,
+        "answer_digit": 9,
+        "operand_digits": [
+          2,
+          2
+        ],
+        "column_sum": 4,
+        "split": "sub_M5"
+      },
+      {
+        "problem": "799091-605619=0193472",
+        "op": "sub",
+        "answer_pos": 3,
+        "answer_digit": 3,
+        "operand_digits": [
+          9,
+          5
+        ],
+        "column_sum": 14,
+        "split": "sub_random"
+      },
+      {
+        "problem": "831955-737964=0093991",
+        "op": "sub",
+        "answer_pos": 3,
+        "answer_digit": 3,
+        "operand_digits": [
+          1,
+          7
+        ],
+        "column_sum": 8,
+        "split": "sub_B4"
+      }
+    ]
+  },
+  {
+    "code": 2,
+    "n_total": 2600,
+    "examples": [
+      {
+        "problem": "417080+531003=0948083",
+        "op": "add",
+        "answer_pos": 5,
+        "answer_digit": 8,
+        "operand_digits": [
+          8,
+          0
+        ],
+        "column_sum": 8,
+        "split": "add_S0"
+      },
+      {
+        "problem": "036067+787192=0823259",
+        "op": "add",
+        "answer_pos": 5,
+        "answer_digit": 5,
+        "operand_digits": [
+          6,
+          9
+        ],
+        "column_sum": 15,
+        "split": "add_S1"
+      },
+      {
+        "problem": "668637+338589=1007226",
+        "op": "add",
+        "answer_pos": 5,
+        "answer_digit": 2,
+        "operand_digits": [
+          3,
+          8
+        ],
+        "column_sum": 11,
+        "split": "add_S3"
+      },
+      {
+        "problem": "986840+013191=1000031",
+        "op": "add",
+        "answer_pos": 5,
+        "answer_digit": 3,
+        "operand_digits": [
+          4,
+          9
+        ],
+        "column_sum": 13,
+        "split": "add_S5"
+      },
+      {
+        "problem": "544863+487183=1032046",
+        "op": "add",
+        "answer_pos": 5,
+        "answer_digit": 4,
+        "operand_digits": [
+          6,
+          8
+        ],
+        "column_sum": 14,
+        "split": "add_random"
+      },
+      {
+        "problem": "351236+314327=0665563",
+        "op": "add",
+        "answer_pos": 5,
+        "answer_digit": 6,
+        "operand_digits": [
+          3,
+          2
+        ],
+        "column_sum": 5,
+        "split": "add_C1"
+      },
+      {
+        "problem": "458010+546320=1004330",
+        "op": "add",
+        "answer_pos": 5,
+        "answer_digit": 3,
+        "operand_digits": [
+          1,
+          2
+        ],
+        "column_sum": 3,
+        "split": "add_C3"
+      },
+      {
+        "problem": "662597+007946=0670543",
+        "op": "add",
+        "answer_pos": 5,
+        "answer_digit": 4,
+        "operand_digits": [
+          9,
+          4
+        ],
+        "column_sum": 13,
+        "split": "add_C4"
+      },
+      {
+        "problem": "669395+630865=1300260",
+        "op": "add",
+        "answer_pos": 5,
+        "answer_digit": 6,
+        "operand_digits": [
+          9,
+          6
+        ],
+        "column_sum": 15,
+        "split": "add_C6"
+      },
+      {
+        "problem": "450786-409777=0041009",
+        "op": "sub",
+        "answer_pos": 5,
+        "answer_digit": 0,
+        "operand_digits": [
+          8,
+          7
+        ],
+        "column_sum": 15,
+        "split": "sub_M1"
+      },
+      {
+        "problem": "404560-106567=0297993",
+        "op": "sub",
+        "answer_pos": 5,
+        "answer_digit": 9,
+        "operand_digits": [
+          6,
+          6
+        ],
+        "column_sum": 12,
+        "split": "sub_M3"
+      },
+      {
+        "problem": "782352-282353=0499999",
+        "op": "sub",
+        "answer_pos": 5,
+        "answer_digit": 9,
+        "operand_digits": [
+          5,
+          5
+        ],
+        "column_sum": 10,
+        "split": "sub_M5"
+      },
+      {
+        "problem": "799091-605619=0193472",
+        "op": "sub",
+        "answer_pos": 5,
+        "answer_digit": 7,
+        "operand_digits": [
+          9,
+          1
+        ],
+        "column_sum": 10,
+        "split": "sub_random"
+      },
+      {
+        "problem": "831955-737964=0093991",
+        "op": "sub",
+        "answer_pos": 5,
+        "answer_digit": 9,
+        "operand_digits": [
+          5,
+          6
+        ],
+        "column_sum": 11,
+        "split": "sub_B4"
+      }
+    ]
+  },
+  {
+    "code": 14,
+    "n_total": 180,
+    "examples": [
+      {
+        "problem": "055830+344144=0399974",
+        "op": "add",
+        "answer_pos": 4,
+        "answer_digit": 9,
+        "operand_digits": [
+          8,
+          1
+        ],
+        "column_sum": 9,
+        "split": "add_S0"
+      },
+      {
+        "problem": "008140+007504=0015644",
+        "op": "add",
+        "answer_pos": 4,
+        "answer_digit": 6,
+        "operand_digits": [
+          1,
+          5
+        ],
+        "column_sum": 6,
+        "split": "add_C1"
+      },
+      {
+        "problem": "145161+018894=0164055",
+        "op": "add",
+        "answer_pos": 4,
+        "answer_digit": 0,
+        "operand_digits": [
+          1,
+          8
+        ],
+        "column_sum": 9,
+        "split": "add_C3"
+      },
+      {
+        "problem": "776138-051112=0725026",
+        "op": "sub",
+        "answer_pos": 4,
+        "answer_digit": 0,
+        "operand_digits": [
+          1,
+          1
+        ],
+        "column_sum": 2,
+        "split": "sub_M0"
+      },
+      {
+        "problem": "275326-261205=0014121",
+        "op": "sub",
+        "answer_pos": 4,
+        "answer_digit": 1,
+        "operand_digits": [
+          3,
+          2
+        ],
+        "column_sum": 5,
+        "split": "sub_M0"
+      },
+      {
+        "problem": "931434-398388=0533046",
+        "op": "sub",
+        "answer_pos": 4,
+        "answer_digit": 0,
+        "operand_digits": [
+          4,
+          3
+        ],
+        "column_sum": 7,
+        "split": "sub_M1"
+      },
+      {
+        "problem": "356941-352966=0003975",
+        "op": "sub",
+        "answer_pos": 4,
+        "answer_digit": 9,
+        "operand_digits": [
+          9,
+          9
+        ],
+        "column_sum": 18,
+        "split": "sub_M2"
+      },
+      {
+        "problem": "393920-386827=0007093",
+        "op": "sub",
+        "answer_pos": 4,
+        "answer_digit": 0,
+        "operand_digits": [
+          9,
+          8
+        ],
+        "column_sum": 17,
+        "split": "sub_M2"
+      },
+      {
+        "problem": "482282-468288=0013994",
+        "op": "sub",
+        "answer_pos": 4,
+        "answer_digit": 9,
+        "operand_digits": [
+          2,
+          2
+        ],
+        "column_sum": 4,
+        "split": "sub_M3"
+      },
+      {
+        "problem": "410824-000825=0409999",
+        "op": "sub",
+        "answer_pos": 4,
+        "answer_digit": 9,
+        "operand_digits": [
+          8,
+          8
+        ],
+        "column_sum": 16,
+        "split": "sub_M4"
+      },
+      {
+        "problem": "708691-108697=0599994",
+        "op": "sub",
+        "answer_pos": 4,
+        "answer_digit": 9,
+        "operand_digits": [
+          6,
+          6
+        ],
+        "column_sum": 12,
+        "split": "sub_M5"
+      },
+      {
+        "problem": "548402-518338=0030064",
+        "op": "sub",
+        "answer_pos": 4,
+        "answer_digit": 0,
+        "operand_digits": [
+          4,
+          3
+        ],
+        "column_sum": 7,
+        "split": "sub_random"
+      },
+      {
+        "problem": "221968-101889=0120079",
+        "op": "sub",
+        "answer_pos": 4,
+        "answer_digit": 0,
+        "operand_digits": [
+          9,
+          8
+        ],
+        "column_sum": 17,
+        "split": "sub_random"
+      },
+      {
+        "problem": "650484-308386=0342098",
+        "op": "sub",
+        "answer_pos": 4,
+        "answer_digit": 0,
+        "operand_digits": [
+          4,
+          3
+        ],
+        "column_sum": 7,
+        "split": "sub_random"
+      }
+    ]
+  },
+  {
+    "code": 12,
+    "n_total": 65,
+    "examples": [
+      {
+        "problem": "751451+834792=1586243",
+        "op": "add",
+        "answer_pos": 1,
+        "answer_digit": 5,
+        "operand_digits": [
+          7,
+          8
+        ],
+        "column_sum": 15,
+        "split": "add_S1"
+      },
+      {
+        "problem": "958621+853111=1811732",
+        "op": "add",
+        "answer_pos": 1,
+        "answer_digit": 8,
+        "operand_digits": [
+          9,
+          8
+        ],
+        "column_sum": 17,
+        "split": "add_S1"
+      },
+      {
+        "problem": "980962+821060=1802022",
+        "op": "add",
+        "answer_pos": 1,
+        "answer_digit": 8,
+        "operand_digits": [
+          9,
+          8
+        ],
+        "column_sum": 17,
+        "split": "add_S2"
+      },
+      {
+        "problem": "828168+960866=1789034",
+        "op": "add",
+        "answer_pos": 1,
+        "answer_digit": 7,
+        "operand_digits": [
+          8,
+          9
+        ],
+        "column_sum": 17,
+        "split": "add_S2"
+      },
+      {
+        "problem": "968527+681492=1650019",
+        "op": "add",
+        "answer_pos": 1,
+        "answer_digit": 6,
+        "operand_digits": [
+          9,
+          6
+        ],
+        "column_sum": 15,
+        "split": "add_S3"
+      },
+      {
+        "problem": "663918+906088=1570006",
+        "op": "add",
+        "answer_pos": 1,
+        "answer_digit": 5,
+        "operand_digits": [
+          6,
+          9
+        ],
+        "column_sum": 15,
+        "split": "add_S4"
+      },
+      {
+        "problem": "770253+836977=1607230",
+        "op": "add",
+        "answer_pos": 1,
+        "answer_digit": 6,
+        "operand_digits": [
+          7,
+          8
+        ],
+        "column_sum": 15,
+        "split": "add_random"
+      },
+      {
+        "problem": "767300+916461=1683761",
+        "op": "add",
+        "answer_pos": 1,
+        "answer_digit": 6,
+        "operand_digits": [
+          7,
+          9
+        ],
+        "column_sum": 16,
+        "split": "add_random"
+      },
+      {
+        "problem": "845247+994197=1839444",
+        "op": "add",
+        "answer_pos": 1,
+        "answer_digit": 8,
+        "operand_digits": [
+          8,
+          9
+        ],
+        "column_sum": 17,
+        "split": "add_random"
+      },
+      {
+        "problem": "904771+867308=1772079",
+        "op": "add",
+        "answer_pos": 1,
+        "answer_digit": 7,
+        "operand_digits": [
+          9,
+          8
+        ],
+        "column_sum": 17,
+        "split": "add_random"
+      },
+      {
+        "problem": "630021+920000=1550021",
+        "op": "add",
+        "answer_pos": 1,
+        "answer_digit": 5,
+        "operand_digits": [
+          6,
+          9
+        ],
+        "column_sum": 15,
+        "split": "add_C1"
+      },
+      {
+        "problem": "846001+884010=1730011",
+        "op": "add",
+        "answer_pos": 1,
+        "answer_digit": 7,
+        "operand_digits": [
+          8,
+          8
+        ],
+        "column_sum": 16,
+        "split": "add_C3"
+      },
+      {
+        "problem": "981501+859801=1841302",
+        "op": "add",
+        "answer_pos": 1,
+        "answer_digit": 8,
+        "operand_digits": [
+          9,
+          8
+        ],
+        "column_sum": 17,
+        "split": "add_C4"
+      },
+      {
+        "problem": "707930+892401=1600331",
+        "op": "add",
+        "answer_pos": 1,
+        "answer_digit": 6,
+        "operand_digits": [
+          7,
+          8
+        ],
+        "column_sum": 15,
+        "split": "add_C4"
+      }
+    ]
+  },
+  {
+    "code": 19,
+    "n_total": 32,
+    "examples": [
+      {
+        "problem": "000304+010900=0011204",
+        "op": "add",
+        "answer_pos": 4,
+        "answer_digit": 2,
+        "operand_digits": [
+          3,
+          9
+        ],
+        "column_sum": 12,
+        "split": "add_C1"
+      },
+      {
+        "problem": "468990-432080=0036910",
+        "op": "sub",
+        "answer_pos": 4,
+        "answer_digit": 9,
+        "operand_digits": [
+          9,
+          0
+        ],
+        "column_sum": 9,
+        "split": "sub_M0"
+      },
+      {
+        "problem": "402372-339445=0062927",
+        "op": "sub",
+        "answer_pos": 4,
+        "answer_digit": 9,
+        "operand_digits": [
+          3,
+          4
+        ],
+        "column_sum": 7,
+        "split": "sub_M1"
+      },
+      {
+        "problem": "012409-010431=0001978",
+        "op": "sub",
+        "answer_pos": 4,
+        "answer_digit": 9,
+        "operand_digits": [
+          4,
+          4
+        ],
+        "column_sum": 8,
+        "split": "sub_M2"
+      },
+      {
+        "problem": "786218-753268=0032950",
+        "op": "sub",
+        "answer_pos": 4,
+        "answer_digit": 9,
+        "operand_digits": [
+          2,
+          2
+        ],
+        "column_sum": 4,
+        "split": "sub_M2"
+      },
+      {
+        "problem": "494852-465864=0028988",
+        "op": "sub",
+        "answer_pos": 4,
+        "answer_digit": 9,
+        "operand_digits": [
+          8,
+          8
+        ],
+        "column_sum": 16,
+        "split": "sub_M2"
+      },
+      {
+        "problem": "768574-702586=0065988",
+        "op": "sub",
+        "answer_pos": 4,
+        "answer_digit": 9,
+        "operand_digits": [
+          5,
+          5
+        ],
+        "column_sum": 10,
+        "split": "sub_M2"
+      },
+      {
+        "problem": "291704-273712=0017992",
+        "op": "sub",
+        "answer_pos": 4,
+        "answer_digit": 9,
+        "operand_digits": [
+          7,
+          7
+        ],
+        "column_sum": 14,
+        "split": "sub_M2"
+      },
+      {
+        "problem": "361307-327309=0033998",
+        "op": "sub",
+        "answer_pos": 4,
+        "answer_digit": 9,
+        "operand_digits": [
+          3,
+          3
+        ],
+        "column_sum": 6,
+        "split": "sub_M3"
+      },
+      {
+        "problem": "058654-018697=0039957",
+        "op": "sub",
+        "answer_pos": 4,
+        "answer_digit": 9,
+        "operand_digits": [
+          6,
+          6
+        ],
+        "column_sum": 12,
+        "split": "sub_M3"
+      },
+      {
+        "problem": "079756-009776=0069980",
+        "op": "sub",
+        "answer_pos": 4,
+        "answer_digit": 9,
+        "operand_digits": [
+          7,
+          7
+        ],
+        "column_sum": 14,
+        "split": "sub_M3"
+      },
+      {
+        "problem": "378208-343209=0034999",
+        "op": "sub",
+        "answer_pos": 4,
+        "answer_digit": 9,
+        "operand_digits": [
+          2,
+          2
+        ],
+        "column_sum": 4,
+        "split": "sub_M3"
+      },
+      {
+        "problem": "430008-330010=0099998",
+        "op": "sub",
+        "answer_pos": 4,
+        "answer_digit": 9,
+        "operand_digits": [
+          0,
+          0
+        ],
+        "column_sum": 0,
+        "split": "sub_M4"
+      },
+      {
+        "problem": "141421-044440=0096981",
+        "op": "sub",
+        "answer_pos": 4,
+        "answer_digit": 9,
+        "operand_digits": [
+          4,
+          4
+        ],
+        "column_sum": 8,
+        "split": "sub_B4"
+      }
+    ]
+  }
+]

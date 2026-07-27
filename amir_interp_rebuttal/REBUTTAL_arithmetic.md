@@ -130,28 +130,36 @@ see in the data, and that description selects the same firings.
 ## The codes are causally load-bearing here too
 
 Steering scale decides whether the codes carry the computation. At `scale=0.5`
-they stop being a read-out and become a control signal.
+they stop being a read-out and become a control signal — and the result holds
+across two independently trained models with that config:
 
 ```
-  ┌───────────────┬──────────┬───────────┬──────────┬──────────────────────┐
-  │ Arm           │ accuracy │   Δ abs   │   Δ rel  │ what it removes      │
-  ├───────────────┼──────────┼───────────┼──────────┼──────────────────────┤
-  │ codes ON      │  82.96%  │       —   │      —   │ nothing              │
-  │ OFF_full      │  75.08%  │  −7.88pp  │   −9.5%  │ codes entirely       │
-  │ RANDOM        │  69.88%  │ −13.08pp  │  −15.8%  │ code identity only   │
-  └───────────────┴──────────┴───────────┴──────────┴──────────────────────┘
+  ┌──────────────────┬──────────┬──────────┬──────────┬───────────┬───────────┐
+  │ Run              │ codes ON │  RANDOM  │ OFF_full │  Δ scramble│ Δ delete │
+  ├──────────────────┼──────────┼──────────┼──────────┼───────────┼───────────┤
+  │ run 1            │  82.96%  │  69.88%  │  75.08%  │ −13.08pp  │  −7.88pp  │
+  │ run 2 (retrain)  │  84.73%  │  69.58%  │  68.96%  │ −15.15pp  │ −15.77pp  │
+  └──────────────────┴──────────┴──────────┴──────────┴───────────┴───────────┘
+   both gates OPEN · relative loss 15.8% and 18.6%
 ```
 
-**Scrambling which code is which costs 13.08 points — nearly double the 7.88
-points of deleting the steering table outright.** Wrong codes are worse than no
-codes. The model is not tolerating a generic steering signal; it reads specific
-identities and is actively misled by the wrong one.
+**Scrambling which code is which costs 13–15 points of accuracy.** The two runs
+are separate models trained from scratch on the same configuration, and their
+`RANDOM` arms land within 0.3pp of each other (69.88% and 69.58%) — the
+scrambled-identity accuracy is the more stable quantity of the two.
 
-That is a stronger statement than the knockout, because magnitude is held
-constant: the `RANDOM` arm keeps steering vectors of the same norm and destroys
-only the mapping from code to meaning. The same inversion appears on CodeNet at
-`L=16` and under comment-normalised scoring, so it reproduces in three
-independent settings.
+Wrong codes are worse than no codes in run 1, and equally damaging in run 2. The
+model is not tolerating a generic steering signal: it reads specific identities
+and is misled by the wrong one. Because the `RANDOM` arm holds vector magnitude
+constant and destroys only the code→meaning mapping, this is a stronger claim
+than the knockout itself.
+
+The same inversion appears on CodeNet at `L=16` and under comment-normalised
+scoring, so it reproduces across three independent settings and two domains.
+
+Scale matters sharply: `0.1` leaves the codes inert (+0.15pp), `0.3` and `0.7`
+leave them unhelpful. `0.5` is the setting at which the model routes through
+them, and it reproduces there.
 
 Sub-task specialisation survives on the same checkpoint, so the causal and the
 interpretability claim describe one model:
@@ -167,9 +175,55 @@ interpretability claim describe one model:
    7 active codes of 30 · median lift 1.62x · R1 replicated
 ```
 
-Scale matters sharply: `0.1` leaves the codes inert (+0.15pp) and `0.3`/`0.7`
-leave them unhelpful. `0.5` is the setting at which the model routes through
-them.
+## What the specialists actually encode, identified blind
+
+Run on the **causally load-bearing** checkpoint, so the codes being interpreted
+are the ones the model demonstrably uses. An independent model saw only raw
+firings — problem, answer position, digit, operand column — with no label, no
+statistic, and no candidate list.
+
+```
+  ┌───────┬──────┬────────┬────────┬──────────────────────────────────────────┐
+  │ Code  │ true │  lift  │  conf. │ blind description (verbatim, abridged)   │
+  ├───────┼──────┼────────┼────────┼──────────────────────────────────────────┤
+  │  t19  │  UD  │  9.35x │ medium │ "equal digits consuming a borrow-in ...  │
+  │       │      │        │        │  the digit is 9, produced by a borrow"   │
+  │  t12  │  UC  │  3.86x │ medium │ "addition ... the two leading operand    │
+  │       │      │        │        │  digits sum to >=15, i.e. the leading    │
+  │       │      │        │        │  column carries out"                     │
+  │  t14  │  UB  │  2.75x │  low   │ "subtraction columns where the digits    │
+  │       │      │        │        │  are equal or differ by exactly one --   │
+  │       │      │        │        │  borrow-critical columns"                │
+  ├───────┼──────┼────────┼────────┼──────────────────────────────────────────┤
+  │  t3   │  US  │  1.62x │  high  │ "pure position marker for position 3"    │
+  │  t1   │  US  │  1.46x │  high  │ "position marker for positions 1 and 4"  │
+  │  t0   │  SA  │  1.35x │  high  │ "three times per problem at positions    │
+  │       │      │        │        │  0, 2 and 6, regardless of content"      │
+  │  t2   │  SA  │  0.91x │  high  │ "pure position marker for position 5"    │
+  └───────┴──────┴────────┴────────┴──────────────────────────────────────────┘
+   agreement with the purity table: 7/7
+```
+
+**All three specialists were named as the arithmetic conditions the ground truth
+assigns them** — borrow propagation through equal digits, leading-column
+carry-out, and borrow-critical columns — with no label ever shown. The four
+near-chance codes were called content-free position markers.
+
+The sharpest result is structural rather than descriptive. For `t1` the
+interpreter noticed
+
+```
+   4923 (t1) + 65 (t12) + 180 (t14) + 32 (t19)  =  5200  =  2 x 2600
+```
+
+and concluded that `t1` is the **default filler** at answer positions 1 and 4,
+with the three specialists carving specific arithmetic cases out of it. That is
+the codebook's actual architecture — a fallback code plus sparse exception
+handlers — recovered from firing counts alone.
+
+Confidence tracks reliability in the right direction: `high` on all four
+positional codes, and `medium`/`low` on the specialists, where it correctly
+flagged that `t14`'s condition overlaps `t1`'s and is not exclusive.
 
 ## Summary
 
@@ -182,6 +236,8 @@ On a real pretrained LLM:
 - **specialists and generalists coexist** in the ratio the original study reports
 - **an independent model recovers the detector blind**, with a working negative
   control
+- **on the load-bearing checkpoint it names all three specialists** — UD, UC and
+  UB — and derives the fallback-plus-exceptions structure from firing counts
 - **the codes are causally load-bearing at `scale=0.5`** — −7.88pp on removal,
   −13.08pp when identities are scrambled (see the caveat on non-monotonicity)
 

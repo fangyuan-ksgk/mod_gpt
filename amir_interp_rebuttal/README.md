@@ -20,11 +20,11 @@ Mapped onto the original case study's finding numbers:
 
 | # | Paper finding | Status | Evidence |
 |---|---|---|---|
-| **#2** | codes causally necessary | **replicated, both domains** | CodeNet −39.3% rel (RANDOM carries 6.37 of 6.87pp); arithmetic **−13.08pp / −15.8%** when identities are scrambled at `scale=0.5` — wrong codes worse than none |
+| **#2** | codes causally necessary | **replicated, both domains** | CodeNet −39.3% rel (RANDOM carries 6.37 of 6.87pp); arithmetic **−13 to −15pp** when identities are scrambled, **replicated across two independent retrains** at `scale=0.5` |
 | **#3** | sub-task-specialised routing | **replicated** | arith `t6` 78.3%/6.21×; CodeNet `t5`,`t3`,`t6` at 1.88/1.88/1.80× position-matched |
 | **#5** | tri-state carry classifier | **replicated** (addition half) | `t6` marks sum-9, 11/14, p<1e-4, 5.04× leave-one-out |
 | **#6** | specialists + generalists coexist | **replicated, both domains** | arithmetic 3 specialists / 14.3% of traffic; CodeNet 5 / 13.7% — same ~14/86 split on different label sets |
-| **#7** | auto-interp matches labels | **replicated, both domains** | arithmetic 7/7; CodeNet 10/11 — and blind it rejected the codebook's 2nd-highest global lift (4.40×) as a position artefact |
+| **#7** | auto-interp matches labels | **replicated, both domains** | CodeNet 10/11 (rejected a 4.40× position artefact); arithmetic **7/7 on the load-bearing checkpoint** — named all 3 specialists (UD/UC/UB) and derived the fallback-plus-exceptions structure from firing counts |
 
 ## Scoring rules
 
