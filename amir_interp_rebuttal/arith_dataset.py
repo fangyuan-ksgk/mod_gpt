@@ -148,10 +148,15 @@ class ArithmeticDataset(Dataset):
                                            self.hard, self.aug_prob)
             self.split_of = [f"{e.op}_{e.complexity}" for e in self.examples]
 
-    # Sub-tasks that require a carry/borrow to propagate ACROSS columns. These
-    # are the ones a per-digit code can encode non-trivially; SA/SC/MD/MB are
-    # decidable from the column alone.
+    # Sub-tasks requiring a carry/borrow to propagate ACROSS columns -- the ones
+    # a per-digit code can encode non-trivially. SA/SC/MD/MB are decidable from
+    # the column alone and carry nothing worth routing on.
     HARD_LABELS = {"US", "UC", "SS", "UB", "UD", "ME"}
+    # The strict target: multi-column CASCADES (US = carry through a sum-9 run,
+    # UD = borrow propagating through equal digits). Enriching on HARD_LABELS
+    # over-produces SS, which is only the cascade *seed*; requiring US/UD forces
+    # the chain itself. Set ARITH_FOCUS=cascade to use these instead.
+    CASCADE_LABELS = {"US", "UD"}
 
     @staticmethod
     def _generate(size, seed, enrich, n_digits, hard=0, aug_prob=0.4
@@ -159,7 +164,10 @@ class ArithmeticDataset(Dataset):
         rng_state = random.getstate()
         random.seed(seed)
         out: List[ArithmeticExample] = []
-        HL = ArithmeticDataset.HARD_LABELS
+        import os as _os
+        HL = (ArithmeticDataset.CASCADE_LABELS
+              if _os.environ.get("ARITH_FOCUS") == "cascade"
+              else ArithmeticDataset.HARD_LABELS)
         tries = 0
         while len(out) < size:
             tries += 1
