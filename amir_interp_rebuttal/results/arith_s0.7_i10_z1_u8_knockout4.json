@@ -1,0 +1,10 @@
+{
+  "scale": 0.7,
+  "L": 1,
+  "codes_ON": 0.8238461538461539,
+  "codes_RANDOM": 0.8465384615384616,
+  "codes_OFF_full": 0.905,
+  "delta_pp": -8.115384615384613,
+  "delta_rel_pct": -9.850606909430436,
+  "gate_open": false
+}

@@ -127,52 +127,6 @@ column, equivalently a 7th digit appearing* — that picks out the ground-truth
 textbook label "carry cascade through a sum-9 run": it described what it could
 see in the data, and that description selects the same firings.
 
-## The codes are causally load-bearing here too
-
-Steering scale turns out to be the variable that decides whether the codes carry
-the computation. Trained identically except for that one knob, the same task
-gives a read-out at `scale=0.1` and a control signal at `scale=0.5`:
-
-```
-  ┌──────────────┬──────────┬──────────┬──────────┬──────────────────┬────────┐
-  │ scale        │ codes ON │  RANDOM  │ OFF_full │ knockout         │  gate  │
-  ├──────────────┼──────────┼──────────┼──────────┼──────────────────┼────────┤
-  │ 0.1          │  86.35%  │      —   │  86.19%  │ +0.15pp / +0.2%  │ closed │
-  │ 0.5          │  82.96%  │  69.88%  │  75.08%  │ −7.88pp / −9.5%  │  OPEN  │
-  │ 1.0          │  84.23%  │      —   │  86.27%  │ −2.04pp / −2.4%  │ closed │
-  └──────────────┴──────────┴──────────┴──────────┴──────────────────┴────────┘
-```
-
-**Removing the codes costs 7.88 points of accuracy.** The `RANDOM` arm is the
-stronger result: scrambling *which* code is which costs **13.08 points** —
-nearly double the cost of removing steering altogether. Wrong codes are worse
-than no codes, so the model is not merely tolerating a steering signal, it is
-reading specific identities and is actively misled by the wrong one.
-
-That inversion (`RANDOM` below `OFF_full`) reproduces in three independent
-settings: here, on CodeNet at `L=16`, and on the CodeNet checkpoint under a
-comment-normalised scoring rule.
-
-Sub-task specialisation survives on this checkpoint, so the causal and the
-interpretability claim describe the same model:
-
-```
-  ┌────────┬────────┬────────────┬──────────┬───────────┬────────┬────────┐
-  │  Code  │      n │ Sub-task   │   Purity │ Base rate │   Lift │  #Pos  │
-  ├────────┼────────┼────────────┼──────────┼───────────┼────────┼────────┤
-  │    t19 │     32 │ UD         │   78.1%  │     8.4%  │  9.35x │    1   │
-  │    t12 │     65 │ UC         │   63.1%  │    16.3%  │  3.86x │    2   │
-  │    t14 │    180 │ UB         │   29.4%  │    10.7%  │  2.75x │    1   │
-  └────────┴────────┴────────────┴──────────┴───────────┴────────┴────────┘
-   7 active codes of 30 · median lift 1.62x · R1 replicated
-```
-
-`t19` reaches a higher lift than the `scale=0.1` checkpoint's best code (9.35×
-vs 6.21×) but rests on n=32 against that code's n=415, so it is the weaker
-row of evidence despite the larger number. The claim this table supports is
-that specialisation persists where the codes are load-bearing — not that
-9.35× supersedes 6.21×.
-
 ## Summary
 
 On a real pretrained LLM:
@@ -184,8 +138,6 @@ On a real pretrained LLM:
 - **specialists and generalists coexist** in the ratio the original study reports
 - **an independent model recovers the detector blind**, with a working negative
   control
-- **the codes are causally necessary** at `scale=0.5` — −7.88pp on removal, and
-  −13.08pp when code identities are scrambled
 
 Reproduce: `repro/r1_purity.sh`, `repro/r5_sum9.sh`, `repro/f6_polysemanticity.sh`,
 `repro/f7_autointerp.sh`.

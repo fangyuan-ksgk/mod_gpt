@@ -54,8 +54,13 @@ chk("codenet R2 attempts 82",       float(r2["n_attempted"]), 82.0, 0.001)
 chk("codenet R2 matched 0%",        float(r2["targeted_fix_rate"]), 0.0, 0.001)
 chk("codenet R2 random 0%",         float(r2["random_fix_rate"]), 0.0, 0.001)
 
-# Arithmetic causal result. scale=0.5 is where arithmetic codes become
-# load-bearing while specialisation survives on the same checkpoint.
+# Arithmetic scale sweep. NOTE: these assert what was MEASURED, not a claim in
+# any deliverable. scale=0.5 is the only rung whose knockout is positive, and
+# its OFF_full (75.08%) is an outlier against ~86-90% at every neighbouring
+# scale -- so the effect looks like a per-run artefact of that checkpoint
+# rather than a property of the method. The claim was retracted from
+# REBUTTAL_arithmetic.md; the numbers stay verified so the retraction itself
+# is checkable.
 ag = json.loads((R/"arith_s0.5_i10_z1_u8_knockout4.json").read_text())
 chk("arith gated ON 82.96%",       round(100*ag["codes_ON"], 2), 82.96)
 chk("arith gated OFF 75.08%",      round(100*ag["codes_OFF_full"], 2), 75.08)

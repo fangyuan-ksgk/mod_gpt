@@ -1,0 +1,233 @@
+{
+  "study": "arithmetic",
+  "ckpt": "ckpt/arith_s0.5_i10_z1_u8",
+  "n_eval": 2600,
+  "accuracy": 0.8296153846153846,
+  "n_wrong": 443,
+  "R1": {
+    "n_active_codes": 7,
+    "median_lift": 1.6219512195121952,
+    "rows": [
+      {
+        "code": 19,
+        "n": 32,
+        "top_subtask": "UD",
+        "purity": 0.78125,
+        "recall": 0.01644736842105263,
+        "f1": 0.03221649484536082,
+        "marginal": 0.08351648351648351,
+        "lift": 9.354440789473685,
+        "top_pos": 4,
+        "pos_concentration": 1.0,
+        "n_positions": 1
+      },
+      {
+        "code": 12,
+        "n": 65,
+        "top_subtask": "UC",
+        "purity": 0.6307692307692307,
+        "recall": 0.013790783720148,
+        "f1": 0.026991441737985518,
+        "marginal": 0.16335164835164837,
+        "lift": 3.861419441641439,
+        "top_pos": 1,
+        "pos_concentration": 0.9846153846153847,
+        "n_positions": 2
+      },
+      {
+        "code": 14,
+        "n": 180,
+        "top_subtask": "UB",
+        "purity": 0.29444444444444445,
+        "recall": 0.02717948717948718,
+        "f1": 0.04976525821596244,
+        "marginal": 0.10714285714285714,
+        "lift": 2.7481481481481485,
+        "top_pos": 4,
+        "pos_concentration": 1.0,
+        "n_positions": 1
+      },
+      {
+        "code": 3,
+        "n": 2600,
+        "top_subtask": "US",
+        "purity": 0.20461538461538462,
+        "recall": 0.23170731707317074,
+        "f1": 0.21732026143790853,
+        "marginal": 0.12615384615384614,
+        "lift": 1.6219512195121952,
+        "top_pos": 3,
+        "pos_concentration": 1.0,
+        "n_positions": 1
+      },
+      {
+        "code": 1,
+        "n": 4923,
+        "top_subtask": "US",
+        "purity": 0.18423725370708918,
+        "recall": 0.3950348432055749,
+        "f1": 0.2512813409059426,
+        "marginal": 0.12615384615384614,
+        "lift": 1.4604172549952192,
+        "top_pos": 1,
+        "pos_concentration": 0.5151330489538899,
+        "n_positions": 2
+      },
+      {
+        "code": 0,
+        "n": 7800,
+        "top_subtask": "SA",
+        "purity": 0.2414102564102564,
+        "recall": 0.5804562268803946,
+        "f1": 0.34099963781238685,
+        "marginal": 0.17824175824175825,
+        "lift": 1.3543978627209206,
+        "top_pos": 0,
+        "pos_concentration": 0.3333333333333333,
+        "n_positions": 3
+      },
+      {
+        "code": 2,
+        "n": 2600,
+        "top_subtask": "SA",
+        "purity": 0.16230769230769232,
+        "recall": 0.13008631319358815,
+        "f1": 0.14442162902121833,
+        "marginal": 0.17824175824175825,
+        "lift": 0.9106041923551171,
+        "top_pos": 5,
+        "pos_concentration": 1.0,
+        "n_positions": 1
+      }
+    ],
+    "marginal": {
+      "SA": 0.17824175824175825,
+      "SS": 0.018736263736263737,
+      "UC": 0.16335164835164837,
+      "SC": 0.09043956043956045,
+      "US": 0.12615384615384614,
+      "MD": 0.15368131868131868,
+      "ME": 0.016703296703296705,
+      "UB": 0.10714285714285714,
+      "MB": 0.06203296703296703,
+      "UD": 0.08351648351648351
+    },
+    "replicated": true
+  },
+  "R2": {
+    "measurable": true,
+    "R2b_targeted": {
+      "measurable": true,
+      "n_attempted": 813,
+      "targeted_fix_rate": 0.008610086100861008,
+      "random_fix_rate": 0.01107011070110701,
+      "lift": 0.7777777777777778,
+      "per_label": {
+        "SA": {
+          "fixed": 2,
+          "n": 188,
+          "rate": 0.010638297872340425
+        },
+        "UC": {
+          "fixed": 4,
+          "n": 248,
+          "rate": 0.016129032258064516
+        },
+        "US": {
+          "fixed": 1,
+          "n": 377,
+          "rate": 0.002652519893899204
+        }
+      },
+      "code_for_label": {
+        "UD": 19,
+        "UC": 12,
+        "UB": 14,
+        "SA": 0,
+        "US": 3
+      }
+    },
+    "R2a_best_of_C": {
+      "per_position": {
+        "0": {
+          "fix_rate_best_of_C": 0.013333333333333334,
+          "n_wrong": 150,
+          "n_fixed": 2,
+          "best_code": [
+            11,
+            2
+          ]
+        },
+        "1": {
+          "fix_rate_best_of_C": 0.0,
+          "n_wrong": 150,
+          "n_fixed": 0,
+          "best_code": null
+        },
+        "2": {
+          "fix_rate_best_of_C": 0.0,
+          "n_wrong": 150,
+          "n_fixed": 0,
+          "best_code": null
+        },
+        "3": {
+          "fix_rate_best_of_C": 0.0,
+          "n_wrong": 150,
+          "n_fixed": 0,
+          "best_code": null
+        },
+        "4": {
+          "fix_rate_best_of_C": 0.0,
+          "n_wrong": 150,
+          "n_fixed": 0,
+          "best_code": null
+        },
+        "5": {
+          "fix_rate_best_of_C": 0.0,
+          "n_wrong": 150,
+          "n_fixed": 0,
+          "best_code": null
+        },
+        "6": {
+          "fix_rate_best_of_C": 0.0,
+          "n_wrong": 150,
+          "n_fixed": 0,
+          "best_code": null
+        }
+      },
+      "control": {
+        "0": {
+          "code": 24,
+          "fix_rate": 0.0
+        },
+        "1": {
+          "code": 29,
+          "fix_rate": 0.0
+        },
+        "2": {
+          "code": 17,
+          "fix_rate": 0.0
+        },
+        "3": {
+          "code": 4,
+          "fix_rate": 0.0
+        },
+        "4": {
+          "code": 0,
+          "fix_rate": 0.0
+        },
+        "5": {
+          "code": 2,
+          "fix_rate": 0.0
+        },
+        "6": {
+          "code": 20,
+          "fix_rate": 0.0
+        }
+      },
+      "best_position": "0",
+      "note": "existence measure over C x positions attempts per example"
+    },
+    "replicated": false
+  }
+}
