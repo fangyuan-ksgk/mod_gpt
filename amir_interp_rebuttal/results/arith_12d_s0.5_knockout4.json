@@ -1,0 +1,11 @@
+{
+  "scale": 0.5,
+  "L": 1,
+  "max_new_tokens": 15,
+  "codes_ON": 0.7007692307692308,
+  "codes_RANDOM": 0.6996153846153846,
+  "codes_OFF_full": 0.6984615384615385,
+  "delta_pp": 0.2307692307692344,
+  "delta_rel_pct": 0.32930845225027955,
+  "gate_open": false
+}

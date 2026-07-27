@@ -35,8 +35,13 @@ from amir_interp_rebuttal.runner import batched_generate
 w,tok,a = load_local_steered('$CK', device='cuda')
 ds = ArithmeticDataset(split='test', tokenizer=tok, max_length=64)
 idxs=list(range(min(2600,len(ds)))); sc=float(a['scale']); out={'scale':sc,'L':int(a['L'])}
+# Answer length is n_digits+1. Hardcoding 8 truncates anything past 7 digits and
+# scores 0 in EVERY arm, which reads as 'codes do nothing' rather than as a bug.
+MNT = ds.answer_len + 2
+out['max_new_tokens'] = MNT
+print('answer_len', ds.answer_len, '-> max_new_tokens', MNT, flush=True)
 def run(tag, **kw):
-    r=batched_generate(w,tok,ds,'cuda',idxs,eval_batch_size=32,max_new_tokens=8,
+    r=batched_generate(w,tok,ds,'cuda',idxs,eval_batch_size=32,max_new_tokens=MNT,
                        record_codes=False,decode_scale=sc,**kw)
     out[tag]=sum(x['correct'] for x in r)/len(r); print(tag, round(out[tag],4), flush=True)
 sv=w.steering_emb.weight.data.clone()
@@ -53,6 +58,7 @@ print('DELTA_PP',round(out['delta_pp'],2),'DELTA_REL',round(out['delta_rel_pct']
 json.dump(out,open('$RES/${TAG}_knockout4.json','w'),indent=2)
 " 2>&1 | tee "$LOGS/${TAG}_knockout.log"
 
+MNT=$($PY -c "import json;print(json.load(open('$RES/${TAG}_knockout4.json'))['max_new_tokens'])")
 OPEN=$($PY -c "import json;print(json.load(open('$RES/${TAG}_knockout4.json'))['gate_open'])")
 if [ "$OPEN" != "True" ]; then
   echo "gate CLOSED for $TAG -- not running repair. Repair on a read-out channel"
@@ -63,10 +69,10 @@ fi
 
 echo "=== gate OPEN -- building error taxonomy on $TAG ==="
 $PY -u -m amir_interp_rebuttal.error_repair --study arithmetic --ckpt "$CK" \
-    --dump --eval_n 2600 --max_new_tokens 8 2>&1 | tee "$LOGS/${TAG}_taxonomy.log"
+    --dump --eval_n 2600 --max_new_tokens $MNT 2>&1 | tee "$LOGS/${TAG}_taxonomy.log"
 
 echo "=== targeted repair on single-digit carry errors ==="
 $PY -u -m amir_interp_rebuttal.error_repair --study arithmetic --ckpt "$CK" \
-    --repair --from_taxonomy --eval_n 2600 --max_new_tokens 8 \
+    --repair --from_taxonomy --eval_n 2600 --max_new_tokens $MNT \
     --error_class single_digit --mode targeted --max_examples 40 \
     2>&1 | tee "$LOGS/${TAG}_repair_single_digit.log"

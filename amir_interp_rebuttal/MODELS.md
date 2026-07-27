@@ -213,6 +213,41 @@ mechanism buys the first by destroying the second.
 baseline with the answer distribution intact. Rejection does the selecting;
 forcing is kept low enough not to dictate the operands.
 
+### Difficulty × scale: the grid, completed
+
+The escalation sweep varied difficulty at `scale=0.1` and the scale sweep varied
+scale at 6 digits, so each axis was tested at the other's dead value. Crossing
+them:
+
+```
+  ┌───────────┬──────────────────────┬──────────────────────────────────┐
+  │           │      scale 0.1       │            scale 0.5             │
+  ├───────────┼──────────────────────┼──────────────────────────────────┤
+  │  6-digit  │  +0.15pp   closed    │  −13 to −15pp  OPEN (2 retrains) │
+  │ 12-digit  │  +0.54pp   closed    │  +0.23pp       closed            │
+  │ 18-digit  │  +1.69pp   closed    │  not run                         │
+  └───────────┴──────────────────────┴──────────────────────────────────┘
+```
+
+**Difficulty is not the axis.** At 12 digits the model reaches 70.08% — far from
+saturated — and its codes remain inert at the scale that works for 6 digits
+(ON 70.08 / RANDOM 69.96 / OFF 69.85). The arithmetic causal effect is specific
+to 6-digit × `scale=0.5`, where it replicated across two independent retrains.
+
+A harness bug was found here and is worth recording: `gate_then_repair.sh`
+hardcoded `max_new_tokens=8`, which truncates any answer past 7 digits and
+returns **0.0% in every arm** — indistinguishable from "the codes do nothing".
+The script now derives generation length from `ds.answer_len`.
+
+### Cascade enrichment does not create difficulty
+
+`hard=2, aug=0.2` enriches carry cascades 4-5x over baseline while keeping the
+answer distribution intact — but the resulting model reaches **97.31%**, well
+above the 83% of unenriched data, and its gate is closed (+1.38pp). Selecting
+for cascades selects for structure the model exploits. Two settings tried
+(`aug=0.8` degenerate at 99.35%, `aug=0.2` merely easy at 97.31%); neither makes
+the task harder.
+
 ### `codenet_FROZEN` — freezing the backbone does not force causal load
 
 The idea: freeze all 596M model parameters and train only the 61K steering
