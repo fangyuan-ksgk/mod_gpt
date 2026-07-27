@@ -135,6 +135,52 @@ CHECKPOINTS = {
             "Single seed, one run per configuration.",
         ],
     ),
+    "arith_s0.5_i10_z1_u8": dict(
+        study="arithmetic",
+        task="6-digit addition and subtraction, `abcdef±ghijkl=mnopqrs`; one "
+             "steering code per answer digit",
+        train_size=100_000, digits=6, eval_n=2600,
+        env="ARITH_DIGITS=6 ARITH_SIZE=100000",
+        blurb="scale=0.5. The arithmetic checkpoint where the codes are "
+              "causally load-bearing AND specialisation survives.",
+        metrics_json=["arith_s0.5_i10_z1_u8_knockout4.json",
+                      "arith_gated_autointerp_rawfirings.json"],
+        deliverables=["REBUTTAL_arithmetic.md (causal result, specialist "
+                      "auto-interp)", "repro/verify_claims.sh"],
+        recommend="push", provisional=False,
+        reason="The arithmetic causal result. Steering scale, not difficulty, "
+               "is what makes the codes load-bearing, and this is the "
+               "checkpoint where that happens. Replicated by "
+               "arith_s0.5_REPLICATE.",
+        shows=[
+            "Codes are causally necessary: scrambling which code is which "
+            "costs 13.08pp (82.96% -> 69.88%), against 7.88pp for deleting the "
+            "steering table entirely. Wrong codes are worse than no codes.",
+            "Replicated: an independent retrain gives 84.73% / 69.58% / 68.96%, "
+            "-15.77pp, gate open. The two RANDOM arms agree to 0.3pp.",
+            "Specialisation survives on the same checkpoint: t19 -> UD 78.1% "
+            "(9.35x), t12 -> UC 63.1% (3.86x), t14 -> UB 29.4% (2.75x).",
+            "A blind interpreter, shown only raw firings, named all three "
+            "specialists as the arithmetic conditions ground truth assigns "
+            "them, and derived the codebook's fallback-plus-exceptions "
+            "structure from firing counts alone (4923+65+180+32 = 2x2600).",
+        ],
+        does_not_show=[
+            "The effect is scale-specific and non-monotonic: 0.1 leaves the "
+            "codes inert (+0.15pp) and 0.3/0.7/1.0 leave them unhelpful. Only "
+            "0.5 opens the gate, though it does so in both runs at that value.",
+            "t19's 9.35x rests on n=32 against the scale=0.1 checkpoint's "
+            "n=415 for its best code, so it is the thinner row of evidence "
+            "despite the larger lift.",
+            "Single-code repair does NOT work here either, on a checkpoint "
+            "where the gate is open: ~21 swept cells, pooled 48/289 vs 32/289 "
+            "for a matched-effort random control, p=0.07. Causal load and "
+            "interpretability are anti-correlated -- the generalists carry the "
+            "computation, the specialists do not.",
+            "Accuracy is slightly below the scale=0.1 checkpoint (82.96% vs "
+            "86.35%): making the codes load-bearing costs a little accuracy.",
+        ],
+    ),
     "arith_v9_paperhp": dict(
         study="arithmetic",
         task="6-digit addition and subtraction, `abcdef±ghijkl=mnopqrs`; one "

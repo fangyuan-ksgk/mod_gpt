@@ -31,7 +31,8 @@ local.
 │ Local checkpoint                 │ Study      │ Push? │ Role                         │
 ├──────────────────────────────────┼────────────┼───────┼──────────────────────────────┤
 │ ckpt/codenet_s0.5_i10_z1_L8_n4000│ codenet    │ YES   │ the causal result (gate open)│
-│ ckpt/arith_v9_paperhp            │ arithmetic │ YES   │ every arithmetic table       │
+│ ckpt/arith_s0.5_i10_z1_u8        │ arithmetic │ YES   │ arithmetic causal (gate open)│
+│ ckpt/arith_v9_paperhp            │ arithmetic │ YES   │ arithmetic R1 / #5 / #6 / #7 │
 ├──────────────────────────────────┼────────────┼───────┼──────────────────────────────┤
 │ ckpt/arith_18d_500_MAX           │ arithmetic │ hold  │ escalation row 4             │
 │ ckpt/arith_12d_10k               │ arithmetic │ hold  │ escalation row 2             │

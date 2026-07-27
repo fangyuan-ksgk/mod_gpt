@@ -131,7 +131,8 @@ see in the data, and that description selects the same firings.
 
 Steering scale decides whether the codes carry the computation. At `scale=0.5`
 they stop being a read-out and become a control signal — and the result holds
-across two independently trained models with that config:
+across two independently trained models with that config
+(`ckpt/arith_s0.5_i10_z1_u8` and `ckpt/arith_s0.5_REPLICATE`):
 
 ```
   ┌──────────────────┬──────────┬──────────┬──────────┬───────────┬───────────┐
@@ -177,8 +178,8 @@ interpretability claim describe one model:
 
 ## What the specialists actually encode, identified blind
 
-Run on the **causally load-bearing** checkpoint, so the codes being interpreted
-are the ones the model demonstrably uses. An independent model saw only raw
+Run on the **causally load-bearing** checkpoint (`ckpt/arith_s0.5_i10_z1_u8`),
+so the codes being interpreted are the ones the model demonstrably uses. An independent model saw only raw
 firings — problem, answer position, digit, operand column — with no label, no
 statistic, and no candidate list.
 
@@ -238,10 +239,13 @@ On a real pretrained LLM:
   control
 - **on the load-bearing checkpoint it names all three specialists** — UD, UC and
   UB — and derives the fallback-plus-exceptions structure from firing counts
-- **the codes are causally load-bearing at `scale=0.5`** — −7.88pp on removal,
-  −13.08pp when identities are scrambled (see the caveat on non-monotonicity)
+- **the codes are causally load-bearing at `scale=0.5`** — scrambling code
+  identities costs −13 to −15pp, replicated across two independent retrains
 
 Reproduce: `repro/r1_purity.sh`, `repro/r5_sum9.sh`, `repro/f6_polysemanticity.sh`,
+`repro/f7_autointerp.sh`, `repro/verify_claims.sh`. Causal and specialist results in
+`results/arith_s0.5_i10_z1_u8_knockout4.json`, `results/arith_s0.5_REPLICATE_knockout4.json`,
+`results/arith_gated_autointerp_rawfirings.json`.
 `repro/f7_autointerp.sh`.
 Raw results in `results/arithmetic_r1r2.json`,
 `results/arithmetic_autointerp_rawfirings.json`, `results/arith_firings.json`.

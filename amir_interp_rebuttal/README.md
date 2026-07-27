@@ -97,8 +97,9 @@ still under review; flip it public from the HF UI when that no longer matters).
 
 | Checkpoint | Carries |
 |---|---|
-| [`codenet_s0.5_i10_z1_L8_n4000`](https://huggingface.co/thoughtworks/dlr-rebuttal-interp/tree/main/codenet_s0.5_i10_z1_L8_n4000) | the causal result — knockout, per-code ablation, CodeNet R1 |
-| [`arith_v9_paperhp`](https://huggingface.co/thoughtworks/dlr-rebuttal-interp/tree/main/arith_v9_paperhp) | every arithmetic table — R1, Findings #5, #6, #7 |
+| [`codenet_s0.5_i10_z1_L8_n4000`](https://huggingface.co/thoughtworks/dlr-rebuttal-interp/tree/main/codenet_s0.5_i10_z1_L8_n4000) | CodeNet causal result, R1, blind auto-interp, Finding #6 |
+| [`arith_s0.5_i10_z1_u8`](https://huggingface.co/thoughtworks/dlr-rebuttal-interp/tree/main/arith_s0.5_i10_z1_u8) | arithmetic causal result + specialist auto-interp (the load-bearing checkpoint) |
+| [`arith_v9_paperhp`](https://huggingface.co/thoughtworks/dlr-rebuttal-interp/tree/main/arith_v9_paperhp) | arithmetic R1, Findings #5, #6, #7 |
 
 Each ships `final.pt` (optimizer state stripped, 1.19 GB — loads for inference,
 will not resume training), `history.json`, `steer_v9.pt`, and a model card
