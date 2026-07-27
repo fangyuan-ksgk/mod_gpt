@@ -157,7 +157,7 @@ def load_ground_truth(study):
     return {str(r["code"]): r for r in rows}
 
 
-def render_prompt(study, code, entry):
+def render_prompt(study, entry):
     """The whole prompt: raw firings, no statistics, no candidate list."""
     spec = STUDIES[study]
     lines = [
@@ -191,7 +191,7 @@ def build_prompts(study, top_n=None, min_firings=0):
                          f"min_firings={min_firings}")
     return [{"code": int(c), "n_total": e["n_total"],
              "n_examples": len(e["examples"]),
-             "prompt": render_prompt(study, c, e)} for c, e in ranked]
+             "prompt": render_prompt(study, e)} for c, e in ranked]
 
 
 def score(entries, gt):

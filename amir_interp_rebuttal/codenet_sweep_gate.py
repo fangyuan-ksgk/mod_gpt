@@ -151,8 +151,8 @@ def train(tag, scale, a_info, a_zipf, L, size):
 # Run out-of-process so each rung gets a clean CUDA context and a crash in one
 # knockout cannot take the sweep down with it.
 KNOCKOUT_SRC = r'''
-import json, sys, random
-from collections import Counter, defaultdict
+import json, sys
+from collections import Counter
 import torch
 from amir_interp_rebuttal.load_local import load_local_steered
 from amir_interp_rebuttal.codenet_dataset import CodeNetDataset
@@ -193,7 +193,10 @@ res["codes_OFF_decode"], _ = acc(decode_scale=0.0)
 # ── RANDOM: steering vectors still injected at full magnitude, identities
 #    destroyed, in BOTH phases. Separates "codes carry information" from
 #    "the model adapted to a vector of roughly this size".
-rng = random.Random(0)
+#    NOTE: the substitute identities come from torch's GLOBAL RNG, which this
+#    script never seeds. The reported RANDOM arms are therefore single draws,
+#    not reproducible ones. Seeding it now would change those published
+#    numbers, so it is recorded rather than "fixed".
 orig = w._ablate_patch_codes
 def rand_patch(codes, phase):
     return torch.randint(0, C, codes.shape, device=codes.device, dtype=codes.dtype)

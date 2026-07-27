@@ -195,7 +195,7 @@ def train(tag, digits, size, epochs, scale, a_info, a_zipf, tgt_util):
 
 
 KNOCKOUT_SRC = '''
-import json, os, sys
+import json, sys
 from amir_interp_rebuttal.load_local import load_local_steered
 from amir_interp_rebuttal.arith_dataset import ArithmeticDataset
 from amir_interp_rebuttal.runner import batched_generate
@@ -204,7 +204,6 @@ w, tok, a = load_local_steered(ckpt, device="cuda")
 ds = ArithmeticDataset(split="test", tokenizer=tok, max_length=96, n_digits=digits)
 idxs = list(range(len(ds)))
 from collections import Counter
-import torch
 
 # THREE ARMS, and the gate is decided by the third.
 #

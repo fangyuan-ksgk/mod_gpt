@@ -27,14 +27,6 @@ from collections import Counter
 from pathlib import Path
 
 
-def build_dataset(study, tok, size):
-    if study == "codenet":
-        from amir_interp_rebuttal.codenet_dataset import CodeNetDataset
-        return CodeNetDataset(split="test", tokenizer=tok, max_length=256, size=size)
-    from amir_interp_rebuttal.arith_dataset import ArithmeticDataset
-    return ArithmeticDataset(split="test", tokenizer=tok, size=size)
-
-
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--ckpt", required=True)
@@ -53,7 +45,7 @@ def main():
     p.add_argument("--out_dir", default="amir_interp_rebuttal/results")
     args = p.parse_args()
 
-    from amir_interp_rebuttal.load_local import load_local_steered
+    from amir_interp_rebuttal.load_local import build_dataset, load_local_steered
     from amir_interp_rebuttal.runner import batched_generate
 
     wrapper, tok, meta = load_local_steered(args.ckpt, device=args.device)

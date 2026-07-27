@@ -145,8 +145,7 @@ def main():
     rows, marginal = purity_report(counts, pos_counts, min_n=args.min_code_n)
 
     if rows:
-        print(format_purity_table(rows, marginal,
-                                  title=f"{args.study}: P(label | code)"))
+        print(format_purity_table(rows, title=f"{args.study}: P(label | code)"))
         # rows are lift-ranked, so rows[0] is the strongest specialist
         best = rows[0]
         best_pur = max(rows, key=lambda r: r["purity"])

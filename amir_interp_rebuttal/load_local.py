@@ -68,3 +68,23 @@ def load_local_steered(ckpt_dir, device=None, dtype=torch.bfloat16, verbose=True
               f"L={args['L']} scale={args['scale']} layers={args['inject_layers']}")
 
     return wrapper, tokenizer, args
+
+
+def build_dataset(study, tok, size):
+    """The study's held-out eval set, as the intervention drivers build it.
+
+    Shared by `per_code_ablation.py` and `error_repair.py`, which had identical
+    copies of this. Imports stay inside the function so that importing this
+    module does not drag in either dataset (`data/pt_dataset.py` relies on both
+    being importable lazily).
+
+    `size` is deliberately passed on the arithmetic branch even though
+    `ArithmeticDataset` ignores it for `split="test"` — that path loads the
+    frozen 2,600-example eval set. Callers pass `--eval_n 2600` to match, and
+    the argument is kept so the two branches stay symmetrical.
+    """
+    if study == "codenet":
+        from amir_interp_rebuttal.codenet_dataset import CodeNetDataset
+        return CodeNetDataset(split="test", tokenizer=tok, max_length=256, size=size)
+    from amir_interp_rebuttal.arith_dataset import ArithmeticDataset
+    return ArithmeticDataset(split="test", tokenizer=tok, size=size)

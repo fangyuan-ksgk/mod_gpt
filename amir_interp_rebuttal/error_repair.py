@@ -99,14 +99,6 @@ CLASS_ORDER = ["empty", "whitespace_only", "stopped_early", "ran_on", "reorderin
                "single_digit", "two_digit", "many_digit", "length_mismatch"]
 
 
-def build_dataset(study, tok, size):
-    if study == "codenet":
-        from amir_interp_rebuttal.codenet_dataset import CodeNetDataset
-        return CodeNetDataset(split="test", tokenizer=tok, max_length=256, size=size)
-    from amir_interp_rebuttal.arith_dataset import ArithmeticDataset
-    return ArithmeticDataset(split="test", tokenizer=tok, size=size)
-
-
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--ckpt", required=True)
@@ -170,7 +162,7 @@ def main():
     if not (args.dump or args.repair):
         raise SystemExit("pick --dump or --repair")
 
-    from amir_interp_rebuttal.load_local import load_local_steered
+    from amir_interp_rebuttal.load_local import build_dataset, load_local_steered
     from amir_interp_rebuttal.runner import batched_generate
 
     wrapper, tok, meta = load_local_steered(args.ckpt, device=args.device)
@@ -236,7 +228,10 @@ def main():
                 print(f"    gold: {_norm(r.get('gold'))[:90]!r}")
                 print(f"    pred: {_norm(r.get('pred'))[:90]!r}")
         payload = {
-            "ckpt": args.ckpt, "study": args.study, "n_eval": len(recs),
+            # len(idxs), not len(recs): `recs` is only bound on the branch that
+            # regenerates. With --dump --from_taxonomy this raised NameError.
+            # The two are equal — batched_generate returns one record per idx.
+            "ckpt": args.ckpt, "study": args.study, "n_eval": len(idxs),
             "accuracy": acc, "n_wrong": len(wrong),
             "counts": {k: counts.get(k, 0) for k in CLASS_ORDER if counts.get(k)},
             "errors": [{"ds_idx": r["ds_idx"], "error_class": r["error_class"],

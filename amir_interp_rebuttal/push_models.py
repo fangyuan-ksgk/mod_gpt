@@ -501,7 +501,11 @@ def load_metrics(spec: dict) -> dict:
         rows = []
 
         if "codes_ON" in d:
-            on, off = d["codes_ON"], d["codes_OFF"] if "codes_OFF" in d else None
+            # Two schemas in results/: the 2-arm arithmetic driver writes
+            # `codes_OFF`, every 4-arm file writes `codes_OFF_full`. Reading
+            # only the first dropped the knockout row from 17 of 18 cards.
+            on = d["codes_ON"]
+            off = d.get("codes_OFF", d.get("codes_OFF_full"))
             rows.append(("accuracy (codes ON)", f"{on:.4f}"))
             if off is not None:
                 rows.append(("accuracy (codes zeroed)", f"{off:.4f}"))
@@ -521,16 +525,12 @@ def load_metrics(spec: dict) -> dict:
                 rows.append(("median lift", f"{r1['median_lift']:.2f}x"))
             best = (r1.get("rows") or [None])[0]
             if best:
-                label = best.get("top_subtask") or best.get("top")
+                label = best["top_subtask"]
                 rows.append(("best code", f"t{best['code']} -> {label}, "
                              f"purity {100*best['purity']:.1f}%, base rate "
                              f"{100*best['marginal']:.1f}%, lift "
                              f"{best['lift']:.2f}x, n={best['n']}, "
                              f"{best.get('n_positions','?')} position(s)"))
-            r2 = d.get("R2") or {}
-            for k in ("matched", "random", "predictive", "existence"):
-                if k in r2:
-                    rows.append((f"R2 {k}", json.dumps(r2[k])[:120]))
 
         if "code_rows" in d:                      # position-confound audit
             # lift_glob is the number that gets quoted and the number that is

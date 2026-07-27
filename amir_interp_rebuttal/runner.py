@@ -17,9 +17,16 @@ def _pad_id(tokenizer):
     return tokenizer.pad_token_id if tokenizer.pad_token_id is not None else tokenizer.eos_token_id
 
 
-@torch.no_grad()
 def _clean_match(pred, gold):
     """Correctness ignoring two pure decoding artefacts.
+
+    KEEP. No committed caller passes `score_mode="clean"`, so a call-graph scan
+    reports this function and the `score_mode` branch below as dead. They are
+    not: `results/codenet_knockout4_cleanscore.json` is asserted by
+    `repro/verify_claims.sh` ("codenet clean-score rel 29.1%"), and this is the
+    only implementation of the scoring that produced it. Deleting it would
+    strand a reported number with no path back to source.
+
 
     Roughly 12% of CodeNet eval failures are not modelling errors: the model
     emits the right statement and then a trailing `# comment`, or the answer is

@@ -18,10 +18,6 @@ import random
 from collections import Counter, defaultdict
 from typing import Dict, List, Optional, Sequence
 
-ADD_LABELS = ["SA", "SC", "SS", "UC", "US"]
-SUB_LABELS = ["MD", "MB", "ME", "UB", "UD"]
-ALL_LABELS = ADD_LABELS + SUB_LABELS
-
 
 # ─────────────────────────────────────────────────────────────────────
 # Positional code forcing
@@ -184,7 +180,7 @@ def surgical_swap_sweep(
     positions = list(positions if positions is not None else range(answer_len))
     idxs = list(wrong_idxs)[:max_examples]
 
-    results = {"per_position": {}, "pairs": Counter(), "control": {}}
+    results = {"per_position": {}, "control": {}}
 
     for pos in positions:
         fixed_by_code = Counter()
@@ -200,7 +196,6 @@ def surgical_swap_sweep(
                 if ok:
                     fixed_by_code[code] += 1
                     any_fix.add(i)
-                    results["pairs"][(pos, code)] += 1
 
         fix_rate = len(any_fix) / len(idxs) if idxs else 0.0
 
@@ -324,7 +319,7 @@ def targeted_swap_sweep(
     }
 
 
-def format_purity_table(rows, marginal_rate, title="Code <-> subtask purity"):
+def format_purity_table(rows, title="Code <-> subtask purity"):
     """Box-drawing table."""
     hdr = ("┌────────┬────────┬──────────┬──────────┬──────────┬────────┬──────────┬────────┬──────────┬────────┐\n"
            "│  Code  │      n │ Top task │   Purity │   Recall │     F1 │ Marginal │   Lift │  Top pos │  #Pos  │\n"

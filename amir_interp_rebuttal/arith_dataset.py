@@ -45,11 +45,6 @@ EVAL_SET = Path(__file__).resolve().parent.parent / (
     "arithmetic/data/eval_sets/eval_add_sub_6d_N100_seed42.json"
 )
 
-ADD_LABELS = ["SA", "SC", "SS", "UC", "US"]
-SUB_LABELS = ["MD", "MB", "ME", "UB", "UD"]
-ALL_LABELS = ADD_LABELS + SUB_LABELS
-
-
 # ─────────────────────────────────────────────────────────────────────
 # Rendering
 # ─────────────────────────────────────────────────────────────────────
@@ -215,11 +210,6 @@ class ArithmeticDataset(Dataset):
     def labels_at(self, idx) -> List[str]:
         """Quirke subtask label per answer digit, MSB first."""
         return self.examples[idx].labels
-
-    def digit_sums(self, idx) -> List[int]:
-        """(x_n + y_n) per digit, MSB first — for the sum-9 / ST_n = U analysis."""
-        ex = self.examples[idx]
-        return [a + b for a, b in zip(ex.x_digits, ex.y_digits)]
 
 
 # ─────────────────────────────────────────────────────────────────────

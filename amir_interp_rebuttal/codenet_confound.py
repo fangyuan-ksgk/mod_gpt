@@ -62,7 +62,6 @@ def main():
 
     # Same alignment analyze.py uses for codenet: prefill (prompt) codes vs source
     # chunk labels, both indexed from token 0 of the source.
-    joint = Counter()          # (code, pos, label)
     code_pos = defaultdict(Counter)
     pos_code = defaultdict(Counter)
     pos_label = defaultdict(Counter)
@@ -75,7 +74,6 @@ def main():
             c, lab = int(codes[pos]), labels[pos]
             if c < 0:
                 continue
-            joint[(c, pos, lab)] += 1
             code_pos[c][pos] += 1
             pos_code[pos][c] += 1
             pos_label[pos][lab] += 1

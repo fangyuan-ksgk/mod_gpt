@@ -93,7 +93,7 @@ class CodeNetDataset(Dataset):
     Attributes used by the interp analysis:
         .sources[i]           raw source
         .char_labels[i]       per-character AST construct
-        .offsets[i]           token -> (char_start, char_end) from the fast tokenizer
+        .token_offsets(i)     token -> (char_start, char_end) from the fast tokenizer
         .chunk_labels(i, L)   dominant construct per L-token chunk
     """
 
@@ -227,7 +227,3 @@ class CodeNetDataset(Dataset):
             pick = (structural or votes).most_common(1)
             out.append(pick[0][0] if pick else "OTHER")
         return out
-
-    def label_at_chunk(self, idx, chunk_i: int, L: int) -> str:
-        labels = self.chunk_labels(idx, L)
-        return labels[chunk_i] if chunk_i < len(labels) else "OTHER"
