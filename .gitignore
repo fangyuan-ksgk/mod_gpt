@@ -18,3 +18,5 @@ ckpt/
 data_cache/
 paper/
 amir_interp_rebuttal/logs/
+.ipynb_checkpoints/
+__pycache__/
