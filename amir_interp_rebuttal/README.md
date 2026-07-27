@@ -106,5 +106,15 @@ will not resume training), `history.json`, `steer_v9.pt`, and a model card
 carrying the exact config, every metric with the results file it came from, and
 an explicit "what this model does NOT show" section.
 
-Full configs, the seven checkpoints that were *not* published, and why:
-[MODELS.md](MODELS.md).
+The repo also carries the **reproduction data**: all 62 result JSONs and the 13
+`repro/` scripts that render every table from them, plus a `REPRODUCTION.md`
+index. Nothing in the tables needs a GPU to re-derive —
+
+```bash
+bash repro/verify_claims.sh   # 242 assertions, every table cell against its source JSON
+bash repro/determinism.sh     # renders every table twice, fails on any drift
+bash repro/manifest.sh        # provenance: script -> JSON -> sha256 -> checkpoint
+```
+
+Full configs, the checkpoints that were *not* published, and why:
+[MODELS.md](MODELS.md). Data-audit findings: [DATA_AUDIT.md](DATA_AUDIT.md).
