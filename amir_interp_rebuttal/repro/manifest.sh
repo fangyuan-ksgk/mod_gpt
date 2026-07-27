@@ -17,15 +17,28 @@ R = sys.argv[1]
 commit = os.environ.get("GIT_COMMIT", "unknown")
 dirty = os.environ.get("GIT_DIRTY", "unknown")
 
-# table -> (script, [source json files], checkpoint)
+# Every table that appears in a deliverable, mapped to the checkpoint it was
+# measured on, the JSON it renders from, and the script that renders it. Nothing
+# else is listed: a row vanishing here means a claim vanished from the
+# deliverables too. The same mapping is mirrored into each published checkpoint
+# folder on HuggingFace as PROVENANCE.md, so a downloaded model is
+# self-describing.
+#
+# doc -> (table, script, [source json], checkpoint)
 TABLES = [
-    ("R1 purity",     "repro/r1_purity.sh",  ["arithmetic_r1r2.json"], "ckpt/arith_v9_paperhp"),
-    ("R3 position",   "repro/r3_position.sh", ["arithmetic_r1r2.json"], "ckpt/arith_v9_paperhp"),
-    ("R5 sum9/eq",    "repro/r5_sum9.sh",    ["arith_firings.json"],   "ckpt/arith_v9_paperhp"),
-    ("F7 autointerp", "repro/f7_autointerp.sh", ["arithmetic_autointerp_rawfirings.json"], "ckpt/arith_v9_paperhp"),
-    ("knockout",      "repro/knockout.sh",   ["arith_paperhp_knockout.json"], "ckpt/arith_v9_paperhp"),
-    ("knockout",      "repro/knockout.sh",   ["codenet_v9_knockout4.json"], "ckpt/codenet_v9"),
-    ("knockout",      "repro/knockout.sh",   ["codenet_s0.5_i10_z1_L8_n4000_knockout4.json"], "ckpt/codenet_s0.5_i10_z1_L8_n4000"),
+    ("arith R1 purity",    "repro/r1_purity.sh",  ["arithmetic_r1r2.json"], "ckpt/arith_v9_paperhp"),
+    ("arith #5 sum-9",     "repro/r5_sum9.sh",    ["arith_firings.json"],   "ckpt/arith_v9_paperhp"),
+    ("arith #6 poly",      "repro/f6_polysemanticity.sh", ["arithmetic_r1r2.json"], "ckpt/arith_v9_paperhp"),
+    ("arith #2 run 1",     "repro/verify_claims.sh", ["arith_s0.5_i10_z1_u8_knockout4.json"], "ckpt/arith_s0.5_i10_z1_u8"),
+    ("arith #2 replicate", "repro/verify_claims.sh", ["arith_s0.5_REPLICATE_knockout4.json"], "ckpt/arith_s0.5_REPLICATE"),
+    ("arith R1 (gated)",   "repro/verify_claims.sh", ["gated/arithmetic_r1r2.json"], "ckpt/arith_s0.5_i10_z1_u8"),
+    ("arith #7 blind 7/7", "repro/f7_autointerp.sh", ["arith_gated_autointerp_rawfirings.json"], "ckpt/arith_s0.5_i10_z1_u8"),
+    ("cn #2 four arms",    "repro/knockout.sh",   ["codenet_s0.5_i10_z1_L8_n4000_knockout4.json"], "ckpt/codenet_s0.5_i10_z1_L8_n4000"),
+    ("cn #2 clean score",  "repro/verify_claims.sh", ["codenet_knockout4_cleanscore.json"], "ckpt/codenet_s0.5_i10_z1_L8_n4000"),
+    ("cn R1 purity",       "repro/f3_codenet_purity.sh", ["codenet_gated_confound_nopad.json"], "ckpt/codenet_s0.5_i10_z1_L8_n4000"),
+    ("cn #6 poly",         "repro/f6_polysemanticity.sh", ["codenet_gated_confound_nopad.json"], "ckpt/codenet_s0.5_i10_z1_L8_n4000"),
+    ("cn #7 blind 10/11",  "repro/f7_autointerp.sh", ["codenet_autointerp_rawfirings.json"], "ckpt/codenet_s0.5_i10_z1_L8_n4000"),
+    ("cn per-code ablate", "repro/f4_per_code_ablation.sh", ["codenet_per_code_ablation.json"], "ckpt/codenet_s0.5_i10_z1_L8_n4000"),
 ]
 
 def sha256(p):
@@ -36,7 +49,7 @@ def sha256(p):
     return h.hexdigest()
 
 H = ["Table", "Script", "Source JSON (results/)", "sha256 (first 16)", "Checkpoint"]
-W = [12, 22, 30, 18, 22]
+W = [21, 30, 46, 18, 34]
 
 def rule(l, m, r):
     return l + m.join("─" * (w + 2) for w in W) + r
