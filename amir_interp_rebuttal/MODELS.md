@@ -315,6 +315,26 @@ mechanism buys the first by destroying the second.
 baseline with the answer distribution intact. Rejection does the selecting;
 forcing is kept low enough not to dictate the operands.
 
+### Untrained baselines
+
+```
+  ┌─────────────┬──────────────────┬─────────────┬────────────────────────┐
+  │ Domain      │ untrained base   │ trained     │ attributable to training│
+  ├─────────────┼──────────────────┼─────────────┼────────────────────────┤
+  │ arithmetic  │           0.00%  │  82-86%     │ all of it              │
+  │ CodeNet     │          15.75%  │  17.5%      │ 1.75pp                 │
+  └─────────────┴──────────────────┴─────────────┴────────────────────────┘
+```
+
+Untrained Qwen3-0.6B scores **0/2600** on the arithmetic eval — zero in every
+one of the 24 difficulty splits. The task is learned, not elicited, so no part
+of the reported accuracy can be attributed to the base model already knowing
+how to do it. `results/arith_untrained_baseline.json`.
+
+The CodeNet contrast is worth stating plainly: there the base model already
+reaches 15.75% and training adds 1.75pp, so its accuracy is a much weaker
+signal than its knockout.
+
 ### Difficulty × scale: the grid, completed
 
 The escalation sweep varied difficulty at `scale=0.1` and the scale sweep varied
