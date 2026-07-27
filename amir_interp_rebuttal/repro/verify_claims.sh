@@ -98,77 +98,6 @@ chk("codenet clean RANDOM below OFF",
 # that a stale copy-paste cannot survive a re-run.
 # ---------------------------------------------------------------------------
 
-print("\n  -- REBUTTAL_arithmetic.md | R1 purity table (ckpt/arith_v9_paperhp) --")
-ar = json.loads((R/"arithmetic_r1r2.json").read_text())
-chks("arith R1 ckpt", ar["ckpt"], "ckpt/arith_v9_paperhp")
-chk("arith R1 n_eval 2600", float(ar["n_eval"]), 2600.0, 0.001)
-for code, n, purity, base, lift, npos in [
-        (6,   415, 78.3, 12.6, 6.21, 2),
-        (17, 1026, 43.6, 10.7, 4.07, 1),
-        (11, 1163, 36.5, 16.3, 2.24, 1)]:
-    chk(f"arith t{code} n={n}",          float(a[code]["n"]), float(n), 0.001)
-    chk(f"arith t{code} purity {purity}%", round(100*a[code]["purity"], 1), purity)
-    chk(f"arith t{code} base rate {base}%", round(100*a[code]["marginal"], 1), base)
-    chk(f"arith t{code} #Pos {npos}",     float(a[code]["n_positions"]), float(npos), 0.001)
-chk("arith R1 active codes 7", float(ar["R1"]["n_active_codes"]), 7.0, 0.001)
-
-print("\n  -- REBUTTAL_arithmetic.md | sum-9 / tri-state carry table --")
-# Recomputed from the firing dump exactly as repro/r5_sum9.sh does it.
-from math import comb
-fir = json.loads((R/"arith_firings.json").read_text())
-s9 = {}
-for code, v in fir.items():
-    ex = [e for e in v["examples"] if e["column_sum"] is not None]
-    s9[int(code)] = (len(ex), sum(1 for e in ex if e["column_sum"] == 9))
-pool_n = sum(u for u, _ in s9.values())
-pool_9 = sum(k for _, k in s9.values())
-u6, k6 = s9[6]
-chk("sum9 t6 11/14 firings",       float(k6), 11.0, 0.001)
-chk("sum9 t6 sampled usable 14",   float(u6), 14.0, 0.001)
-chk("sum9 P(sum9|t6) 78.6%",       round(100*k6/u6, 1), 78.6)
-chk("sum9 pooled base 25.3%",      round(100*pool_9/pool_n, 1), 25.3)
-loo = (pool_9 - k6) / (pool_n - u6)
-chk("sum9 leave-one-out base 15.6%", round(100*loo, 1), 15.6)
-chk("sum9 leave-one-out lift 5.04x", round((k6/u6)/loo, 2), 5.04)
-p = sum(comb(u6, i) * (pool_9/pool_n)**i * (1-pool_9/pool_n)**(u6-i) for i in range(k6, u6+1))
-chk("sum9 exact binomial p < 1e-4", 1.0 if p < 1e-4 else 0.0, 1.0, 0.001)
-others = [(k/u)/(pool_9/pool_n) for c, (u, k) in s9.items() if c != 6]
-chk("sum9 other codes lift min 0.00", round(min(others), 2), 0.00)
-chk("sum9 other codes lift max 0.85", round(max(others), 2), 0.85)
-
-print("\n  -- REBUTTAL_arithmetic.md | specialists vs generalists (lift >= 2.0) --")
-rows_a = ar["R1"]["rows"]
-spec_a = [r for r in rows_a if r["lift"] >= 2.0]
-gen_a  = [r for r in rows_a if r["lift"] <  2.0]
-na, ng = sum(r["n"] for r in spec_a), sum(r["n"] for r in gen_a)
-chk("arith specialists 3 codes",    float(len(spec_a)), 3.0, 0.001)
-chk("arith specialists 2,604 fires", float(na), 2604.0, 0.001)
-chk("arith specialists 14.3% share", round(100*na/(na+ng), 1), 14.3)
-chk("arith specialists best purity 78.3%", round(100*max(r["purity"] for r in spec_a), 1), 78.3)
-chk("arith specialists lift lo 2.2x", round(min(r["lift"] for r in spec_a), 1), 2.2)
-chk("arith specialists lift hi 6.2x", round(max(r["lift"] for r in spec_a), 1), 6.2)
-chk("arith generalists 4 codes",     float(len(gen_a)), 4.0, 0.001)
-chk("arith generalists 15,575 fires", float(ng), 15575.0, 0.001)
-chk("arith generalists 85.7% share", round(100*ng/(na+ng), 1), 85.7)
-chk("arith generalists best purity 24.9%", round(100*max(r["purity"] for r in gen_a), 1), 24.9)
-chk("arith generalists lift lo 1.2x", round(min(r["lift"] for r in gen_a), 1), 1.2)
-chk("arith generalists lift hi 1.6x", round(max(r["lift"] for r in gen_a), 1), 1.6)
-big = max(gen_a, key=lambda r: r["n"])
-chk("arith largest generalist n=5,200", float(big["n"]), 5200.0, 0.001)
-chk("arith largest generalist 1.62x",   round(big["lift"], 2), 1.62)
-
-print("\n  -- REBUTTAL_arithmetic.md | blind autointerp, paperhp checkpoint --")
-aij = json.loads((R/"arithmetic_autointerp_rawfirings.json").read_text())
-air = {r["code"]: r for r in aij["results"]}
-chks("arith autointerp ckpt", aij["ckpt"], "ckpt/arith_v9_paperhp")
-for code, lift, conf in [(6, 6.21, "high"), (17, 4.07, "high"), (11, 2.24, "medium"),
-                         (0, 1.62, "high"), (1, 1.53, "high"),
-                         (7, 1.60, "high"), (2, 1.24, "high")]:
-    chk(f"arith autointerp t{code} lift {lift}x", round(air[code]["gt_lift"], 2), lift)
-    chks(f"arith autointerp t{code} conf {conf}", air[code]["confidence"], conf)
-chk("arith autointerp 4 positional", float(aij["summary"]["n_flagged_positional_only"]), 4.0, 0.001)
-chk("arith autointerp 3 arithmetic", float(aij["summary"]["n_flagged_arithmetic_condition"]), 3.0, 0.001)
-
 print("\n  -- REBUTTAL_arithmetic.md | R1 on the load-bearing ckpt (results/gated/) --")
 # The second purity table is measured on ckpt/arith_s0.5_i10_z1_u8 -- the SAME
 # checkpoint as the causal result -- not on arith_v9_paperhp. Different file.
@@ -326,10 +255,12 @@ chk("codenet 12 samples per code",    float(max(e["n_examples"] for e in cp)), 1
 chk("codenet 12 samples per code (min)", float(min(e["n_examples"] for e in cp)), 12.0, 0.001)
 chk("codenet 'other 120 firings'",
     float(sum(e["n_examples"] for e in cp) - 12), 120.0, 0.001)
+_gf = json.loads((R/"arith_gated_firings.json").read_text())
+_gf = _gf.get("codes", _gf)
 chk("arith 14 sampled firings per code",
-    float(max(len(v["examples"]) for v in fir.values())), 14.0, 0.001)
+    float(max(len(v["examples"]) for v in _gf.values())), 14.0, 0.001)
 chk("arith 98 sampled firings total",
-    float(sum(len(v["examples"]) for v in fir.values())), 98.0, 0.001)
+    float(sum(len(v["examples"]) for v in _gf.values())), 98.0, 0.001)
 # Summary bullet: "conditional and binary-expression detectors at 2.1-2.3x lift".
 # The four If/BinOp codes actually span 2.06x (t3) to 2.40x (t7); t7 sits above
 # the quoted range, and t7's n is 58, not "hundreds".
@@ -338,10 +269,28 @@ chk("codenet If/BinOp detector lift lo 2.06x", round(min(det), 2), 2.06)
 chk("codenet If/BinOp detector lift hi 2.40x", round(max(det), 2), 2.40)
 
 print("\n  -- cross-document consistency --")
-# The cross-domain claim: two different label sets, same division of labour,
-# now measured with the same metric (global lift) and the same 2.0x threshold.
-chk("arith 14.3% vs codenet 14.7% split (both ~15%)",
-    round(100*na/(na+ng), 1) - round(100*ns/(ns+nge), 1), -0.4, 0.05)
+# Finding #6 on the load-bearing arithmetic checkpoint. The RATIO differs
+# sharply from CodeNet (1.5% vs 14.7% of traffic held by specialists); what the
+# two domains share is the STRUCTURE -- a few sharp detectors plus a
+# high-traffic fallback -- not the proportion. Asserted so the deliverable
+# cannot drift back to claiming a matching split.
+_ga = json.loads((R/"gated/arithmetic_r1r2.json").read_text())["R1"]["rows"]
+_sp = [r for r in _ga if r["lift"] >= 2.0]
+_ge = [r for r in _ga if r["lift"] <  2.0]
+_nsa, _nga = sum(r["n"] for r in _sp), sum(r["n"] for r in _ge)
+chk("arith specialists 3 codes",       float(len(_sp)), 3.0, 0.001)
+chk("arith specialists 277 firings",   float(_nsa), 277.0, 0.001)
+chk("arith specialists 1.5% share",    round(100*_nsa/(_nsa+_nga), 1), 1.5)
+chk("arith generalists 4 codes",       float(len(_ge)), 4.0, 0.001)
+chk("arith generalists 17,923 firings",float(_nga), 17923.0, 0.001)
+chk("arith generalists 98.5% share",   round(100*_nga/(_nsa+_nga), 1), 98.5)
+chk("arith spec lift lo 2.75x",  round(min(r["lift"] for r in _sp), 2), 2.75)
+chk("arith spec lift hi 9.35x",  round(max(r["lift"] for r in _sp), 2), 9.35)
+chk("arith gen lift lo 0.91x",   round(min(r["lift"] for r in _ge), 2), 0.91)
+chk("arith gen lift hi 1.62x",   round(max(r["lift"] for r in _ge), 2), 1.62)
+chk("arith untrained baseline 0.0%",
+    100*json.loads((R/"arith_untrained_baseline.json").read_text())["untrained_arith_accuracy"],
+    0.0, 0.001)
 
 print(f"\n  {ok} verified, {fail} failed")
 sys.exit(1 if fail else 0)

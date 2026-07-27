@@ -14,7 +14,7 @@ import json
 from pathlib import Path
 
 R = Path("amir_interp_rebuttal/results")
-arith = json.loads((R / "arithmetic_r1r2.json").read_text())["R1"]["rows"]
+arith = json.loads((R / "gated/arithmetic_r1r2.json").read_text())["R1"]["rows"]
 
 def band(r):
     """Specialist vs generalist by lift, not purity.
@@ -31,7 +31,7 @@ W = "┌────────┬────────────┬──
 M = "├────────┼────────────┼────────┼─────────────┼──────────┼──────────┼────────┼────────┤"
 E = "└────────┴────────────┴────────┴─────────────┴──────────┴──────────┴────────┴────────┘"
 
-print("  Finding #6 | specialists vs polysemantic generalists | ckpt/arith_v9_paperhp")
+print("  Finding #6 | specialists vs polysemantic generalists | ckpt/arith_s0.5_i10_z1_u8")
 print("  Qwen3-0.6B | six-digit add/sub | 2,600 held-out problems | 7 active codes of 30")
 print()
 print(W)
@@ -96,9 +96,10 @@ for name, g in (("specialists", spec), ("generalists", gen)):
           f"{max(r['purity'] for r in g):>7.1%}  │ {min(L):.2f}-{max(L):.2f}x │")
 print(E)
 print()
-print("  arithmetic splits 3 specialists / 14.3% of firings vs 4 generalists / 85.7%.")
-print("  CodeNet splits 5 / 14.7% vs 5 / 85.3%. Different label sets entirely,")
-print("  same ~15/85 division of labour, under the same metric and threshold.")
+print("  arithmetic splits 3 specialists / 1.5% of firings vs 4 generalists / 98.5%.")
+print("  CodeNet splits 5 / 14.7% vs 5 / 85.3%. The RATIO is not constant across")
+print("  domains; what recurs is the structure -- a few sharp detectors alongside")
+print("  a high-traffic fallback code.")
 print()
 print("  Note the best-purity generalist (t4, 35.3%) outranks every specialist on")
 print("  purity alone. Purity without a base rate is not a measure of specialisation.")

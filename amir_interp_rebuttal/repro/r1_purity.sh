@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # R1 -- per-code subtask purity / lift for ckpt/arith_v9_paperhp.
-# Source: results/arithmetic_r1r2.json  (key R1.rows)
+# Source: results/gated/arithmetic_r1r2.json  (key R1.rows)
 source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/_common.sh"
 
-"$PY" - "$RESULTS/arithmetic_r1r2.json" <<'PY'
+"$PY" - "$RESULTS/gated/arithmetic_r1r2.json" <<'PY'
 import json, sys
 
 d = json.load(open(sys.argv[1]))

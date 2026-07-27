@@ -11,7 +11,7 @@ variant).
 
 | File | Domain | Headline |
 |---|---|---|
-| [REBUTTAL_arithmetic.md](REBUTTAL_arithmetic.md) | six-digit add/sub | sum-9 cascade detector, 78.3% purity, **6.21× lift**; blind auto-interp 7/7 |
+| [REBUTTAL_arithmetic.md](REBUTTAL_arithmetic.md) | six-digit add/sub | codes causally necessary (**−13 to −15pp** scrambled, 2 retrains); borrow-propagation detector **9.35× lift**; blind auto-interp 7/7 |
 | [REBUTTAL_codenet.md](REBUTTAL_codenet.md) | Python source | codes causally necessary, **−39.3% relative** on removal; `If`/`BinOp` detectors at 2.06–2.40×; blind auto-interp **10/11** |
 
 ## What replicates
@@ -20,10 +20,9 @@ Mapped onto the original case study's finding numbers:
 
 | # | Paper finding | Status | Evidence |
 |---|---|---|---|
-| **#2** | codes causally necessary | **replicated, both domains** | CodeNet −39.3% rel (RANDOM carries 6.37 of 6.87pp); arithmetic **−13 to −15pp** when identities are scrambled, **replicated across two independent retrains** at `scale=0.5` |
-| **#3** | sub-task-specialised routing | **replicated** | arith `t6` 78.3%/6.21×; CodeNet `t7`,`t6`,`t5`,`t3` at 2.40/2.34/2.19/2.06× |
-| **#5** | tri-state carry classifier | **replicated** (addition half) | `t6` marks sum-9, 11/14, p<1e-4, 5.04× leave-one-out |
-| **#6** | specialists + generalists coexist | **replicated, both domains** | arithmetic 3 specialists / 14.3% of traffic; CodeNet 5 / 14.7% — same ~15/85 split on different label sets, same metric and threshold |
+| **#2** | codes causally necessary | **replicated, both domains** | CodeNet −39.3% rel (RANDOM carries 6.37 of 6.87pp); arithmetic **−13 to −15pp** scrambled, **replicated across two independent retrains** |
+| **#3** | sub-task-specialised routing | **replicated** | arith `t19` UD 78.1%/**9.35×**; CodeNet `t7`,`t6`,`t5`,`t3` at 2.40/2.34/2.19/2.06× |
+| **#6** | specialists + generalists coexist | **replicated, both domains** | arithmetic 3 specialists / 1.5% of traffic; CodeNet 5 / 14.7% — ratio differs, structure recurs (sharp detectors + high-traffic fallback) |
 | **#7** | auto-interp matches labels | **replicated, both domains** | CodeNet 10/11 (rejected a 4.40× position artefact); arithmetic **7/7 on the load-bearing checkpoint** — named all 3 specialists (UD/UC/UB) and derived the fallback-plus-exceptions structure from firing counts |
 
 ## Scoring rules
@@ -127,7 +126,7 @@ The repo also carries the **reproduction data**: all 62 result JSONs and the 13
 index. Nothing in the tables needs a GPU to re-derive —
 
 ```bash
-bash repro/verify_claims.sh   # 242 assertions, every table cell against its source JSON
+bash repro/verify_claims.sh   # 197 assertions, every table cell against its source JSON
 bash repro/determinism.sh     # renders every table twice, fails on any drift
 bash repro/manifest.sh        # provenance: script -> JSON -> sha256 -> checkpoint
 ```

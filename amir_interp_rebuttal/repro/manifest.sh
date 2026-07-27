@@ -26,12 +26,11 @@ dirty = os.environ.get("GIT_DIRTY", "unknown")
 #
 # doc -> (table, script, [source json], checkpoint)
 TABLES = [
-    ("arith R1 purity",    "repro/r1_purity.sh",  ["arithmetic_r1r2.json"], "ckpt/arith_v9_paperhp"),
-    ("arith #5 sum-9",     "repro/r5_sum9.sh",    ["arith_firings.json"],   "ckpt/arith_v9_paperhp"),
-    ("arith #6 poly",      "repro/f6_polysemanticity.sh", ["arithmetic_r1r2.json"], "ckpt/arith_v9_paperhp"),
+    ("arith R1 purity",    "repro/r1_purity.sh",  ["gated/arithmetic_r1r2.json"], "ckpt/arith_s0.5_i10_z1_u8"),
+    ("arith #6 poly",      "repro/f6_polysemanticity.sh", ["gated/arithmetic_r1r2.json"], "ckpt/arith_s0.5_i10_z1_u8"),
+    ("arith untrained 0%", "repro/verify_claims.sh", ["arith_untrained_baseline.json"], "Qwen3-0.6B (base)"),
     ("arith #2 run 1",     "repro/verify_claims.sh", ["arith_s0.5_i10_z1_u8_knockout4.json"], "ckpt/arith_s0.5_i10_z1_u8"),
     ("arith #2 replicate", "repro/verify_claims.sh", ["arith_s0.5_REPLICATE_knockout4.json"], "ckpt/arith_s0.5_REPLICATE"),
-    ("arith R1 (gated)",   "repro/verify_claims.sh", ["gated/arithmetic_r1r2.json"], "ckpt/arith_s0.5_i10_z1_u8"),
     ("arith #7 blind 7/7", "repro/f7_autointerp.sh", ["arith_gated_autointerp_rawfirings.json"], "ckpt/arith_s0.5_i10_z1_u8"),
     ("cn #2 four arms",    "repro/knockout.sh",   ["codenet_s0.5_i10_z1_L8_n4000_knockout4.json"], "ckpt/codenet_s0.5_i10_z1_L8_n4000"),
     ("cn #2 clean score",  "repro/verify_claims.sh", ["codenet_knockout4_cleanscore.json"], "ckpt/codenet_s0.5_i10_z1_L8_n4000"),
