@@ -67,3 +67,35 @@ print("  The two coexist: a small number of sharp detectors carry a minority of"
 print("  the traffic, while high-frequency near-chance codes absorb the rest.")
 print("  This is the structure the paper reports, reproduced on a real LLM.")
 PY
+
+python3 - <<'PY2'
+import json
+from pathlib import Path
+R = Path("amir_interp_rebuttal/results")
+d = json.loads((R/"codenet_gated_confound_nopad.json").read_text())
+rows = [r for r in d["code_rows"] if r.get("lift_pos") is not None]
+rows.sort(key=lambda r: -r["lift_pos"])
+tot = sum(r["n"] for r in rows)
+spec = [r for r in rows if r["lift_pos"] >= 1.5]
+gen  = [r for r in rows if r["lift_pos"] <  1.5]
+W="  ┌──────────────┬────────┬───────────┬──────────┬──────────┬────────────┐"
+M="  ├──────────────┼────────┼───────────┼──────────┼──────────┼────────────┤"
+E="  └──────────────┴────────┴───────────┴──────────┴──────────┴────────────┘"
+print(); print("  CodeNet | specialists vs generalists | ranked by POSITION-MATCHED lift")
+print(f"  {d.get('ckpt')} | {tot} firings"); print()
+print(W)
+print("  │ Role         │  codes │  firings  │ share of │ best     │ lift range │")
+print(M)
+for name, g in (("specialists", spec), ("generalists", gen)):
+    n = sum(r["n"] for r in g); L=[r["lift_pos"] for r in g]
+    print(f"  │ {name:<12} │ {len(g):>6} │ {n:>9,} │ {n/tot:>7.1%}  │ "
+          f"{max(r['purity'] for r in g):>7.1%}  │ {min(L):.2f}-{max(L):.2f}x │")
+print(E)
+print()
+print("  arithmetic splits 3 specialists / 14.3% of firings vs 4 generalists / 85.7%.")
+print("  CodeNet splits 5 / 13.7% vs 6 / 86.3%. Different label sets entirely,")
+print("  same ~14/86 division of labour.")
+print()
+print("  Note the highest PURITY in the table belongs to a generalist (t9, 40.8%),")
+print("  the chunk-0 position artefact. Purity alone would rank it first.")
+PY2

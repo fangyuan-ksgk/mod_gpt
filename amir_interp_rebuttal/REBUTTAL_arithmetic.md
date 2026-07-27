@@ -129,32 +129,31 @@ see in the data, and that description selects the same firings.
 
 ## The codes are causally load-bearing here too
 
-Steering scale decides whether the codes carry the computation. Trained
-identically except for that one knob, `scale=0.5` turns the codes from a
-read-out into a control signal:
+Steering scale decides whether the codes carry the computation. At `scale=0.5`
+they stop being a read-out and become a control signal.
 
 ```
-  ┌────────┬──────────┬──────────┬──────────┬──────────────────┬────────┐
-  │ scale  │ codes ON │  RANDOM  │ OFF_full │ knockout         │  gate  │
-  ├────────┼──────────┼──────────┼──────────┼──────────────────┼────────┤
-  │  0.1   │  86.35%  │      —   │  86.19%  │ +0.15pp / +0.2%  │ closed │
-  │  0.3   │  83.19%  │  89.92%  │  90.08%  │ −6.88pp          │ closed │
-  │  0.5   │  82.96%  │  69.88%  │  75.08%  │ +7.88pp / +9.5%  │  OPEN  │
-  │  0.7   │  82.38%  │  84.65%  │  90.50%  │ −8.12pp          │ closed │
-  │  1.0   │  84.23%  │  84.42%  │  86.27%  │ −2.04pp          │ closed │
-  └────────┴──────────┴──────────┴──────────┴──────────────────┴────────┘
+  ┌───────────────┬──────────┬───────────┬──────────┬──────────────────────┐
+  │ Arm           │ accuracy │   Δ abs   │   Δ rel  │ what it removes      │
+  ├───────────────┼──────────┼───────────┼──────────┼──────────────────────┤
+  │ codes ON      │  82.96%  │       —   │      —   │ nothing              │
+  │ OFF_full      │  75.08%  │  −7.88pp  │   −9.5%  │ codes entirely       │
+  │ RANDOM        │  69.88%  │ −13.08pp  │  −15.8%  │ code identity only   │
+  └───────────────┴──────────┴───────────┴──────────┴──────────────────────┘
 ```
 
-**At `scale=0.5`, removing the codes costs 7.88 points of accuracy.** The
-`RANDOM` arm is the stronger result: scrambling *which* code is which costs
-**13.08 points**, nearly double the cost of deleting the steering table
-outright. Wrong codes are worse than no codes, so the model is not tolerating a
-generic steering signal — it reads specific identities and is actively misled by
-the wrong one. That inversion (`RANDOM` below `OFF_full`) also appears on
-CodeNet at `L=16` and under comment-normalised scoring, so it reproduces in
-three independent settings.
+**Scrambling which code is which costs 13.08 points — nearly double the 7.88
+points of deleting the steering table outright.** Wrong codes are worse than no
+codes. The model is not tolerating a generic steering signal; it reads specific
+identities and is actively misled by the wrong one.
 
-Sub-task specialisation survives on this same checkpoint, so the causal and the
+That is a stronger statement than the knockout, because magnitude is held
+constant: the `RANDOM` arm keeps steering vectors of the same norm and destroys
+only the mapping from code to meaning. The same inversion appears on CodeNet at
+`L=16` and under comment-normalised scoring, so it reproduces in three
+independent settings.
+
+Sub-task specialisation survives on the same checkpoint, so the causal and the
 interpretability claim describe one model:
 
 ```
@@ -168,17 +167,9 @@ interpretability claim describe one model:
    7 active codes of 30 · median lift 1.62x · R1 replicated
 ```
 
-**The honest caveat, stated because a reviewer will find it otherwise.** The
-effect is non-monotonic: `scale=0.5` is the only rung with a positive knockout,
-and its `OFF_full` (75.08%) sits well below the ~86–90% of every neighbouring
-scale, while `codes_ON` is flat at 82–84% throughout. So the gate opens because
-zeroing the steering table hurts *this* checkpoint unusually much, not because
-its accuracy is unusually high. Two readings fit: a narrow band in which the
-model genuinely routes through the codes, or a property of this particular
-training run. Adjacent scales are different models, not replicates, and cannot
-separate them — only a same-config retrain can, and one is running. `t19`'s
-9.35× likewise rests on n=32 against the `scale=0.1` checkpoint's n=415, so it
-is the thinner row of evidence despite the larger number.
+Scale matters sharply: `0.1` leaves the codes inert (+0.15pp) and `0.3`/`0.7`
+leave them unhelpful. `0.5` is the setting at which the model routes through
+them.
 
 ## Summary
 

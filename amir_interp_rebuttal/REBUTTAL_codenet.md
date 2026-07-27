@@ -119,6 +119,35 @@ genuinely ambiguous code is marked low. A procedure that reports uncertainty
 where the signal is weak, and that rejects the most impressive-looking number in
 the table on evidence, is one whose positive identifications carry weight.
 
+## Specialists and polysemantic generalists coexist
+
+Ranking by position-matched lift splits the codebook into two regimes, exactly
+as in the arithmetic study:
+
+```
+  ┌──────────────┬────────┬───────────┬──────────┬──────────┬────────────┐
+  │ Role         │  codes │  firings  │ share of │ best     │ lift range │
+  │              │        │           │ traffic  │ purity   │ (pos-match)│
+  ├──────────────┼────────┼───────────┼──────────┼──────────┼────────────┤
+  │ specialists  │      5 │     1,578 │   13.7%  │   33.3%  │ 1.53-6.54x │
+  │ generalists  │      6 │     9,960 │   86.3%  │   40.8%  │ 0.77-1.30x │
+  └──────────────┴────────┴───────────┴──────────┴──────────┴────────────┘
+```
+
+A handful of sharp detectors carry a small minority of the traffic while
+high-frequency near-chance codes absorb the rest — `t0` alone fires 4,978 times
+at 1.15× and acts as a fallback.
+
+The cross-domain agreement is the interesting part. Arithmetic splits 3
+specialists over **14.3%** of firings against 4 generalists over 85.7%; CodeNet
+splits 5 over **13.7%** against 6 over 86.3%. Two entirely different label sets
+— carry/borrow sub-tasks versus Python AST constructs — and the same ~14/86
+division of labour.
+
+Note also that the highest *purity* in the table (40.8%, `t9`) belongs to a
+generalist, not a specialist: `t9` is the chunk-0 position artefact. Purity
+alone would rank it first; position-matched lift puts it where it belongs.
+
 ## Summary
 
 On a real pretrained LLM, in a syntactic domain with an entirely different label

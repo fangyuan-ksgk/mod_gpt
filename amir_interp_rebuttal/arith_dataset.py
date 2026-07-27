@@ -114,6 +114,14 @@ class ArithmeticDataset(Dataset):
             n_digits = int(os.environ.get("ARITH_DIGITS", 6))
         if size is None:
             size = int(os.environ.get("ARITH_SIZE", 100_000))
+        # ARITH_HARD: reject-sample so every example actually contains the
+        # sub-tasks the codes are supposed to encode. Ordinary random operands
+        # are dominated by SA (no carry involvement), so most answer positions
+        # carry nothing worth routing on and a code can score well by being a
+        # position tag. Requiring multi-cascade / borrow-chain structure makes
+        # the label distribution sparse and the routing decision load-bearing.
+        self.hard = int(os.environ.get("ARITH_HARD", 0))
+        self.aug_prob = float(os.environ.get("ARITH_AUG_PROB", 0.4))
 
         self.tokenizer = tokenizer
         self.max_length = max_length
@@ -122,9 +130,10 @@ class ArithmeticDataset(Dataset):
         self.split = split
 
         if split == "train":
-            self.examples = self._generate(size, seed, enrich, n_digits)
+            self.examples = self._generate(size, seed, enrich, n_digits,
+                                           self.hard, self.aug_prob)
             self.split_of = ["train"] * len(self.examples)
-        elif n_digits == 6:
+        elif n_digits == 6 and not self.hard:
             # Canonical frozen eval set — keeps per-split numbers comparable.
             data = json.loads(EVAL_SET.read_text())
             self.examples, self.split_of = [], []
@@ -135,20 +144,42 @@ class ArithmeticDataset(Dataset):
         else:
             # Escalated difficulty (8/10-digit): no frozen set exists, so build a
             # deterministic one. Different seed than train so the splits are disjoint.
-            self.examples = self._generate(2600, seed + 10_000, enrich, n_digits)
+            self.examples = self._generate(2600, seed + 10_000, enrich, n_digits,
+                                           self.hard, self.aug_prob)
             self.split_of = [f"{e.op}_{e.complexity}" for e in self.examples]
 
+    # Sub-tasks that require a carry/borrow to propagate ACROSS columns. These
+    # are the ones a per-digit code can encode non-trivially; SA/SC/MD/MB are
+    # decidable from the column alone.
+    HARD_LABELS = {"US", "UC", "SS", "UB", "UD", "ME"}
+
     @staticmethod
-    def _generate(size, seed, enrich, n_digits) -> List[ArithmeticExample]:
+    def _generate(size, seed, enrich, n_digits, hard=0, aug_prob=0.4
+                  ) -> List[ArithmeticExample]:
         rng_state = random.getstate()
         random.seed(seed)
         out: List[ArithmeticExample] = []
-        for _ in range(size):
-            do_enrich = enrich and (random.random() < 0.6)
+        HL = ArithmeticDataset.HARD_LABELS
+        tries = 0
+        while len(out) < size:
+            tries += 1
+            do_enrich = enrich and (random.random() < (0.95 if hard else 0.6))
             if random.random() < 0.5:
-                out.append(random_add_example(n_digits, use_sum9_aug=do_enrich))
+                ex = random_add_example(n_digits, use_sum9_aug=do_enrich,
+                                        aug_prob=aug_prob)
             else:
-                out.append(random_sub_example(n_digits, use_borrow_aug=do_enrich))
+                ex = random_sub_example(n_digits, use_borrow_aug=do_enrich)
+            if hard:
+                # Keep only examples carrying at least `hard` propagating
+                # sub-tasks. Bail out of the rejection loop if the criterion is
+                # unreachable rather than spinning forever.
+                if sum(1 for l in ex.labels if l in HL) < hard:
+                    if tries < size * 60:
+                        continue
+                    raise RuntimeError(
+                        f"ARITH_HARD={hard} unreachable at {n_digits} digits "
+                        f"after {tries} draws; lower it or raise ARITH_AUG_PROB")
+            out.append(ex)
         random.setstate(rng_state)
         return out
 
