@@ -173,6 +173,45 @@ justification for the reported configuration. `L=8` is not an unexamined default
 it is the setting at which the codes carry the computation, and the two
 neighbouring ratios were trained and gated to establish that.
 
+### `arith_HARD_cascade_s0.5` — enriching for cascades made the task EASIER
+
+The intent was right and the implementation was wrong. To make the codes more
+meaningful, the training data was reject-sampled for multi-column carry
+cascades (`US`) and borrow propagation (`UD`), with `ARITH_AUG_PROB=0.8`
+forcing digit pairs to sum to 9 — the cascade seed.
+
+At that rate the distribution collapses. Forcing `y = 9 − x` on 80% of columns
+makes `x + y = 999999`, so almost every answer is `1000000` plus a small
+remainder:
+
+```
+  824475 + 175526 = 1000001      817069 + 182939 = 1000008
+  422314 + 587688 = 1010002      035780 + 964819 = 1000599
+```
+
+The model learns to emit `100…` and reaches **99.35%** accuracy — the opposite
+of harder. All three knockout arms returned an identical 0.9935, which is the
+signature of a task so saturated that the steering channel is irrelevant.
+
+Diagnosis: cascade frequency and operand diversity trade off, and the forcing
+mechanism buys the first by destroying the second.
+
+```
+  ┌────────────────────┬───────┬───────┬────────────────┬──────────────────┐
+  │ config             │   US  │   UD  │ distinct ans.  │ most common      │
+  │                    │       │       │ prefixes/1200  │ prefix share     │
+  ├────────────────────┼───────┼───────┼────────────────┼──────────────────┤
+  │ baseline aug=0.4   │  4.3% │  2.9% │           180  │              8%  │
+  │ hard=2 aug=0.2     │ 17.1% │ 15.6% │           152  │             15%  │
+  │ hard=3 aug=0.35    │ 32.7% │ 13.7% │           116  │             34%  │
+  │ hard=3 aug=0.8     │     — │     — │           125  │             26%  │
+  └────────────────────┴───────┴───────┴────────────────┴──────────────────┘
+```
+
+`hard=2, aug=0.2` is the setting actually used: cascades enriched 4–5× over
+baseline with the answer distribution intact. Rejection does the selecting;
+forcing is kept low enough not to dictate the operands.
+
 ### `codenet_FROZEN` — freezing the backbone does not force causal load
 
 The idea: freeze all 596M model parameters and train only the 61K steering

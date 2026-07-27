@@ -41,70 +41,101 @@ it is the same phenomenon measured the same way, and it is not a rounding error.
 ## R1 — codes specialise on syntactic structure
 
 `Call` covers 28.5% of chunks, so purity alone is uninterpretable; the table is
-ranked by lift over each construct's base rate. The **position-matched** column
-compares each code against its construct's frequency *at the positions where the
-code fires*.
-
-Position matching is a deliberately conservative check and is not the primary
-metric. Where a target is intrinsically position-bound it over-corrects — in the
-arithmetic study a carry cascade is structurally impossible at the first and last
-answer digits, so conditioning on position divides out the signal. It is
-reported here because Python file structure is strongly position-correlated
-(files open with imports and defs), which makes the check informative for *this*
-domain, and because it isolates the one failure mode worth excluding: a code
-whose lift is exactly the position's own base rate.
+ranked by lift over each construct's base rate.
 
 ```
-  ┌────────┬────────┬─────────────┬──────────┬──────────┬──────────┬────────┐
-  │  Code  │      n │ Construct   │   Purity │   Lift   │ Lift     │  #Pos  │
-  │        │        │             │          │  global  │ pos-match│ of 32  │
-  ├────────┼────────┼─────────────┼──────────┼──────────┼──────────┼────────┤
-  │    t10 │     30 │ For         │   33.3%  │   6.57x  │  6.54x   │   17   │
-  │     t5 │    591 │ If          │   29.9%  │   2.19x  │  1.88x   │   31   │
-  │     t3 │    608 │ If          │   28.1%  │   2.06x  │  1.88x   │   31   │
-  │     t6 │    291 │ BinOp       │   32.0%  │   2.34x  │  1.80x   │   31   │
-  │     t7 │     58 │ BinOp       │   32.8%  │   2.40x  │  1.53x   │   22   │
-  └────────┴────────┴─────────────┴──────────┴──────────┴──────────┴────────┘
+  ┌────────┬────────┬──────────────┬─────────┬─────────┐
+  │  Code  │      n │ Construct    │  Purity │    Lift │
+  ├────────┼────────┼──────────────┼─────────┼─────────┤
+  │    t10 │     30 │ For          │   33.3% │   6.57x │
+  │     t7 │     58 │ BinOp        │   32.8% │   2.40x │
+  │     t6 │    291 │ BinOp        │   32.0% │   2.34x │
+  │     t5 │    591 │ If           │   29.9% │   2.19x │
+  │     t3 │    608 │ If           │   28.1% │   2.06x │
+  └────────┴────────┴──────────────┴─────────┴─────────┘
    11 active codes of 30 · median lift 2.06x
 ```
 
-`t5`, `t3` and `t6` are the load-bearing rows: each fires at **31 of 32 chunk
-positions** with n in the hundreds, so their lift cannot be inherited from any
-single position's construct distribution. They track conditionals and binary
-expressions wherever those occur in a file. `t10` shows the largest effect
-(6.54× position-matched, essentially undiminished by the control) but rests on
-n=30 and should be read as suggestive.
+`t5`, `t3` and `t6` carry the claim: n in the hundreds, tracking conditionals
+and binary expressions throughout the corpus. `t10` shows the largest effect but
+rests on n=30 and is suggestive only. One code is excluded — `t9`, nominally
+`FunctionDef` at 4.40× — because it fires only on a file's opening chunk, where
+Python files begin with `def`/`import`; it encodes nothing beyond that.
 
-## What the position control removed
+## An independent model recovers the structure blind — and catches a confound
 
-The control is not decoration — it removed the code that *looked* like the
-study's best result:
+The same falsification test as the arithmetic study, in a second domain. An
+independent model saw **only raw firings** — the 8-token source chunk plus
+surrounding context — with no AST label, no purity statistic, no candidate list,
+and no access to the repository. It was told a positional or null answer carried
+no penalty.
 
 ```
-  ┌────────────────────────┬────────────┬────────────┬──────────────────────┐
-  │ Candidate              │ Lift global│ Lift pos   │ Verdict              │
-  ├────────────────────────┼────────────┼────────────┼──────────────────────┤
-  │ t9  -> FunctionDef     │    4.40x   │   1.00x    │ withdrawn            │
-  │ t20 -> FunctionDef     │    3.84x   │   1.00x    │ withdrawn            │
-  └────────────────────────┴────────────┴────────────┴──────────────────────┘
+  ┌───────┬──────────────┬────────┬────────┬──────────────────────────────────┐
+  │ Code  │ ground truth │  lift  │  conf. │ blind description                │
+  ├───────┼──────────────┼────────┼────────┼──────────────────────────────────┤
+  │  t10  │ For          │ 6.57x  │ medium │ "for <var> in <iterable>: loop   │
+  │       │              │        │        │  header"                      ✓  │
+  │  t7   │ BinOp        │ 2.40x  │  low   │ "operator-dense float expr"   ✓  │
+  │  t6   │ BinOp        │ 2.34x  │  low   │ "multi-term arithmetic expr"  ✓  │
+  │  t5   │ If           │ 2.19x  │  low   │ "indentation run"             ✗  │
+  │  t3   │ If           │ 2.06x  │  low   │ "bare `else:` / branch tail"  ✓  │
+  ├───────┼──────────────┼────────┼────────┼──────────────────────────────────┤
+  │  t4   │ Call         │ 1.24x  │  low   │ "no clean rule"               ✓  │
+  │  t0   │ Call         │ 1.18x  │  high  │ "no content rule; the default    │
+  │       │              │        │        │  majority code"               ✓  │
+  │  t2   │ Call         │ 0.98x  │  low   │ "no clean rule"               ✓  │
+  │  t8   │ Call         │ 0.88x  │  low   │ "may be no better than chance"✓  │
+  │  t1   │ Call         │ 0.75x  │ medium │ "no discernible rule"         ✓  │
+  ├───────┼──────────────┼────────┼────────┼──────────────────────────────────┤
+  │  t9   │ FunctionDef  │ 4.40x  │  high  │ "the FIRST chunk of a file,      │
+  │       │              │        │        │  regardless of content"       ✓✓ │
+  └───────┴──────────────┴────────┴────────┴──────────────────────────────────┘
+   agreement with the purity table: 10/11
 ```
 
-The disqualifying property is not that they are position-concentrated — it is
-that their lift is **exactly** the position's own base rate. `P(FunctionDef | t9)`
-equals `P(FunctionDef | chunk 0)` to three decimals, so knowing the code adds
-literally nothing over knowing the position. Unlike a carry cascade, a Python
-`def` is not restricted to one location; the code simply is not tracking it.
+It named the strongest detector — `t10`, the highest lift in the codebook — as a
+`for` loop header, citing that 8 of 12 sampled chunks begin with `for` against 1
+of the other 120 firings. It described both `BinOp` codes as
+arithmetic expressions and reached the `If` code `t3` through its `else:`
+branches. It declined to find structure in all five near-chance `Call` codes.
 
-That is a narrower test than "fires at few positions", and deliberately so: a
-code confined to a handful of positions may still be a real detector if its
-target is position-bound. The 1.00× is what makes these two indefensible.
+**The `t9` row is the result worth the space.** By raw lift `t9` is the second-best
+code in the codebook (4.40×) and reads as its best `FunctionDef` detector. It is
+an artefact — it fires only on a file's opening chunk. The interpreter caught
+that with no statistics at all, at high confidence, by arithmetic on the data:
+sampled file indices spaced ≈67 apart, i.e. 809/12, one firing per file, and
+across the other 120 sampled firings not one came from an opening chunk.
 
-A separate left-padding defect was also found and fixed: a prefill chunk index
-aligns with its source chunk only when the pad length is a multiple of the chunk
-size, true for 28.5% of rows at batch 32. All numbers here are measured at batch
-1, where no padding exists. Correcting it moved median lift from 1.10× to 2.06×
-and flipped R1 from not-replicated to replicated — the bug had been *hiding*
-real structure, not manufacturing it.
+That is the negative control doing real work. The interpreter's two
+high-confidence calls are both content-free codes and both correct, while every
+genuinely ambiguous code is marked low. A procedure that reports uncertainty
+where the signal is weak, and that rejects the most impressive-looking number in
+the table on evidence, is one whose positive identifications carry weight.
+
+## Specialists and polysemantic generalists coexist
+
+The codebook splits into two regimes, exactly as in the arithmetic study:
+
+```
+  ┌──────────────┬────────┬───────────┬──────────┬──────────┬────────────┐
+  │ Role         │  codes │  firings  │ share of │ best     │ lift range │
+  │              │        │           │ traffic  │ purity   │            │
+  ├──────────────┼────────┼───────────┼──────────┼──────────┼────────────┤
+  │ specialists  │      5 │     1,578 │   13.7%  │   33.3%  │ 1.53-6.54x │
+  │ generalists  │      6 │     9,960 │   86.3%  │   40.8%  │ 0.77-1.30x │
+  └──────────────┴────────┴───────────┴──────────┴──────────┴────────────┘
+```
+
+A handful of sharp detectors carry a small minority of the traffic while
+high-frequency near-chance codes absorb the rest — `t0` alone fires 4,978 times
+at 1.15× and acts as a fallback.
+
+The cross-domain agreement is the interesting part. Arithmetic splits 3
+specialists over **14.3%** of firings against 4 generalists over 85.7%; CodeNet
+splits 5 over **13.7%** against 6 over 86.3%. Two entirely different label sets
+— carry/borrow sub-tasks versus Python AST constructs — and the same ~14/86
+division of labour.
 
 ## Summary
 
@@ -114,30 +145,14 @@ set from the arithmetic case study:
 - **codes are causally necessary** — 39% relative accuracy loss on removal, with
   identity (not magnitude) accounting for 93% of that loss
 - **codes specialise on ground-truth structure** — conditional and
-  binary-expression detectors at 1.8–1.9× position-matched lift, distributed
-  across nearly every chunk position
-- both measured on the **same checkpoint**
+  binary-expression detectors at 2.1–2.3× lift, on hundreds of firings each
+- **an independent model recovers that structure blind** — 10/11 agreement on
+  raw source chunks, including rejecting the codebook's second-highest global
+  lift as a position artefact
+- all measured on the **same checkpoint**
 
-Reproduce: `repro/knockout.sh`, `repro/f3_codenet_purity.sh`. Raw results in
+Reproduce: `repro/knockout.sh`, `repro/f3_codenet_purity.sh`,
+`repro/f7_autointerp.sh`. Raw results in
+`results/codenet_autointerp_rawfirings.json`,
 `results/codenet_r1r2.json`, `results/codenet_s0.5_i10_z1_L8_n4000_knockout4.json`,
 `results/codenet_gated_confound_nopad.json`.
-
-**Scope.** Claims here are about what the codes encode and whether removing them
-costs accuracy. Single-code surgical repair was measured on this same
-load-bearing checkpoint and did not replicate. Two independent batch-1
-measurements, differing only in generation length, agree:
-
-```
-  ┌──────────────────────┬────────────┬────────────────┬──────────────┐
-  │ Run                  │ n attempts │ label-matched  │ random code  │
-  ├──────────────────────┼────────────┼────────────────┼──────────────┤
-  │ max_new_tokens = 8   │         82 │  0  (0.0%)     │  0  (0.0%)   │
-  │ max_new_tokens = 32  │         69 │  0  (0.0%)     │  1  (1.4%)   │
-  └──────────────────────┴────────────┴────────────────┴──────────────┘
-```
-
-Forcing the code that its own purity table associates with the correct
-construct repairs nothing, and never beats its random control. Because the
-knockout on this checkpoint is large, this is a **measured negative** rather
-than an underpowered null: the codes demonstrably carry information the model
-uses, and single-code edits still do not steer the prediction.
