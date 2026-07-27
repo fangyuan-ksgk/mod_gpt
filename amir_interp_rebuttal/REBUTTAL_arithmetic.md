@@ -13,6 +13,12 @@ Ground truth is the standard per-digit taxonomy: **SA** no carry, **SC**
 generates carry, **SS** digits sum to 9, **UC** consumes carry, **US** carry
 cascade through a sum-9 run, plus the borrow analogues **MD/MB/ME/UB/UD**.
 
+Two checkpoints appear below, differing only in steering scale. The
+specialisation, sum-9 and polysemanticity results are measured on
+`arith_v9_paperhp` (`scale=0.1`); the causal result and the blind
+identification of the specialists are measured on `arith_s0.5_i10_z1_u8`
+(`scale=0.5`), where the codes are load-bearing. Each section names its own.
+
 ## Codes specialise on algorithmic sub-tasks
 
 Purity is `P(sub-task | code)`; **lift** is purity over that sub-task's base
@@ -74,59 +80,6 @@ high-frequency near-chance codes absorb the rest — the largest generalist fire
 5,200 times at 1.62× lift and acts as a fallback. This is the structure the
 original case study reports, reproduced on a real pretrained model.
 
-## An independent model recovers the mechanism blind
-
-Automated interpretation run as a falsification test, not a demonstration. A
-separate model (Claude Sonnet 5) saw **only raw firings** — problem, answer-digit
-index, digit value, operand column — with no ground-truth label, no purity
-statistic, and **no list of candidate conditions**. It was told that "this code
-only marks position N" was a valid answer, so finding nothing carried no penalty.
-
-```
-  ┌───────┬────────┬──────────┬───────────────────────────────────────────────┐
-  │ Code  │  lift  │  conf.   │ blind description (verbatim, abridged)        │
-  ├───────┼────────┼──────────┼───────────────────────────────────────────────┤
-  │  t6   │  6.21x │  high    │ "...when that column generates a carry-out,   │
-  │       │        │          │  i.e. A+G+carry_in >= 10 — equivalently,      │
-  │       │        │          │  whenever the addition overflows into a 7th   │
-  │       │        │          │  leading digit"                               │
-  │  t17  │  4.07x │  high    │ "...when that column does NOT generate a      │
-  │       │        │          │  carry-out/borrow-out"                        │
-  │  t11  │  2.24x │ medium   │ "does not reduce to a clean carry rule"       │
-  ├───────┼────────┼──────────┼───────────────────────────────────────────────┤
-  │  t0   │  1.62x │  high    │ "two fixed positions ... regardless of        │
-  │  t1   │  1.53x │  high    │  operand values, carry/borrow status, digit   │
-  │  t7   │  1.60x │  high    │  value, or operation"                         │
-  │  t2   │  1.24x │  high    │                                               │
-  └───────┴────────┴──────────┴───────────────────────────────────────────────┘
-   agreement with the purity table: 7/7
-```
-
-Three things make this more than a plausible-sounding label.
-
-**It partitioned the codebook without being told there were two kinds.** The
-three genuine specialists were described as arithmetic conditions; the four
-near-chance codes were described as fixed-position tags carrying no arithmetic
-information. That split is exactly the one the purity table makes, and nothing in
-the prompt hinted that such a split existed.
-
-**Its confidence tracks lift.** High on 6.21× and 4.07×, and it dropped itself to
-*medium* on 2.24× — explicitly declining to state a clean rule for the weakest
-specialist. A procedure that reports uncertainty where the signal is weak is one
-whose confident claims mean something.
-
-**The negative control held.** Inventing an arithmetic story for a code firing
-5,200 times was the easy false positive. Instead it reasoned from the count —
-5,200 is exactly 2× the 2,600-problem eval set, so the code fires twice per
-problem regardless of content — and concluded "positional tag". It reached that
-by arithmetic on the evidence, not by hedging.
-
-For `t6` it produced a precise, executable rule — *carry-out at the leading
-column, equivalently a 7th digit appearing* — that picks out the ground-truth
-`US` firings. Notably it named the **observable signature** rather than the
-textbook label "carry cascade through a sum-9 run": it described what it could
-see in the data, and that description selects the same firings.
-
 ## The codes are causally load-bearing here too
 
 Steering scale decides whether the codes carry the computation. At `scale=0.5`
@@ -178,10 +131,14 @@ interpretability claim describe one model:
 
 ## What the specialists actually encode, identified blind
 
-Run on the **causally load-bearing** checkpoint (`ckpt/arith_s0.5_i10_z1_u8`),
-so the codes being interpreted are the ones the model demonstrably uses. An independent model saw only raw
-firings — problem, answer position, digit, operand column — with no label, no
-statistic, and no candidate list.
+Automated interpretation run as a falsification test, not a demonstration, and
+run on the **causally load-bearing** checkpoint (`ckpt/arith_s0.5_i10_z1_u8`) so
+the codes being described are ones the model demonstrably uses.
+
+An independent model saw **only raw firings** — problem, answer position, digit
+value, operand column — with no ground-truth label, no purity statistic, and
+**no list of candidate conditions**. It was told explicitly that "this code only
+marks position N" was a valid answer, so finding nothing carried no penalty.
 
 ```
   ┌───────┬──────┬────────┬────────┬──────────────────────────────────────────┐
@@ -235,10 +192,9 @@ On a real pretrained LLM:
 - **the carry-uncertainty boundary is recovered** without supervision
   (p < 1e-4, 5.04× leave-one-out)
 - **specialists and generalists coexist** in the ratio the original study reports
-- **an independent model recovers the detector blind**, with a working negative
-  control
-- **on the load-bearing checkpoint it names all three specialists** — UD, UC and
-  UB — and derives the fallback-plus-exceptions structure from firing counts
+- **an independent model, blind, names all three specialists** — UD, UC and UB —
+  calls the four near-chance codes position tags, and derives the codebook's
+  fallback-plus-exceptions structure from firing counts alone
 - **the codes are causally load-bearing at `scale=0.5`** — scrambling code
   identities costs −13 to −15pp, replicated across two independent retrains
 
