@@ -1,0 +1,265 @@
+{
+  "ckpt": "ckpt/arith_s0.5_i10_z1_u8",
+  "scale": 0.5,
+  "label": "UD",
+  "code": 19,
+  "n_eval": 2600,
+  "baseline_accuracy": 0.8296153846153846,
+  "max_new_tokens": 7,
+  "n_label_digits": 1520,
+  "n_label_routed_to_code": 25,
+  "n_label_errors_code_absent": 76,
+  "n_label_errors_code_present": 0,
+  "errors_by_pos": {
+    "2": 16,
+    "3": 20,
+    "4": 20,
+    "5": 20
+  },
+  "codes_normally_routed": {
+    "2": {
+      "0": 307
+    },
+    "3": {
+      "3": 446
+    },
+    "4": {
+      "1": 372,
+      "19": 25,
+      "14": 48,
+      "12": 1
+    },
+    "5": {
+      "2": 321
+    }
+  },
+  "unforced_resume_sanity": {
+    "code": null,
+    "attempts": 76,
+    "digit_fixed": 0,
+    "answer_fixed": 0,
+    "per_pos": {
+      "2": {
+        "n": 16,
+        "digit_fixed": 0,
+        "answer_fixed": 0
+      },
+      "3": {
+        "n": 20,
+        "digit_fixed": 0,
+        "answer_fixed": 0
+      },
+      "4": {
+        "n": 20,
+        "digit_fixed": 0,
+        "answer_fixed": 0
+      },
+      "5": {
+        "n": 20,
+        "digit_fixed": 0,
+        "answer_fixed": 0
+      }
+    }
+  },
+  "specialist": {
+    "code": 19,
+    "attempts": 76,
+    "digit_fixed": 0,
+    "answer_fixed": 0,
+    "per_pos": {
+      "2": {
+        "n": 16,
+        "digit_fixed": 0,
+        "answer_fixed": 0
+      },
+      "3": {
+        "n": 20,
+        "digit_fixed": 0,
+        "answer_fixed": 0
+      },
+      "4": {
+        "n": 20,
+        "digit_fixed": 0,
+        "answer_fixed": 0
+      },
+      "5": {
+        "n": 20,
+        "digit_fixed": 0,
+        "answer_fixed": 0
+      }
+    }
+  },
+  "controls": [
+    {
+      "code": 2,
+      "attempts": 76,
+      "digit_fixed": 0,
+      "answer_fixed": 0,
+      "per_pos": {
+        "2": {
+          "n": 16,
+          "digit_fixed": 0,
+          "answer_fixed": 0
+        },
+        "3": {
+          "n": 20,
+          "digit_fixed": 0,
+          "answer_fixed": 0
+        },
+        "4": {
+          "n": 20,
+          "digit_fixed": 0,
+          "answer_fixed": 0
+        },
+        "5": {
+          "n": 20,
+          "digit_fixed": 0,
+          "answer_fixed": 0
+        }
+      }
+    },
+    {
+      "code": 3,
+      "attempts": 76,
+      "digit_fixed": 0,
+      "answer_fixed": 0,
+      "per_pos": {
+        "2": {
+          "n": 16,
+          "digit_fixed": 0,
+          "answer_fixed": 0
+        },
+        "3": {
+          "n": 20,
+          "digit_fixed": 0,
+          "answer_fixed": 0
+        },
+        "4": {
+          "n": 20,
+          "digit_fixed": 0,
+          "answer_fixed": 0
+        },
+        "5": {
+          "n": 20,
+          "digit_fixed": 0,
+          "answer_fixed": 0
+        }
+      }
+    },
+    {
+      "code": 14,
+      "attempts": 76,
+      "digit_fixed": 0,
+      "answer_fixed": 0,
+      "per_pos": {
+        "2": {
+          "n": 16,
+          "digit_fixed": 0,
+          "answer_fixed": 0
+        },
+        "3": {
+          "n": 20,
+          "digit_fixed": 0,
+          "answer_fixed": 0
+        },
+        "4": {
+          "n": 20,
+          "digit_fixed": 0,
+          "answer_fixed": 0
+        },
+        "5": {
+          "n": 20,
+          "digit_fixed": 0,
+          "answer_fixed": 0
+        }
+      }
+    },
+    {
+      "code": 0,
+      "attempts": 76,
+      "digit_fixed": 0,
+      "answer_fixed": 0,
+      "per_pos": {
+        "2": {
+          "n": 16,
+          "digit_fixed": 0,
+          "answer_fixed": 0
+        },
+        "3": {
+          "n": 20,
+          "digit_fixed": 0,
+          "answer_fixed": 0
+        },
+        "4": {
+          "n": 20,
+          "digit_fixed": 0,
+          "answer_fixed": 0
+        },
+        "5": {
+          "n": 20,
+          "digit_fixed": 0,
+          "answer_fixed": 0
+        }
+      }
+    },
+    {
+      "code": 1,
+      "attempts": 76,
+      "digit_fixed": 0,
+      "answer_fixed": 0,
+      "per_pos": {
+        "2": {
+          "n": 16,
+          "digit_fixed": 0,
+          "answer_fixed": 0
+        },
+        "3": {
+          "n": 20,
+          "digit_fixed": 0,
+          "answer_fixed": 0
+        },
+        "4": {
+          "n": 20,
+          "digit_fixed": 0,
+          "answer_fixed": 0
+        },
+        "5": {
+          "n": 20,
+          "digit_fixed": 0,
+          "answer_fixed": 0
+        }
+      }
+    }
+  ],
+  "control_mean_digit_fixed": 0.0,
+  "control_mean_answer_fixed": 0.0,
+  "fisher_p_digit_level": 1.0,
+  "intervention_reach_control": {
+    "note": "Positive control on the forcing itself, 64 examples, resume at d=3.",
+    "unforced_resume_reproduces_original": "64/64",
+    "outputs_changed_by_forced_code": {
+      "t0": 0,
+      "t1": 1,
+      "t2": 1,
+      "t3": 1,
+      "t12": 1,
+      "t14": 1,
+      "t19": 1,
+      "t7_dead": 0,
+      "t25_dead": 0
+    },
+    "patch_verified_applied": "last_codes tail [9,14,0,7] -> [9,14,0,25] with output unchanged",
+    "steer_norm_x_scale": {
+      "t0": 1.511,
+      "t1": 1.582,
+      "t2": 1.954,
+      "t3": 2.242,
+      "t12": 1.772,
+      "t14": 1.033,
+      "t19": 1.757
+    },
+    "layer14_residual_norm": 47.0,
+    "perturbation_pct_of_residual": "2.2-4.8% at one token position of 17",
+    "verdict": "single-code intervention has no measurable reach; the 0/76 is a null about the method, not about t19"
+  }
+}

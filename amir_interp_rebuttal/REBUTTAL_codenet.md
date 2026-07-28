@@ -1,10 +1,19 @@
 # Real-LLM replication — Python source (Project CodeNet)
 
 **Qwen3-0.6B (596M), DLR v9 residual steering**, one code per 8-token chunk,
-codebook 30, injection layer fixed a priori. 800 competitive-programming Python
-files, **split by problem** so near-identical solutions cannot straddle
-train/test. Ground truth is the innermost AST construct each chunk sits inside,
-recovered from source with a parser.
+codebook 30, injection layer fixed a priori. Trained on 4,000 competitive
+programming Python files from the Python800 benchmark subset of Project CodeNet
+[Puri et al., arXiv:2105.12655] — 800 problem classes, Python only — and
+evaluated on 800 held-out files, **split by problem**: assignment hashes the
+problem name, so near-identical solutions to the same problem cannot straddle
+train/test. Ground
+truth is the innermost AST construct each chunk sits inside — `For`, `If`,
+`Return`, `Call`, `Subscript`, `Assign`, `FunctionDef` and nine others —
+recovered from source with Python's `ast`. *Innermost* is what makes the label
+informative: in `for i in range(n): print(a[i])`, `range(n)` is labelled `Call`
+rather than `For`, and `a[i]` is labelled `Subscript`, because narrower spans
+overwrite wider ones. Without that, almost every chunk in a file would read
+`FunctionDef`.
 
 ```
    toy model :  answer digit  ->  carry/borrow sub-task  ->  code

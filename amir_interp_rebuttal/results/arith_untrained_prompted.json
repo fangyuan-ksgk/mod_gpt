@@ -1,0 +1,101 @@
+{
+  "model": "Qwen/Qwen3-0.6B",
+  "n": 200,
+  "answer_len": 7,
+  "shots": 4,
+  "conditions": {
+    "bare": {
+      "exact": 0.0,
+      "lenient": 0.0,
+      "samples": [
+        {
+          "gold": "0948083",
+          "raw": "?\n\nLet me calculate this step by",
+          "pred": null
+        },
+        {
+          "gold": "0587675",
+          "raw": "?\n\nLet's solve this step by",
+          "pred": null
+        },
+        {
+          "gold": "0769372",
+          "raw": "?\n\nLet's solve this step by",
+          "pred": null
+        },
+        {
+          "gold": "0478657",
+          "raw": "?\n\nLet me solve this equation step",
+          "pred": null
+        },
+        {
+          "gold": "0889977",
+          "raw": "?\n\nLet me calculate this step by",
+          "pred": null
+        }
+      ]
+    },
+    "fewshot": {
+      "exact": 0.0,
+      "lenient": 0.0,
+      "samples": [
+        {
+          "gold": "0948083",
+          "raw": "0698883",
+          "pred": "0698883"
+        },
+        {
+          "gold": "0587675",
+          "raw": "0566333",
+          "pred": "0566333"
+        },
+        {
+          "gold": "0769372",
+          "raw": "0767770",
+          "pred": "0767770"
+        },
+        {
+          "gold": "0478657",
+          "raw": "0000000",
+          "pred": "0000000"
+        },
+        {
+          "gold": "0889977",
+          "raw": "0698399",
+          "pred": "0698399"
+        }
+      ]
+    },
+    "instruct": {
+      "exact": 0.0,
+      "lenient": 0.01,
+      "samples": [
+        {
+          "gold": "0948083",
+          "raw": "417080+531003=948083",
+          "pred": "417080"
+        },
+        {
+          "gold": "0587675",
+          "raw": "587675",
+          "pred": "587675"
+        },
+        {
+          "gold": "0769372",
+          "raw": "114262+655110=769372",
+          "pred": "114262"
+        },
+        {
+          "gold": "0478657",
+          "raw": "063242+415415=063242+415415=478",
+          "pred": "063242"
+        },
+        {
+          "gold": "0889977",
+          "raw": "278977",
+          "pred": "278977"
+        }
+      ]
+    }
+  }
+}

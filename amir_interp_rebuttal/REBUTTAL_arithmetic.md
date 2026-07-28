@@ -150,6 +150,84 @@ Confidence tracks reliability: `high` on all four positional codes, `medium` and
 `low` on the specialists, where it correctly flagged that `t14`'s condition
 overlaps `t1`'s and is not exclusive.
 
+## Single-code repair: a null about reach, not about `t19`
+
+The reviewer singles out the toy study's surgical single-code repairs, so we
+asked the sharpest available version of that question on this model. `t19` is
+the borrow-propagation detector. If its role is causal rather than
+correlational, then on the UD columns the model *fails*, forcing `t19` should
+repair some of them.
+
+The population is clean:
+
+```
+  ┌─────────────────────────────────┬────────┬─────────────────────────┐
+  │ UD digits in 2,600 problems     │  1,520 │                         │
+  │  ├─ routed to t19               │     25 │ wrong: 0  (25/25 right) │
+  │  └─ routed to a generalist      │  1,495 │ wrong: 76               │
+  └─────────────────────────────────┴────────┴─────────────────────────┘
+```
+
+Every one of the 76 errors is a column where `t19` should have fired by its own
+purity profile and a generalist was routed instead — exactly the repairable set,
+with no no-op cases diluting it. Where `t19` *is* routed, UD is never failed.
+
+Forcing `t19` into all 76 repairs **0**. So does every control code. So does a
+never-trained code.
+
+That last clause is why this is not evidence against `t19`. The intervention was
+verified end to end: the prefix resume reproduces the original answer 64/64, and
+the forced code demonstrably reaches the routing table (`last_codes` tail
+`[9,14,0,7] → [9,14,0,25]`). The output is unchanged anyway, because a steering
+vector at `scale=0.5` perturbs the layer-14 residual by **2.2–4.8% at one token
+position out of 17** — below the threshold at which greedy decoding flips a
+digit. Forcing dead codes `t7`/`t25`, whose vectors were never trained, changes
+0 of 64 generations.
+
+A substitution at the codebook's own magnitude therefore cannot resolve the
+question either way. So we amplified instead — injecting `t19`'s *direction* at
+increasing magnitude through an unused carrier slot, against a different
+specialist and a random direction of identical norm at every dose:
+
+```
+  ┌──────────┬──────┬────────┬─────────┬─────────┬─────────┐
+  │ direction│ mult │    |v| │   moved │   FIXED │   broke │
+  ├──────────┼──────┼────────┼─────────┼─────────┼─────────┤
+  │ t19 (UD) │    8 │  28.11 │   10/76 │    1/76 │    0/76 │
+  │ t19 (UD) │   16 │  56.23 │   33/76 │    0/76 │    3/76 │
+  │ t19 (UD) │   32 │ 112.46 │   72/76 │    9/76 │   36/76 │
+  │ t19 (UD) │   64 │ 224.92 │   74/76 │    4/76 │   65/76 │
+  ├──────────┼──────┼────────┼─────────┼─────────┼─────────┤
+  │ t14 (UB) │   32 │ 112.46 │   41/76 │    7/76 │   40/76 │
+  │ random   │   32 │ 112.46 │   34/76 │    0/76 │   12/76 │
+  │ random   │   64 │ 224.92 │   50/76 │    1/76 │   56/76 │
+  └──────────┴──────┴────────┴─────────┴─────────┴─────────┘
+   layer-14 residual norm 47.0 · "broke" is a size-matched set of CORRECT UD digits
+```
+
+`t19` fixes 9 where a random direction of the same norm fixes 0 — but `t14`, the
+**UB** specialist applied to **UD** errors, fixes 7. A UD-specific signal would
+beat the wrong specialist; 9 against 7 does not. What separates both from random
+is being a *trained* direction, which keeps the perturbed state nearer the
+model's distribution and so likelier to emit a valid digit. That is an
+in-distribution effect, not a sub-task one.
+
+There is also no operating point worth having: at every dose where the knob
+bites, damage exceeds repair — 36 correct digits destroyed for 9 repaired at
+32×, 65 for 4 at 64×.
+
+**Surgical single-code repair does not replicate here.** The causal effect in
+Finding #2 is real but *distributed*: it appears when all positions are
+perturbed together (scramble −13.08pp) and vanishes when one is. Codes can be
+individually interpretable and jointly load-bearing without any one of them
+being an individually actionable control — which is the honest scaling story,
+and it matches the earlier sweeps (0/40 targeted; 48/289 vs 32/289, p=0.07)
+rather than adding a separate negative.
+
+Raw data: `results/arith_ud_repair.json` (reach control),
+`results/arith_ud_repair_dose.json` (dose-response). Reproduce:
+`python -m amir_interp_rebuttal.ud_repair --code 19 --label UD [--dose]`.
+
 ## Summary
 
 On a real pretrained LLM — 596M parameters against the original study's ~0.1M
