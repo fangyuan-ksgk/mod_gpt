@@ -45,24 +45,19 @@ REBUTTAL_arithmetic.md  REBUTTAL_codenet.md   the deliverables — read these
 PLAN.md                                       objectives, metrics, checklist,
                                               and what was tried and abandoned
 MODELS.md                                     all 20 checkpoints, configs, HF links
-AUDIT.md                                      code audit: defects, fixes, what was left
-DATA_AUDIT.md                                 every table number traced to its JSON
+AUDIT.md                                      code + data audit (defects, fixes, every table number traced)
+
 gate_then_repair.sh                           gate a checkpoint, repair only if it opens
 repro/                                        one script per table + verification
 results/                                      all raw JSON (+ results/gated/ for the
                                               load-bearing arithmetic checkpoint)
+amir_rebuttal.md                              the rebuttal text as submitted
+ud_repair.py                                  single-code repair + dose response
+                                              (repro/f8_ud_repair.sh)
+untrained_prompted.py                         untrained-baseline format control
+                                              (repro/f9_untrained_baseline.sh)
 logs/                                         run logs — NOT in git, see below
-notes/                                        working notes, not deliverables
-  arithmetic.md                                 the original case study, extracted
-  codenet_gate.md                               confound audit for the SUPERSEDED
-                                                scale=0.1 checkpoint
-  r1_r3_r5_tables.md                            per-code tables behind Finding #6
 ```
-
-`notes/` is provenance, not results. `codenet_gate.md` describes the checkpoint
-the scale sweep replaced, and `r1_r3_r5_tables.md` includes an R3 section that
-neither deliverable claims. Both are kept because they document *why* a result
-was withdrawn, which is worth more than a clean-looking directory.
 
 `logs/` is **gitignored** — it is a local working record, not part of the
 deliverable, and nothing in `repro/` or `results/` reads it. It holds one log per
@@ -132,4 +127,4 @@ bash repro/manifest.sh        # provenance: script -> JSON -> sha256 -> checkpoi
 ```
 
 Full configs, the checkpoints that were *not* published, and why:
-[MODELS.md](MODELS.md). Data-audit findings: [DATA_AUDIT.md](DATA_AUDIT.md).
+[MODELS.md](MODELS.md).

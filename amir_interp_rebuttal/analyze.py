@@ -180,7 +180,7 @@ def main():
     print("\n--- R2: surgical-swap repairs ---")
     if len(wrong) < 20:
         print(f"  only {len(wrong)} wrong predictions — too few to measure a fix "
-              f"rate. Task is saturated; escalate difficulty (see notes/arithmetic.md §3).")
+              f"rate. Task is saturated; escalate difficulty.")
         report["R2"] = {"measurable": False, "n_wrong": len(wrong)}
     else:
         # R2b — the predictive test. Uses R1's purity table to pick the code the

@@ -248,6 +248,43 @@ CHECKPOINTS = {
         ],
     ),
 
+    "arith_s0.5_REPLICATE": dict(
+        study="arithmetic",
+        task="6-digit addition and subtraction, `abcdef±ghijkl=mnopqrs`; one "
+             "steering code per answer digit",
+        train_size=100_000, digits=6, eval_n=2600,
+        env="ARITH_DIGITS=6 ARITH_SIZE=100000",
+        blurb="Independent retrain of arith_s0.5_i10_z1_u8 at the same config. "
+              "The seed replicate behind 'run 2' in the rebuttal's Finding 1.",
+        metrics_json=["arith_s0.5_REPLICATE_knockout4.json"],
+        deliverables=["amir_rebuttal.md (Finding 1, run 2)",
+                      "REBUTTAL_arithmetic.md (causal result, run 2 row)"],
+        recommend="push", provisional=False,
+        reason="Cited as a row in the rebuttal's headline causal table, so it "
+               "falls under the same 'push what is cited' rule as the run-1 "
+               "checkpoint. Without it the replication claim rests on a number "
+               "no reviewer can check.",
+        shows=[
+            "The causal result replicates across independent training runs: "
+            "84.73% ON, 69.58% RANDOM, 68.96% OFF_full, scramble -15.15pp "
+            "(-17.9% relative), gate open.",
+            "The two runs' RANDOM arms agree to 0.3pp (69.88% and 69.58%), so "
+            "scrambled-identity accuracy is the more stable quantity of the "
+            "two -- which is what makes the scramble delta trustworthy.",
+            "Here scrambling and deleting cost about the same (-15.15pp vs "
+            "-15.77pp), whereas in run 1 scrambling cost strictly more. The "
+            "inversion is not guaranteed run to run; the large scramble cost "
+            "is.",
+        ],
+        does_not_show=[
+            "No interpretability analysis was run on this checkpoint. Purity, "
+            "polysemanticity and auto-interp numbers all come from "
+            "arith_s0.5_i10_z1_u8, so this model backs the causal claim only.",
+            "Same scale sensitivity as run 1: the effect exists at scale=0.5 "
+            "and not at 0.1/0.3/0.7/1.0.",
+        ],
+    ),
+
     # ── Supporting runs: cited as rows in a table, not as headline results ───
     "arith_18d_500_MAX": dict(
         study="arithmetic",
